@@ -540,6 +540,137 @@ main {
   font-size: clamp(3rem, 8vw, 5rem);
 }
 
+.operation-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+
+.operation-guide {
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.operation-stage {
+  min-height: 360px;
+  margin-bottom: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.operation-prompt {
+  margin-bottom: 14px;
+  color: var(--ink);
+  font-size: clamp(1.15rem, 2.3vw, 1.6rem);
+  font-weight: 900;
+}
+
+.operation-item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.operation-choice {
+  min-height: 128px;
+  padding: 16px;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: clamp(1.4rem, 3vw, 2.2rem);
+  font-weight: 900;
+}
+
+.point-board,
+.drag-board {
+  position: relative;
+  min-height: 280px;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.point-target,
+.tap-target {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.point-target {
+  width: 48px;
+  height: 48px;
+  border: 6px solid var(--bad);
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.tap-target {
+  width: 104px;
+  height: 104px;
+  border-color: var(--bad);
+  border-radius: 50%;
+  background: #ffffff;
+  color: var(--bad);
+  font-weight: 900;
+}
+
+.point-line {
+  position: absolute;
+  pointer-events: none;
+  background: var(--accent-strong);
+}
+
+.point-line.vertical {
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  transform: translateX(-50%);
+}
+
+.point-line.horizontal {
+  right: 0;
+  left: 0;
+  height: 4px;
+  transform: translateY(-50%);
+}
+
+.drag-board {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 22px;
+}
+
+.drag-zone,
+.drag-card {
+  display: grid;
+  min-height: 136px;
+  border-radius: var(--radius);
+  place-items: center;
+  font-weight: 900;
+}
+
+.drag-zone {
+  border: 2px dashed var(--line);
+  color: var(--muted);
+}
+
+.drag-card {
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.drag-card.is-picked {
+  background: var(--good);
+}
+
 .message-board strong {
   font-size: clamp(1.85rem, 4.4vw, 3.3rem);
   line-height: 1.25;
@@ -841,6 +972,7 @@ input[type="checkbox"] {
   }
 
   .trainer-layout,
+  .operation-layout,
   .choice-grid,
   .module-grid,
   .card-grid,

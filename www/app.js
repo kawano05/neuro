@@ -69,6 +69,41 @@ const letterTasks = [
   { prompt: "「ありがとう」の最初の文字を選んでください", answer: "あ", options: ["お", "あ", "ま", "や"] },
 ];
 
+const operationModes = [
+  {
+    id: "item",
+    name: "項目スキャン",
+    description: "順番にハイライトされる項目から目的のボタンを選ぶ練習です。",
+  },
+  {
+    id: "point",
+    name: "ポイントスキャン",
+    description: "縦横のカーソルを止めて、画面上の一点を指定する練習です。",
+  },
+  {
+    id: "tap",
+    name: "タップ",
+    description: "目的の場所をタップする操作を確認します。",
+  },
+  {
+    id: "drag",
+    name: "ドラッグ",
+    description: "開始点から終了点へ動かす操作を段階的に練習します。",
+  },
+];
+
+const operationItemTasks = [
+  { prompt: "「水」を選んでください", answer: "水", options: ["はい", "水", "休む", "戻る"] },
+  { prompt: "「戻る」を選んでください", answer: "戻る", options: ["痛い", "寒い", "戻る", "ありがとう"] },
+  { prompt: "「ナースコール」を選んでください", answer: "ナースコール", options: ["水", "ナースコール", "暑い", "眠い"] },
+];
+
+const operationPointTargets = [
+  { x: 30, y: 34, label: "左上の目標" },
+  { x: 72, y: 38, label: "右上の目標" },
+  { x: 44, y: 72, label: "下側の目標" },
+];
+
 const phraseCategories = {
   基本: ["はい", "いいえ", "もう一度", "わかりません", "ありがとう", "大丈夫です"],
   体調: ["痛いです", "寒いです", "暑いです", "眠いです", "休みたいです", "水がほしいです"],
@@ -101,6 +136,12 @@ const evaluationTasks = [
     guide: "文字学習画面で提示された単語の最初の文字を選びます。誤選択は自動で記録されます。",
     view: "letters",
   },
+  {
+    id: "operation-point",
+    title: "ポイントスキャンで目標を選択",
+    guide: "操作訓練画面でポイントスキャンを選び、縦横カーソルを止めて目標を指定します。",
+    view: "operation",
+  },
 ];
 
 const defaultState = {
@@ -113,6 +154,19 @@ const defaultState = {
   letterIndex: 0,
   currentPhrase: "",
   currentCategory: "基本",
+  operation: {
+    mode: "item",
+    itemIndex: 0,
+    pointIndex: 0,
+    pointPhase: "x",
+    pointStartedAt: null,
+    selectedX: null,
+    selectedY: null,
+    dragPhase: "start",
+    trials: 0,
+    successes: 0,
+    distances: [],
+  },
   settings: {
     scanInterval: 1600,
     autoScan: true,
@@ -137,6 +191,7 @@ const defaultState = {
     taskTimingEarly: 0,
     taskTimingLate: 0,
     taskAssists: 0,
+    taskDistances: [],
     effortRating: 3,
     easeRating: 3,
     engagementRating: 3,
@@ -177,6 +232,16 @@ const elements = {
   letterPrompt: document.querySelector("#letterPrompt"),
   letterGrid: document.querySelector("#letterGrid"),
   nextLetter: document.querySelector("#nextLetter"),
+  operationModeGrid: document.querySelector("#operationModeGrid"),
+  operationModeTitle: document.querySelector("#operationModeTitle"),
+  operationGuide: document.querySelector("#operationGuide"),
+  operationStage: document.querySelector("#operationStage"),
+  operationPrimary: document.querySelector("#operationPrimary"),
+  nextOperationTarget: document.querySelector("#nextOperationTarget"),
+  resetOperation: document.querySelector("#resetOperation"),
+  operationTrials: document.querySelector("#operationTrials"),
+  operationSuccessRate: document.querySelector("#operationSuccessRate"),
+  operationAverageDistance: document.querySelector("#operationAverageDistance"),
   participantId: document.querySelector("#participantId"),
   evaluationCondition: document.querySelector("#evaluationCondition"),
   startSession: document.querySelector("#startSession"),
@@ -241,6 +306,11 @@ function loadState() {
       ...cloneDefaultState(),
       ...parsed,
       settings: { ...defaultState.settings, ...(parsed.settings || {}) },
+      operation: {
+        ...defaultState.operation,
+        ...(parsed.operation || {}),
+        distances: Array.isArray(parsed.operation?.distances) ? parsed.operation.distances : [],
+      },
       evaluation: {
         ...defaultState.evaluation,
         ...(parsed.evaluation || {}),
@@ -311,6 +381,7 @@ function render() {
   renderCategories();
   renderPhrases();
   renderLetters();
+  renderOperation();
   renderEvaluation();
   renderSettings();
   renderLog();
@@ -443,6 +514,236 @@ function renderLetters() {
   });
 }
 
+function activeOperationMode() {
+  return operationModes.find((mode) => mode.id === state.operation.mode) || operationModes[0];
+}
+
+function renderOperation() {
+  renderOperationModes();
+  renderOperationStage();
+  renderOperationMetrics();
+}
+
+function renderOperationModes() {
+  elements.operationModeGrid.innerHTML = "";
+  operationModes.forEach((mode) => {
+    const button = document.createElement("button");
+    button.className = "module-button";
+    button.classList.toggle("is-active", mode.id === state.operation.mode);
+    button.type = "button";
+    button.dataset.scan = "";
+    button.innerHTML = `<strong>${mode.name}</strong><span>${mode.description}</span>`;
+    button.addEventListener("click", () => {
+      state.operation.mode = mode.id;
+      state.operation.pointPhase = "x";
+      state.operation.pointStartedAt = Date.now();
+      state.operation.selectedX = null;
+      state.operation.selectedY = null;
+      state.operation.dragPhase = "start";
+      saveState();
+      renderOperation();
+      restartScanIfNeeded();
+    });
+    elements.operationModeGrid.append(button);
+  });
+}
+
+function renderOperationStage() {
+  const mode = activeOperationMode();
+  elements.operationModeTitle.textContent = `${mode.name}訓練`;
+  elements.operationGuide.textContent = mode.description;
+  elements.operationStage.className = `operation-stage operation-${mode.id}`;
+  elements.operationStage.innerHTML = "";
+  elements.operationPrimary.hidden = false;
+
+  if (mode.id === "item") renderItemScanTraining();
+  if (mode.id === "point") renderPointScanTraining();
+  if (mode.id === "tap") renderTapTraining();
+  if (mode.id === "drag") renderDragTraining();
+}
+
+function renderItemScanTraining() {
+  const task = operationItemTasks[state.operation.itemIndex % operationItemTasks.length];
+  elements.operationPrimary.hidden = true;
+  const prompt = document.createElement("p");
+  prompt.className = "operation-prompt";
+  prompt.textContent = task.prompt;
+  const grid = document.createElement("div");
+  grid.className = "operation-item-grid";
+  task.options.forEach((option) => {
+    const button = document.createElement("button");
+    button.className = "operation-choice";
+    button.type = "button";
+    button.dataset.scan = "";
+    button.textContent = option;
+    button.addEventListener("click", () => chooseOperationItem(option));
+    grid.append(button);
+  });
+  elements.operationStage.append(prompt, grid);
+}
+
+function renderPointScanTraining() {
+  const target = operationPointTargets[state.operation.pointIndex % operationPointTargets.length];
+  if (!state.operation.pointStartedAt) state.operation.pointStartedAt = Date.now();
+  const x = state.operation.selectedX ?? getPointScanPercent();
+  const y = state.operation.selectedY ?? getPointScanPercent();
+  elements.operationPrimary.textContent =
+    state.operation.pointPhase === "x"
+      ? "縦カーソルを止める"
+      : state.operation.pointPhase === "y"
+        ? "横カーソルを止める"
+        : "次のポイント課題";
+  elements.operationStage.innerHTML = `
+    <p class="operation-prompt">${target.label}を指定してください</p>
+    <div class="point-board">
+      <span class="point-target" style="left:${target.x}%;top:${target.y}%"></span>
+      <span class="point-line vertical" id="pointVertical" style="left:${x}%"></span>
+      <span class="point-line horizontal" id="pointHorizontal" style="top:${y}%"></span>
+    </div>
+  `;
+}
+
+function renderTapTraining() {
+  const target = operationPointTargets[state.operation.pointIndex % operationPointTargets.length];
+  elements.operationPrimary.textContent = "タップ成功として記録";
+  elements.operationStage.innerHTML = `
+    <p class="operation-prompt">${target.label}をタップしてください</p>
+    <div class="point-board">
+      <button class="tap-target" data-scan type="button" style="left:${target.x}%;top:${target.y}%">タップ</button>
+    </div>
+  `;
+  elements.operationStage.querySelector(".tap-target").addEventListener("click", () => completeOperationTrial("タップ", true, 0));
+}
+
+function renderDragTraining() {
+  elements.operationPrimary.textContent = state.operation.dragPhase === "start" ? "ドラッグ開始" : "目標へドロップ";
+  elements.operationStage.innerHTML = `
+    <p class="operation-prompt">カードを開始点から目標へ移動する想定で、2段階で入力してください</p>
+    <div class="drag-board">
+      <span class="drag-zone start">開始</span>
+      <span class="drag-card ${state.operation.dragPhase === "end" ? "is-picked" : ""}">カード</span>
+      <span class="drag-zone goal">目標</span>
+    </div>
+  `;
+}
+
+function renderOperationMetrics() {
+  elements.operationTrials.textContent = String(state.operation.trials);
+  elements.operationSuccessRate.textContent = state.operation.trials
+    ? `${Math.round((state.operation.successes / state.operation.trials) * 100)}%`
+    : "--";
+  if (state.operation.distances.length === 0) {
+    elements.operationAverageDistance.textContent = "--";
+    return;
+  }
+  const average = state.operation.distances.reduce((sum, value) => sum + value, 0) / state.operation.distances.length;
+  elements.operationAverageDistance.textContent = `${Math.round(average)}px相当`;
+}
+
+function getPointScanPercent() {
+  const startedAt = state.operation.pointStartedAt || Date.now();
+  const elapsed = (Date.now() - startedAt) % 3200;
+  const half = elapsed <= 1600 ? elapsed : 3200 - elapsed;
+  return Math.max(4, Math.min(96, Math.round((half / 1600) * 100)));
+}
+
+function updatePointCursorDom() {
+  if (state.currentView !== "operation" || state.operation.mode !== "point") return;
+  const percent = getPointScanPercent();
+  const vertical = document.querySelector("#pointVertical");
+  const horizontal = document.querySelector("#pointHorizontal");
+  if (vertical && state.operation.pointPhase === "x") vertical.style.left = `${percent}%`;
+  if (horizontal && state.operation.pointPhase === "y") horizontal.style.top = `${percent}%`;
+}
+
+function chooseOperationItem(answer) {
+  const task = operationItemTasks[state.operation.itemIndex % operationItemTasks.length];
+  const correct = answer === task.answer;
+  completeOperationTrial(`項目スキャン: ${answer}`, correct, null);
+  state.operation.itemIndex = (state.operation.itemIndex + 1) % operationItemTasks.length;
+  saveState();
+  renderOperation();
+  restartScanIfNeeded();
+}
+
+function handleOperationPrimary() {
+  if (state.operation.mode === "point") {
+    handlePointScanInput();
+  } else if (state.operation.mode === "tap") {
+    completeOperationTrial("タップ", true, 0);
+    nextOperationTarget();
+  } else if (state.operation.mode === "drag") {
+    handleDragInput();
+  }
+}
+
+function handlePointScanInput() {
+  if (!state.operation.pointStartedAt) state.operation.pointStartedAt = Date.now();
+  if (state.operation.pointPhase === "x") {
+    state.operation.selectedX = getPointScanPercent();
+    state.operation.pointPhase = "y";
+    state.operation.pointStartedAt = Date.now();
+    saveState();
+    renderPointScanTraining();
+    return;
+  }
+  if (state.operation.pointPhase === "y") {
+    state.operation.selectedY = getPointScanPercent();
+    const target = operationPointTargets[state.operation.pointIndex % operationPointTargets.length];
+    const dx = state.operation.selectedX - target.x;
+    const dy = state.operation.selectedY - target.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    completeOperationTrial("ポイントスキャン", distance <= 16, distance * 4);
+    nextOperationTarget();
+  }
+}
+
+function handleDragInput() {
+  if (state.operation.dragPhase === "start") {
+    state.operation.dragPhase = "end";
+    saveState();
+    renderOperationStage();
+    return;
+  }
+  completeOperationTrial("ドラッグ", true, 0);
+  state.operation.dragPhase = "start";
+  saveState();
+  renderOperation();
+}
+
+function nextOperationTarget() {
+  state.operation.pointIndex = (state.operation.pointIndex + 1) % operationPointTargets.length;
+  state.operation.pointPhase = "x";
+  state.operation.pointStartedAt = Date.now();
+  state.operation.selectedX = null;
+  state.operation.selectedY = null;
+  state.operation.dragPhase = "start";
+  saveState();
+  renderOperation();
+  restartScanIfNeeded();
+}
+
+function completeOperationTrial(label, success, distance) {
+  state.operation.trials += 1;
+  if (success) state.operation.successes += 1;
+  if (typeof distance === "number") state.operation.distances.push(distance);
+  state.operation.distances = state.operation.distances.slice(-40);
+  playTone(success ? 700 : 240);
+  speak(success ? "成功です" : "もう一度です");
+  announce(success ? `${label}に成功しました` : `${label}に失敗しました`);
+  logEvent({ type: "operation", label, correct: success, distance: Math.round(distance ?? 0) });
+  saveState();
+  renderOperationMetrics();
+}
+
+function resetOperationTraining() {
+  state.operation = cloneDefaultState().operation;
+  saveState();
+  announce("操作訓練の記録をリセットしました");
+  renderOperation();
+  restartScanIfNeeded();
+}
+
 function renderSettings() {
   const settings = state.settings;
   elements.scanInterval.value = settings.scanInterval;
@@ -499,7 +800,7 @@ function shouldCountEvaluationEntry(entry) {
     state.evaluation.isActive &&
     state.evaluation.taskStartedAt &&
     !entry.skipEvaluation &&
-    ["switch", "matching", "phrase", "letter"].includes(entry.type)
+    ["switch", "matching", "phrase", "letter", "operation"].includes(entry.type)
   );
 }
 
@@ -507,6 +808,7 @@ function countEvaluationEntry(entry) {
   if (!shouldCountEvaluationEntry(entry)) return;
   state.evaluation.taskInputs += 1;
   if (entry.correct === false) state.evaluation.taskMistakes += 1;
+  if (typeof entry.distance === "number") state.evaluation.taskDistances.push(entry.distance);
 }
 
 function formatDuration(milliseconds) {
@@ -530,6 +832,7 @@ function startEvaluationSession() {
   state.evaluation.taskTimingEarly = 0;
   state.evaluation.taskTimingLate = 0;
   state.evaluation.taskAssists = 0;
+  state.evaluation.taskDistances = [];
   state.evaluation.results = [];
   saveState();
   announce("効果測定セッションを開始しました");
@@ -563,6 +866,7 @@ function finishEvaluationSession() {
   state.evaluation.taskTimingEarly = 0;
   state.evaluation.taskTimingLate = 0;
   state.evaluation.taskAssists = 0;
+  state.evaluation.taskDistances = [];
   saveState();
   announce("効果測定セッションを終了しました");
   logEvent({ type: "measurement", label: "効果測定セッション終了", skipEvaluation: true });
@@ -584,6 +888,7 @@ function startEvaluationTask() {
   state.evaluation.taskTimingEarly = 0;
   state.evaluation.taskTimingLate = 0;
   state.evaluation.taskAssists = 0;
+  state.evaluation.taskDistances = [];
   saveState();
   announce(`${task.title}を開始しました`);
   logEvent({ type: "measurement", label: `タスク開始: ${task.title}`, skipEvaluation: true });
@@ -603,6 +908,12 @@ function completeEvaluationTask(success) {
     state.evaluation.taskTimingEarly +
     state.evaluation.taskTimingLate;
   const durationMinutes = durationMs > 0 ? durationMs / 60000 : 0;
+  const averageTargetDistance = state.evaluation.taskDistances.length
+    ? Math.round(
+        state.evaluation.taskDistances.reduce((sum, value) => sum + value, 0) /
+          state.evaluation.taskDistances.length
+      )
+    : "";
   const result = {
     participantId: state.evaluation.participantId,
     condition: state.evaluation.condition,
@@ -622,6 +933,7 @@ function completeEvaluationTask(success) {
     assists: state.evaluation.taskAssists,
     scanIntervalMs: state.settings.scanInterval,
     inputsPerMinute: durationMinutes ? Math.round((state.evaluation.taskInputs / durationMinutes) * 10) / 10 : 0,
+    averageTargetDistance,
     selectionErrorRate: state.evaluation.taskInputs
       ? Math.round((state.evaluation.taskMistakes / state.evaluation.taskInputs) * 1000) / 10
       : 0,
@@ -643,6 +955,7 @@ function completeEvaluationTask(success) {
   state.evaluation.taskTimingEarly = 0;
   state.evaluation.taskTimingLate = 0;
   state.evaluation.taskAssists = 0;
+  state.evaluation.taskDistances = [];
   saveState();
   announce(success ? "タスクを成功で記録しました" : "タスクを中止または失敗で記録しました");
   logEvent({
@@ -744,6 +1057,7 @@ function exportEvaluationCsv() {
       "backs",
       "assists",
       "inputs_per_minute",
+      "average_target_distance",
       "scan_interval_ms",
       "effort_rating",
       "ease_rating",
@@ -772,6 +1086,7 @@ function exportEvaluationCsv() {
       result.backs,
       result.assists ?? "",
       result.inputsPerMinute ?? "",
+      result.averageTargetDistance ?? "",
       result.scanIntervalMs ?? "",
       result.effortRating,
       result.easeRating,
@@ -1008,6 +1323,7 @@ function activateCurrentScanTarget() {
   refreshScanTargets();
   if (!scanTargets.length || scanIndex < 0) {
     if (state.currentView === "switcher") runSwitchActivity();
+    if (state.currentView === "operation") handleOperationPrimary();
     return;
   }
   const target = scanTargets[scanIndex];
@@ -1093,6 +1409,9 @@ elements.nextLetter.addEventListener("click", () => {
   renderLetters();
   restartScanIfNeeded();
 });
+elements.operationPrimary.addEventListener("click", handleOperationPrimary);
+elements.nextOperationTarget.addEventListener("click", nextOperationTarget);
+elements.resetOperation.addEventListener("click", resetOperationTraining);
 elements.participantId.addEventListener("input", (event) => {
   state.evaluation.participantId = event.target.value.trim();
   saveState();
@@ -1192,6 +1511,8 @@ if ("serviceWorker" in navigator) {
 window.setInterval(() => {
   if (state.evaluation.taskStartedAt) renderEvaluation();
 }, 1000);
+
+window.setInterval(updatePointCursorDom, 200);
 
 render();
 switchView(state.currentView);

@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0f8b8d" />
     <title>NeuroNode Support Lab</title>
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=5" />
+    <link rel="stylesheet" href="styles.css?v=6" />
   </head>
   <body>
     <div class="app-shell">
@@ -25,6 +25,7 @@
         <button class="tab" data-view="matching" data-scan>マッチング</button>
         <button class="tab" data-view="voca" data-scan>VOCA</button>
         <button class="tab" data-view="letters" data-scan>文字学習</button>
+        <button class="tab" data-view="operation" data-scan>操作訓練</button>
         <button class="tab" data-view="evaluation" data-scan>効果測定</button>
         <button class="tab" data-view="log" data-scan>評価ログ</button>
         <button class="tab" data-view="settings" data-scan>設定</button>
@@ -114,6 +115,45 @@
             <strong id="letterPrompt">「あめ」の最初の文字を選んでください</strong>
           </div>
           <div class="letter-grid" id="letterGrid" aria-label="文字選択肢"></div>
+        </section>
+
+        <section class="view" id="operation" aria-labelledby="operation-title">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">iOS Switch Control training</p>
+              <h2 id="operation-title">iOS操作訓練</h2>
+            </div>
+            <button class="secondary" id="resetOperation" data-scan>訓練記録をリセット</button>
+          </div>
+
+          <div class="module-grid" id="operationModeGrid" aria-label="操作訓練の種類"></div>
+
+          <div class="operation-layout">
+            <section class="eval-panel">
+              <h3 id="operationModeTitle">項目スキャン訓練</h3>
+              <p class="operation-guide" id="operationGuide">項目が順番にハイライトされる前提で、目的の項目を選びます。</p>
+              <div class="operation-stage" id="operationStage" aria-label="操作訓練ステージ"></div>
+              <div class="action-row wrap">
+                <button class="primary-small" id="operationPrimary" data-scan>訓練入力</button>
+                <button class="secondary" id="nextOperationTarget" data-scan>次の課題</button>
+              </div>
+            </section>
+
+            <aside class="metrics" aria-label="操作訓練の記録">
+              <div>
+                <span class="metric-label">試行回数</span>
+                <strong id="operationTrials">0</strong>
+              </div>
+              <div>
+                <span class="metric-label">成功率</span>
+                <strong id="operationSuccessRate">--</strong>
+              </div>
+              <div>
+                <span class="metric-label">平均ズレ</span>
+                <strong id="operationAverageDistance">--</strong>
+              </div>
+            </aside>
+          </div>
         </section>
 
         <section class="view" id="evaluation" aria-labelledby="evaluation-title">
@@ -336,6 +376,6 @@
     </div>
 
     <div class="sr-only" id="liveRegion" aria-live="assertive"></div>
-    <script src="app.js?v=5" defer></script>
+    <script src="app.js?v=6" defer></script>
   </body>
 </html>
