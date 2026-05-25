@@ -133,8 +133,14 @@ const defaultState = {
     taskInputs: 0,
     taskMistakes: 0,
     taskBacks: 0,
+    taskTimingMissed: 0,
+    taskTimingEarly: 0,
+    taskTimingLate: 0,
+    taskAssists: 0,
     effortRating: 3,
     easeRating: 3,
+    engagementRating: 3,
+    observerNotes: "",
     results: [],
     completedSessions: [],
   },
@@ -181,10 +187,17 @@ const elements = {
   markTaskFail: document.querySelector("#markTaskFail"),
   addMistake: document.querySelector("#addMistake"),
   addBack: document.querySelector("#addBack"),
+  addTimingMissed: document.querySelector("#addTimingMissed"),
+  addTimingEarly: document.querySelector("#addTimingEarly"),
+  addTimingLate: document.querySelector("#addTimingLate"),
+  addAssist: document.querySelector("#addAssist"),
   effortRating: document.querySelector("#effortRating"),
   effortRatingValue: document.querySelector("#effortRatingValue"),
   easeRating: document.querySelector("#easeRating"),
   easeRatingValue: document.querySelector("#easeRatingValue"),
+  engagementRating: document.querySelector("#engagementRating"),
+  engagementRatingValue: document.querySelector("#engagementRatingValue"),
+  observerNotes: document.querySelector("#observerNotes"),
   exportEvaluationCsv: document.querySelector("#exportEvaluationCsv"),
   resetEvaluation: document.querySelector("#resetEvaluation"),
   evaluationStatus: document.querySelector("#evaluationStatus"),
@@ -194,6 +207,8 @@ const elements = {
   taskInputs: document.querySelector("#taskInputs"),
   taskMistakes: document.querySelector("#taskMistakes"),
   taskBacks: document.querySelector("#taskBacks"),
+  taskTimingErrors: document.querySelector("#taskTimingErrors"),
+  taskAssists: document.querySelector("#taskAssists"),
   evaluationTaskList: document.querySelector("#evaluationTaskList"),
   evaluationResultList: document.querySelector("#evaluationResultList"),
   totalInputs: document.querySelector("#totalInputs"),
@@ -511,6 +526,10 @@ function startEvaluationSession() {
   state.evaluation.taskInputs = 0;
   state.evaluation.taskMistakes = 0;
   state.evaluation.taskBacks = 0;
+  state.evaluation.taskTimingMissed = 0;
+  state.evaluation.taskTimingEarly = 0;
+  state.evaluation.taskTimingLate = 0;
+  state.evaluation.taskAssists = 0;
   state.evaluation.results = [];
   saveState();
   announce("効果測定セッションを開始しました");
@@ -528,6 +547,8 @@ function finishEvaluationSession() {
     endedAt: new Date().toISOString(),
     effortRating: state.evaluation.effortRating,
     easeRating: state.evaluation.easeRating,
+    engagementRating: state.evaluation.engagementRating,
+    observerNotes: state.evaluation.observerNotes,
     taskResults: [...state.evaluation.results],
   };
   state.evaluation.completedSessions.unshift(session);
@@ -538,6 +559,10 @@ function finishEvaluationSession() {
   state.evaluation.taskInputs = 0;
   state.evaluation.taskMistakes = 0;
   state.evaluation.taskBacks = 0;
+  state.evaluation.taskTimingMissed = 0;
+  state.evaluation.taskTimingEarly = 0;
+  state.evaluation.taskTimingLate = 0;
+  state.evaluation.taskAssists = 0;
   saveState();
   announce("効果測定セッションを終了しました");
   logEvent({ type: "measurement", label: "効果測定セッション終了", skipEvaluation: true });
@@ -555,6 +580,10 @@ function startEvaluationTask() {
   state.evaluation.taskInputs = 0;
   state.evaluation.taskMistakes = 0;
   state.evaluation.taskBacks = 0;
+  state.evaluation.taskTimingMissed = 0;
+  state.evaluation.taskTimingEarly = 0;
+  state.evaluation.taskTimingLate = 0;
+  state.evaluation.taskAssists = 0;
   saveState();
   announce(`${task.title}を開始しました`);
   logEvent({ type: "measurement", label: `タスク開始: ${task.title}`, skipEvaluation: true });
@@ -569,6 +598,11 @@ function completeEvaluationTask(success) {
   }
   const endedAt = new Date().toISOString();
   const durationMs = new Date(endedAt).getTime() - new Date(state.evaluation.taskStartedAt).getTime();
+  const timingErrors =
+    state.evaluation.taskTimingMissed +
+    state.evaluation.taskTimingEarly +
+    state.evaluation.taskTimingLate;
+  const durationMinutes = durationMs > 0 ? durationMs / 60000 : 0;
   const result = {
     participantId: state.evaluation.participantId,
     condition: state.evaluation.condition,
@@ -581,8 +615,23 @@ function completeEvaluationTask(success) {
     inputs: state.evaluation.taskInputs,
     mistakes: state.evaluation.taskMistakes,
     backs: state.evaluation.taskBacks,
+    timingMissed: state.evaluation.taskTimingMissed,
+    timingEarly: state.evaluation.taskTimingEarly,
+    timingLate: state.evaluation.taskTimingLate,
+    timingErrors,
+    assists: state.evaluation.taskAssists,
+    scanIntervalMs: state.settings.scanInterval,
+    inputsPerMinute: durationMinutes ? Math.round((state.evaluation.taskInputs / durationMinutes) * 10) / 10 : 0,
+    selectionErrorRate: state.evaluation.taskInputs
+      ? Math.round((state.evaluation.taskMistakes / state.evaluation.taskInputs) * 1000) / 10
+      : 0,
+    totalScanningErrorRate: state.evaluation.taskInputs
+      ? Math.round(((state.evaluation.taskMistakes + timingErrors) / state.evaluation.taskInputs) * 1000) / 10
+      : 0,
     effortRating: state.evaluation.effortRating,
     easeRating: state.evaluation.easeRating,
+    engagementRating: state.evaluation.engagementRating,
+    observerNotes: state.evaluation.observerNotes,
   };
   state.evaluation.results.push(result);
   state.evaluation.activeTaskIndex = Math.min(state.evaluation.activeTaskIndex + 1, evaluationTasks.length);
@@ -590,6 +639,10 @@ function completeEvaluationTask(success) {
   state.evaluation.taskInputs = 0;
   state.evaluation.taskMistakes = 0;
   state.evaluation.taskBacks = 0;
+  state.evaluation.taskTimingMissed = 0;
+  state.evaluation.taskTimingEarly = 0;
+  state.evaluation.taskTimingLate = 0;
+  state.evaluation.taskAssists = 0;
   saveState();
   announce(success ? "タスクを成功で記録しました" : "タスクを中止または失敗で記録しました");
   logEvent({
@@ -618,9 +671,23 @@ function adjustEvaluationCounter(kind) {
     state.evaluation.taskInputs += 1;
     state.evaluation.taskMistakes += 1;
     logEvent({ type: "measurement", label: "誤選択を手動加算", skipEvaluation: true });
-  } else {
+  } else if (kind === "back") {
     state.evaluation.taskBacks += 1;
     logEvent({ type: "measurement", label: "戻り操作を手動加算", skipEvaluation: true });
+  } else if (kind === "timingMissed") {
+    state.evaluation.taskTimingMissed += 1;
+    logEvent({ type: "measurement", label: "タイミングエラー: 見逃し", skipEvaluation: true });
+  } else if (kind === "timingEarly") {
+    state.evaluation.taskInputs += 1;
+    state.evaluation.taskTimingEarly += 1;
+    logEvent({ type: "measurement", label: "タイミングエラー: 早押し", skipEvaluation: true });
+  } else if (kind === "timingLate") {
+    state.evaluation.taskInputs += 1;
+    state.evaluation.taskTimingLate += 1;
+    logEvent({ type: "measurement", label: "タイミングエラー: 遅押し", skipEvaluation: true });
+  } else if (kind === "assist") {
+    state.evaluation.taskAssists += 1;
+    logEvent({ type: "measurement", label: "介助を手動加算", skipEvaluation: true });
   }
   saveState();
   renderEvaluation();
@@ -645,6 +712,8 @@ function flattenEvaluationResults() {
       sessionEndedAt: session.endedAt,
       effortRating: session.effortRating,
       easeRating: session.easeRating,
+      engagementRating: session.engagementRating,
+      observerNotes: session.observerNotes,
     }))
   );
   return [...state.evaluation.results, ...completed];
@@ -666,9 +735,20 @@ function exportEvaluationCsv() {
       "duration_sec",
       "inputs",
       "mistakes",
+      "selection_error_rate_percent",
+      "timing_missed",
+      "timing_early",
+      "timing_late",
+      "timing_errors",
+      "total_scanning_error_rate_percent",
       "backs",
+      "assists",
+      "inputs_per_minute",
+      "scan_interval_ms",
       "effort_rating",
       "ease_rating",
+      "engagement_rating",
+      "observer_notes",
       "task_started_at",
       "task_ended_at",
       "session_started_at",
@@ -683,9 +763,20 @@ function exportEvaluationCsv() {
       result.durationSeconds,
       result.inputs,
       result.mistakes,
+      result.selectionErrorRate ?? "",
+      result.timingMissed ?? "",
+      result.timingEarly ?? "",
+      result.timingLate ?? "",
+      result.timingErrors ?? "",
+      result.totalScanningErrorRate ?? "",
       result.backs,
+      result.assists ?? "",
+      result.inputsPerMinute ?? "",
+      result.scanIntervalMs ?? "",
       result.effortRating,
       result.easeRating,
+      result.engagementRating ?? "",
+      result.observerNotes ?? "",
       result.startedAt,
       result.endedAt,
       result.sessionStartedAt || state.evaluation.sessionStartedAt || "",
@@ -712,6 +803,9 @@ function renderEvaluation() {
   elements.effortRatingValue.value = String(state.evaluation.effortRating);
   elements.easeRating.value = state.evaluation.easeRating;
   elements.easeRatingValue.value = String(state.evaluation.easeRating);
+  elements.engagementRating.value = state.evaluation.engagementRating;
+  elements.engagementRatingValue.value = String(state.evaluation.engagementRating);
+  elements.observerNotes.value = state.evaluation.observerNotes;
 
   elements.evaluationStatus.textContent = isRunningTask
     ? "タスク計測中"
@@ -728,6 +822,12 @@ function renderEvaluation() {
   elements.taskInputs.textContent = String(state.evaluation.taskInputs);
   elements.taskMistakes.textContent = String(state.evaluation.taskMistakes);
   elements.taskBacks.textContent = String(state.evaluation.taskBacks);
+  elements.taskTimingErrors.textContent = String(
+    state.evaluation.taskTimingMissed +
+      state.evaluation.taskTimingEarly +
+      state.evaluation.taskTimingLate
+  );
+  elements.taskAssists.textContent = String(state.evaluation.taskAssists);
 
   elements.evaluationTaskList.innerHTML = "";
   evaluationTasks.forEach((item, index) => {
@@ -759,7 +859,7 @@ function renderEvaluation() {
     item.innerHTML = `
       <span class="metric-label">${result.success ? "成功" : "中止/失敗"}</span>
       <strong>${escapeHtml(result.taskTitle)}</strong>
-      <span>${result.durationSeconds}秒 / 入力${result.inputs} / 誤${result.mistakes}</span>
+      <span>${result.durationSeconds}秒 / 入力${result.inputs} / 誤${result.mistakes} / 走査誤${result.timingErrors || 0}</span>
     `;
     elements.evaluationResultList.append(item);
   });
@@ -1010,6 +1110,10 @@ elements.markTaskSuccess.addEventListener("click", () => completeEvaluationTask(
 elements.markTaskFail.addEventListener("click", () => completeEvaluationTask(false));
 elements.addMistake.addEventListener("click", () => adjustEvaluationCounter("mistake"));
 elements.addBack.addEventListener("click", () => adjustEvaluationCounter("back"));
+elements.addTimingMissed.addEventListener("click", () => adjustEvaluationCounter("timingMissed"));
+elements.addTimingEarly.addEventListener("click", () => adjustEvaluationCounter("timingEarly"));
+elements.addTimingLate.addEventListener("click", () => adjustEvaluationCounter("timingLate"));
+elements.addAssist.addEventListener("click", () => adjustEvaluationCounter("assist"));
 elements.effortRating.addEventListener("input", (event) => {
   state.evaluation.effortRating = Number(event.target.value);
   saveState();
@@ -1019,6 +1123,15 @@ elements.easeRating.addEventListener("input", (event) => {
   state.evaluation.easeRating = Number(event.target.value);
   saveState();
   renderEvaluation();
+});
+elements.engagementRating.addEventListener("input", (event) => {
+  state.evaluation.engagementRating = Number(event.target.value);
+  saveState();
+  renderEvaluation();
+});
+elements.observerNotes.addEventListener("input", (event) => {
+  state.evaluation.observerNotes = event.target.value;
+  saveState();
 });
 elements.exportEvaluationCsv.addEventListener("click", exportEvaluationCsv);
 elements.resetEvaluation.addEventListener("click", resetEvaluation);

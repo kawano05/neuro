@@ -43,6 +43,8 @@ Xcodeが開いたら、Signing & CapabilitiesでApple Developer Teamを選び、
 - 効果測定: セッション単位でタスク完了時間、入力回数、誤選択、戻り操作、主観評価を記録
 - 評価ログ: 入力、正答、誤選択をCSVで書き出し
 
+研究目的、関連研究の評価軸、実験タスク案は `docs/research-summary.md` に整理しています。
+
 ## 実装メモ
 
 - ログ、設定、教材の入力回数は `localStorage` に保存されます。

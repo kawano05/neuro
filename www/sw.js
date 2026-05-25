@@ -1,11 +1,11 @@
-const cacheName = "neuronode-support-lab-v4";
+const cacheName = "neuronode-support-lab-v5";
 const coreAssets = [
   "./",
   "index.html",
   "styles.css",
-  "styles.css?v=4",
+  "styles.css?v=5",
   "app.js",
-  "app.js?v=4",
+  "app.js?v=5",
   "manifest.webmanifest",
   "icon.svg",
 ];

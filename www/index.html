@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0f8b8d" />
     <title>NeuroNode Support Lab</title>
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=4" />
+    <link rel="stylesheet" href="styles.css?v=5" />
   </head>
   <body>
     <div class="app-shell">
@@ -183,11 +183,23 @@
               <span class="metric-label">戻り操作</span>
               <strong id="taskBacks">0</strong>
             </div>
+            <div class="summary-tile">
+              <span class="metric-label">タイミングエラー</span>
+              <strong id="taskTimingErrors">0</strong>
+            </div>
+            <div class="summary-tile">
+              <span class="metric-label">介助回数</span>
+              <strong id="taskAssists">0</strong>
+            </div>
           </div>
 
           <div class="action-row wrap evaluation-counters">
             <button class="secondary" id="addMistake" data-scan>誤選択 +1</button>
             <button class="secondary" id="addBack" data-scan>戻り操作 +1</button>
+            <button class="secondary" id="addTimingMissed" data-scan>見逃し +1</button>
+            <button class="secondary" id="addTimingEarly" data-scan>早押し +1</button>
+            <button class="secondary" id="addTimingLate" data-scan>遅押し +1</button>
+            <button class="secondary" id="addAssist" data-scan>介助 +1</button>
           </div>
 
           <div class="evaluation-grid">
@@ -202,6 +214,15 @@
                 <span>操作しやすさ</span>
                 <input id="easeRating" type="range" min="1" max="5" step="1" />
                 <output id="easeRatingValue">3</output>
+              </label>
+              <label class="scale-row">
+                <span>集中・関心</span>
+                <input id="engagementRating" type="range" min="1" max="5" step="1" />
+                <output id="engagementRatingValue">3</output>
+              </label>
+              <label class="note-row">
+                <span>観察メモ</span>
+                <textarea id="observerNotes" rows="4" placeholder="例: 走査速度は適切。3問目で見逃しがあった。"></textarea>
               </label>
             </section>
 
@@ -315,6 +336,6 @@
     </div>
 
     <div class="sr-only" id="liveRegion" aria-live="assertive"></div>
-    <script src="app.js?v=4" defer></script>
+    <script src="app.js?v=5" defer></script>
   </body>
 </html>

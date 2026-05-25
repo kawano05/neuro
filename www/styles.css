@@ -578,7 +578,7 @@ main {
 }
 
 .evaluation-summary {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .summary-tile {
@@ -602,7 +602,8 @@ main {
 }
 
 .field-row,
-.scale-row {
+.scale-row,
+.note-row {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
   gap: 12px;
@@ -615,13 +616,15 @@ main {
 }
 
 .field-row span,
-.scale-row span {
+.scale-row span,
+.note-row span {
   color: var(--muted);
   font-weight: 800;
 }
 
 .field-row input,
-.field-row select {
+.field-row select,
+.note-row textarea {
   min-height: 48px;
   width: 100%;
   padding: 8px 12px;
@@ -629,6 +632,15 @@ main {
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
+}
+
+.note-row {
+  align-items: start;
+}
+
+.note-row textarea {
+  min-height: 112px;
+  resize: vertical;
 }
 
 .primary-small {
