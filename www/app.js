@@ -1,36 +1,72 @@
-const storageKey = "neuronode-prototype-state-v1";
+const storageKey = "neuronode-prototype-state-v2";
 
-const lessons = [
+const switchModules = [
   {
-    label: "入力できました",
-    detail: "一入力一反応の確認です。入力のたびに表示と記録が更新されます。",
-    tone: 440,
-    flash: "flash-good",
+    id: "color",
+    name: "色変化",
+    description: "入力すると画面の色が変わります。",
+    tones: [392, 440, 494, 523],
   },
   {
-    label: "次の画面へ",
-    detail: "共有iPadで迷わないように、大きな反応領域を中心にしています。",
-    tone: 520,
-    flash: "flash-warn",
+    id: "balloon",
+    name: "風船ふくらませ",
+    description: "入力するたびに風船が大きくなり、最後に割れます。",
+    tones: [330, 392, 494, 660],
   },
   {
-    label: "よくできました",
-    detail: "SpaceまたはEnterでニューロノード入力を簡易的に再現できます。",
-    tone: 660,
-    flash: "flash-good",
+    id: "firework",
+    name: "花火",
+    description: "入力すると花火のような光が広がります。",
+    tones: [523, 659, 784, 988],
   },
   {
-    label: "もう一度",
-    detail: "反応時間、入力回数、誤選択数を評価ログに残します。",
-    tone: 360,
-    flash: "flash-warn",
+    id: "sound",
+    name: "音あそび",
+    description: "入力するたびに違う音を鳴らします。",
+    tones: [262, 330, 392, 523],
   },
 ];
 
-const choiceTasks = [
-  { prompt: "「はい」を選んでください", answer: "はい", options: ["はい", "いいえ", "もう一度", "休みたい"] },
-  { prompt: "「痛い」を選んでください", answer: "痛い", options: ["寒い", "痛い", "水がほしい", "ありがとう"] },
-  { prompt: "「姿勢を変えて」を選んでください", answer: "姿勢を変えて", options: ["姿勢を変えて", "トイレ", "眠い", "大丈夫"] },
+const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747"];
+
+const matchingTasks = [
+  {
+    prompt: "赤いものを選んでください",
+    answer: "りんご",
+    options: [
+      { label: "りんご", visual: "circle red" },
+      { label: "そら", visual: "square blue" },
+      { label: "はっぱ", visual: "triangle green" },
+      { label: "ゆき", visual: "circle white" },
+    ],
+  },
+  {
+    prompt: "丸い形を選んでください",
+    answer: "まる",
+    options: [
+      { label: "しかく", visual: "square teal" },
+      { label: "さんかく", visual: "triangle yellow" },
+      { label: "まる", visual: "circle blue" },
+      { label: "ながしかく", visual: "bar green" },
+    ],
+  },
+  {
+    prompt: "食べものを選んでください",
+    answer: "パン",
+    options: [
+      { label: "くつ", visual: "bar teal" },
+      { label: "パン", visual: "circle yellow" },
+      { label: "ほん", visual: "square blue" },
+      { label: "いす", visual: "square green" },
+    ],
+  },
+];
+
+const letterTasks = [
+  { prompt: "「あめ」の最初の文字を選んでください", answer: "あ", options: ["あ", "い", "う", "え"] },
+  { prompt: "「からだ」の最初の文字を選んでください", answer: "か", options: ["さ", "た", "か", "な"] },
+  { prompt: "「みず」の最初の文字を選んでください", answer: "み", options: ["に", "み", "し", "り"] },
+  { prompt: "「ありがとう」の最初の文字を選んでください", answer: "あ", options: ["お", "あ", "ま", "や"] },
 ];
 
 const phraseCategories = {
@@ -41,11 +77,13 @@ const phraseCategories = {
 };
 
 const defaultState = {
-  currentView: "trainer",
-  lessonIndex: 0,
-  choiceIndex: 0,
+  currentView: "switcher",
+  activeSwitchModule: "color",
+  switchStep: 0,
   hitCount: 0,
   hitTimes: [],
+  matchingIndex: 0,
+  letterIndex: 0,
   currentPhrase: "",
   currentCategory: "基本",
   settings: {
@@ -66,28 +104,30 @@ let scanTimer = null;
 let audioContext;
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
-function cloneDefaultState() {
-  return JSON.parse(JSON.stringify(defaultState));
-}
-
 const elements = {
   scanState: document.querySelector("#scanState"),
   liveRegion: document.querySelector("#liveRegion"),
   tabs: [...document.querySelectorAll(".tab")],
   views: [...document.querySelectorAll(".view")],
-  reactionPad: document.querySelector("#reactionPad"),
-  reactionLabel: document.querySelector("#reactionLabel"),
-  lessonPrompt: document.querySelector("#lessonPrompt"),
+  switchModuleGrid: document.querySelector("#switchModuleGrid"),
+  switchStage: document.querySelector("#switchStage"),
+  activityVisual: document.querySelector("#activityVisual"),
+  switchTitle: document.querySelector("#switchTitle"),
+  switchHint: document.querySelector("#switchHint"),
   hitCount: document.querySelector("#hitCount"),
   averageInterval: document.querySelector("#averageInterval"),
   lastReaction: document.querySelector("#lastReaction"),
-  resetTrainer: document.querySelector("#resetTrainer"),
-  choicePrompt: document.querySelector("#choicePrompt"),
-  choiceGrid: document.querySelector("#choiceGrid"),
+  resetSwitch: document.querySelector("#resetSwitch"),
+  matchingPrompt: document.querySelector("#matchingPrompt"),
+  matchingGrid: document.querySelector("#matchingGrid"),
+  nextMatching: document.querySelector("#nextMatching"),
   categoryRow: document.querySelector("#categoryRow"),
   phraseGrid: document.querySelector("#phraseGrid"),
   currentPhrase: document.querySelector("#currentPhrase"),
   repeatPhrase: document.querySelector("#repeatPhrase"),
+  letterPrompt: document.querySelector("#letterPrompt"),
+  letterGrid: document.querySelector("#letterGrid"),
+  nextLetter: document.querySelector("#nextLetter"),
   totalInputs: document.querySelector("#totalInputs"),
   accuracyRate: document.querySelector("#accuracyRate"),
   mistakeCount: document.querySelector("#mistakeCount"),
@@ -104,6 +144,10 @@ const elements = {
   toggleScan: document.querySelector("#toggleScan"),
   primarySwitch: document.querySelector("#primarySwitch"),
 };
+
+function cloneDefaultState() {
+  return JSON.parse(JSON.stringify(defaultState));
+}
 
 function loadState() {
   try {
@@ -136,7 +180,7 @@ function logEvent(entry) {
     view: state.currentView,
     ...entry,
   });
-  state.logs = state.logs.slice(0, 200);
+  state.logs = state.logs.slice(0, 300);
   saveState();
   renderLog();
 }
@@ -147,6 +191,10 @@ function formatTime(isoString) {
     minute: "2-digit",
     second: "2-digit",
   }).format(new Date(isoString));
+}
+
+function activeSwitchModule() {
+  return switchModules.find((module) => module.id === state.activeSwitchModule) || switchModules[0];
 }
 
 function switchView(viewName) {
@@ -164,21 +212,67 @@ function switchView(viewName) {
 }
 
 function render() {
-  renderTrainer();
-  renderChoices();
+  renderSwitchModules();
+  renderSwitchStage();
+  renderMatching();
   renderCategories();
   renderPhrases();
+  renderLetters();
   renderSettings();
   renderLog();
   applySettingsClasses();
 }
 
-function renderTrainer() {
-  const lesson = lessons[state.lessonIndex % lessons.length];
-  elements.reactionLabel.textContent = lesson.label;
-  elements.lessonPrompt.textContent = lesson.detail;
-  elements.hitCount.textContent = String(state.hitCount);
+function renderSwitchModules() {
+  elements.switchModuleGrid.innerHTML = "";
+  switchModules.forEach((module) => {
+    const button = document.createElement("button");
+    button.className = "module-button";
+    button.classList.toggle("is-active", module.id === state.activeSwitchModule);
+    button.type = "button";
+    button.dataset.scan = "";
+    button.innerHTML = `<strong>${module.name}</strong><span>${module.description}</span>`;
+    button.addEventListener("click", () => {
+      state.activeSwitchModule = module.id;
+      state.switchStep = 0;
+      saveState();
+      renderSwitchModules();
+      renderSwitchStage();
+      restartScanIfNeeded();
+    });
+    elements.switchModuleGrid.append(button);
+  });
+}
 
+function renderSwitchStage() {
+  const module = activeSwitchModule();
+  elements.switchTitle.textContent = module.name;
+  elements.switchHint.textContent = module.description;
+  elements.switchStage.className = `activity-stage module-${module.id}`;
+  elements.switchStage.dataset.scan = "";
+
+  if (module.id === "color") {
+    const color = stageColors[state.switchStep % stageColors.length];
+    elements.switchStage.style.setProperty("--stage-color", color);
+    elements.activityVisual.innerHTML = `<span class="color-chip" style="background:${color}"></span>`;
+  } else if (module.id === "balloon") {
+    const size = 64 + (state.switchStep % 5) * 26;
+    const popped = state.switchStep % 6 === 5;
+    elements.activityVisual.innerHTML = popped
+      ? `<span class="burst-mark">POP</span>`
+      : `<span class="balloon-shape" style="width:${size}px;height:${size}px"></span>`;
+  } else if (module.id === "firework") {
+    elements.activityVisual.innerHTML = `<span class="firework-ring"></span><span class="firework-ring delay"></span>`;
+  } else {
+    const notes = ["ド", "ミ", "ソ", "高いド"];
+    elements.activityVisual.innerHTML = `<span class="sound-note">${notes[state.switchStep % notes.length]}</span>`;
+  }
+
+  renderSwitchMetrics();
+}
+
+function renderSwitchMetrics() {
+  elements.hitCount.textContent = String(state.hitCount);
   if (state.hitTimes.length >= 2) {
     const intervals = state.hitTimes.slice(1).map((time, index) => time - state.hitTimes[index]);
     const average = intervals.reduce((sum, value) => sum + value, 0) / intervals.length;
@@ -191,18 +285,18 @@ function renderTrainer() {
   elements.lastReaction.textContent = last ? new Intl.DateTimeFormat("ja-JP", { minute: "2-digit", second: "2-digit" }).format(last) : "--";
 }
 
-function renderChoices() {
-  const task = choiceTasks[state.choiceIndex % choiceTasks.length];
-  elements.choicePrompt.textContent = task.prompt;
-  elements.choiceGrid.innerHTML = "";
+function renderMatching() {
+  const task = matchingTasks[state.matchingIndex % matchingTasks.length];
+  elements.matchingPrompt.textContent = task.prompt;
+  elements.matchingGrid.innerHTML = "";
   task.options.forEach((option) => {
     const button = document.createElement("button");
-    button.className = "choice-button";
+    button.className = "match-card";
     button.type = "button";
     button.dataset.scan = "";
-    button.textContent = option;
-    button.addEventListener("click", () => chooseAnswer(option));
-    elements.choiceGrid.append(button);
+    button.innerHTML = `<span class="shape ${option.visual}"></span><strong>${option.label}</strong>`;
+    button.addEventListener("click", () => chooseMatching(option.label));
+    elements.matchingGrid.append(button);
   });
 }
 
@@ -240,6 +334,21 @@ function renderPhrases() {
   });
 }
 
+function renderLetters() {
+  const task = letterTasks[state.letterIndex % letterTasks.length];
+  elements.letterPrompt.textContent = task.prompt;
+  elements.letterGrid.innerHTML = "";
+  task.options.forEach((letter) => {
+    const button = document.createElement("button");
+    button.className = "letter-button";
+    button.type = "button";
+    button.dataset.scan = "";
+    button.textContent = letter;
+    button.addEventListener("click", () => chooseLetter(letter));
+    elements.letterGrid.append(button);
+  });
+}
+
 function renderSettings() {
   const settings = state.settings;
   elements.scanInterval.value = settings.scanInterval;
@@ -253,23 +362,23 @@ function renderSettings() {
 
 function renderLog() {
   const total = state.logs.filter((entry) => entry.type !== "system").length;
-  const answers = state.logs.filter((entry) => entry.type === "choice");
-  const mistakes = answers.filter((entry) => !entry.correct).length;
-  const correct = answers.filter((entry) => entry.correct).length;
+  const graded = state.logs.filter((entry) => entry.type === "matching" || entry.type === "letter");
+  const mistakes = graded.filter((entry) => !entry.correct).length;
+  const correct = graded.filter((entry) => entry.correct).length;
   elements.totalInputs.textContent = String(total);
   elements.mistakeCount.textContent = String(mistakes);
-  elements.accuracyRate.textContent = answers.length ? `${Math.round((correct / answers.length) * 100)}%` : "--";
+  elements.accuracyRate.textContent = graded.length ? `${Math.round((correct / graded.length) * 100)}%` : "--";
 
   elements.logList.innerHTML = "";
   if (state.logs.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "まだログはありません。教材または会話画面で入力すると記録されます。";
+    empty.textContent = "まだログはありません。教材、マッチング、VOCA、文字学習で入力すると記録されます。";
     elements.logList.append(empty);
     return;
   }
 
-  state.logs.slice(0, 24).forEach((entry) => {
+  state.logs.slice(0, 32).forEach((entry) => {
     const item = document.createElement("article");
     item.className = "log-item";
     const result = entry.correct === true ? "正答" : entry.correct === false ? "誤選択" : "";
@@ -287,39 +396,45 @@ function applySettingsClasses() {
   document.body.classList.toggle("high-contrast", state.settings.highContrast);
 }
 
-function runReaction() {
-  const now = Date.now();
-  const lesson = lessons[state.lessonIndex % lessons.length];
+function runSwitchActivity() {
+  const module = activeSwitchModule();
+  const tone = module.tones[state.switchStep % module.tones.length];
   state.hitCount += 1;
-  state.hitTimes.push(now);
-  state.hitTimes = state.hitTimes.slice(-40);
-  state.lessonIndex = (state.lessonIndex + 1) % lessons.length;
+  state.hitTimes.push(Date.now());
+  state.hitTimes = state.hitTimes.slice(-60);
+  state.switchStep += 1;
 
-  elements.reactionPad.classList.remove("flash-good", "flash-warn");
-  requestAnimationFrame(() => {
-    elements.reactionPad.classList.add(lesson.flash);
-    setTimeout(() => elements.reactionPad.classList.remove(lesson.flash), 520);
-  });
-
-  playTone(lesson.tone);
-  speak(lesson.label);
-  announce(lesson.label);
-  logEvent({ type: "reaction", label: lesson.label });
+  playTone(tone);
+  speak(module.name);
+  announce(`${module.name}に入力しました`);
+  logEvent({ type: "switch", label: module.name });
   saveState();
-  renderTrainer();
+  renderSwitchStage();
 }
 
-function chooseAnswer(answer) {
-  const task = choiceTasks[state.choiceIndex % choiceTasks.length];
+function chooseMatching(answer) {
+  const task = matchingTasks[state.matchingIndex % matchingTasks.length];
   const correct = answer === task.answer;
-  const label = correct ? `正解: ${answer}` : `違います: ${answer}`;
-  state.choiceIndex = (state.choiceIndex + 1) % choiceTasks.length;
   playTone(correct ? 700 : 230);
   speak(correct ? "正解です" : "違います");
-  announce(label);
-  logEvent({ type: "choice", label: answer, correct });
+  announce(correct ? `正解: ${answer}` : `違います: ${answer}`);
+  logEvent({ type: "matching", label: answer, correct });
+  state.matchingIndex = (state.matchingIndex + 1) % matchingTasks.length;
   saveState();
-  renderChoices();
+  renderMatching();
+  restartScanIfNeeded();
+}
+
+function chooseLetter(letter) {
+  const task = letterTasks[state.letterIndex % letterTasks.length];
+  const correct = letter === task.answer;
+  playTone(correct ? 760 : 240);
+  speak(correct ? "正解です" : "違います");
+  announce(correct ? `正解: ${letter}` : `違います: ${letter}`);
+  logEvent({ type: "letter", label: letter, correct });
+  state.letterIndex = (state.letterIndex + 1) % letterTasks.length;
+  saveState();
+  renderLetters();
   restartScanIfNeeded();
 }
 
@@ -354,8 +469,8 @@ function playTone(frequency) {
     oscillator.connect(gain);
     gain.connect(audioContext.destination);
     oscillator.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.16);
-    oscillator.stop(audioContext.currentTime + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.18);
+    oscillator.stop(audioContext.currentTime + 0.2);
   } catch {
     // AudioContext may be unavailable in older embedded browsers.
   }
@@ -423,7 +538,7 @@ function restartScanIfNeeded() {
 function activateCurrentScanTarget() {
   refreshScanTargets();
   if (!scanTargets.length || scanIndex < 0) {
-    if (state.currentView === "trainer") runReaction();
+    if (state.currentView === "switcher") runSwitchActivity();
     return;
   }
   const target = scanTargets[scanIndex];
@@ -483,19 +598,31 @@ elements.tabs.forEach((tab) => {
   tab.addEventListener("click", () => switchView(tab.dataset.view));
 });
 
-elements.reactionPad.addEventListener("click", runReaction);
+elements.switchStage.addEventListener("click", runSwitchActivity);
 elements.primarySwitch.addEventListener("click", activateCurrentScanTarget);
 elements.toggleScan.addEventListener("click", toggleScan);
-elements.resetTrainer.addEventListener("click", () => {
+elements.resetSwitch.addEventListener("click", () => {
   state.hitCount = 0;
   state.hitTimes = [];
-  state.lessonIndex = 0;
-  logEvent({ type: "system", label: "教材記録をリセット" });
+  state.switchStep = 0;
+  logEvent({ type: "system", label: "スイッチ教材記録をリセット" });
   saveState();
-  renderTrainer();
+  renderSwitchStage();
+});
+elements.nextMatching.addEventListener("click", () => {
+  state.matchingIndex = (state.matchingIndex + 1) % matchingTasks.length;
+  saveState();
+  renderMatching();
+  restartScanIfNeeded();
 });
 elements.repeatPhrase.addEventListener("click", () => {
   if (state.currentPhrase) speak(state.currentPhrase);
+});
+elements.nextLetter.addEventListener("click", () => {
+  state.letterIndex = (state.letterIndex + 1) % letterTasks.length;
+  saveState();
+  renderLetters();
+  restartScanIfNeeded();
 });
 elements.exportCsv.addEventListener("click", exportCsv);
 elements.clearLog.addEventListener("click", () => {

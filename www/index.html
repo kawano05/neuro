@@ -21,26 +21,31 @@
       </header>
 
       <nav class="tabbar" aria-label="主要画面">
-        <button class="tab is-active" data-view="trainer" data-scan>教材</button>
-        <button class="tab" data-view="talk" data-scan>会話</button>
+        <button class="tab is-active" data-view="switcher" data-scan>スイッチ教材</button>
+        <button class="tab" data-view="matching" data-scan>マッチング</button>
+        <button class="tab" data-view="voca" data-scan>VOCA</button>
+        <button class="tab" data-view="letters" data-scan>文字学習</button>
         <button class="tab" data-view="log" data-scan>評価ログ</button>
         <button class="tab" data-view="settings" data-scan>設定</button>
       </nav>
 
       <main>
-        <section class="view is-active" id="trainer" aria-labelledby="trainer-title">
+        <section class="view is-active" id="switcher" aria-labelledby="switcher-title">
           <div class="section-head">
             <div>
-              <p class="eyebrow">One switch material</p>
-              <h2 id="trainer-title">一入力一反応教材</h2>
+              <p class="eyebrow">Switch apps</p>
+              <h2 id="switcher-title">スイッチ教材ソフト</h2>
             </div>
-            <button class="secondary" id="resetTrainer" data-scan>記録をリセット</button>
+            <button class="secondary" id="resetSwitch" data-scan>教材記録をリセット</button>
           </div>
 
+          <div class="module-grid" id="switchModuleGrid" aria-label="スイッチ教材の種類"></div>
+
           <div class="trainer-layout">
-            <button class="reaction-pad" id="reactionPad" data-scan aria-describedby="lessonPrompt">
-              <span class="reaction-label" id="reactionLabel">入力してください</span>
-              <span class="reaction-detail" id="lessonPrompt">Space、Enter、または下の入力ボタンで反応します。</span>
+            <button class="activity-stage" id="switchStage" data-scan aria-describedby="switchHint">
+              <span class="activity-visual" id="activityVisual"></span>
+              <span class="reaction-label" id="switchTitle">色変化</span>
+              <span class="reaction-detail" id="switchHint">入力すると画面の色が変わります。</span>
             </button>
 
             <aside class="metrics" aria-label="教材の記録">
@@ -58,24 +63,29 @@
               </div>
             </aside>
           </div>
-
-          <div class="choice-block">
-            <div class="section-head compact">
-              <div>
-                <p class="eyebrow">Scanning choice</p>
-                <h3>選択練習</h3>
-              </div>
-              <p class="prompt" id="choicePrompt">「はい」を選んでください</p>
-            </div>
-            <div class="choice-grid" id="choiceGrid" aria-label="選択練習の選択肢"></div>
-          </div>
         </section>
 
-        <section class="view" id="talk" aria-labelledby="talk-title">
+        <section class="view" id="matching" aria-labelledby="matching-title">
           <div class="section-head">
             <div>
-              <p class="eyebrow">Simple communication</p>
-              <h2 id="talk-title">簡易コミュニケーション</h2>
+              <p class="eyebrow">Scan matching</p>
+              <h2 id="matching-title">スキャン・マッチング教材</h2>
+            </div>
+            <button class="secondary" id="nextMatching" data-scan>次の問題</button>
+          </div>
+
+          <div class="question-board">
+            <span class="metric-label">お題</span>
+            <strong id="matchingPrompt">赤いものを選んでください</strong>
+          </div>
+          <div class="card-grid" id="matchingGrid" aria-label="マッチング選択肢"></div>
+        </section>
+
+        <section class="view" id="voca" aria-labelledby="voca-title">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Fixed phrase VOCA</p>
+              <h2 id="voca-title">定型句VOCA</h2>
             </div>
             <button class="secondary" id="repeatPhrase" data-scan>もう一度読む</button>
           </div>
@@ -87,6 +97,22 @@
 
           <div class="category-row" id="categoryRow" aria-label="カテゴリ"></div>
           <div class="phrase-grid" id="phraseGrid" aria-label="定型句"></div>
+        </section>
+
+        <section class="view" id="letters" aria-labelledby="letters-title">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Letter learning</p>
+              <h2 id="letters-title">文字学習ソフト</h2>
+            </div>
+            <button class="secondary" id="nextLetter" data-scan>次の問題</button>
+          </div>
+
+          <div class="question-board letter-board">
+            <span class="metric-label">文字のお題</span>
+            <strong id="letterPrompt">「あめ」の最初の文字を選んでください</strong>
+          </div>
+          <div class="letter-grid" id="letterGrid" aria-label="文字選択肢"></div>
         </section>
 
         <section class="view" id="log" aria-labelledby="log-title">

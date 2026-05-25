@@ -1,4 +1,4 @@
-const cacheName = "neuronode-support-lab-v1";
+const cacheName = "neuronode-support-lab-v2";
 const coreAssets = [
   "./",
   "index.html",

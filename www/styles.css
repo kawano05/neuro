@@ -193,7 +193,8 @@ main {
   align-items: stretch;
 }
 
-.reaction-pad {
+.reaction-pad,
+.activity-stage {
   display: grid;
   min-height: 360px;
   padding: 28px;
@@ -203,6 +204,12 @@ main {
   place-items: center;
   text-align: center;
   box-shadow: var(--shadow);
+}
+
+.activity-stage {
+  background: linear-gradient(135deg, var(--stage-color, var(--accent)), #3bb5a8);
+  grid-template-rows: minmax(96px, auto) auto auto;
+  gap: 16px;
 }
 
 .reaction-pad.flash-good {
@@ -227,6 +234,108 @@ main {
   font-size: clamp(1rem, 2.2vw, 1.45rem);
   font-weight: 700;
   line-height: 1.6;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.module-button {
+  display: grid;
+  min-height: 112px;
+  padding: 14px;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  align-content: center;
+  gap: 6px;
+  text-align: left;
+}
+
+.module-button strong {
+  font-size: 1.18rem;
+}
+
+.module-button span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.module-button.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.activity-visual {
+  display: grid;
+  min-height: 120px;
+  position: relative;
+  place-items: center;
+}
+
+.color-chip,
+.balloon-shape,
+.firework-ring,
+.sound-note,
+.burst-mark {
+  display: inline-grid;
+  place-items: center;
+}
+
+.color-chip {
+  width: 136px;
+  height: 136px;
+  border: 8px solid rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+}
+
+.balloon-shape {
+  border-radius: 50% 50% 48% 48%;
+  background: #e75b7b;
+  box-shadow: inset -14px -18px 0 rgba(0, 0, 0, 0.12);
+  transition: width 0.2s ease, height 0.2s ease;
+}
+
+.burst-mark,
+.sound-note {
+  min-width: 136px;
+  min-height: 136px;
+  border: 8px solid rgba(255, 255, 255, 0.74);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 2.25rem;
+  font-weight: 900;
+}
+
+.firework-ring {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border: 10px solid rgba(255, 255, 255, 0.78);
+  border-radius: 50%;
+  animation: pulse-ring 1.1s ease-out infinite;
+}
+
+.firework-ring.delay {
+  animation-delay: 0.3s;
+  border-color: rgba(242, 201, 76, 0.92);
+}
+
+@keyframes pulse-ring {
+  from {
+    opacity: 1;
+    transform: scale(0.35);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.75);
+  }
 }
 
 .metrics,
@@ -275,7 +384,9 @@ main {
 .choice-grid,
 .phrase-grid,
 .summary-grid,
-.settings-grid {
+.settings-grid,
+.card-grid,
+.letter-grid {
   display: grid;
   gap: 12px;
 }
@@ -313,6 +424,120 @@ main {
   margin-bottom: 16px;
   padding: 20px;
   background: var(--accent-soft);
+}
+
+.question-board {
+  min-height: 128px;
+  margin-bottom: 16px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.question-board strong {
+  display: block;
+  margin-top: 8px;
+  font-size: clamp(1.7rem, 4vw, 3rem);
+  line-height: 1.25;
+}
+
+.letter-board {
+  background: #eef5df;
+}
+
+.card-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.match-card,
+.letter-button {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.match-card {
+  display: grid;
+  min-height: 180px;
+  padding: 18px;
+  gap: 12px;
+  place-items: center;
+}
+
+.match-card strong {
+  font-size: 1.35rem;
+}
+
+.shape {
+  display: block;
+  width: 92px;
+  height: 92px;
+  background: var(--accent);
+}
+
+.shape.circle {
+  border-radius: 50%;
+}
+
+.shape.square {
+  border-radius: 8px;
+}
+
+.shape.triangle {
+  width: 0;
+  height: 0;
+  border-right: 54px solid transparent;
+  border-bottom: 94px solid var(--shape-color, var(--accent));
+  border-left: 54px solid transparent;
+  background: transparent;
+}
+
+.shape.bar {
+  width: 116px;
+  height: 56px;
+  border-radius: 8px;
+}
+
+.shape.red {
+  --shape-color: #c04747;
+  background: #c04747;
+}
+
+.shape.blue {
+  --shape-color: #315c9c;
+  background: #315c9c;
+}
+
+.shape.green {
+  --shape-color: #2f8f5b;
+  background: #2f8f5b;
+}
+
+.shape.yellow {
+  --shape-color: #c8d84f;
+  background: #c8d84f;
+}
+
+.shape.teal {
+  --shape-color: var(--accent);
+  background: var(--accent);
+}
+
+.shape.white {
+  --shape-color: #ffffff;
+  background: #ffffff;
+  border: 2px solid var(--line);
+}
+
+.letter-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.letter-button {
+  min-height: 172px;
+  font-size: clamp(3rem, 8vw, 5rem);
 }
 
 .message-board strong {
@@ -491,6 +716,9 @@ input[type="checkbox"] {
 
   .trainer-layout,
   .choice-grid,
+  .module-grid,
+  .card-grid,
+  .letter-grid,
   .phrase-grid,
   .summary-grid {
     grid-template-columns: 1fr;
@@ -502,7 +730,7 @@ input[type="checkbox"] {
 
   .tabbar {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .log-item {
