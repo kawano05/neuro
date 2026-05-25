@@ -32,9 +32,7 @@ body {
   min-height: 100vh;
   margin: 0;
   color: var(--ink);
-  background:
-    linear-gradient(180deg, rgba(15, 139, 141, 0.12), transparent 260px),
-    var(--bg);
+  background: var(--bg);
 }
 
 body.large-text {
@@ -199,7 +197,7 @@ main {
   min-height: 360px;
   padding: 28px;
   border-color: var(--accent);
-  background: linear-gradient(135deg, var(--accent), #3bb5a8);
+  background: var(--accent);
   color: #ffffff;
   place-items: center;
   text-align: center;
@@ -207,17 +205,17 @@ main {
 }
 
 .activity-stage {
-  background: linear-gradient(135deg, var(--stage-color, var(--accent)), #3bb5a8);
+  background: var(--stage-color, var(--accent));
   grid-template-rows: minmax(96px, auto) auto auto;
   gap: 16px;
 }
 
 .reaction-pad.flash-good {
-  background: linear-gradient(135deg, var(--good), #58b976);
+  background: var(--good);
 }
 
 .reaction-pad.flash-warn {
-  background: linear-gradient(135deg, #6f8f1f, #c8d84f);
+  background: #6f8f1f;
 }
 
 .reaction-label {
