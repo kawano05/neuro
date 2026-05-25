@@ -342,7 +342,9 @@ main {
 .summary-tile,
 .message-board,
 .setting-row,
-.log-item {
+.log-item,
+.eval-panel,
+.task-card {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
@@ -577,9 +579,123 @@ main {
   margin-bottom: 16px;
 }
 
+.evaluation-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .summary-tile {
   min-height: 120px;
   padding: 18px;
+}
+
+.evaluation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.eval-panel {
+  padding: 18px;
+}
+
+.eval-panel h3 {
+  margin-bottom: 14px;
+}
+
+.field-row,
+.scale-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.scale-row {
+  grid-template-columns: 112px minmax(0, 1fr) 48px;
+}
+
+.field-row span,
+.scale-row span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.field-row input,
+.field-row select {
+  min-height: 48px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.primary-small {
+  padding: 0 18px;
+  background: var(--accent-strong);
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+.current-task {
+  min-height: 160px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.current-task strong {
+  display: block;
+  margin-top: 8px;
+  font-size: clamp(1.3rem, 2.8vw, 2rem);
+  line-height: 1.25;
+}
+
+.current-task p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.evaluation-counters {
+  margin: -4px 0 16px;
+}
+
+.task-list {
+  display: grid;
+  gap: 10px;
+}
+
+.task-card {
+  padding: 14px;
+}
+
+.task-card strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.task-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.task-card.is-current {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.task-card.is-done {
+  border-color: #b9dfc9;
+  background: #e5f5ec;
 }
 
 .log-list {
@@ -720,7 +836,9 @@ input[type="checkbox"] {
   .card-grid,
   .letter-grid,
   .phrase-grid,
-  .summary-grid {
+  .summary-grid,
+  .evaluation-grid,
+  .evaluation-summary {
     grid-template-columns: 1fr;
   }
 

@@ -76,6 +76,33 @@ const phraseCategories = {
   気持ち: ["うれしいです", "不安です", "楽しいです", "静かにしたいです", "外に出たいです", "話したいです"],
 };
 
+const evaluationTasks = [
+  {
+    id: "switch-5",
+    title: "スイッチ教材を5回入力",
+    guide: "スイッチ教材画面で同じ入力を5回行い、支援者が達成を確認したら成功で終了します。",
+    view: "switcher",
+  },
+  {
+    id: "matching-1",
+    title: "マッチング問題を1問正解",
+    guide: "マッチング画面でお題に合う選択肢を選びます。誤選択は自動で記録されます。",
+    view: "matching",
+  },
+  {
+    id: "voca-pain",
+    title: "VOCAで「痛いです」を選択",
+    guide: "VOCA画面で体調カテゴリから「痛いです」を選びます。必要に応じて誤選択を手動で加算します。",
+    view: "voca",
+  },
+  {
+    id: "letter-1",
+    title: "文字学習を1問正解",
+    guide: "文字学習画面で提示された単語の最初の文字を選びます。誤選択は自動で記録されます。",
+    view: "letters",
+  },
+];
+
 const defaultState = {
   currentView: "switcher",
   activeSwitchModule: "color",
@@ -95,6 +122,22 @@ const defaultState = {
     highContrast: false,
   },
   logs: [],
+  evaluation: {
+    participantId: "",
+    condition: "web",
+    isActive: false,
+    sessionStartedAt: null,
+    sessionEndedAt: null,
+    activeTaskIndex: 0,
+    taskStartedAt: null,
+    taskInputs: 0,
+    taskMistakes: 0,
+    taskBacks: 0,
+    effortRating: 3,
+    easeRating: 3,
+    results: [],
+    completedSessions: [],
+  },
 };
 
 let state = loadState();
@@ -128,6 +171,31 @@ const elements = {
   letterPrompt: document.querySelector("#letterPrompt"),
   letterGrid: document.querySelector("#letterGrid"),
   nextLetter: document.querySelector("#nextLetter"),
+  participantId: document.querySelector("#participantId"),
+  evaluationCondition: document.querySelector("#evaluationCondition"),
+  startSession: document.querySelector("#startSession"),
+  finishSession: document.querySelector("#finishSession"),
+  startTask: document.querySelector("#startTask"),
+  openTaskView: document.querySelector("#openTaskView"),
+  markTaskSuccess: document.querySelector("#markTaskSuccess"),
+  markTaskFail: document.querySelector("#markTaskFail"),
+  addMistake: document.querySelector("#addMistake"),
+  addBack: document.querySelector("#addBack"),
+  effortRating: document.querySelector("#effortRating"),
+  effortRatingValue: document.querySelector("#effortRatingValue"),
+  easeRating: document.querySelector("#easeRating"),
+  easeRatingValue: document.querySelector("#easeRatingValue"),
+  exportEvaluationCsv: document.querySelector("#exportEvaluationCsv"),
+  resetEvaluation: document.querySelector("#resetEvaluation"),
+  evaluationStatus: document.querySelector("#evaluationStatus"),
+  currentTaskTitle: document.querySelector("#currentTaskTitle"),
+  currentTaskGuide: document.querySelector("#currentTaskGuide"),
+  taskElapsed: document.querySelector("#taskElapsed"),
+  taskInputs: document.querySelector("#taskInputs"),
+  taskMistakes: document.querySelector("#taskMistakes"),
+  taskBacks: document.querySelector("#taskBacks"),
+  evaluationTaskList: document.querySelector("#evaluationTaskList"),
+  evaluationResultList: document.querySelector("#evaluationResultList"),
   totalInputs: document.querySelector("#totalInputs"),
   accuracyRate: document.querySelector("#accuracyRate"),
   mistakeCount: document.querySelector("#mistakeCount"),
@@ -158,6 +226,14 @@ function loadState() {
       ...cloneDefaultState(),
       ...parsed,
       settings: { ...defaultState.settings, ...(parsed.settings || {}) },
+      evaluation: {
+        ...defaultState.evaluation,
+        ...(parsed.evaluation || {}),
+        results: Array.isArray(parsed.evaluation?.results) ? parsed.evaluation.results : [],
+        completedSessions: Array.isArray(parsed.evaluation?.completedSessions)
+          ? parsed.evaluation.completedSessions
+          : [],
+      },
       logs: Array.isArray(parsed.logs) ? parsed.logs : [],
       hitTimes: Array.isArray(parsed.hitTimes) ? parsed.hitTimes : [],
     };
@@ -181,8 +257,10 @@ function logEvent(entry) {
     ...entry,
   });
   state.logs = state.logs.slice(0, 300);
+  countEvaluationEntry(entry);
   saveState();
   renderLog();
+  renderEvaluation();
 }
 
 function formatTime(isoString) {
@@ -218,6 +296,7 @@ function render() {
   renderCategories();
   renderPhrases();
   renderLetters();
+  renderEvaluation();
   renderSettings();
   renderLog();
   applySettingsClasses();
@@ -394,6 +473,296 @@ function renderLog() {
 function applySettingsClasses() {
   document.body.classList.toggle("large-text", state.settings.largeText);
   document.body.classList.toggle("high-contrast", state.settings.highContrast);
+}
+
+function activeEvaluationTask() {
+  return evaluationTasks[state.evaluation.activeTaskIndex] || null;
+}
+
+function shouldCountEvaluationEntry(entry) {
+  return (
+    state.evaluation.isActive &&
+    state.evaluation.taskStartedAt &&
+    !entry.skipEvaluation &&
+    ["switch", "matching", "phrase", "letter"].includes(entry.type)
+  );
+}
+
+function countEvaluationEntry(entry) {
+  if (!shouldCountEvaluationEntry(entry)) return;
+  state.evaluation.taskInputs += 1;
+  if (entry.correct === false) state.evaluation.taskMistakes += 1;
+}
+
+function formatDuration(milliseconds) {
+  if (!milliseconds || milliseconds < 0) return "--";
+  const totalSeconds = Math.round(milliseconds / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`;
+}
+
+function startEvaluationSession() {
+  state.evaluation.isActive = true;
+  state.evaluation.sessionStartedAt = new Date().toISOString();
+  state.evaluation.sessionEndedAt = null;
+  state.evaluation.activeTaskIndex = 0;
+  state.evaluation.taskStartedAt = null;
+  state.evaluation.taskInputs = 0;
+  state.evaluation.taskMistakes = 0;
+  state.evaluation.taskBacks = 0;
+  state.evaluation.results = [];
+  saveState();
+  announce("効果測定セッションを開始しました");
+  logEvent({ type: "measurement", label: "効果測定セッション開始", skipEvaluation: true });
+  renderEvaluation();
+}
+
+function finishEvaluationSession() {
+  if (!state.evaluation.isActive && state.evaluation.results.length === 0) return;
+  if (state.evaluation.taskStartedAt) completeEvaluationTask(false);
+  const session = {
+    participantId: state.evaluation.participantId,
+    condition: state.evaluation.condition,
+    startedAt: state.evaluation.sessionStartedAt,
+    endedAt: new Date().toISOString(),
+    effortRating: state.evaluation.effortRating,
+    easeRating: state.evaluation.easeRating,
+    taskResults: [...state.evaluation.results],
+  };
+  state.evaluation.completedSessions.unshift(session);
+  state.evaluation.completedSessions = state.evaluation.completedSessions.slice(0, 20);
+  state.evaluation.isActive = false;
+  state.evaluation.sessionEndedAt = session.endedAt;
+  state.evaluation.taskStartedAt = null;
+  state.evaluation.taskInputs = 0;
+  state.evaluation.taskMistakes = 0;
+  state.evaluation.taskBacks = 0;
+  saveState();
+  announce("効果測定セッションを終了しました");
+  logEvent({ type: "measurement", label: "効果測定セッション終了", skipEvaluation: true });
+  renderEvaluation();
+}
+
+function startEvaluationTask() {
+  if (!state.evaluation.isActive) startEvaluationSession();
+  const task = activeEvaluationTask();
+  if (!task) {
+    announce("すべての評価タスクが完了しています");
+    return;
+  }
+  state.evaluation.taskStartedAt = new Date().toISOString();
+  state.evaluation.taskInputs = 0;
+  state.evaluation.taskMistakes = 0;
+  state.evaluation.taskBacks = 0;
+  saveState();
+  announce(`${task.title}を開始しました`);
+  logEvent({ type: "measurement", label: `タスク開始: ${task.title}`, skipEvaluation: true });
+  renderEvaluation();
+}
+
+function completeEvaluationTask(success) {
+  const task = activeEvaluationTask();
+  if (!task || !state.evaluation.taskStartedAt) {
+    announce("先にタスクを開始してください");
+    return;
+  }
+  const endedAt = new Date().toISOString();
+  const durationMs = new Date(endedAt).getTime() - new Date(state.evaluation.taskStartedAt).getTime();
+  const result = {
+    participantId: state.evaluation.participantId,
+    condition: state.evaluation.condition,
+    taskId: task.id,
+    taskTitle: task.title,
+    success,
+    startedAt: state.evaluation.taskStartedAt,
+    endedAt,
+    durationSeconds: Math.round(durationMs / 100) / 10,
+    inputs: state.evaluation.taskInputs,
+    mistakes: state.evaluation.taskMistakes,
+    backs: state.evaluation.taskBacks,
+    effortRating: state.evaluation.effortRating,
+    easeRating: state.evaluation.easeRating,
+  };
+  state.evaluation.results.push(result);
+  state.evaluation.activeTaskIndex = Math.min(state.evaluation.activeTaskIndex + 1, evaluationTasks.length);
+  state.evaluation.taskStartedAt = null;
+  state.evaluation.taskInputs = 0;
+  state.evaluation.taskMistakes = 0;
+  state.evaluation.taskBacks = 0;
+  saveState();
+  announce(success ? "タスクを成功で記録しました" : "タスクを中止または失敗で記録しました");
+  logEvent({
+    type: "measurement",
+    label: `${success ? "成功" : "中止/失敗"}: ${task.title}`,
+    skipEvaluation: true,
+  });
+  renderEvaluation();
+}
+
+function openCurrentEvaluationTask() {
+  const task = activeEvaluationTask();
+  if (!task) {
+    announce("すべての評価タスクが完了しています");
+    return;
+  }
+  switchView(task.view);
+}
+
+function adjustEvaluationCounter(kind) {
+  if (!state.evaluation.taskStartedAt) {
+    announce("先にタスクを開始してください");
+    return;
+  }
+  if (kind === "mistake") {
+    state.evaluation.taskInputs += 1;
+    state.evaluation.taskMistakes += 1;
+    logEvent({ type: "measurement", label: "誤選択を手動加算", skipEvaluation: true });
+  } else {
+    state.evaluation.taskBacks += 1;
+    logEvent({ type: "measurement", label: "戻り操作を手動加算", skipEvaluation: true });
+  }
+  saveState();
+  renderEvaluation();
+}
+
+function resetEvaluation() {
+  state.evaluation = {
+    ...cloneDefaultState().evaluation,
+    participantId: state.evaluation.participantId,
+    condition: state.evaluation.condition,
+  };
+  saveState();
+  announce("測定データをリセットしました");
+  renderEvaluation();
+}
+
+function flattenEvaluationResults() {
+  const completed = state.evaluation.completedSessions.flatMap((session) =>
+    session.taskResults.map((result) => ({
+      ...result,
+      sessionStartedAt: session.startedAt,
+      sessionEndedAt: session.endedAt,
+      effortRating: session.effortRating,
+      easeRating: session.easeRating,
+    }))
+  );
+  return [...state.evaluation.results, ...completed];
+}
+
+function exportEvaluationCsv() {
+  const results = flattenEvaluationResults();
+  if (results.length === 0) {
+    announce("書き出す測定結果がありません");
+    return;
+  }
+  const rows = [
+    [
+      "participant_id",
+      "condition",
+      "task_id",
+      "task_title",
+      "success",
+      "duration_sec",
+      "inputs",
+      "mistakes",
+      "backs",
+      "effort_rating",
+      "ease_rating",
+      "task_started_at",
+      "task_ended_at",
+      "session_started_at",
+      "session_ended_at",
+    ],
+    ...results.map((result) => [
+      result.participantId || "",
+      result.condition || "",
+      result.taskId,
+      result.taskTitle,
+      result.success ? "success" : "fail",
+      result.durationSeconds,
+      result.inputs,
+      result.mistakes,
+      result.backs,
+      result.effortRating,
+      result.easeRating,
+      result.startedAt,
+      result.endedAt,
+      result.sessionStartedAt || state.evaluation.sessionStartedAt || "",
+      result.sessionEndedAt || state.evaluation.sessionEndedAt || "",
+    ]),
+  ];
+  const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+  const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `neuronode-evaluation-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function renderEvaluation() {
+  if (!elements.evaluationStatus) return;
+  const task = activeEvaluationTask();
+  const isRunningTask = Boolean(state.evaluation.taskStartedAt);
+  elements.participantId.value = state.evaluation.participantId;
+  elements.evaluationCondition.value = state.evaluation.condition;
+  elements.effortRating.value = state.evaluation.effortRating;
+  elements.effortRatingValue.value = String(state.evaluation.effortRating);
+  elements.easeRating.value = state.evaluation.easeRating;
+  elements.easeRatingValue.value = String(state.evaluation.easeRating);
+
+  elements.evaluationStatus.textContent = isRunningTask
+    ? "タスク計測中"
+    : state.evaluation.isActive
+      ? "セッション中"
+      : "未開始";
+  elements.currentTaskTitle.textContent = task ? task.title : "すべてのタスクが完了しました";
+  elements.currentTaskGuide.textContent = task
+    ? task.guide
+    : "セッション終了を押すと、今回の測定を保存できます。";
+  elements.taskElapsed.textContent = isRunningTask
+    ? formatDuration(Date.now() - new Date(state.evaluation.taskStartedAt).getTime())
+    : "--";
+  elements.taskInputs.textContent = String(state.evaluation.taskInputs);
+  elements.taskMistakes.textContent = String(state.evaluation.taskMistakes);
+  elements.taskBacks.textContent = String(state.evaluation.taskBacks);
+
+  elements.evaluationTaskList.innerHTML = "";
+  evaluationTasks.forEach((item, index) => {
+    const done = state.evaluation.results.some((result) => result.taskId === item.id);
+    const card = document.createElement("article");
+    card.className = "task-card";
+    card.classList.toggle("is-current", index === state.evaluation.activeTaskIndex);
+    card.classList.toggle("is-done", done);
+    card.innerHTML = `
+      <span class="metric-label">${done ? "完了" : index === state.evaluation.activeTaskIndex ? "現在" : "待機"}</span>
+      <strong>${index + 1}. ${escapeHtml(item.title)}</strong>
+      <p>${escapeHtml(item.guide)}</p>
+    `;
+    elements.evaluationTaskList.append(card);
+  });
+
+  elements.evaluationResultList.innerHTML = "";
+  const results = [...state.evaluation.results].reverse();
+  if (results.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "まだ測定結果はありません。タスクを開始して、成功または中止/失敗で終了すると記録されます。";
+    elements.evaluationResultList.append(empty);
+    return;
+  }
+  results.forEach((result) => {
+    const item = document.createElement("article");
+    item.className = "log-item";
+    item.innerHTML = `
+      <span class="metric-label">${result.success ? "成功" : "中止/失敗"}</span>
+      <strong>${escapeHtml(result.taskTitle)}</strong>
+      <span>${result.durationSeconds}秒 / 入力${result.inputs} / 誤${result.mistakes}</span>
+    `;
+    elements.evaluationResultList.append(item);
+  });
 }
 
 function runSwitchActivity() {
@@ -624,6 +993,35 @@ elements.nextLetter.addEventListener("click", () => {
   renderLetters();
   restartScanIfNeeded();
 });
+elements.participantId.addEventListener("input", (event) => {
+  state.evaluation.participantId = event.target.value.trim();
+  saveState();
+});
+elements.evaluationCondition.addEventListener("change", (event) => {
+  state.evaluation.condition = event.target.value;
+  saveState();
+  renderEvaluation();
+});
+elements.startSession.addEventListener("click", startEvaluationSession);
+elements.finishSession.addEventListener("click", finishEvaluationSession);
+elements.startTask.addEventListener("click", startEvaluationTask);
+elements.openTaskView.addEventListener("click", openCurrentEvaluationTask);
+elements.markTaskSuccess.addEventListener("click", () => completeEvaluationTask(true));
+elements.markTaskFail.addEventListener("click", () => completeEvaluationTask(false));
+elements.addMistake.addEventListener("click", () => adjustEvaluationCounter("mistake"));
+elements.addBack.addEventListener("click", () => adjustEvaluationCounter("back"));
+elements.effortRating.addEventListener("input", (event) => {
+  state.evaluation.effortRating = Number(event.target.value);
+  saveState();
+  renderEvaluation();
+});
+elements.easeRating.addEventListener("input", (event) => {
+  state.evaluation.easeRating = Number(event.target.value);
+  saveState();
+  renderEvaluation();
+});
+elements.exportEvaluationCsv.addEventListener("click", exportEvaluationCsv);
+elements.resetEvaluation.addEventListener("click", resetEvaluation);
 elements.exportCsv.addEventListener("click", exportCsv);
 elements.clearLog.addEventListener("click", () => {
   state.logs = [];
@@ -677,6 +1075,10 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
+
+window.setInterval(() => {
+  if (state.evaluation.taskStartedAt) renderEvaluation();
+}, 1000);
 
 render();
 switchView(state.currentView);
