@@ -8,24 +8,6 @@ const switchModules = [
     description: "入力すると画面の色が変わります。",
     tones: [392, 440, 494, 523],
   },
-  {
-    id: "balloon",
-    name: "風船ふくらませ",
-    description: "入力するたびに風船が大きくなり、最後に割れます。",
-    tones: [330, 392, 494, 660],
-  },
-  {
-    id: "firework",
-    name: "花火",
-    description: "入力すると花火のような光が広がります。",
-    tones: [523, 659, 784, 988],
-  },
-  {
-    id: "sound",
-    name: "音あそび",
-    description: "入力するたびに違う音を鳴らします。",
-    tones: [262, 330, 392, 523],
-  },
 ];
 
 const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747"];
@@ -277,6 +259,9 @@ const defaultState = {
 
 let state = loadState();
 if (!visibleViews.has(state.currentView)) state.currentView = "switcher";
+if (!switchModules.some((module) => module.id === state.activeSwitchModule)) {
+  state.activeSwitchModule = switchModules[0].id;
+}
 let scanTargets = [];
 let scanIndex = -1;
 let scanTimer = null;
@@ -482,10 +467,11 @@ function render() {
 
 function renderSwitchModules() {
   elements.switchModuleGrid.innerHTML = "";
+  const activeModuleId = activeSwitchModule().id;
   switchModules.forEach((module) => {
     const button = document.createElement("button");
     button.className = "module-button";
-    button.classList.toggle("is-active", module.id === state.activeSwitchModule);
+    button.classList.toggle("is-active", module.id === activeModuleId);
     button.type = "button";
     button.dataset.scan = "";
     button.innerHTML = `<strong>${module.name}</strong><span>${module.description}</span>`;
@@ -508,22 +494,9 @@ function renderSwitchStage() {
   elements.switchStage.className = `activity-stage module-${module.id}`;
   elements.switchStage.dataset.scan = "";
 
-  if (module.id === "color") {
-    const color = stageColors[state.switchStep % stageColors.length];
-    elements.switchStage.style.setProperty("--stage-color", color);
-    elements.activityVisual.innerHTML = `<span class="color-chip" style="background:${color}"></span>`;
-  } else if (module.id === "balloon") {
-    const size = 64 + (state.switchStep % 5) * 26;
-    const popped = state.switchStep % 6 === 5;
-    elements.activityVisual.innerHTML = popped
-      ? `<span class="burst-mark">POP</span>`
-      : `<span class="balloon-shape" style="width:${size}px;height:${size}px"></span>`;
-  } else if (module.id === "firework") {
-    elements.activityVisual.innerHTML = `<span class="firework-ring"></span><span class="firework-ring delay"></span>`;
-  } else {
-    const notes = ["ド", "ミ", "ソ", "高いド"];
-    elements.activityVisual.innerHTML = `<span class="sound-note">${notes[state.switchStep % notes.length]}</span>`;
-  }
+  const color = stageColors[state.switchStep % stageColors.length];
+  elements.switchStage.style.setProperty("--stage-color", color);
+  elements.activityVisual.innerHTML = `<span class="color-chip" style="background:${color}"></span>`;
 
   renderSwitchMetrics();
 }
