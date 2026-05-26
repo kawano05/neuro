@@ -1,8 +1,8 @@
 {
-  "name": "neuronode-support-lab",
+  "name": "neuro",
   "version": "0.1.0",
   "private": true,
-  "description": "NeuroNode support app web prototype prepared for Capacitor iOS packaging.",
+  "description": "neuro web prototype prepared for Capacitor iOS packaging.",
   "type": "module",
   "scripts": {
     "serve": "python -m http.server 5173 --directory www",

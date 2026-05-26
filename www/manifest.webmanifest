@@ -1,6 +1,6 @@
 {
-  "name": "NeuroNode Support Lab",
-  "short_name": "NeuroNode Lab",
+  "name": "neuro",
+  "short_name": "neuro",
   "description": "ニューロノード利用者向け支援アプリのWeb試作版",
   "start_url": "./",
   "display": "standalone",

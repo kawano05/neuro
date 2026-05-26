@@ -1,6 +1,6 @@
 {
-  "appId": "jp.ac.nit.kumeno.neuronodesupport",
-  "appName": "NeuroNode Support Lab",
+  "appId": "jp.ac.nit.kumeno.neuro",
+  "appName": "neuro",
   "webDir": "www",
   "backgroundColor": "#f4f8f7",
   "server": {
