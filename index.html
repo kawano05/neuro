@@ -9,6 +9,17 @@
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module">
+      if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+        import("/src/main.js");
+      } else {
+        const stylesheet = document.createElement("link");
+        stylesheet.rel = "stylesheet";
+        stylesheet.href = "./assets/main.css";
+        document.head.append(stylesheet);
+        const appScript = "./assets/main.js";
+        import(appScript);
+      }
+    </script>
   </body>
 </html>
