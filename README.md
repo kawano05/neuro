@@ -45,6 +45,7 @@ Xcodeが開いたら、Signing & CapabilitiesでApple Developer Teamを選び、
 - 評価ログ: 入力、正答、誤選択をCSVで書き出し
 
 研究目的、関連研究の評価軸、実験タスク案は `docs/research-summary.md` に整理しています。
+iOS版ビルド手順は `docs/ios-build-steps.md` にまとめています。
 
 ## 実装メモ
 
