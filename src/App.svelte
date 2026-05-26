@@ -25,6 +25,7 @@
     <button class="tab" data-view="letters" data-scan>文字学習</button>
     <button class="tab" data-view="operation" data-scan>操作訓練</button>
     <button class="tab" data-view="evaluation" data-scan>効果測定</button>
+    <button class="tab" data-view="research" data-scan>実用化研究</button>
     <button class="tab" data-view="log" data-scan>評価ログ</button>
     <button class="tab" data-view="settings" data-scan>設定</button>
   </nav>
@@ -274,6 +275,87 @@
         <h3>測定結果</h3>
         <div class="log-list" id="evaluationResultList"></div>
       </section>
+    </section>
+
+    <section class="view" id="research" aria-labelledby="research-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Original research design</p>
+          <h2 id="research-title">neuro独自要素</h2>
+        </div>
+      </div>
+
+      <div class="summary-grid research-axis-grid">
+        <div class="summary-tile">
+          <span class="metric-label">二段階開発</span>
+          <strong>Web → iOS</strong>
+          <p>Webで高速に試作し、CapacitorでiOS公開候補版へつなげる。</p>
+        </div>
+        <div class="summary-tile">
+          <span class="metric-label">比較条件</span>
+          <strong>参照 / 最適化</strong>
+          <p>先行Web教材に近い構成と、Switch Control向けに調整した構成を比較する。</p>
+        </div>
+        <div class="summary-tile">
+          <span class="metric-label">実運用</span>
+          <strong>共有iPad</strong>
+          <p>Guided Access、オフライン動作、単一アプリ運用を確認する。</p>
+        </div>
+      </div>
+
+      <div class="evaluation-grid">
+        <section class="eval-panel">
+          <h3>研究条件プロファイル</h3>
+          <p class="panel-note">
+            効果測定の条件欄と連動させ、Web版/iOS版、参照構成/最適化構成の比較を明確にします。
+          </p>
+          <div class="condition-profile-grid" id="researchProfileGrid"></div>
+        </section>
+
+        <section class="eval-panel">
+          <h3>公開候補チェック</h3>
+          <div class="readiness-meter">
+            <span class="metric-label">実用化準備</span>
+            <strong id="readinessScore">0/0</strong>
+          </div>
+          <div class="readiness-list" id="readinessChecklist"></div>
+        </section>
+      </div>
+
+      <div class="evaluation-grid">
+        <section class="eval-panel">
+          <h3>現場運用メモ</h3>
+          <label class="field-row">
+            <span>利用場面</span>
+            <select id="researchEnvironment">
+              <option value="hospital">病院</option>
+              <option value="facility">施設</option>
+              <option value="home">在宅</option>
+            </select>
+          </label>
+          <label class="note-row">
+            <span>運用メモ</span>
+            <textarea
+              id="deploymentNotes"
+              rows="4"
+              placeholder="例: 共有iPadでアクセスガイドを有効化。支援者が走査間隔を調整。"
+            ></textarea>
+          </label>
+          <button class="secondary" id="copyDeploymentNote" data-scan>観察メモへ反映</button>
+        </section>
+
+        <section class="eval-panel research-protocol">
+          <h3>計画書からの研究軸</h3>
+          <p id="researchProtocolHint">
+            Web先行開発、iOSネイティブ化、共有端末運用、App Store公開準備を評価対象に含めます。
+          </p>
+          <ul class="research-points">
+            <li>教材機能だけでなく、変換工程と運用要件を研究対象にする。</li>
+            <li>Switch Controlに合わせた要素配置と走査順序を比較する。</li>
+            <li>支援者の観察メモを、タスク結果と同じ記録として残す。</li>
+          </ul>
+        </section>
+      </div>
     </section>
 
     <section class="view" id="log" aria-labelledby="log-title">

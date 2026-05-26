@@ -145,6 +145,71 @@ const evaluationTasks = [
   },
 ];
 
+const researchConditionProfiles = [
+  {
+    id: "web",
+    name: "Web版",
+    description: "iPad Safariで動かし、試作と先行Web教材との比較を行う条件です。",
+    focus: "試作速度、ブラウザ互換、オフライン配信",
+    evaluationValue: "web",
+  },
+  {
+    id: "native",
+    name: "iOS版",
+    description: "Capacitorで変換した公開候補版として、Switch ControlとGuided Accessを確認します。",
+    focus: "単一アプリ運用、署名、App Store公開準備",
+    evaluationValue: "native",
+  },
+  {
+    id: "reference",
+    name: "参照構成",
+    description: "先行Web教材に近い配置・画面遷移で測り、比較の基準にします。",
+    focus: "従来構成との差分、誤操作、戻り操作",
+    evaluationValue: "reference",
+  },
+  {
+    id: "optimized",
+    name: "最適化構成",
+    description: "ニューロノードとSwitch Control向けに、走査順・ボタンサイズ・復帰導線を調整します。",
+    focus: "操作負担、見逃し、支援者介助の減少",
+    evaluationValue: "optimized",
+  },
+];
+
+const readinessItems = [
+  {
+    id: "localRun",
+    label: "ローカル動作",
+    detail: "通信が不安定な病院・施設でも主要機能が使える。",
+  },
+  {
+    id: "switchControl",
+    label: "Switch Control検証",
+    detail: "項目スキャン/ポイントスキャンで主要タスクを実施できる。",
+  },
+  {
+    id: "guidedAccess",
+    label: "Guided Access想定",
+    detail: "共有iPadで単一アプリ運用し、誤終了を防ぐ導線を確認する。",
+  },
+  {
+    id: "sharedIpad",
+    label: "共有端末運用",
+    detail: "利用者ID、観察メモ、ログ削除の扱いを支援者が管理できる。",
+  },
+  {
+    id: "appStoreAssets",
+    label: "公開素材",
+    detail: "説明文、スクリーンショット、アイコン、運用説明を準備する。",
+  },
+];
+
+const environmentLabels = {
+  hospital: "病院",
+  facility: "施設",
+  home: "在宅",
+};
+
 const defaultState = {
   currentView: "switcher",
   activeSwitchModule: "color",
@@ -199,6 +264,12 @@ const defaultState = {
     observerNotes: "",
     results: [],
     completedSessions: [],
+  },
+  research: {
+    conditionProfile: "optimized",
+    environment: "hospital",
+    deploymentNotes: "",
+    readiness: readinessItems.reduce((items, item) => ({ ...items, [item.id]: false }), {}),
   },
 };
 
@@ -277,6 +348,13 @@ const elements = {
   taskAssists: document.querySelector("#taskAssists"),
   evaluationTaskList: document.querySelector("#evaluationTaskList"),
   evaluationResultList: document.querySelector("#evaluationResultList"),
+  researchProfileGrid: document.querySelector("#researchProfileGrid"),
+  readinessChecklist: document.querySelector("#readinessChecklist"),
+  readinessScore: document.querySelector("#readinessScore"),
+  researchEnvironment: document.querySelector("#researchEnvironment"),
+  deploymentNotes: document.querySelector("#deploymentNotes"),
+  copyDeploymentNote: document.querySelector("#copyDeploymentNote"),
+  researchProtocolHint: document.querySelector("#researchProtocolHint"),
   totalInputs: document.querySelector("#totalInputs"),
   accuracyRate: document.querySelector("#accuracyRate"),
   mistakeCount: document.querySelector("#mistakeCount"),
@@ -319,6 +397,14 @@ function loadState() {
         completedSessions: Array.isArray(parsed.evaluation?.completedSessions)
           ? parsed.evaluation.completedSessions
           : [],
+      },
+      research: {
+        ...defaultState.research,
+        ...(parsed.research || {}),
+        readiness: {
+          ...defaultState.research.readiness,
+          ...(parsed.research?.readiness || {}),
+        },
       },
       logs: Array.isArray(parsed.logs) ? parsed.logs : [],
       hitTimes: Array.isArray(parsed.hitTimes) ? parsed.hitTimes : [],
@@ -384,6 +470,7 @@ function render() {
   renderLetters();
   renderOperation();
   renderEvaluation();
+  renderResearchPlan();
   renderSettings();
   renderLog();
   applySettingsClasses();
@@ -1181,6 +1268,102 @@ function renderEvaluation() {
   });
 }
 
+function activeResearchProfile() {
+  return (
+    researchConditionProfiles.find((profile) => profile.id === state.research.conditionProfile) ||
+    researchConditionProfiles[0]
+  );
+}
+
+function renderResearchPlan() {
+  if (!elements.researchProfileGrid) return;
+  const activeProfile = activeResearchProfile();
+  const environment = environmentLabels[state.research.environment] || environmentLabels.hospital;
+
+  elements.researchProfileGrid.innerHTML = "";
+  researchConditionProfiles.forEach((profile) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "module-button condition-profile";
+    button.classList.toggle("is-active", profile.id === activeProfile.id);
+    button.dataset.scan = "";
+    button.innerHTML = `
+      <strong>${escapeHtml(profile.name)}</strong>
+      <span>${escapeHtml(profile.description)}</span>
+      <small>${escapeHtml(profile.focus)}</small>
+    `;
+    button.addEventListener("click", () => {
+      state.research.conditionProfile = profile.id;
+      state.evaluation.condition = profile.evaluationValue;
+      saveState();
+      announce(`${profile.name}を効果測定の条件に設定しました`);
+      renderResearchPlan();
+      renderEvaluation();
+      restartScanIfNeeded();
+    });
+    elements.researchProfileGrid.append(button);
+  });
+
+  const readiness = state.research.readiness || {};
+  const completed = readinessItems.filter((item) => readiness[item.id]).length;
+  elements.readinessScore.textContent = `${completed}/${readinessItems.length}`;
+  elements.readinessChecklist.innerHTML = "";
+  readinessItems.forEach((item) => {
+    const row = document.createElement("label");
+    row.className = "readiness-row";
+
+    const text = document.createElement("span");
+    text.innerHTML = `<strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.detail)}</small>`;
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.role = "switch";
+    input.dataset.scan = "";
+    input.checked = Boolean(readiness[item.id]);
+    input.addEventListener("change", () => {
+      state.research.readiness[item.id] = input.checked;
+      saveState();
+      announce(`${item.label}を${input.checked ? "確認済み" : "未確認"}にしました`);
+      renderResearchPlan();
+      restartScanIfNeeded();
+    });
+
+    row.append(text, input);
+    elements.readinessChecklist.append(row);
+  });
+
+  elements.researchEnvironment.value = state.research.environment;
+  elements.deploymentNotes.value = state.research.deploymentNotes;
+  elements.researchProtocolHint.textContent =
+    `${environment}で${activeProfile.name}を使い、${activeProfile.focus}を観察します。` +
+    "測定後はタスク完了時間、入力回数、誤選択、戻り操作、タイミングエラー、介助回数、支援者メモを比較します。";
+}
+
+function copyDeploymentNoteToEvaluation() {
+  const profile = activeResearchProfile();
+  const environment = environmentLabels[state.research.environment] || environmentLabels.hospital;
+  const completedLabels = readinessItems
+    .filter((item) => state.research.readiness[item.id])
+    .map((item) => item.label)
+    .join("、");
+  const note = [
+    `[実用化検証] 条件: ${profile.name}`,
+    `場面: ${environment}`,
+    `確認済み: ${completedLabels || "未確認"}`,
+    state.research.deploymentNotes ? `メモ: ${state.research.deploymentNotes}` : "",
+  ]
+    .filter(Boolean)
+    .join(" / ");
+
+  state.evaluation.observerNotes = state.evaluation.observerNotes
+    ? `${state.evaluation.observerNotes}\n${note}`
+    : note;
+  saveState();
+  logEvent({ type: "measurement", label: "実用化研究メモを観察メモへ反映", skipEvaluation: true });
+  renderEvaluation();
+  announce("実用化研究メモを観察メモへ反映しました");
+}
+
 function runSwitchActivity() {
   const module = activeSwitchModule();
   const tone = module.tones[state.switchStep % module.tones.length];
@@ -1419,8 +1602,11 @@ elements.participantId.addEventListener("input", (event) => {
 });
 elements.evaluationCondition.addEventListener("change", (event) => {
   state.evaluation.condition = event.target.value;
+  const profile = researchConditionProfiles.find((item) => item.evaluationValue === event.target.value);
+  if (profile) state.research.conditionProfile = profile.id;
   saveState();
   renderEvaluation();
+  renderResearchPlan();
 });
 elements.startSession.addEventListener("click", startEvaluationSession);
 elements.finishSession.addEventListener("click", finishEvaluationSession);
@@ -1455,6 +1641,16 @@ elements.observerNotes.addEventListener("input", (event) => {
 });
 elements.exportEvaluationCsv.addEventListener("click", exportEvaluationCsv);
 elements.resetEvaluation.addEventListener("click", resetEvaluation);
+elements.researchEnvironment.addEventListener("change", (event) => {
+  state.research.environment = event.target.value;
+  saveState();
+  renderResearchPlan();
+});
+elements.deploymentNotes.addEventListener("input", (event) => {
+  state.research.deploymentNotes = event.target.value;
+  saveState();
+});
+elements.copyDeploymentNote.addEventListener("click", copyDeploymentNoteToEvaluation);
 elements.exportCsv.addEventListener("click", exportCsv);
 elements.clearLog.addEventListener("click", () => {
   state.logs = [];

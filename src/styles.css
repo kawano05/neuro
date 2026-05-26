@@ -63,7 +63,9 @@ button {
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
   outline: 4px solid var(--focus);
   outline-offset: 3px;
 }
@@ -717,6 +719,88 @@ main {
   padding: 18px;
 }
 
+.summary-tile p,
+.panel-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.research-axis-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.condition-profile-grid,
+.readiness-list {
+  display: grid;
+  gap: 10px;
+}
+
+.condition-profile {
+  min-height: 136px;
+}
+
+.condition-profile small {
+  display: block;
+  margin-top: 6px;
+  color: var(--accent-strong);
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.readiness-meter {
+  display: grid;
+  min-height: 92px;
+  margin-bottom: 12px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  align-content: center;
+}
+
+.readiness-meter strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 2rem;
+}
+
+.readiness-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.readiness-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.research-protocol {
+  background: var(--surface-soft);
+}
+
+.research-protocol p {
+  color: var(--ink);
+  font-weight: 800;
+  line-height: 1.65;
+}
+
+.research-points {
+  margin: 14px 0 0;
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.7;
+}
+
 .evaluation-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -979,6 +1063,7 @@ input[type="checkbox"] {
   .letter-grid,
   .phrase-grid,
   .summary-grid,
+  .research-axis-grid,
   .evaluation-grid,
   .evaluation-summary {
     grid-template-columns: 1fr;
