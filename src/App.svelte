@@ -23,9 +23,6 @@
     <button class="tab" data-view="matching" data-scan>マッチング</button>
     <button class="tab" data-view="voca" data-scan>VOCA</button>
     <button class="tab" data-view="letters" data-scan>文字学習</button>
-    <button class="tab" data-view="operation" data-scan>操作訓練</button>
-    <button class="tab" data-view="evaluation" data-scan>効果測定</button>
-    <button class="tab" data-view="research" data-scan>実用化研究</button>
     <button class="tab" data-view="log" data-scan>評価ログ</button>
     <button class="tab" data-view="settings" data-scan>設定</button>
   </nav>

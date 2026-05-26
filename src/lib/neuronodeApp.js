@@ -210,6 +210,8 @@ const environmentLabels = {
   home: "在宅",
 };
 
+const visibleViews = new Set(["switcher", "matching", "voca", "letters", "log", "settings"]);
+
 const defaultState = {
   currentView: "switcher",
   activeSwitchModule: "color",
@@ -274,6 +276,7 @@ const defaultState = {
 };
 
 let state = loadState();
+if (!visibleViews.has(state.currentView)) state.currentView = "switcher";
 let scanTargets = [];
 let scanIndex = -1;
 let scanTimer = null;
@@ -448,13 +451,14 @@ function activeSwitchModule() {
 }
 
 function switchView(viewName) {
-  state.currentView = viewName;
+  const nextView = visibleViews.has(viewName) ? viewName : "switcher";
+  state.currentView = nextView;
   elements.tabs.forEach((tab) => {
-    tab.classList.toggle("is-active", tab.dataset.view === viewName);
-    tab.setAttribute("aria-selected", String(tab.dataset.view === viewName));
+    tab.classList.toggle("is-active", tab.dataset.view === nextView);
+    tab.setAttribute("aria-selected", String(tab.dataset.view === nextView));
   });
   elements.views.forEach((view) => {
-    view.classList.toggle("is-active", view.id === viewName);
+    view.classList.toggle("is-active", view.id === nextView);
   });
   saveState();
   render();
