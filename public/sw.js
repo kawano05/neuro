@@ -2,10 +2,6 @@ const cacheName = "neuro-v7";
 const coreAssets = [
   "./",
   "index.html",
-  "styles.css",
-  "styles.css?v=7",
-  "app.js",
-  "app.js?v=7",
   "manifest.webmanifest",
   "icon.svg",
 ];
@@ -26,5 +22,14 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+      return fetch(event.request).then((response) => {
+        const copy = response.clone();
+        caches.open(cacheName).then((cache) => cache.put(event.request, copy));
+        return response;
+      });
+    })
+  );
 });

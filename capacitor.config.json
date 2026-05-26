@@ -1,7 +1,7 @@
 {
   "appId": "jp.ac.nit.kumeno.neuro",
   "appName": "neuro",
-  "webDir": "www",
+  "webDir": "dist",
   "backgroundColor": "#f4f8f7",
   "server": {
     "hostname": "localhost",

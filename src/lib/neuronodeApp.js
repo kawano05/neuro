@@ -1,3 +1,4 @@
+export function initNeuroNodeApp() {
 const storageKey = "neuronode-prototype-state-v2";
 
 const switchModules = [
@@ -1502,7 +1503,7 @@ document.addEventListener("keydown", (event) => {
 
 window.addEventListener("resize", () => refreshScanTargets());
 
-if ("serviceWorker" in navigator) {
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
@@ -1516,3 +1517,4 @@ window.setInterval(updatePointCursorDom, 200);
 
 render();
 switchView(state.currentView);
+}

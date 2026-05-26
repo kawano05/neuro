@@ -1,18 +1,17 @@
 # neuro
 
-neuro は、ニューロノード利用者向けiPad支援アプリのWeb試作版です。仙台高専 竹島研究室の「重度肢体不自由児のための学習支援ソフト」のように、複数の支援機能をひとつのアプリ内にまとめる構成にしています。CapacitorでiOSアプリ化しやすいように、Web成果物は `www/`、Capacitor設定はルートに置いています。
+neuro は、ニューロノード利用者向けiPad支援アプリのWeb試作版です。仙台高専 竹島研究室の「重度肢体不自由児のための学習支援ソフト」のように、複数の支援機能をひとつのアプリ内にまとめる構成にしています。現在は Svelte + Vite で画面を構成し、CapacitorでiOSアプリ化しやすいように、ビルド成果物は `dist/`、Capacitor設定はルートに置いています。
 
 ## Web版の起動
 
+Node.js 22以上を推奨します。Capacitor 8系のCLIがNode.js 22以上を要求するため、iOS化まで行う環境では特にバージョンを合わせてください。
+
 ```powershell
+npm install
 npm run serve
 ```
 
-その後、ブラウザで `http://localhost:5173` を開きます。npmを使わない場合は次でも起動できます。
-
-```powershell
-python -m http.server 5173 --directory www
-```
+その後、ブラウザで `http://localhost:5173` を開きます。開発時は `npm run dev` でも同じVite開発サーバーを起動できます。
 
 ## iOS化の流れ
 
@@ -20,6 +19,7 @@ Mac上で以下を実行します。
 
 ```bash
 npm install
+npm run build
 npm run cap:add:ios
 npm run cap:sync
 npm run cap:open:ios
@@ -48,7 +48,9 @@ Xcodeが開いたら、Signing & CapabilitiesでApple Developer Teamを選び、
 
 ## 実装メモ
 
+- `src/App.svelte` が画面構造、`src/styles.css` が見た目、`src/lib/neuronodeApp.js` が教材・走査・評価の制御ロジックです。
+- `public/` の `manifest.webmanifest`、`sw.js`、`icon.svg` はViteビルド時に配信ルートへコピーされます。
 - ログ、設定、教材の入力回数は `localStorage` に保存されます。
-- `www/sw.js` により、HTTP配信時は主要ファイルをキャッシュします。
+- `public/sw.js` により、HTTP配信時は主要ファイルと取得済みアセットをキャッシュします。
 - CSV書き出しは評価実験の入力回数、誤選択、定型句選択の確認用です。
 - iOSネイティブプロジェクトはこのWindows環境では生成せず、Mac/Xcode環境で `npx cap add ios` します。
