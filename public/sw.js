@@ -1,9 +1,10 @@
-const cacheName = "neuro-v8";
+const cacheName = "neuro-v9";
 const coreAssets = [
   "./",
   "index.html",
-  "assets/main.css",
-  "assets/main.js",
+  "assets/index-v9.js",
+  "assets/main-v9.css",
+  "assets/main-v9.js",
   "manifest.webmanifest",
   "icon.svg",
 ];
