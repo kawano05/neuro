@@ -16,9 +16,9 @@
         const assetBase = import.meta.url.includes("/assets/") ? "./" : "./assets/";
         const stylesheet = document.createElement("link");
         stylesheet.rel = "stylesheet";
-        stylesheet.href = `${assetBase}main-v9.css`;
+        stylesheet.href = new URL(`${assetBase}main-v10.css`, import.meta.url).href;
         document.head.append(stylesheet);
-        const appScript = `${assetBase}main-v9.js`;
+        const appScript = `${assetBase}main-v10.js`;
         import(appScript);
       }
     </script>
