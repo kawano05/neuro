@@ -13,11 +13,12 @@
       if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
         import("/src/main.js");
       } else {
+        const assetBase = import.meta.url.includes("/assets/") ? "./" : "./assets/";
         const stylesheet = document.createElement("link");
         stylesheet.rel = "stylesheet";
-        stylesheet.href = "./assets/main.css";
+        stylesheet.href = `${assetBase}main.css`;
         document.head.append(stylesheet);
-        const appScript = "./assets/main.js";
+        const appScript = `${assetBase}main.js`;
         import(appScript);
       }
     </script>
