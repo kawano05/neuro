@@ -46,12 +46,21 @@ Xcodeが開いたら、Signing & CapabilitiesでApple Developer Teamを選び、
 
 研究目的、関連研究の評価軸、実験タスク案は `docs/research-summary.md` に整理しています。
 iOS版ビルド手順は `docs/ios-build-steps.md` にまとめています。
+モジュール分割リファクタリングの内容と改善バックログは `docs/refactoring-notes-2026-06-10.md` を参照してください。
 
 ## 実装メモ
 
-- `src/App.svelte` が画面構造、`src/styles.css` が見た目、`src/lib/neuronodeApp.js` が教材・走査・評価の制御ロジックです。
+- `src/App.svelte` が画面構造、`src/styles.css` が見た目です。制御ロジックは `src/lib/` 配下のESモジュールに責務単位で分割されています。
+  - `src/lib/neuronodeApp.js` — ブートストラップ。ctxの構築、ビュー初期化、画面横断のイベント配線のみを担当
+  - `src/lib/content.js` — 教材・タスク・研究条件などの純粋データ。**ゲーム追加はここの `switchModules` が起点**
+  - `src/lib/state.js` — 状態の初期値・読み込み・保存（保存失敗時は通知）
+  - `src/lib/audio.js` — 効果音・読み上げ（音バリエーション要件の集約先）
+  - `src/lib/scan.js` — 走査エンジン
+  - `src/lib/views/*.js` — 各画面のレンダリングとイベントリスナー
+  - `src/lib/utils.js` / `src/lib/dom.js` — 純粋関数とDOM要素レジストリ
+- モジュール間は共有コンテキスト `ctx`（state, elements, save, announce, speak, playTone, scan, logEvent, switchView, renderAll, views）で連携します。
 - `public/` の `manifest.webmanifest`、`sw.js`、`icon.svg` はViteビルド時に配信ルートへコピーされます。
-- ログ、設定、教材の入力回数は `localStorage` に保存されます。
+- ログ、設定、教材の入力回数は `localStorage` に保存されます（キー: `neuronode-prototype-state-v2`。保存失敗時はコンソールとライブリージョンに通知）。
 - `public/sw.js` により、HTTP配信時は主要ファイルと取得済みアセットをキャッシュします。
 - CSV書き出しは評価実験の入力回数、誤選択、定型句選択の確認用です。
 - iOSネイティブプロジェクトはこのWindows環境では生成せず、Mac/Xcode環境で `npx cap add ios` します。
