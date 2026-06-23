@@ -1,455 +1,980 @@
 <script>
   import { onMount } from "svelte";
-  import { initNeuroNodeApp } from "./lib/neuronodeApp.js";
+
+  const storageKey = "neuro-trainer-state-v1";
+
+  const views = [
+    { id: "training", label: "訓練", eyebrow: "Training" },
+    { id: "voca", label: "VOCA", eyebrow: "Communication" },
+    { id: "records", label: "記録", eyebrow: "Support log" },
+    { id: "settings", label: "設定", eyebrow: "Adjust" },
+  ];
+
+  const levels = [
+    {
+      id: "reaction",
+      number: 1,
+      label: "反応を知る",
+      short: "反応",
+      goal: "入力と画面反応の対応をつかむ",
+      description: "入力するたびに色と音が変わります。ニューロノードの反応を楽に確認する導入訓練です。",
+      action: "入力して色を変える",
+      coach: "まずは成功体験を作ります。反応が出るまでの姿勢、装着位置、疲れやすさを支援者が見ます。",
+    },
+    {
+      id: "timing",
+      number: 2,
+      label: "合図で入力",
+      short: "合図",
+      goal: "待つ、見る、入力する流れを練習する",
+      description: "合図が出てから入力します。見逃しや早押しが起きやすい設定を調整できます。",
+      action: "合図に合わせて入力",
+      coach: "合図後の反応時間を見ます。早押しが多い場合はクールタイム、見逃しが多い場合は走査間隔を調整します。",
+    },
+    {
+      id: "choice",
+      number: 3,
+      label: "選択する",
+      short: "選択",
+      goal: "目的の項目を選ぶ操作に慣れる",
+      description: "お題に合う選択肢を選びます。項目スキャンに近い練習として使えます。",
+      action: "お題の項目を選ぶ",
+      coach: "ボタンの数、サイズ、間隔が合っているかを見ます。誤選択が続く場合は選択肢を減らします。",
+    },
+    {
+      id: "message",
+      number: 4,
+      label: "伝える",
+      short: "伝達",
+      goal: "定型句で意思表示する",
+      description: "病院・施設で使いやすい短いことばを選び、音声読み上げで伝えます。",
+      action: "ことばを選んで伝える",
+      coach: "訓練から実利用へつなげる段階です。本人が使いたい語句を優先表示できるか確認します。",
+    },
+  ];
+
+  const stageColors = ["#147d78", "#247a4d", "#315f9d", "#8a6f19", "#b84a4a"];
+
+  const choiceTasks = [
+    {
+      prompt: "「水」を選んでください",
+      answer: "水",
+      options: ["はい", "水", "休む", "戻る"],
+    },
+    {
+      prompt: "「痛い」を選んでください",
+      answer: "痛い",
+      options: ["眠い", "痛い", "寒い", "暑い"],
+    },
+    {
+      prompt: "「ナースコール」を選んでください",
+      answer: "ナースコール",
+      options: ["ありがとう", "水", "ナースコール", "家族"],
+    },
+  ];
+
+  const phraseCategories = {
+    基本: ["はい", "いいえ", "もう一度", "わかりません", "ありがとう", "待ってください"],
+    体調: ["痛いです", "寒いです", "暑いです", "眠いです", "休みたいです", "水がほしいです"],
+    介助: ["姿勢を変えてください", "トイレに行きたいです", "吸引してください", "家族に連絡してください", "ナースコール", "外に出たいです"],
+  };
+
+  const buttonScaleLabels = {
+    1: "標準",
+    2: "大きめ",
+    3: "最大",
+  };
+
+  const defaultState = {
+    activeView: "training",
+    activeLevel: "reaction",
+    activeCategory: "基本",
+    colorStep: 0,
+    choiceIndex: 0,
+    selectedPhrase: "",
+    profileName: "",
+    sessionPlace: "病院",
+    settings: {
+      scanInterval: 1600,
+      inputLockMs: 900,
+      buttonScale: 2,
+      autoScan: false,
+      soundEnabled: true,
+      speechEnabled: true,
+      highContrast: false,
+      largeText: true,
+    },
+    metrics: {
+      totalInputs: 0,
+      successes: 0,
+      mistakes: 0,
+      timingInputs: 0,
+      timingSumMs: 0,
+      lastReactionMs: null,
+      lockedInputs: 0,
+    },
+    logs: [],
+    supportNote: "",
+  };
+
+  let state = loadState();
+  let scanTargets = [];
+  let scanIndex = -1;
+  let scanTimer = null;
+  let cueActive = false;
+  let cueWaiting = false;
+  let cueStartedAt = null;
+  let cueTimer = null;
+  let lastInputAt = 0;
+  let toast = "訓練を開始できます";
+  let mounted = false;
+  let audioContext;
+
+  $: activeView = views.find((view) => view.id === state.activeView) || views[0];
+  $: activeLevel = levels.find((level) => level.id === state.activeLevel) || levels[0];
+  $: currentChoiceTask = choiceTasks[state.choiceIndex % choiceTasks.length];
+  $: phrases = phraseCategories[state.activeCategory] || phraseCategories.基本;
+  $: stageColor = stageColors[state.colorStep % stageColors.length];
+  $: averageTiming = state.metrics.timingInputs
+    ? Math.round(state.metrics.timingSumMs / state.metrics.timingInputs)
+    : null;
+  $: successRate = state.metrics.totalInputs
+    ? Math.round((state.metrics.successes / state.metrics.totalInputs) * 100)
+    : null;
+  $: recommendation = buildRecommendation();
 
   onMount(() => {
-    initNeuroNodeApp();
+    mounted = true;
+    applyBodyClasses();
+    refreshScanTargets();
+    if (state.settings.autoScan) startScan();
+
+    const handleKeydown = (event) => {
+      const tag = event.target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+      if (event.key === " " || event.key === "Enter") {
+        event.preventDefault();
+        activateCurrentScanTarget();
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        stepScan();
+      }
+      if (event.key === "Escape") {
+        stopScan();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeydown);
+    window.addEventListener("resize", refreshScanTargets);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeydown);
+      window.removeEventListener("resize", refreshScanTargets);
+      stopScan();
+      clearCueTimer();
+    };
   });
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return cloneDefaultState();
+      const parsed = JSON.parse(raw);
+      return {
+        ...cloneDefaultState(),
+        ...parsed,
+        settings: { ...defaultState.settings, ...(parsed.settings || {}) },
+        metrics: { ...defaultState.metrics, ...(parsed.metrics || {}) },
+        logs: Array.isArray(parsed.logs) ? parsed.logs : [],
+      };
+    } catch {
+      return cloneDefaultState();
+    }
+  }
+
+  function cloneDefaultState() {
+    return JSON.parse(JSON.stringify(defaultState));
+  }
+
+  function commit(message) {
+    state = { ...state };
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    applyBodyClasses();
+    if (message) toast = message;
+    window.setTimeout(refreshScanTargets, 0);
+  }
+
+  function applyBodyClasses() {
+    if (!mounted) return;
+    document.body.classList.toggle("large-text", state.settings.largeText);
+    document.body.classList.toggle("high-contrast", state.settings.highContrast);
+    document.body.dataset.buttonScale = String(state.settings.buttonScale);
+  }
+
+  function setView(viewId) {
+    state.activeView = viewId;
+    clearCue();
+    commit(`${views.find((view) => view.id === viewId)?.label || "画面"}を表示しました`);
+    restartScanIfNeeded();
+  }
+
+  function setLevel(levelId) {
+    state.activeLevel = levelId;
+    clearCue();
+    addLog("level", `${levels.find((level) => level.id === levelId)?.label || "訓練"}に切り替え`, true, false);
+    commit(`${activeLevel.label}の訓練に切り替えました`);
+    restartScanIfNeeded();
+  }
+
+  function handleTrainingInput() {
+    if (isInputLocked()) return;
+    lastInputAt = Date.now();
+
+    if (state.activeLevel === "reaction") {
+      state.colorStep += 1;
+      recordInput(true);
+      playTone(520 + state.colorStep * 24);
+      speak("入力できました");
+      addLog("training", "反応入力", true);
+      commit("入力できました。色が変わりました");
+      return;
+    }
+
+    if (state.activeLevel === "timing") {
+      if (!cueActive) {
+        state.metrics.mistakes += 1;
+        recordInput(false, false);
+        playTone(220);
+        addLog("timing", cueWaiting ? "合図前の入力" : "合図なしの入力", false);
+        commit(cueWaiting ? "まだ合図前です。待つ練習として記録しました" : "先に「合図を出す」を押してください");
+        return;
+      }
+
+      const reactionMs = Date.now() - cueStartedAt;
+      state.metrics.timingInputs += 1;
+      state.metrics.timingSumMs += reactionMs;
+      state.metrics.lastReactionMs = reactionMs;
+      clearCue();
+      recordInput(true);
+      playTone(660);
+      speak("入力できました");
+      addLog("timing", `合図後 ${reactionMs}ms`, true);
+      commit(`合図後 ${reactionMs}ms で入力できました`);
+      return;
+    }
+
+    if (state.activeLevel === "choice") {
+      commit("選択肢からお題の項目を選びます");
+      return;
+    }
+
+    if (state.activeLevel === "message") {
+      if (state.selectedPhrase) {
+        speak(state.selectedPhrase);
+        playTone(560);
+        addLog("message", `再読み上げ: ${state.selectedPhrase}`, true);
+        commit(`「${state.selectedPhrase}」をもう一度読み上げました`);
+      } else {
+        commit("VOCA画面でことばを選んでください");
+      }
+    }
+  }
+
+  function beginCue() {
+    clearCue();
+    cueWaiting = true;
+    toast = "待ってください。まもなく合図が出ます";
+    cueTimer = window.setTimeout(() => {
+      cueWaiting = false;
+      cueActive = true;
+      cueStartedAt = Date.now();
+      playTone(740);
+      speak("いまです");
+      toast = "いま入力してください";
+    }, 900);
+  }
+
+  function chooseOption(option) {
+    if (isInputLocked()) return;
+    lastInputAt = Date.now();
+    const correct = option === currentChoiceTask.answer;
+    if (correct) {
+      state.choiceIndex = (state.choiceIndex + 1) % choiceTasks.length;
+    } else {
+      state.metrics.mistakes += 1;
+    }
+    recordInput(correct);
+    playTone(correct ? 690 : 240);
+    speak(correct ? "正解です" : "違います");
+    addLog("choice", option, correct);
+    commit(correct ? `正解です。「${option}」を選びました` : `「${option}」は違います`);
+    restartScanIfNeeded();
+  }
+
+  function selectPhrase(phrase) {
+    if (isInputLocked()) return;
+    lastInputAt = Date.now();
+    state.selectedPhrase = phrase;
+    recordInput(true);
+    speak(phrase);
+    playTone(560);
+    addLog("message", phrase, true);
+    commit(`「${phrase}」を選びました`);
+  }
+
+  function recordInput(success, countSuccess = true) {
+    state.metrics.totalInputs += 1;
+    if (success && countSuccess) state.metrics.successes += 1;
+  }
+
+  function isInputLocked() {
+    const elapsed = Date.now() - lastInputAt;
+    if (elapsed < state.settings.inputLockMs) {
+      state.metrics.lockedInputs += 1;
+      commit("連続入力を防止しました");
+      return true;
+    }
+    return false;
+  }
+
+  function addLog(type, label, success = true, save = true) {
+    const level = levels.find((item) => item.id === state.activeLevel);
+    state.logs.unshift({
+      at: new Date().toISOString(),
+      type,
+      label,
+      success,
+      level: level?.label || "",
+      scanInterval: state.settings.scanInterval,
+      inputLockMs: state.settings.inputLockMs,
+      place: state.sessionPlace,
+      profileName: state.profileName,
+    });
+    state.logs = state.logs.slice(0, 120);
+    if (save) commit();
+  }
+
+  function saveSupportNote() {
+    const text = state.supportNote.trim();
+    if (!text) {
+      toast = "メモを入力してください";
+      return;
+    }
+    addLog("note", text, true);
+    state.supportNote = "";
+    commit("支援者メモを記録しました");
+  }
+
+  function resetSession() {
+    state.metrics = cloneDefaultState().metrics;
+    state.logs = [];
+    state.colorStep = 0;
+    state.choiceIndex = 0;
+    state.selectedPhrase = "";
+    clearCue();
+    commit("セッション記録をリセットしました");
+  }
+
+  function exportCsv() {
+    if (!state.logs.length) {
+      toast = "書き出す記録がありません";
+      return;
+    }
+    const rows = [
+      ["time", "type", "level", "label", "success", "scanInterval", "inputLockMs", "place", "profileName"],
+      ...state.logs.map((entry) => [
+        entry.at,
+        entry.type,
+        entry.level,
+        entry.label,
+        entry.success,
+        entry.scanInterval,
+        entry.inputLockMs,
+        entry.place,
+        entry.profileName,
+      ]),
+    ];
+    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `neuro-training-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function updateSetting(key, value) {
+    state.settings[key] = value;
+    commit("設定を更新しました");
+    if (key === "scanInterval" && scanTimer) startScan();
+    if (key === "autoScan") restartScanIfNeeded();
+  }
+
+  function clearCueTimer() {
+    if (cueTimer) {
+      window.clearTimeout(cueTimer);
+      cueTimer = null;
+    }
+  }
+
+  function clearCue() {
+    clearCueTimer();
+    cueWaiting = false;
+    cueActive = false;
+    cueStartedAt = null;
+  }
+
+  function refreshScanTargets() {
+    if (!mounted) return;
+    const activeSection = document.querySelector(".view.is-active");
+    scanTargets = [
+      ...document.querySelectorAll(".tabbar [data-scan]"),
+      ...(activeSection ? [...activeSection.querySelectorAll("[data-scan]")] : []),
+      ...document.querySelectorAll(".switch-dock [data-scan]"),
+    ].filter((target) => {
+      const rect = target.getBoundingClientRect();
+      return !target.disabled && rect.width > 0 && rect.height > 0;
+    });
+    if (scanIndex >= scanTargets.length) scanIndex = scanTargets.length ? 0 : -1;
+    updateScanFocus();
+  }
+
+  function updateScanFocus() {
+    document.querySelectorAll(".scan-focus").forEach((target) => target.classList.remove("scan-focus"));
+    if (!scanTargets.length || scanIndex < 0) return;
+    const target = scanTargets[scanIndex];
+    target.classList.add("scan-focus");
+    target.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  function stepScan() {
+    refreshScanTargets();
+    if (!scanTargets.length) return;
+    scanIndex = (scanIndex + 1) % scanTargets.length;
+    updateScanFocus();
+  }
+
+  function startScan() {
+    stopScan(false);
+    refreshScanTargets();
+    scanIndex = scanTargets.length ? Math.max(0, scanIndex) : -1;
+    updateScanFocus();
+    scanTimer = window.setInterval(stepScan, state.settings.scanInterval);
+    toast = "走査中です。入力ボタンで選択できます";
+  }
+
+  function stopScan(clearFocus = true) {
+    if (scanTimer) {
+      window.clearInterval(scanTimer);
+      scanTimer = null;
+    }
+    if (clearFocus) {
+      scanIndex = -1;
+      document.querySelectorAll(".scan-focus").forEach((target) => target.classList.remove("scan-focus"));
+    }
+  }
+
+  function restartScanIfNeeded() {
+    window.setTimeout(() => {
+      refreshScanTargets();
+      if (state.settings.autoScan) startScan();
+    }, 0);
+  }
+
+  function activateCurrentScanTarget() {
+    refreshScanTargets();
+    if (scanTargets.length && scanIndex >= 0) {
+      const target = scanTargets[scanIndex];
+      target.click();
+      return;
+    }
+    handleTrainingInput();
+  }
+
+  function toggleScan() {
+    if (scanTimer) {
+      stopScan();
+      toast = "走査を停止しました";
+    } else {
+      startScan();
+    }
+  }
+
+  function speak(text) {
+    if (!state.settings.speechEnabled || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "ja-JP";
+    utterance.rate = 0.92;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function playTone(frequency) {
+    if (!state.settings.soundEnabled) return;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    try {
+      if (!audioContext) audioContext = new AudioContextClass();
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.frequency.value = frequency;
+      oscillator.type = "sine";
+      gain.gain.value = 0.05;
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.18);
+      oscillator.stop(audioContext.currentTime + 0.2);
+    } catch {
+      // Audio feedback is optional in embedded browsers.
+    }
+  }
+
+  function buildRecommendation() {
+    if (state.metrics.mistakes >= 3) {
+      return "誤選択が増えています。選択肢を減らす、ボタンサイズを上げる、走査間隔を少し長くする候補です。";
+    }
+    if (state.metrics.lockedInputs >= 3) {
+      return "連続入力防止が多く働いています。入力後待機時間が長すぎないか、本人の入力リズムと合わせて確認してください。";
+    }
+    if (averageTiming && averageTiming > 2200) {
+      return "合図後の入力がゆっくりです。合図表示を強くする、走査間隔を長めにする候補です。";
+    }
+    if (state.metrics.totalInputs >= 8 && successRate >= 80) {
+      return "安定して入力できています。次のレベル、またはVOCAで実用語句の練習に進めます。";
+    }
+    return "まずはレベル1で入力しやすい姿勢と装着位置を確認し、反応が安定したらレベル2へ進みます。";
+  }
+
+  function escapeCsv(value) {
+    const text = String(value ?? "");
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  function formatTime(isoString) {
+    return new Intl.DateTimeFormat("ja-JP", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(isoString));
+  }
 </script>
 
 <div class="app-shell">
   <header class="topbar">
-    <div>
-      <p class="eyebrow">neuro Web Prototype</p>
-      <h1>neuro</h1>
+    <div class="brand-block">
+      <p class="eyebrow">NeuroNode training app</p>
+      <h1>neuro trainer</h1>
+      <p>ニューロノード導入時の「できた」を積み上げる訓練アプリ</p>
     </div>
-    <div class="status-pill" aria-live="polite">
-      <span id="scanState">走査停止中</span>
+    <div class="session-card" aria-live="polite">
+      <span>現在の段階</span>
+      <strong>Lv.{activeLevel.number} {activeLevel.label}</strong>
+      <small>{scanTimer ? "走査中" : "走査停止中"} / {state.settings.scanInterval}ms</small>
     </div>
   </header>
 
   <nav class="tabbar" aria-label="主要画面">
-    <button class="tab is-active" data-view="switcher" data-scan>スイッチ教材</button>
-    <button class="tab" data-view="matching" data-scan>マッチング</button>
-    <button class="tab" data-view="voca" data-scan>VOCA</button>
-    <button class="tab" data-view="letters" data-scan>文字学習</button>
-    <button class="tab" data-view="log" data-scan>評価ログ</button>
-    <button class="tab" data-view="settings" data-scan>設定</button>
+    {#each views as view}
+      <button
+        class:is-active={state.activeView === view.id}
+        class="tab"
+        type="button"
+        data-view={view.id}
+        data-scan
+        onclick={() => setView(view.id)}
+      >
+        <span>{view.eyebrow}</span>
+        {view.label}
+      </button>
+    {/each}
   </nav>
 
   <main>
-    <section class="view is-active" id="switcher" aria-labelledby="switcher-title">
+    <section class:is-active={state.activeView === "training"} class="view training-view" id="training">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Switch apps</p>
-          <h2 id="switcher-title">スイッチ教材ソフト</h2>
+          <p class="eyebrow">Step training</p>
+          <h2>段階式トレーニング</h2>
         </div>
-        <button class="secondary" id="resetSwitch" data-scan>教材記録をリセット</button>
+        <p class="section-copy">支援者が横で見ながら、反応確認から意思表示まで少しずつ進めます。</p>
       </div>
 
-      <div class="module-grid" id="switchModuleGrid" aria-label="スイッチ教材の種類"></div>
-
-      <div class="trainer-layout">
-        <button class="activity-stage" id="switchStage" data-scan aria-describedby="switchHint">
-          <span class="activity-visual" id="activityVisual"></span>
-          <span class="reaction-label" id="switchTitle">色変化</span>
-          <span class="reaction-detail" id="switchHint">入力すると画面の色が変わります。</span>
-        </button>
-
-        <aside class="metrics" aria-label="教材の記録">
-          <div>
-            <span class="metric-label">入力回数</span>
-            <strong id="hitCount">0</strong>
-          </div>
-          <div>
-            <span class="metric-label">平均間隔</span>
-            <strong id="averageInterval">--</strong>
-          </div>
-          <div>
-            <span class="metric-label">直近反応</span>
-            <strong id="lastReaction">--</strong>
-          </div>
+      <div class="training-layout">
+        <aside class="level-rail" aria-label="訓練レベル">
+          {#each levels as level}
+            <button
+              class:is-active={state.activeLevel === level.id}
+              class="level-card"
+              type="button"
+              data-scan
+              onclick={() => setLevel(level.id)}
+            >
+              <span>Level {level.number}</span>
+              <strong>{level.label}</strong>
+              <small>{level.goal}</small>
+            </button>
+          {/each}
         </aside>
-      </div>
-    </section>
 
-    <section class="view" id="matching" aria-labelledby="matching-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Scan matching</p>
-          <h2 id="matching-title">スキャン・マッチング教材</h2>
-        </div>
-        <button class="secondary" id="nextMatching" data-scan>次の問題</button>
-      </div>
+        <section class="stage-panel">
+          <div class="stage-header">
+            <div>
+              <p class="eyebrow">Level {activeLevel.number}</p>
+              <h3>{activeLevel.action}</h3>
+            </div>
+            {#if state.activeLevel === "timing"}
+              <button class="secondary" type="button" data-scan onclick={beginCue}>
+                合図を出す
+              </button>
+            {/if}
+          </div>
 
-      <div class="question-board">
-        <span class="metric-label">お題</span>
-        <strong id="matchingPrompt">赤いものを選んでください</strong>
-      </div>
-      <div class="card-grid" id="matchingGrid" aria-label="マッチング選択肢"></div>
-    </section>
+          {#if state.activeLevel === "choice"}
+            <div class="prompt-board">
+              <span>お題</span>
+              <strong>{currentChoiceTask.prompt}</strong>
+            </div>
+            <div class="choice-grid">
+              {#each currentChoiceTask.options as option}
+                <button class="choice-button" type="button" data-scan onclick={() => chooseOption(option)}>
+                  {option}
+                </button>
+              {/each}
+            </div>
+          {:else if state.activeLevel === "message"}
+            <div class="prompt-board">
+              <span>選択中のことば</span>
+              <strong>{state.selectedPhrase || "VOCA画面でことばを選びます"}</strong>
+            </div>
+            <button class="training-stage message-stage" type="button" data-scan onclick={handleTrainingInput}>
+              <span class="stage-symbol">話す</span>
+              <strong>選んだことばを読み上げる</strong>
+              <small>{activeLevel.description}</small>
+            </button>
+          {:else}
+            <button
+              class:is-cue={cueActive}
+              class:is-waiting={cueWaiting}
+              class="training-stage"
+              style={`--stage-color: ${state.activeLevel === "reaction" ? stageColor : "#147d78"}`}
+              type="button"
+              data-scan
+              onclick={handleTrainingInput}
+            >
+              <span class="stage-symbol">
+                {#if state.activeLevel === "timing"}
+                  {cueActive ? "今" : cueWaiting ? "待つ" : "合図"}
+                {:else}
+                  入力
+                {/if}
+              </span>
+              <strong>
+                {#if state.activeLevel === "timing"}
+                  {cueActive ? "いま入力してください" : cueWaiting ? "合図を待っています" : "合図後に入力します"}
+                {:else}
+                  入力すると反応します
+                {/if}
+              </strong>
+              <small>{activeLevel.description}</small>
+            </button>
+          {/if}
 
-    <section class="view" id="voca" aria-labelledby="voca-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Fixed phrase VOCA</p>
-          <h2 id="voca-title">定型句VOCA</h2>
-        </div>
-        <button class="secondary" id="repeatPhrase" data-scan>もう一度読む</button>
-      </div>
-
-      <div class="message-board" aria-live="polite">
-        <span class="metric-label">選択したことば</span>
-        <strong id="currentPhrase">まだ選択されていません</strong>
-      </div>
-
-      <div class="category-row" id="categoryRow" aria-label="カテゴリ"></div>
-      <div class="phrase-grid" id="phraseGrid" aria-label="定型句"></div>
-    </section>
-
-    <section class="view" id="letters" aria-labelledby="letters-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Letter learning</p>
-          <h2 id="letters-title">文字学習ソフト</h2>
-        </div>
-        <button class="secondary" id="nextLetter" data-scan>次の問題</button>
-      </div>
-
-      <div class="question-board letter-board">
-        <span class="metric-label">文字のお題</span>
-        <strong id="letterPrompt">「あめ」の最初の文字を選んでください</strong>
-      </div>
-      <div class="letter-grid" id="letterGrid" aria-label="文字選択肢"></div>
-    </section>
-
-    <section class="view" id="operation" aria-labelledby="operation-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">iOS Switch Control training</p>
-          <h2 id="operation-title">iOS操作訓練</h2>
-        </div>
-        <button class="secondary" id="resetOperation" data-scan>訓練記録をリセット</button>
-      </div>
-
-      <div class="module-grid" id="operationModeGrid" aria-label="操作訓練の種類"></div>
-
-      <div class="operation-layout">
-        <section class="eval-panel">
-          <h3 id="operationModeTitle">項目スキャン訓練</h3>
-          <p class="operation-guide" id="operationGuide">項目が順番にハイライトされる前提で、目的の項目を選びます。</p>
-          <div class="operation-stage" id="operationStage" aria-label="操作訓練ステージ"></div>
-          <div class="action-row wrap">
-            <button class="primary-small" id="operationPrimary" data-scan>訓練入力</button>
-            <button class="secondary" id="nextOperationTarget" data-scan>次の課題</button>
+          <div class="coach-note">
+            <span>支援者の観察ポイント</span>
+            <p>{activeLevel.coach}</p>
           </div>
         </section>
 
-        <aside class="metrics" aria-label="操作訓練の記録">
-          <div>
-            <span class="metric-label">試行回数</span>
-            <strong id="operationTrials">0</strong>
+        <aside class="insight-panel">
+          <div class="metric-tile primary">
+            <span>総入力</span>
+            <strong>{state.metrics.totalInputs}</strong>
           </div>
-          <div>
-            <span class="metric-label">成功率</span>
-            <strong id="operationSuccessRate">--</strong>
+          <div class="metric-grid">
+            <div class="metric-tile">
+              <span>成功率</span>
+              <strong>{successRate === null ? "--" : `${successRate}%`}</strong>
+            </div>
+            <div class="metric-tile">
+              <span>誤選択</span>
+              <strong>{state.metrics.mistakes}</strong>
+            </div>
+            <div class="metric-tile">
+              <span>平均反応</span>
+              <strong>{averageTiming === null ? "--" : `${averageTiming}ms`}</strong>
+            </div>
+            <div class="metric-tile">
+              <span>連続防止</span>
+              <strong>{state.metrics.lockedInputs}</strong>
+            </div>
           </div>
-          <div>
-            <span class="metric-label">平均ズレ</span>
-            <strong id="operationAverageDistance">--</strong>
+          <div class="recommendation">
+            <span>次の調整候補</span>
+            <p>{recommendation}</p>
           </div>
         </aside>
       </div>
     </section>
 
-    <section class="view" id="evaluation" aria-labelledby="evaluation-title">
+    <section class:is-active={state.activeView === "voca"} class="view" id="voca">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Research measurement</p>
-          <h2 id="evaluation-title">効果測定セッション</h2>
+          <p class="eyebrow">Communication bridge</p>
+          <h2>VOCA練習</h2>
+        </div>
+        <p class="section-copy">訓練の最後に、実際に伝えたいことばへつなげます。</p>
+      </div>
+
+      <div class="voca-layout">
+        <div class="message-board">
+          <span>現在のことば</span>
+          <strong>{state.selectedPhrase || "まだ選択されていません"}</strong>
+          <button class="secondary" type="button" data-scan onclick={handleTrainingInput}>もう一度読む</button>
+        </div>
+
+        <div class="phrase-area">
+          <div class="category-row">
+            {#each Object.keys(phraseCategories) as category}
+              <button
+                class:is-active={state.activeCategory === category}
+                class="category-button"
+                type="button"
+                data-scan
+                onclick={() => {
+                  state.activeCategory = category;
+                  commit(`${category}カテゴリを表示しました`);
+                  restartScanIfNeeded();
+                }}
+              >
+                {category}
+              </button>
+            {/each}
+          </div>
+          <div class="phrase-grid">
+            {#each phrases as phrase}
+              <button class="phrase-button" type="button" data-scan onclick={() => selectPhrase(phrase)}>
+                {phrase}
+              </button>
+            {/each}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class:is-active={state.activeView === "records"} class="view" id="records">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Supporter log</p>
+          <h2>支援者記録</h2>
         </div>
         <div class="action-row">
-          <button class="secondary" id="exportEvaluationCsv" data-scan>測定CSV</button>
-          <button class="danger" id="resetEvaluation" data-scan>測定リセット</button>
+          <button class="secondary" type="button" data-scan onclick={exportCsv}>CSV書き出し</button>
+          <button class="danger" type="button" data-scan onclick={resetSession}>記録リセット</button>
         </div>
       </div>
 
-      <div class="evaluation-grid">
-        <section class="eval-panel">
-          <h3>セッション情報</h3>
+      <div class="records-layout">
+        <section class="record-panel">
+          <h3>利用者と場面</h3>
           <label class="field-row">
-            <span>参加者ID</span>
-            <input id="participantId" type="text" inputmode="text" placeholder="例: P001" />
+            <span>利用者名/ID</span>
+            <input
+              value={state.profileName}
+              placeholder="例: P001"
+              oninput={(event) => {
+                state.profileName = event.target.value;
+                commit();
+              }}
+            />
           </label>
           <label class="field-row">
-            <span>条件</span>
-            <select id="evaluationCondition">
-              <option value="web">Web版</option>
-              <option value="native">iOSネイティブ版</option>
-              <option value="reference">参照構成</option>
-              <option value="optimized">最適化構成</option>
+            <span>利用場面</span>
+            <select
+              value={state.sessionPlace}
+              onchange={(event) => {
+                state.sessionPlace = event.target.value;
+                commit();
+              }}
+            >
+              <option>病院</option>
+              <option>施設</option>
+              <option>在宅</option>
+              <option>デモ</option>
             </select>
           </label>
-          <div class="action-row wrap">
-            <button class="primary-small" id="startSession" data-scan>セッション開始</button>
-            <button class="secondary" id="finishSession" data-scan>セッション終了</button>
-          </div>
-        </section>
-
-        <section class="eval-panel">
-          <h3>現在のタスク</h3>
-          <div class="current-task">
-            <span class="metric-label" id="evaluationStatus">未開始</span>
-            <strong id="currentTaskTitle">セッションを開始してください</strong>
-            <p id="currentTaskGuide">研究協力者ごとに同じ順番でタスクを実施します。</p>
-          </div>
-          <div class="action-row wrap">
-            <button class="primary-small" id="startTask" data-scan>タスク開始</button>
-            <button class="secondary" id="openTaskView" data-scan>タスク画面へ</button>
-            <button class="secondary" id="markTaskSuccess" data-scan>成功で終了</button>
-            <button class="danger" id="markTaskFail" data-scan>中止/失敗</button>
-          </div>
-        </section>
-      </div>
-
-      <div class="summary-grid evaluation-summary">
-        <div class="summary-tile">
-          <span class="metric-label">経過時間</span>
-          <strong id="taskElapsed">--</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">入力回数</span>
-          <strong id="taskInputs">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">誤選択</span>
-          <strong id="taskMistakes">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">戻り操作</span>
-          <strong id="taskBacks">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">タイミングエラー</span>
-          <strong id="taskTimingErrors">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">介助回数</span>
-          <strong id="taskAssists">0</strong>
-        </div>
-      </div>
-
-      <div class="action-row wrap evaluation-counters">
-        <button class="secondary" id="addMistake" data-scan>誤選択 +1</button>
-        <button class="secondary" id="addBack" data-scan>戻り操作 +1</button>
-        <button class="secondary" id="addTimingMissed" data-scan>見逃し +1</button>
-        <button class="secondary" id="addTimingEarly" data-scan>早押し +1</button>
-        <button class="secondary" id="addTimingLate" data-scan>遅押し +1</button>
-        <button class="secondary" id="addAssist" data-scan>介助 +1</button>
-      </div>
-
-      <div class="evaluation-grid">
-        <section class="eval-panel">
-          <h3>主観評価</h3>
-          <label class="scale-row">
-            <span>負担感</span>
-            <input id="effortRating" type="range" min="1" max="5" step="1" />
-            <output id="effortRatingValue">3</output>
-          </label>
-          <label class="scale-row">
-            <span>操作しやすさ</span>
-            <input id="easeRating" type="range" min="1" max="5" step="1" />
-            <output id="easeRatingValue">3</output>
-          </label>
-          <label class="scale-row">
-            <span>集中・関心</span>
-            <input id="engagementRating" type="range" min="1" max="5" step="1" />
-            <output id="engagementRatingValue">3</output>
-          </label>
           <label class="note-row">
-            <span>観察メモ</span>
-            <textarea id="observerNotes" rows="4" placeholder="例: 走査速度は適切。3問目で見逃しがあった。"></textarea>
+            <span>支援者メモ</span>
+            <textarea
+              rows="5"
+              value={state.supportNote}
+              placeholder="例: 走査間隔1600msは少し速い。ボタンは大きめが安定。"
+              oninput={(event) => {
+                state.supportNote = event.target.value;
+                commit();
+              }}
+            ></textarea>
           </label>
+          <button class="primary-small" type="button" data-scan onclick={saveSupportNote}>メモを記録</button>
         </section>
 
-        <section class="eval-panel">
-          <h3>タスク一覧</h3>
-          <div class="task-list" id="evaluationTaskList"></div>
+        <section class="record-panel">
+          <h3>セッション要約</h3>
+          <div class="summary-list">
+            <div><span>現在レベル</span><strong>Lv.{activeLevel.number} {activeLevel.label}</strong></div>
+            <div><span>ボタンサイズ</span><strong>{buttonScaleLabels[state.settings.buttonScale]}</strong></div>
+            <div><span>走査間隔</span><strong>{state.settings.scanInterval}ms</strong></div>
+            <div><span>入力後待機</span><strong>{state.settings.inputLockMs}ms</strong></div>
+          </div>
+          <div class="recommendation compact">
+            <span>引き継ぎメモの種</span>
+            <p>{recommendation}</p>
+          </div>
         </section>
       </div>
 
-      <section class="eval-panel">
-        <h3>測定結果</h3>
-        <div class="log-list" id="evaluationResultList"></div>
+      <section class="log-panel">
+        <h3>最近の記録</h3>
+        <div class="log-list">
+          {#if state.logs.length === 0}
+            <div class="empty-state">まだ記録はありません。訓練入力やメモを行うとここに残ります。</div>
+          {:else}
+            {#each state.logs as entry}
+              <article class:failed={!entry.success} class="log-item">
+                <span>{formatTime(entry.at)}</span>
+                <strong>{entry.label}</strong>
+                <small>{entry.type} / {entry.level || "メモ"}</small>
+              </article>
+            {/each}
+          {/if}
+        </div>
       </section>
     </section>
 
-    <section class="view" id="research" aria-labelledby="research-title">
+    <section class:is-active={state.activeView === "settings"} class="view" id="settings">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Original research design</p>
-          <h2 id="research-title">neuro独自要素</h2>
+          <p class="eyebrow">NeuroNode tuning</p>
+          <h2>訓練設定</h2>
         </div>
-      </div>
-
-      <div class="summary-grid research-axis-grid">
-        <div class="summary-tile">
-          <span class="metric-label">二段階開発</span>
-          <strong>Web → iOS</strong>
-          <p>Webで高速に試作し、CapacitorでiOS公開候補版へつなげる。</p>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">比較条件</span>
-          <strong>参照 / 最適化</strong>
-          <p>先行Web教材に近い構成と、Switch Control向けに調整した構成を比較する。</p>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">実運用</span>
-          <strong>共有iPad</strong>
-          <p>Guided Access、オフライン動作、単一アプリ運用を確認する。</p>
-        </div>
-      </div>
-
-      <div class="evaluation-grid">
-        <section class="eval-panel">
-          <h3>研究条件プロファイル</h3>
-          <p class="panel-note">
-            効果測定の条件欄と連動させ、Web版/iOS版、参照構成/最適化構成の比較を明確にします。
-          </p>
-          <div class="condition-profile-grid" id="researchProfileGrid"></div>
-        </section>
-
-        <section class="eval-panel">
-          <h3>公開候補チェック</h3>
-          <div class="readiness-meter">
-            <span class="metric-label">実用化準備</span>
-            <strong id="readinessScore">0/0</strong>
-          </div>
-          <div class="readiness-list" id="readinessChecklist"></div>
-        </section>
-      </div>
-
-      <div class="evaluation-grid">
-        <section class="eval-panel">
-          <h3>現場運用メモ</h3>
-          <label class="field-row">
-            <span>利用場面</span>
-            <select id="researchEnvironment">
-              <option value="hospital">病院</option>
-              <option value="facility">施設</option>
-              <option value="home">在宅</option>
-            </select>
-          </label>
-          <label class="note-row">
-            <span>運用メモ</span>
-            <textarea
-              id="deploymentNotes"
-              rows="4"
-              placeholder="例: 共有iPadでアクセスガイドを有効化。支援者が走査間隔を調整。"
-            ></textarea>
-          </label>
-          <button class="secondary" id="copyDeploymentNote" data-scan>観察メモへ反映</button>
-        </section>
-
-        <section class="eval-panel research-protocol">
-          <h3>計画書からの研究軸</h3>
-          <p id="researchProtocolHint">
-            Web先行開発、iOSネイティブ化、共有端末運用、App Store公開準備を評価対象に含めます。
-          </p>
-          <ul class="research-points">
-            <li>教材機能だけでなく、変換工程と運用要件を研究対象にする。</li>
-            <li>Switch Controlに合わせた要素配置と走査順序を比較する。</li>
-            <li>支援者の観察メモを、タスク結果と同じ記録として残す。</li>
-          </ul>
-        </section>
-      </div>
-    </section>
-
-    <section class="view" id="log" aria-labelledby="log-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Evaluation</p>
-          <h2 id="log-title">評価ログ</h2>
-        </div>
-        <div class="action-row">
-          <button class="secondary" id="exportCsv" data-scan>CSVを書き出す</button>
-          <button class="danger" id="clearLog" data-scan>ログ削除</button>
-        </div>
-      </div>
-
-      <div class="summary-grid">
-        <div class="summary-tile">
-          <span class="metric-label">総入力</span>
-          <strong id="totalInputs">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">正答率</span>
-          <strong id="accuracyRate">--</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">誤選択</span>
-          <strong id="mistakeCount">0</strong>
-        </div>
-      </div>
-
-      <div class="log-list" id="logList" aria-label="直近の操作ログ"></div>
-    </section>
-
-    <section class="view" id="settings" aria-labelledby="settings-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Prototype settings</p>
-          <h2 id="settings-title">設定</h2>
-        </div>
+        <p class="section-copy">利用者ごとの入力しやすさに合わせます。研究でも会社デモでも説明しやすい調整項目です。</p>
       </div>
 
       <div class="settings-grid">
         <label class="setting-row">
           <span>
             <strong>走査間隔</strong>
-            <small>Switch Control相当のハイライト速度</small>
+            <small>項目が次へ移るまでの時間</small>
           </span>
-          <input id="scanInterval" type="range" min="800" max="3200" step="100" />
-          <output id="scanIntervalValue" for="scanInterval">1600ms</output>
+          <input
+            type="range"
+            min="800"
+            max="3200"
+            step="100"
+            value={state.settings.scanInterval}
+            oninput={(event) => updateSetting("scanInterval", Number(event.target.value))}
+          />
+          <output>{state.settings.scanInterval}ms</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>入力後待機</strong>
+            <small>意図しない連続入力を防ぐ時間</small>
+          </span>
+          <input
+            type="range"
+            min="300"
+            max="2000"
+            step="100"
+            value={state.settings.inputLockMs}
+            oninput={(event) => updateSetting("inputLockMs", Number(event.target.value))}
+          />
+          <output>{state.settings.inputLockMs}ms</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>ボタンサイズ</strong>
+            <small>選択肢とVOCAボタンの大きさ</small>
+          </span>
+          <input
+            type="range"
+            min="1"
+            max="3"
+            step="1"
+            value={state.settings.buttonScale}
+            oninput={(event) => updateSetting("buttonScale", Number(event.target.value))}
+          />
+          <output>{buttonScaleLabels[state.settings.buttonScale]}</output>
         </label>
 
         <label class="setting-row toggle-row">
-          <span>
-            <strong>自動走査</strong>
-            <small>画面切り替え後に走査を開始します</small>
-          </span>
-          <input id="autoScan" type="checkbox" role="switch" data-scan />
+          <span><strong>自動走査</strong><small>画面遷移後に走査を開始</small></span>
+          <input
+            checked={state.settings.autoScan}
+            type="checkbox"
+            role="switch"
+            data-scan
+            onchange={(event) => updateSetting("autoScan", event.target.checked)}
+          />
         </label>
 
         <label class="setting-row toggle-row">
-          <span>
-            <strong>音声読み上げ</strong>
-            <small>定型句やフィードバックを読み上げます</small>
-          </span>
-          <input id="speechEnabled" type="checkbox" role="switch" data-scan />
+          <span><strong>音声読み上げ</strong><small>ことばとフィードバックを読み上げ</small></span>
+          <input
+            checked={state.settings.speechEnabled}
+            type="checkbox"
+            role="switch"
+            data-scan
+            onchange={(event) => updateSetting("speechEnabled", event.target.checked)}
+          />
         </label>
 
         <label class="setting-row toggle-row">
-          <span>
-            <strong>効果音</strong>
-            <small>入力時に短い確認音を鳴らします</small>
-          </span>
-          <input id="soundEnabled" type="checkbox" role="switch" data-scan />
+          <span><strong>効果音</strong><small>入力時に短い確認音を鳴らす</small></span>
+          <input
+            checked={state.settings.soundEnabled}
+            type="checkbox"
+            role="switch"
+            data-scan
+            onchange={(event) => updateSetting("soundEnabled", event.target.checked)}
+          />
         </label>
 
         <label class="setting-row toggle-row">
-          <span>
-            <strong>大きい文字</strong>
-            <small>共有iPadで見やすい表示にします</small>
-          </span>
-          <input id="largeText" type="checkbox" role="switch" data-scan />
+          <span><strong>大きい文字</strong><small>共有iPadで見やすい表示</small></span>
+          <input
+            checked={state.settings.largeText}
+            type="checkbox"
+            role="switch"
+            data-scan
+            onchange={(event) => updateSetting("largeText", event.target.checked)}
+          />
         </label>
 
         <label class="setting-row toggle-row">
-          <span>
-            <strong>高コントラスト</strong>
-            <small>ハイライトと文字の差を強めます</small>
-          </span>
-          <input id="highContrast" type="checkbox" role="switch" data-scan />
+          <span><strong>高コントラスト</strong><small>ハイライトと文字の差を強める</small></span>
+          <input
+            checked={state.settings.highContrast}
+            type="checkbox"
+            role="switch"
+            data-scan
+            onchange={(event) => updateSetting("highContrast", event.target.checked)}
+          />
         </label>
       </div>
     </section>
   </main>
 
-  <footer class="switch-dock">
-    <button class="scan-control" id="toggleScan" data-scan>走査開始</button>
-    <button class="primary-switch" id="primarySwitch">入力</button>
+  <footer class="switch-dock" aria-live="polite">
+    <button class="scan-control" type="button" data-scan onclick={toggleScan}>
+      {scanTimer ? "走査停止" : "走査開始"}
+    </button>
+    <div class="toast-line">{toast}</div>
+    <button class="primary-switch" type="button" data-scan onclick={activateCurrentScanTarget}>入力</button>
   </footer>
 </div>
-
-<div class="sr-only" id="liveRegion" aria-live="assertive"></div>

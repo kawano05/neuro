@@ -43,6 +43,7 @@ try {
     try {
       for (const [name, check] of checks) {
         const context = await browser.newContext(project.contextOptions);
+        await context.addInitScript(() => localStorage.clear());
         const page = await context.newPage();
         try {
           await page.goto(baseUrl);
@@ -86,26 +87,26 @@ async function waitForServer() {
 }
 
 async function checkMainApp(page) {
-  await waitForText(page, "h1", "neuro");
-  await waitForCount(page, ".tab", 6);
-  await waitForClass(page, "#switcher", "is-active");
-  await page.locator("#switchStage").waitFor({ state: "visible" });
+  await waitForText(page, "h1", "neuro trainer");
+  await waitForCount(page, ".tab", 4);
+  await waitForClass(page, "#training", "is-active");
+  await page.locator(".training-stage").waitFor({ state: "visible" });
 }
 
 async function checkSwitchInput(page) {
-  await page.locator("#resetSwitch").click();
-  await waitForText(page, "#hitCount", "0");
+  await waitForText(page, ".metric-tile.primary strong", "0");
 
-  await page.locator("#switchStage").click();
-  await waitForText(page, "#hitCount", "1");
+  await page.locator(".training-stage").click();
+  await waitForText(page, ".metric-tile.primary strong", "1");
 
   await page.keyboard.press("Escape");
-  await page.keyboard.press("Space");
-  await waitForText(page, "#hitCount", "2");
+  await page.waitForTimeout(1000);
+  await page.locator(".training-stage").click();
+  await waitForText(page, ".metric-tile.primary strong", "2");
 }
 
 async function checkFeatureTabs(page) {
-  const tabTargets = ["matching", "voca", "letters", "log", "settings", "switcher"];
+  const tabTargets = ["voca", "records", "settings", "training"];
 
   for (const target of tabTargets) {
     await page.locator(`.tab[data-view="${target}"]`).click();
@@ -121,7 +122,7 @@ async function checkMobileLayout(page) {
 
   assert(overflow <= 2, `Expected horizontal overflow <= 2px, got ${overflow}px`);
   await page.locator(".switch-dock").waitFor({ state: "visible" });
-  await page.locator("#primarySwitch").waitFor({ state: "visible" });
+  await page.locator(".primary-switch").waitFor({ state: "visible" });
 }
 
 async function waitForText(page, selector, expected) {
