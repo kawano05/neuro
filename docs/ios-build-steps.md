@@ -8,6 +8,7 @@
 - Node.js 22以上
 - npm
 - Xcode
+- CocoaPods
 - Apple Developer Teamを選択できるApple ID
 
 ## 初回だけ行う手順
@@ -19,6 +20,8 @@ npm run cap:add:ios
 npm run cap:sync
 npm run cap:open:ios
 ```
+
+`npm run cap:add:ios` は `npx cap add ios --packagemanager cocoapods` を実行します。Capacitor 8のSPM生成では環境によってbinary artifact解決が長時間止まることがあるため、このプロジェクトではCocoaPods版の `ios/App/App.xcworkspace` を標準にします。
 
 Xcodeが開いたら、以下を設定します。
 
@@ -47,6 +50,7 @@ npm run cap:sync
 
 - `dist/index.html` が生成されていること
 - `capacitor.config.json` の `webDir` が `dist` であること
+- `ios/App/App.xcworkspace` が生成されていること
 - XcodeでSigningのTeamが設定されていること
 - 実機で確認する場合、MacとiPad/iPhoneを接続し、端末側で開発者を信頼すること
 

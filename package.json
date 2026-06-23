@@ -16,7 +16,7 @@
     "test": "npm run test:web",
     "test:web": "npm run build && node tests/web-smoke.mjs",
     "test:web:headed": "npm run build && node tests/web-smoke.mjs --headed",
-    "cap:add:ios": "npx cap add ios",
+    "cap:add:ios": "npx cap add ios --packagemanager cocoapods",
     "cap:sync": "npm run build && npx cap sync ios",
     "cap:open:ios": "npx cap open ios"
   },

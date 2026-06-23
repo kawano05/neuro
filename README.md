@@ -46,6 +46,8 @@ npm run cap:sync
 npm run cap:open:ios
 ```
 
+`cap:add:ios` は CocoaPods 版の Xcode workspace を生成します。CI とローカル検証では `ios/App/App.xcworkspace` を `App` scheme でビルドします。
+
 Windows上ではXcodeや本物のiOS Simulatorは使えないため、GitHub Actions の macOS runner で Capacitor iOS プロジェクト生成とXcodeビルド確認を行います。最終的な Switch Control、Guided Access、NeuroNode実機操作は iPad 実機で確認します。
 
 ## 主な画面
