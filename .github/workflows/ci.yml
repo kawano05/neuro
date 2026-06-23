@@ -55,5 +55,8 @@ jobs:
       - name: Sync Capacitor assets
         run: npx cap sync ios
 
+      - name: Inspect generated iOS project
+        run: ls -la ios/App
+
       - name: Build iOS simulator target
-        run: xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
