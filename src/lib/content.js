@@ -35,6 +35,41 @@ export const switchModules = [
 /** スイッチ教材ステージの背景色サイクル */
 export const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747"];
 
+/**
+ * ゲームタイル（アプリ選択画面の表示に使う純粋データ）。detailed-design.md §4.1。
+ *
+ * ロジックを持つ create はここには置かない。games/registry.js が
+ * このタイル情報と各ゲームの create(ctx) を結合して GameModule（契約は
+ * detailed-design.md §3.1）の配列を組み立てる。
+ *
+ * 将来のテーマスキン（寿司・鬼等。基本設計書 §2.2 の非スコープ）用の口として、
+ * 各タイルへ `skin`（例: "sushi" | "oni" | null）フィールドを追加できる構造に
+ * してある。本リファクタでは skin フィールド自体を追加しない（未実装）。
+ */
+export const gameTiles = [
+  { id: "color-legacy", title: "いろがかわる", description: "おすと いろと おとが かわるよ", order: 1, enabled: true },
+  { id: "rhythm-l1", title: "リズム れんしゅう", description: "おとの あいずに あわせて おそう", order: 2, enabled: true },
+  { id: "rhythm-l2", title: "リズム つづけて", description: "おとに あわせて つづけて おそう", order: 3, enabled: true },
+  { id: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true },
+  { id: "calibration", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 5, enabled: true },
+  { id: "future-slot", title: "じゅんびちゅう", description: "", order: 6, enabled: false },
+];
+
+/**
+ * リズム系ゲームのプリセット値（bpm・カウントイン拍数・目標ビート数等）。
+ * detailed-design.md §4.1 / §7.1。state.settings 側の同名値（null 以外）が
+ * 優先される（games/rhythm.js が優先順位を解決する。P2-3 で実装）。
+ */
+export const rhythmPresets = {
+  "rhythm-l1": { bpm: 40, countInBeats: 3, targetBeats: 10, mode: "cued" },
+  "rhythm-l2": { bpm: 60, countInBeats: 4, targetBeats: 20, mode: "continuous" },
+  gonogo: { bpm: 50, countInBeats: 3, targetBeats: 20, mode: "gonogo", goRatio: 0.6 },
+  calibration: { bpm: 50, countInBeats: 4, targetBeats: 12, mode: "cued" },
+};
+
+/** 聴覚キューの周波数（Hz）。detailed-design.md §4.1 / §6.4。 */
+export const cueTones = { low: 440, high: 880, noGo: 330, hit: 660, miss: 220 };
+
 /** マッチング教材の出題 */
 export const matchingTasks = [
   {
