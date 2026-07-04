@@ -10,25 +10,25 @@
 //   dom.js       … DOM要素レジストリ
 //   audio.js     … 効果音・読み上げ（音バリエーション対応の集約先）
 //   scan.js      … 走査エンジン
-//   views/*.js   … 各画面（switcher / matching / voca / letters /
+//   games/*.js   … ゲーム基盤（registry / gameHost / colorLegacy 等）
+//   views/*.js   … 各画面（home / matching / voca / letters /
 //                  operation / evaluation / research / log / settings）
 //
 // 各モジュールは共有コンテキスト ctx を介して連携する:
-//   ctx = { state, elements, save, announce, speak, playTone,
-//           scan, logEvent, switchView, renderAll, views }
+//   ctx = { state, elements, save, announce, speak, playTone, audio,
+//           scan, logEvent, switchView, renderAll, views, gameHost }
 //
 // このファイルの責務は「ctx の構築」「ビューの初期化」「画面横断の
 // イベント配線（タブ・スイッチ入力・キーボード・タイマー・SW登録）」のみ。
 // =====================================================================
 
-import { visibleViews, switchModules } from "./content.js";
+import { visibleViews } from "./content.js";
 import { loadState, createStateSaver } from "./state.js";
 import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
 import { createScanEngine } from "./scan.js";
 import { createInputDeduper } from "./utils.js";
 import { createGameHost } from "./games/gameHost.js";
-import { initSwitcher } from "./views/switcher.js";
 import { initHome } from "./views/home.js";
 import { initMatching } from "./views/matching.js";
 import { initVoca } from "./views/voca.js";
@@ -58,10 +58,11 @@ export function initNeuroNodeApp() {
   // --- 状態と要素 ---
   const elements = collectElements();
   const state = loadState();
-  if (!visibleViews.has(state.currentView)) state.currentView = "switcher";
-  if (!switchModules.some((module) => module.id === state.activeSwitchModule)) {
-    state.activeSwitchModule = switchModules[0].id;
-  }
+  // MUST（detailed-design.md §2.1）: 再訪時でも必ず start から始める。
+  // AudioContext のアンロックと入力導通確認を毎回保証するため、保存されていた
+  // 画面に関わらず無条件で上書きする（旧「visibleViews にない場合 switcher へ」
+  // という一部フォールバックの分岐をこれで置換した）。
+  state.currentView = "start";
 
   // --- 共有コンテキストの構築 ---
   const ctx = { state, elements, views: {} };
@@ -98,9 +99,9 @@ export function initNeuroNodeApp() {
     ctx.views.evaluation.render();
   };
 
-  /** 画面の切り替え。visibleViews にない画面は switcher へフォールバックする。 */
+  /** 画面の切り替え。visibleViews にない画面は start へフォールバックする。 */
   ctx.switchView = function switchView(viewName) {
-    const nextView = visibleViews.has(viewName) ? viewName : "switcher";
+    const nextView = visibleViews.has(viewName) ? viewName : "start";
     state.currentView = nextView;
     ctx.save();
     ctx.renderAll();
@@ -113,7 +114,6 @@ export function initNeuroNodeApp() {
   ctx.gameHost = createGameHost(ctx);
 
   // --- ビューの初期化（各ビューがリスナーを自前で張る） ---
-  ctx.views.switcher = initSwitcher(ctx);
   ctx.views.home = initHome(ctx);
   ctx.views.matching = initMatching(ctx);
   ctx.views.voca = initVoca(ctx);
@@ -142,7 +142,6 @@ export function initNeuroNodeApp() {
     });
     document.body.classList.toggle("game-mode", nextView === "game");
 
-    ctx.views.switcher.render();
     ctx.views.home.render();
     ctx.views.matching.render();
     ctx.views.voca.render();

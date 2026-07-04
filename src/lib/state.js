@@ -20,7 +20,11 @@ const legacyStorageKeyV1 = "neuro-trainer-state-v1";
 
 /** 状態の初期値。localStorage が空・壊れている場合のフォールバック。 */
 export const defaultState = {
-  currentView: "switcher",
+  // P1-2（detailed-design.md §2.1）: 利用者向けフローの入口は常に "start"。
+  // loadState() 呼び出し側（neuronodeApp.js）が読み込み後に必ず "start" へ
+  // 上書きするため実質的にはこの初期値は上書きされるが、defaultState 自体も
+  // 現行フローと矛盾しない値にしておく。
+  currentView: "start",
   activeSwitchModule: "color",
   switchStep: 0,
   hitCount: 0,

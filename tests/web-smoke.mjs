@@ -20,7 +20,7 @@ const projects = [
 
 const checks = [
   ["loads the main learning app", checkMainApp],
-  ["records switch input from stage and keyboard fallback", checkSwitchInput],
+  ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
   ["moves between visible feature tabs", checkFeatureTabs],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
 ];
@@ -88,30 +88,80 @@ async function waitForServer() {
 
 async function checkMainApp(page) {
   await waitForText(page, "h1", "neuro");
-  // 9 tabs exist in the DOM (6 always-visible + 3 researcher-mode tabs that
+  // 8 tabs exist in the DOM (5 always-visible + 3 researcher-mode tabs that
   // stay hidden until settings.researcherMode is enabled, see App.svelte /
-  // styles.css .researcher-tab).
-  await waitForCount(page, ".tab", 9);
-  await waitForClass(page, "#switcher", "is-active");
-  await page.locator("#switchStage").waitFor({ state: "visible" });
+  // styles.css .researcher-tab). The former "switcher" tab was removed when
+  // its "color change" behavior was migrated into games/colorLegacy.js
+  // (P1-2/P1-3, detailed-design.md §12).
+  await waitForCount(page, ".tab", 8);
+  // The app always boots into the start screen (detailed-design.md §2.1:
+  // MUST start from "start" even on revisit, to guarantee the AudioContext
+  // unlock + input continuity check every time).
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").waitFor({ state: "visible" });
 }
 
-async function checkSwitchInput(page) {
-  await page.locator("#resetSwitch").click();
-  await waitForText(page, "#hitCount", "0");
+/**
+ * Plays through the primary user flow end to end: start screen -> (one
+ * input) -> home (game tile grid) -> pick the color-legacy tile -> game
+ * screen (scan/tabbar/header hidden) -> input registers -> exit back to
+ * home. This is the P1-3 completion criterion from detailed-design.md §12.
+ */
+async function checkStartToHomeToGameFlow(page) {
+  await waitForClass(page, "#startView", "is-active");
 
-  await page.locator("#switchStage").click();
-  await waitForText(page, "#hitCount", "1");
+  // One input on the start stage unlocks audio, plays a confirmation tone,
+  // logs a "switch" event, and advances to home (detailed-design.md §2.2).
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForCount(page, "#gameTileGrid .game-tile", 6);
 
-  await page.keyboard.press("Escape");
+  // The color-legacy tile is enabled and first by order (content.js gameTiles).
+  const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
+  await tiles.first().click();
+
+  // Entering a game stops scanning and hides the tabbar/header/dock
+  // (detailed-design.md §2.4, body.game-mode).
+  await waitForClass(page, "#gameView", "is-active");
+  await page.waitForFunction(() => document.body.classList.contains("game-mode"));
+  await page.locator(".tabbar").waitFor({ state: "hidden" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // The shell dedupes switch-input events within 150ms of each other (the
+  // startStage press above still counts as the "last accepted input" for
+  // that window; see utils.js createInputDeduper / detailed-design.md §3.3).
+  // A real switch user could not physically traverse start -> home -> game
+  // and press again within 150ms, but Playwright can, so wait past the
+  // window before treating this as a distinct input.
+  await page.waitForTimeout(200);
+
+  // Tapping the full-screen game stage is a switch input for color-legacy:
+  // it changes color/tone and announces via the live region. Click the
+  // center (default) rather than a corner, since #gameProgress/#gameExit are
+  // absolutely positioned in the corners and would intercept a corner click.
+  await page.locator("#gameStage").click();
+  await waitForText(page, "#liveRegion", "色変化に入力しました");
+
+  // The keyboard fallback (Space) goes through the same input funnel and
+  // reaches the game too (detailed-design.md §3.3). Wait past the dedupe
+  // window again (same reasoning as above).
+  await page.evaluate(() => document.querySelector("#liveRegion").textContent = "");
+  await page.waitForTimeout(200);
   await page.keyboard.press("Space");
-  await waitForText(page, "#hitCount", "2");
+  await waitForText(page, "#liveRegion", "色変化に入力しました");
+
+  // Esc aborts the game and returns to home directly (no result screen for
+  // color-legacy; see games/colorLegacy.js for the design rationale).
+  await page.keyboard.press("Escape");
+  await waitForClass(page, "#homeView", "is-active");
+  await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
+  await page.locator(".tabbar").waitFor({ state: "visible" });
 }
 
 async function checkFeatureTabs(page) {
   // Only the always-visible tabs; operation/evaluation/research stay hidden
   // until "researcher mode" is turned on in settings (P0-0, detailed-design.md §0.2).
-  const tabTargets = ["matching", "voca", "letters", "log", "settings", "switcher"];
+  const tabTargets = ["matching", "voca", "letters", "log", "settings"];
 
   for (const target of tabTargets) {
     await page.locator(`.tab[data-view="${target}"]`).click();

@@ -57,6 +57,9 @@ export function createScanEngine(ctx) {
 
   /** 走査を開始する（既に動いていれば作り直す） */
   function start() {
+    // ゲーム中は絶対に走査しない（不変条件、detailed-design.md §8.4の二重防御）。
+    // gameHost.launch() の scan.stop(true) が一次防御、これは二次防御。
+    if (state.currentView === "game") return;
     stop(false);
     refresh();
     scanIndex = scanTargets.length ? Math.max(0, scanIndex) : -1;
@@ -85,6 +88,8 @@ export function createScanEngine(ctx) {
    * setTimeout(0) で再描画完了後に走査対象を収集し直す。
    */
   function restartIfNeeded() {
+    // ゲーム中は絶対に走査しない（不変条件、detailed-design.md §8.4の二重防御）。
+    if (state.currentView === "game") return;
     window.setTimeout(() => {
       refresh();
       if (state.settings.autoScan) start();
@@ -99,7 +104,6 @@ export function createScanEngine(ctx) {
   function activate() {
     refresh();
     if (!scanTargets.length || scanIndex < 0) {
-      if (state.currentView === "switcher") ctx.views.switcher.runActivity();
       if (state.currentView === "operation") ctx.views.operation.handlePrimary();
       return;
     }

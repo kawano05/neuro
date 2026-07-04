@@ -18,10 +18,10 @@
 export const storageKey = "neuronode-prototype-state-v3";
 
 /**
- * スイッチ教材モジュールの一覧。
- * ここに { id, name, description, tones } を追加すると、
- * スイッチ教材画面のモジュール選択グリッドに自動で並ぶ。
- * （ゲーム追加時の拡張ポイント。描画ロジックの分岐は views/switcher.js 側）
+ * スイッチ教材モジュールの一覧（現状 "color" の1件のみ）。
+ * 旧 views/switcher.js の選択UIはゲーム基盤への移行に伴い削除し、
+ * この "color" データは games/colorLegacy.js（アプリ選択の「いろがかわる」
+ * タイル、content.js の gameTiles 参照）が読み込む。
  */
 export const switchModules = [
   {
@@ -273,16 +273,15 @@ export const environmentLabels = {
  *
  * P1-2（detailed-design.md §2.1）: 利用者向けフロー "start" / "home" /
  * "game" / "result" を追加する。この4画面はタブを持たず、スタート導線・
- * アプリ選択・ゲーム実行・リザルトの各遷移でのみ到達する。この時点では
- * "switcher" もまだ残っている（views/switcher.js の削除・置き換えは
- * 別コミットで行う。detailed-design.md §12 の作業順）。
+ * アプリ選択・ゲーム実行・リザルトの各遷移でのみ到達する。旧 "switcher"
+ * （スイッチ教材ソフト画面）は games/colorLegacy.js への移植に伴い削除した
+ * （views/switcher.js 削除、detailed-design.md §12 の作業順）。
  */
 export const visibleViews = new Set([
   "start",
   "home",
   "game",
   "result",
-  "switcher",
   "matching",
   "voca",
   "letters",

@@ -22,7 +22,6 @@
   </header>
 
   <nav class="tabbar" aria-label="主要画面">
-    <button class="tab is-active" data-view="switcher" data-scan>スイッチ教材</button>
     <button class="tab" data-view="matching" data-scan>マッチング</button>
     <button class="tab" data-view="voca" data-scan>VOCA</button>
     <button class="tab" data-view="letters" data-scan>文字学習</button>
@@ -35,11 +34,10 @@
 
   <main>
     <!--
-      P1-1（新4ビューの器、detailed-design.md §10）: start/home/game/result。
-      この時点ではまだ neuronodeApp.js から配線されておらず、is-active も
-      付与しない（既存の switcher が引き続き既定表示）。配線は P1-2/P1-3 で行う。
+      利用者向けフロー（detailed-design.md §10）: start/home/game/result。
+      起動時は必ず #startView から始まる（P1-2、state.js/neuronodeApp.js参照）。
     -->
-    <section class="view" id="startView" aria-labelledby="start-title">
+    <section class="view is-active" id="startView" aria-labelledby="start-title">
       <div class="start-screen">
         <p class="eyebrow">NeuroNode</p>
         <h2 id="start-title" class="sr-only">スタート画面</h2>
@@ -80,41 +78,6 @@
       <div class="action-row wrap">
         <button class="primary-small" id="resultRetry" type="button" data-scan>もういちど</button>
         <button class="secondary" id="resultHome" type="button" data-scan>メニューへ</button>
-      </div>
-    </section>
-
-    <section class="view is-active" id="switcher" aria-labelledby="switcher-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Switch apps</p>
-          <h2 id="switcher-title">スイッチ教材ソフト</h2>
-        </div>
-        <button class="secondary" id="resetSwitch" data-scan>教材記録をリセット</button>
-      </div>
-
-      <div class="module-grid" id="switchModuleGrid" aria-label="スイッチ教材の種類"></div>
-
-      <div class="trainer-layout">
-        <button class="activity-stage" id="switchStage" data-scan aria-describedby="switchHint">
-          <span class="activity-visual" id="activityVisual"></span>
-          <span class="reaction-label" id="switchTitle">色変化</span>
-          <span class="reaction-detail" id="switchHint">入力すると画面の色が変わります。</span>
-        </button>
-
-        <aside class="metrics" aria-label="教材の記録">
-          <div>
-            <span class="metric-label">入力回数</span>
-            <strong id="hitCount">0</strong>
-          </div>
-          <div>
-            <span class="metric-label">平均間隔</span>
-            <strong id="averageInterval">--</strong>
-          </div>
-          <div>
-            <span class="metric-label">直近反応</span>
-            <strong id="lastReaction">--</strong>
-          </div>
-        </aside>
       </div>
     </section>
 
