@@ -178,6 +178,7 @@
         </div>
         <div class="action-row">
           <button class="secondary" id="exportEvaluationCsv" data-scan>測定CSV</button>
+          <button class="secondary" id="exportRhythmCsv" data-scan>リズムCSV</button>
           <button class="danger" id="resetEvaluation" data-scan>測定リセット</button>
         </div>
       </div>

@@ -160,14 +160,14 @@ export function createGameHost(ctx) {
    * ゲーム側の正常終了（規定試行数の完了等）。リザルトへ遷移する。
    *
    * リズム系ゲームの summary（judge.js の分類を集計した §9.2 の summary
-   * サブスキーマ、goHitRate 等を持つ）が渡された場合のみ、操作ログと
-   * 読み上げを行う。color-legacy のように finish() を呼ばないゲームは
-   * このブロックには来ない。evaluation への失敗系連動（detailed-design.md
-   * §9.4）は P3-1（views/evaluation.js）で追加する。
+   * サブスキーマ、goHitRate 等を持つ）が渡された場合のみ、evaluation 連動
+   * （detailed-design.md §9.4、失敗系のみ）・操作ログ・読み上げを行う。
+   * color-legacy のように finish() を呼ばないゲームはこのブロックには来ない。
    */
   function finishGame(summary) {
     lastResultSummary = summary || null;
     if (summary && typeof summary.goHitRate === "number") {
+      ctx.views.evaluation.recordRhythmSessionOutcome(summary);
       const percent = Math.round(summary.goHitRate * 100);
       logEvent({ type: "game", label: `${activeGameId} 終了 go命中率${percent}%` });
       ctx.audio.speak(`たっせいりつ ${percent}パーセントでした`);

@@ -66,6 +66,7 @@ export function collectElements() {
     engagementRatingValue: document.querySelector("#engagementRatingValue"),
     observerNotes: document.querySelector("#observerNotes"),
     exportEvaluationCsv: document.querySelector("#exportEvaluationCsv"),
+    exportRhythmCsv: document.querySelector("#exportRhythmCsv"),
     resetEvaluation: document.querySelector("#resetEvaluation"),
     evaluationStatus: document.querySelector("#evaluationStatus"),
     currentTaskTitle: document.querySelector("#currentTaskTitle"),
