@@ -51,5 +51,24 @@ export function createAudio(getSettings) {
     }
   }
 
-  return { speak, playTone };
+  /**
+   * AudioContext をユーザー操作起点でアンロックする（detailed-design.md §6.1）。
+   * スタート画面の初回入力で呼ぶ。未生成なら生成し、生成済み／suspended なら
+   * resume() のみ行う。P2-1 で BeatScheduler と時計対応付け（audioContext.currentTime）
+   * を本格活用するまでは、ここでは生成＋resume 以上のことはしない
+   * （BeatScheduler 自体は次フェーズで追加する。§0.2 のP1範囲外）。
+   */
+  function unlock() {
+    if (!AudioContextClass) return;
+    try {
+      if (!audioContext) audioContext = new AudioContextClass();
+      if (audioContext.state === "suspended") {
+        audioContext.resume().catch(() => {});
+      }
+    } catch {
+      // 古い組み込みブラウザでは AudioContext が使えない場合がある。
+    }
+  }
+
+  return { speak, playTone, unlock };
 }

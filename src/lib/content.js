@@ -270,8 +270,18 @@ export const environmentLabels = {
  * 出し分ける（App.svelte の .researcher-tab クラス + styles.css）。
  * switchView() のフォールバック判定にはこのSetをそのまま使うため、
  * 研究者モードがOFFでも（既にそのビューにいた場合等は）到達自体は可能。
+ *
+ * P1-2（detailed-design.md §2.1）: 利用者向けフロー "start" / "home" /
+ * "game" / "result" を追加する。この4画面はタブを持たず、スタート導線・
+ * アプリ選択・ゲーム実行・リザルトの各遷移でのみ到達する。この時点では
+ * "switcher" もまだ残っている（views/switcher.js の削除・置き換えは
+ * 別コミットで行う。detailed-design.md §12 の作業順）。
  */
 export const visibleViews = new Set([
+  "start",
+  "home",
+  "game",
+  "result",
   "switcher",
   "matching",
   "voca",
