@@ -75,6 +75,18 @@
         </div>
       </div>
       <div class="result-stats" id="resultStats" aria-live="polite"></div>
+      <!--
+        P4-3（detailed-design.md §8.2）: キャリブレーションの結果でのみ表示する
+        「候補値を保存しますか」導線。calibrationSaveOffset は支援者のタップ専用
+        （data-scan を付けず走査対象から外し、games/gameHost.js が
+        pointerdown/click で stopPropagation して入力ファネルにも入れない）。
+      -->
+      <div class="calibration-offer" id="calibrationOffer" hidden>
+        <p id="calibrationOfferText"></p>
+        <button class="secondary calibration-save" id="calibrationSaveOffset" type="button">
+          この値を保存する
+        </button>
+      </div>
       <div class="action-row wrap">
         <button class="primary-small" id="resultRetry" type="button" data-scan>もういちど</button>
         <button class="secondary" id="resultHome" type="button" data-scan>メニューへ</button>

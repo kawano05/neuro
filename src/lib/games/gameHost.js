@@ -46,6 +46,16 @@ function formatSignedMs(value) {
   return `${rounded > 0 ? "+" : ""}${rounded}ms`;
 }
 
+/**
+ * P4-3（detailed-design.md §8.2）: キャリブレーション結果から候補となる
+ * baselineOffsetMs（有効試行 hit の生オフセットの中央値、四捨五入）を取り出す。
+ * summary が無い、または medianRawOffsetMs が数値でない（hit が0件）場合は null。
+ */
+function candidateBaselineMsFromSummary(summary) {
+  if (!summary || typeof summary.medianRawOffsetMs !== "number") return null;
+  return Math.round(summary.medianRawOffsetMs);
+}
+
 /** オフセットの符号を「はやめ/おそめ」に言い換える（detailed-design.md §2.5・§5.2規則4）。 */
 function offsetDirectionLabel(value) {
   if (typeof value !== "number" || Number.isNaN(value)) return "";
@@ -88,6 +98,9 @@ export function createGameHost(ctx) {
   let activeInstance = null;
   let activeGameId = null;
   let lastResultSummary = null;
+  // P4-3: 今回のリザルトで既に候補値を保存したか（同一リザルト画面での
+  // 二重保存を防ぎ、保存後は確認文言に切り替える。launch() のたびにリセット）。
+  let calibrationOffsetSaved = false;
 
   /** instance.destroy() を安全に呼ぶ（例外を握りつぶし、activeInstance を必ずクリアする）。 */
   function destroyActive() {
@@ -149,6 +162,7 @@ export function createGameHost(ctx) {
     scan.stop(true);
     activeGameId = gameId;
     lastResultSummary = null;
+    calibrationOffsetSaved = false;
     state.currentView = "game";
     save();
     ctx.renderAll();
@@ -204,6 +218,29 @@ export function createGameHost(ctx) {
     launch(activeGameId);
   }
 
+  /**
+   * P4-3（detailed-design.md §8.2 手順4）: キャリブレーションの候補値を
+   * settings.baselineOffsetMs へ保存する。支援者のタップ専用ボタンからのみ
+   * 呼ばれる（走査対象外・stopPropagation でファネル外、§8.2）。
+   * 旧値→新値を logEvent に残す（MUST）。
+   */
+  function saveCalibrationOffset() {
+    if (activeGameId !== "calibration") return;
+    const candidate = candidateBaselineMsFromSummary(lastResultSummary);
+    if (candidate === null) return;
+    const previous = state.settings.baselineOffsetMs;
+    state.settings.baselineOffsetMs = candidate;
+    calibrationOffsetSaved = true;
+    save();
+    logEvent({
+      type: "measurement",
+      label: `キャリブレーション基準オフセットを更新 ${formatSignedMs(previous)} → ${formatSignedMs(candidate)}`,
+      skipEvaluation: true,
+    });
+    announce(`基準オフセットを ${formatSignedMs(candidate)} に保存しました`);
+    ctx.renderAll();
+  }
+
   elements.gameExit.addEventListener("pointerdown", (event) => event.stopPropagation());
   elements.gameExit.addEventListener("click", (event) => {
     event.stopPropagation(); // ファネルに入れない（detailed-design.md §3.3）
@@ -211,6 +248,11 @@ export function createGameHost(ctx) {
   });
   elements.resultRetry.addEventListener("click", () => retry());
   elements.resultHome.addEventListener("click", () => returnHome());
+  elements.calibrationSaveOffset.addEventListener("pointerdown", (event) => event.stopPropagation());
+  elements.calibrationSaveOffset.addEventListener("click", (event) => {
+    event.stopPropagation(); // ファネルに入れない・走査対象外（detailed-design.md §8.2）
+    saveCalibrationOffset();
+  });
 
   return {
     launch,
@@ -230,6 +272,22 @@ export function createGameHost(ctx) {
         elements.resultStats.innerHTML = '<p class="panel-note">このあそびには せいせき表示がありません。</p>';
       } else {
         elements.resultStats.innerHTML = '<p class="panel-note">まだ けっかがありません。</p>';
+      }
+
+      // P4-3（detailed-design.md §8.2）: キャリブレーションの結果でのみ、
+      // 候補値の保存導線を出す（他ゲームでは常に hidden）。
+      const candidate =
+        activeGameId === "calibration" ? candidateBaselineMsFromSummary(lastResultSummary) : null;
+      if (candidate === null) {
+        elements.calibrationOffer.hidden = true;
+      } else if (calibrationOffsetSaved) {
+        elements.calibrationOffer.hidden = false;
+        elements.calibrationOfferText.textContent = `基準オフセットを ${formatSignedMs(candidate)} に保存しました`;
+        elements.calibrationSaveOffset.hidden = true;
+      } else {
+        elements.calibrationOffer.hidden = false;
+        elements.calibrationOfferText.textContent = `候補値 ${formatSignedMs(candidate)} を設定に保存しますか`;
+        elements.calibrationSaveOffset.hidden = false;
       }
     },
   };

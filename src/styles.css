@@ -444,6 +444,27 @@ main {
   box-shadow: var(--shadow-sm);
 }
 
+/* P4-3: キャリブレーションの「候補値を保存しますか」導線（detailed-design.md §8.2）。
+   保存ボタンは走査対象外・支援者のタップ専用（data-scan を付けない。
+   games/gameHost.js が stopPropagation で入力ファネル外にする）。 */
+.calibration-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.calibration-offer p {
+  margin: 0;
+  font-weight: 700;
+}
+
 /* P2-3: リズム系ゲームのパルス円（detailed-design.md §7.4）。
    40vmin の単一 div。位相にあわせた transform 更新は rhythm.js が rAF で行う
    （CSS transition は使わない。判定には使わずあくまで見た目の補助）。 */

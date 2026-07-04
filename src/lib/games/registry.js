@@ -6,21 +6,21 @@
 // GameModule（契約は detailed-design.md §3.1）の配列として提供する。
 //
 // color-legacy は継承（旧 views/switcher.js の「色変化」を
-// games/colorLegacy.js へ移植）。rhythm-l1/rhythm-l2/gonogo は
-// games/rhythm.js の createRhythmGame(gameId)（パラメータ違いの同一エンジン、
-// 基本設計書 §5）で結合する（P2-3・P4-1・P4-2、gonogo は games/gonogo.js の
-// 薄いラッパ経由）。calibration は P4-3 でここに追加する。
-// gameTiles の enabled は仕様（§4.1）どおり true のままにし、未実装ゲームには
-// createPlaceholderGame() を暫定 create として割り当てる（画面を壊さず
-// 「じゅんびちゅう」を表示するだけ。おわる/Esc は gameHost がゲーム本体に
-// 関わらずホスト側で処理するため、この段階でも安全に終了できる）。実装が
-// 入り次第、creators の対応エントリを追加するだけでよい。
+// games/colorLegacy.js へ移植）。rhythm-l1/rhythm-l2/gonogo/calibration は
+// すべて games/rhythm.js の createRhythmGame(gameId)（パラメータ違いの同一
+// エンジン、基本設計書 §5）で、gonogo/calibration は games/gonogo.js /
+// games/calibration.js の薄いラッパ経由で結合する（P2-3・P4-1〜P4-3）。
+// future-slot は enabled:false（content.js の gameTiles 参照）なので
+// createPlaceholderGame() を割り当てる（「じゅんびちゅう」表示のみ。
+// おわる/Esc は gameHost がゲーム本体に関わらずホスト側で処理するため、
+// この段階でも安全に終了できる）。
 // =====================================================================
 
 import { gameTiles } from "../content.js";
 import { createColorLegacyGame } from "./colorLegacy.js";
 import { createRhythmGame } from "./rhythm.js";
 import { createGonogoGame } from "./gonogo.js";
+import { createCalibrationGame } from "./calibration.js";
 
 /**
  * 未実装ゲーム用の暫定 create。
@@ -49,6 +49,7 @@ const creators = {
   "rhythm-l1": createRhythmGame("rhythm-l1"),
   "rhythm-l2": createRhythmGame("rhythm-l2"),
   gonogo: createGonogoGame,
+  calibration: createCalibrationGame,
 };
 
 /** タイル情報（content.js）と create を結合した GameModule 配列（order 昇順）。 */

@@ -24,6 +24,12 @@ export function collectElements() {
     resultStats: document.querySelector("#resultStats"),
     resultRetry: document.querySelector("#resultRetry"),
     resultHome: document.querySelector("#resultHome"),
+    // P4-3（detailed-design.md §8.2）: キャリブレーションの「候補値を保存
+    // しますか」導線。走査対象外・タップ専用（data-scan を付けない、
+    // games/gameHost.js が stopPropagation で入力ファネル外にする）。
+    calibrationOffer: document.querySelector("#calibrationOffer"),
+    calibrationOfferText: document.querySelector("#calibrationOfferText"),
+    calibrationSaveOffset: document.querySelector("#calibrationSaveOffset"),
     matchingPrompt: document.querySelector("#matchingPrompt"),
     matchingGrid: document.querySelector("#matchingGrid"),
     nextMatching: document.querySelector("#nextMatching"),

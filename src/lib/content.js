@@ -59,12 +59,20 @@ export const gameTiles = [
  * リズム系ゲームのプリセット値（bpm・カウントイン拍数・目標ビート数等）。
  * detailed-design.md §4.1 / §7.1。state.settings 側の同名値（null 以外）が
  * 優先される（games/rhythm.js が優先順位を解決する。P2-3 で実装）。
+ *
+ * mode: "cued"（L1・キャリブレーション、時報→高音1回）/
+ *       "continuous"（L2、カウントインは最初の1回のみで以後は毎拍が高音）/
+ *       "gonogo"（高音Go・低音No-GoをgoRatioで擬似乱数配列、P4-1〜P4-2）。
+ * excludedTrialCount: キャリブレーション専用（detailed-design.md §8.2）。
+ * 最初のN試行を集計から除外する（記録はする）。games/rhythm.js の
+ * resolveParams() がここから読み、gameId 分岐をエンジン側に持ち込まずに
+ * 済ませている（データ駆動、P4-3）。他ゲームは undefined（=0扱い）。
  */
 export const rhythmPresets = {
   "rhythm-l1": { bpm: 40, countInBeats: 3, targetBeats: 10, mode: "cued" },
   "rhythm-l2": { bpm: 60, countInBeats: 4, targetBeats: 20, mode: "continuous" },
   gonogo: { bpm: 50, countInBeats: 3, targetBeats: 20, mode: "gonogo", goRatio: 0.6 },
-  calibration: { bpm: 50, countInBeats: 4, targetBeats: 12, mode: "cued" },
+  calibration: { bpm: 50, countInBeats: 4, targetBeats: 12, mode: "cued", excludedTrialCount: 2 },
 };
 
 /** 聴覚キューの周波数（Hz）。detailed-design.md §4.1 / §6.4。 */

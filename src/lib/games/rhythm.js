@@ -1,13 +1,14 @@
 // =====================================================================
-// games/rhythm.js — リズムL1/L2の共通エンジン（detailed-design.md §7）
+// games/rhythm.js — リズムL1/L2・Go/No-Go・キャリブレーションの共通エンジン
+// （detailed-design.md §7）
 //
-// P2-3 で mode="cued"（rhythm-l1）を実装し、P4-1/P4-2 で mode="continuous"
-// （rhythm-l2）・mode="gonogo" を buildPlan() に追加した
-// （createRhythmGame(gameId) の gameId ごとに resolveParams() が
-// rhythmPresets を切り替える構造のおかげで、パラメータ違いのモードは
-// buildXxxPlan() を1つ足すだけで済んだ）。games/gonogo.js は
-// createRhythmGame("gonogo") を呼ぶだけの薄いラッパ。calibration は
-// P4-3 でここに追加する。
+// P2-3 で mode="cued"（rhythm-l1）を実装し、P4-1/P4-2/P4-3 で
+// continuous（rhythm-l2）・gonogo・calibration の分岐を buildPlan() に
+// 追加した（createRhythmGame(gameId) の gameId ごとに resolveParams() が
+// rhythmPresets を切り替える構造のおかげで、パラメータ違いの3モードは
+// buildXxxPlan() を1つずつ足すだけで済んだ）。gonogo.js / calibration.js は
+// このファイルの createRhythmGame(gameId) を呼ぶだけの薄いラッパ
+// （games/gonogo.js・games/calibration.js のコメント参照）。
 //
 // 計時の方針（detailed-design.md §6.3、MUST）:
 //   - 内部判定（judgeInput/sweepExpired）は audio 絶対時刻（ms）で行う。
@@ -60,6 +61,7 @@ const STAGE_LABELS = {
   "rhythm-l1": "おとに あわせて おそう",
   "rhythm-l2": "おとに あわせて つづけて おそう",
   gonogo: "たかい おとの ときだけ おそう",
+  calibration: "おとに あわせて おそう",
   default: "おとに あわせて おそう",
 };
 
@@ -82,6 +84,9 @@ function resolveParams(gameId, settings) {
     countInBeats: settings.countInBeats ?? preset.countInBeats,
     targetBeats: settings.targetBeats ?? preset.targetBeats,
     goRatio: preset.goRatio ?? null,
+    // キャリブレーション専用（detailed-design.md §8.2）。settings 側の上書きは
+    // 用意しない（利用者が調整する値ではなく、測定プロトコル自体の一部のため）。
+    excludedTrialCount: preset.excludedTrialCount ?? 0,
   };
 }
 
@@ -220,15 +225,20 @@ function median(values) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-/** セッションの summary を trials から都度再計算する（detailed-design.md §9.2、規則5の分母）。 */
+/**
+ * セッションの summary を trials から都度再計算する（detailed-design.md §9.2、規則5の分母）。
+ * excluded:true の行（キャリブレーションの最初の数試行、detailed-design.md §8.2）は
+ * 全指標から除外する。他モードは excluded が常に false のため挙動は変わらない。
+ */
 function computeSummary(trials) {
-  const hits = trials.filter((trial) => trial.judgment === "hit");
-  const misses = trials.filter((trial) => trial.judgment === "miss").length;
-  const extras = trials.filter((trial) => trial.judgment === "extra").length;
-  const commissions = trials.filter((trial) => trial.judgment === "commission").length;
-  const correctRejections = trials.filter((trial) => trial.judgment === "correctRejection").length;
-  const goCount = trials.filter((trial) => trial.beatKind === "go").length;
-  const nogoCount = trials.filter((trial) => trial.beatKind === "nogo").length;
+  const included = trials.filter((trial) => !trial.excluded);
+  const hits = included.filter((trial) => trial.judgment === "hit");
+  const misses = included.filter((trial) => trial.judgment === "miss").length;
+  const extras = included.filter((trial) => trial.judgment === "extra").length;
+  const commissions = included.filter((trial) => trial.judgment === "commission").length;
+  const correctRejections = included.filter((trial) => trial.judgment === "correctRejection").length;
+  const goCount = included.filter((trial) => trial.beatKind === "go").length;
+  const nogoCount = included.filter((trial) => trial.beatKind === "nogo").length;
   const rawOffsets = hits
     .map((trial) => trial.rawOffsetMs)
     .filter((value) => typeof value === "number");
@@ -249,8 +259,9 @@ function computeSummary(trials) {
 }
 
 /**
- * @param {string} gameId - "rhythm-l1" | "rhythm-l2" | "gonogo"（P4-3 で
- *   "calibration" を追加する）
+ * @param {string} gameId - "rhythm-l1" | "rhythm-l2" | "gonogo" | "calibration"
+ *   （rhythmPresets のキー。games/gonogo.js・games/calibration.js は
+ *   このファクトリをそのまま呼ぶ薄いラッパ）
  * @returns {(ctx: import("./gameHost.js").GameCtx) => import("./gameHost.js").GameInstance}
  */
 export function createRhythmGame(gameId) {
@@ -273,10 +284,27 @@ export function createRhythmGame(gameId) {
     let session = null;
     let params = null;
     let effectiveWindowMs = 0;
+    // キャリブレーション専用（detailed-design.md §8.2）。0 なら常に非除外
+    // （rhythm-l1/l2/gonogo は preset に excludedTrialCount が無いので常に0）。
+    let excludedTrialCount = 0;
+    let excludedBoundaryRelMs = -Infinity;
 
     /** 入力/現在時刻（audio絶対ms）→ セッション相対ms（記録用、§6.3）。 */
     function toSessionRelativeMs(absMs) {
       return absMs - sessionStartAudioMs;
+    }
+
+    /**
+     * 最初の excludedTrialCount 試行を集計から除外する判定（キャリブレーション専用、
+     * detailed-design.md §8.2）。beatIndex が確定している判定（hit/miss/
+     * commission/correctRejection）は試行番号そのもので判定する。extra
+     * （beatIndex=null）は「除外対象の試行区間内で起きた余分な入力か」を
+     * セッション相対時刻の境界で判定する。
+     */
+    function isExcludedTrial(beatIndex, relativeMs) {
+      if (excludedTrialCount <= 0) return false;
+      if (beatIndex !== null && beatIndex !== undefined) return beatIndex < excludedTrialCount;
+      return typeof relativeMs === "number" && relativeMs < excludedBoundaryRelMs;
     }
 
     function renderStageMarkup() {
@@ -366,7 +394,7 @@ export function createRhythmGame(gameId) {
             rawOffsetMs: null,
             appliedBaselineMs: baselineNow,
             judgment: entry.judgment,
-            excluded: false,
+            excluded: isExcludedTrial(entry.beatIndex, scheduledMsByIndex.get(entry.beatIndex)),
           });
         });
       }
@@ -397,7 +425,7 @@ export function createRhythmGame(gameId) {
         rawOffsetMs: result.raw, // 生値。baselineOffsetMsは差し引かない（研究設計上の最重要規則）
         appliedBaselineMs: baselineNow,
         judgment: result.judgment,
-        excluded: false,
+        excluded: isExcludedTrial(result.beatIndex, toSessionRelativeMs(inputAbsMs)),
       });
 
       playFeedback(result.judgment);
@@ -412,6 +440,14 @@ export function createRhythmGame(gameId) {
       params = resolveParams(gameId, settings);
       effectiveWindowMs = computeEffectiveWindowMs(params.mode, params.bpm, settings.judgmentWindowMs);
       plan = buildPlan(params);
+      excludedTrialCount = params.excludedTrialCount || 0;
+      // trialPeriodS は cued（buildCuedPlan）のみが返す。continuous/gonogo は
+      // excludedTrialCount が常に0（content.js の rhythmPresets 参照）なので
+      // この境界値は使われない。
+      excludedBoundaryRelMs =
+        excludedTrialCount > 0 && typeof plan.trialPeriodS === "number"
+          ? excludedTrialCount * plan.trialPeriodS * 1000
+          : -Infinity;
 
       // §6.3: 対応ペアの取得は「セッション開始時に1回」。perfMs/audioS を
       // 隣接する行で取得し、以降のずれ（クロックドリフト）は許容誤差内とする。
