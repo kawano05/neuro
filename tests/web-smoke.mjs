@@ -144,6 +144,23 @@ async function checkStartToHomeToGameFlow(page) {
   await page.locator(".tabbar").waitFor({ state: "hidden" });
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
 
+  // Design-deviation regression check (basic-design.md §3.1 "画面全体が単一の
+  // スイッチ"): #gameStage must cover the full viewport with no dead margin
+  // at the bottom. Before this fix, .game-stage used a stale
+  // `calc(100vh - 300px)` sized for the (now-hidden) header/tabbar/dock,
+  // which left an unreachable strip at the bottom of tall viewports (found
+  // on iPad portrait, 834x1210, during on-device verification). #gameView is
+  // now position:fixed; inset:0 while body.game-mode is active, so the stage
+  // should span from y=0 to the full viewport height.
+  const stageBox = await page.locator("#gameStage").boundingBox();
+  const viewportSize = page.viewportSize();
+  assert(stageBox, "Expected #gameStage to have a bounding box while in game mode");
+  assert(Math.abs(stageBox.y) <= 1, `Expected #gameStage to start at the top of the viewport, got y=${stageBox.y}`);
+  assert(
+    Math.abs(stageBox.y + stageBox.height - viewportSize.height) <= 1,
+    `Expected #gameStage to cover the full viewport height, got bottom=${stageBox.y + stageBox.height} viewport=${viewportSize.height}`
+  );
+
   // The shell dedupes switch-input events within 150ms of each other (the
   // startStage press above still counts as the "last accepted input" for
   // that window; see utils.js createInputDeduper / detailed-design.md §3.3).

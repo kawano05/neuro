@@ -392,6 +392,40 @@ main {
   cursor: pointer;
 }
 
+/* basic-design.md §3.1「画面全体が単一のスイッチ」: ゲーム中は #gameView を
+   ビューポート全体に固定し、#gameStage がその全体（100dvh、safe-area考慮）を
+   占めるようにする。タブバー等は既に body.game-mode で非表示（上の
+   ルール群）だが、.app-shell の余白・main の margin はそのままだと
+   #gameStage の下に「入力を受けない余白」が残ってしまうため、#gameView を
+   position:fixed; inset:0 でそれらの外側に出す（実機確認2026-07-04で発覚）。
+   進捗表示（#gameProgress）と「おわる」（#gameExit）はステージ上の
+   オーバーレイのまま維持し、stopPropagation によるファネル除外
+   （games/gameHost.js）は変更しない。 */
+body.game-mode #gameView {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+body.game-mode .game-stage {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  border-radius: 0;
+}
+
+body.game-mode .game-progress {
+  top: max(18px, env(safe-area-inset-top));
+  left: max(18px, env(safe-area-inset-left));
+}
+
+body.game-mode .game-exit {
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+}
+
 .game-stage-content {
   position: absolute;
   inset: 0;
