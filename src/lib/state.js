@@ -51,6 +51,16 @@ export const defaultState = {
     highContrast: false,
     // 既定OFF。ONで操作訓練/効果測定/研究タブを表示する（P0-0, detailed-design.md §0.2）。
     researcherMode: false,
+    // P0-2（ゲーム系設定、detailed-design.md §9.1）。judgmentWindowMs は判定窓の
+    // 設定半幅（既定600・範囲200〜1500）、baselineOffsetMs はキャリブレーション由来の
+    // 窓中心補正（既定0）。rhythmBpm/countInBeats/targetBeats は null のとき
+    // content.js の rhythmPresets の値を使う（games/rhythm.js が優先順位を解決する。
+    // P2-3 で実装）。
+    judgmentWindowMs: 600,
+    baselineOffsetMs: 0,
+    rhythmBpm: null,
+    countInBeats: null,
+    targetBeats: null,
   },
   logs: [],
   evaluation: {
@@ -82,7 +92,20 @@ export const defaultState = {
     deploymentNotes: "",
     readiness: readinessItems.reduce((items, item) => ({ ...items, [item.id]: false }), {}),
   },
+  // P0-2（detailed-design.md §9.1）。リズムゲームのセッション記録（games/rhythm.js が
+  // P2-3 で実際の記録処理を実装するまでは常に空）。直近50セッションのみを保持し、
+  // 超過分は古い順に破棄する（loadState() のマージ処理・保存経路の双方で担保する）。
+  rhythm: {
+    sessions: [],
+  },
 };
+
+/**
+ * rhythm.sessions の保持件数上限（detailed-design.md §9.1・§14 未決事項4）。
+ * セッションを追加する側（games/rhythm.js、P2-3 で実装）も保存時にこの定数で
+ * 古い順に破棄する想定。
+ */
+export const MAX_RHYTHM_SESSIONS = 50;
 
 /** defaultState の深いコピーを返す。 */
 export function cloneDefaultState() {
@@ -221,6 +244,15 @@ export function loadState() {
           ...defaultState.research.readiness,
           ...(parsed.research?.readiness || {}),
         },
+      },
+      rhythm: {
+        ...defaultState.rhythm,
+        ...(parsed.rhythm || {}),
+        // 直近 MAX_RHYTHM_SESSIONS 件のみ保持（古い順に破棄。§9.1）。
+        // セッションは古い→新しいの順で push される前提（配列末尾が最新）。
+        sessions: Array.isArray(parsed.rhythm?.sessions)
+          ? parsed.rhythm.sessions.slice(-MAX_RHYTHM_SESSIONS)
+          : [],
       },
       logs: Array.isArray(parsed.logs) ? parsed.logs : [],
       hitTimes: Array.isArray(parsed.hitTimes) ? parsed.hitTimes : [],
