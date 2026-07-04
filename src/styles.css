@@ -329,6 +329,132 @@ main {
   line-height: 1.6;
 }
 
+/* =====================================================================
+   P1-1: 新4ビュー（start / home / game / result）の器。
+   detailed-design.md §10。タイルは module-grid / module-button の意匠を
+   流用し、largeText / highContrast は既存の body クラス切替（var(--*)、
+   相対フォントサイズ）にそのまま乗る新規セレクタとして追加する。
+   ===================================================================== */
+
+.start-screen {
+  display: grid;
+  min-height: calc(100vh - 260px);
+  justify-items: center;
+  align-content: center;
+  gap: 20px;
+  text-align: center;
+}
+
+.start-stage {
+  display: grid;
+  width: min(720px, 92vw);
+  min-height: 62vh;
+  padding: 32px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #ffffff;
+  place-items: center;
+  box-shadow: var(--shadow-lg);
+}
+
+.start-stage-label {
+  font-size: clamp(2.4rem, 7vw, 5.2rem);
+  font-weight: 950;
+}
+
+.start-settings-link {
+  min-height: 40px;
+  padding: 0 16px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+
+.game-tile:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.game-stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: calc(100vh - 300px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+}
+
+.game-stage-content {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  border-radius: inherit;
+  background: var(--stage-color, var(--accent));
+  color: #ffffff;
+  place-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 32px;
+}
+
+.game-progress {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 1;
+  color: #ffffff;
+  font-size: clamp(1.1rem, 2vw, 1.6rem);
+  font-weight: 900;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.game-exit {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.28);
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.game-exit:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.result-stats {
+  min-height: 120px;
+  margin-bottom: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ゲーム実行中はタブバー・走査UI・ヘッダを非表示にする（detailed-design.md §10）。 */
+body.game-mode .topbar,
+body.game-mode .tabbar,
+body.game-mode .switch-dock {
+  display: none;
+}
+
+body.game-mode .app-shell {
+  padding-bottom: 26px;
+}
+
 .module-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

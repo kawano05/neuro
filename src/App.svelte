@@ -34,6 +34,55 @@
   </nav>
 
   <main>
+    <!--
+      P1-1（新4ビューの器、detailed-design.md §10）: start/home/game/result。
+      この時点ではまだ neuronodeApp.js から配線されておらず、is-active も
+      付与しない（既存の switcher が引き続き既定表示）。配線は P1-2/P1-3 で行う。
+    -->
+    <section class="view" id="startView" aria-labelledby="start-title">
+      <div class="start-screen">
+        <p class="eyebrow">NeuroNode</p>
+        <h2 id="start-title" class="sr-only">スタート画面</h2>
+        <button class="start-stage" id="startStage" type="button">
+          <span class="start-stage-label">はじめる</span>
+        </button>
+        <button class="start-settings-link" id="startSettingsLink" type="button">せってい</button>
+      </div>
+    </section>
+
+    <section class="view" id="homeView" aria-labelledby="home-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Choose a game</p>
+          <h2 id="home-title">あそびを えらぶ</h2>
+        </div>
+      </div>
+      <div class="module-grid" id="gameTileGrid" aria-label="あそびの一覧"></div>
+    </section>
+
+    <section class="view" id="gameView" aria-labelledby="game-title">
+      <h2 id="game-title" class="sr-only">ゲーム画面</h2>
+      <div class="game-stage" id="gameStage" role="button" tabindex="0" aria-label="ゲームの入力エリア">
+        <div class="game-stage-content" id="gameStageContent" aria-hidden="true"></div>
+        <div class="game-progress" id="gameProgress" aria-live="polite"></div>
+        <button class="game-exit" id="gameExit" type="button">おわる</button>
+      </div>
+    </section>
+
+    <section class="view" id="resultView" aria-labelledby="result-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Result</p>
+          <h2 id="result-title">けっか</h2>
+        </div>
+      </div>
+      <div class="result-stats" id="resultStats" aria-live="polite"></div>
+      <div class="action-row wrap">
+        <button class="primary-small" id="resultRetry" type="button" data-scan>もういちど</button>
+        <button class="secondary" id="resultHome" type="button" data-scan>メニューへ</button>
+      </div>
+    </section>
+
     <section class="view is-active" id="switcher" aria-labelledby="switcher-title">
       <div class="section-head">
         <div>
