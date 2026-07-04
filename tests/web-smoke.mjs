@@ -102,6 +102,20 @@ async function checkMainApp(page) {
   // unlock + input continuity check every time).
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").waitFor({ state: "visible" });
+
+  // Design-deviation regression check (detailed-design.md §2.1/§8.4): the
+  // start screen has no scan targets and scanning MUST stay fully stopped,
+  // not merely "not yet started". Before this fix, scan.js's start()/
+  // restartIfNeeded() guards only checked currentView==="game", so the
+  // default autoScan=true (state.js) would keep scanning the tabbar behind
+  // the start screen and the header badge would read "走査中". Confirm the
+  // badge reads stopped and that no element ever gains .scan-focus even
+  // after waiting past the default scanInterval (1600ms, state.js).
+  await waitForText(page, "#scanState", "走査停止中");
+  await page.waitForTimeout(1900);
+  await waitForText(page, "#scanState", "走査停止中");
+  const scanFocusCount = await page.locator(".scan-focus").count();
+  assert(scanFocusCount === 0, `Expected no .scan-focus elements on the start screen, found ${scanFocusCount}`);
 }
 
 /**
