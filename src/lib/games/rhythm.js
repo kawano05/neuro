@@ -212,8 +212,7 @@ export function createRhythmGame(gameId) {
 
     function updateProgressText() {
       if (!session) return;
-      const resolved = params.targetBeats - remainingBeats.length;
-      setProgress(`のこり ${params.targetBeats - resolved}`);
+      setProgress(`のこり ${remainingBeats.length}`);
     }
 
     /** 1件の trial 行をセッションへ追加し、gameHost へ永続化を依頼する。 */
