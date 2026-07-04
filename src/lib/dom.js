@@ -13,6 +13,8 @@ export function collectElements() {
     liveRegion: document.querySelector("#liveRegion"),
     tabs: [...document.querySelectorAll(".tab")],
     views: [...document.querySelectorAll(".view")],
+    // 支援者の世界（タブ群）から home へ戻る導線（detailed-design.md §10）。
+    homeReturn: document.querySelector("#homeReturn"),
     // P1-1（新4ビュー、detailed-design.md §10）。start/home/game/result。
     startStage: document.querySelector("#startStage"),
     startSettingsLink: document.querySelector("#startSettingsLink"),

@@ -24,6 +24,7 @@ const checks = [
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
   ["picks rhythm-l1, hides the shell chrome, and records an aborted session on Esc", checkRhythmL1GameFlow],
   ["moves between visible feature tabs", checkFeatureTabs],
+  ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
 ];
@@ -190,6 +191,45 @@ async function checkStartToHomeToGameFlow(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
   await page.locator(".tabbar").waitFor({ state: "visible" });
+}
+
+/**
+ * Regression check for the on-device gap found 2026-07-04 (basic-design.md
+ * §3.2): once a switch user (or a supporter) moved from home into the
+ * supporter's world (any tab), there was no way back to the user's world
+ * short of force-quitting the app. #homeReturn ("← ホームへ") is the fix:
+ * it must stay hidden while in the user's world (start/home/game/result) and
+ * appear the moment a tab view is entered, and clicking/scanning to it must
+ * take the user all the way back to #homeView and restart scanning there.
+ */
+async function checkHomeReturnFromTabs(page) {
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
+  // In the user's world (home), the return-to-home button makes no sense
+  // and must not be shown or reachable by scanning (detailed-design.md §10).
+  await page.locator("#homeReturn").waitFor({ state: "hidden" });
+
+  // Enter the supporter's world through an ordinary tab click.
+  await page.locator('.tab[data-view="settings"]').click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator("#homeReturn").waitFor({ state: "visible" });
+
+  // Clicking it must announce in hiragana, switch back to home, and hide
+  // itself again now that we're back in the user's world.
+  await page.evaluate(() => {
+    document.querySelector("#liveRegion").textContent = "";
+  });
+  await page.locator("#homeReturn").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForText(page, "#liveRegion", "メニューにもどります");
+  await page.locator("#homeReturn").waitFor({ state: "hidden" });
+
+  // switchView("home") calls scan.restartIfNeeded(); with the default
+  // autoScan=true (state.js) scanning must actually resume against home's
+  // tiles, not stay stale/stopped from whatever the settings view left it in.
+  await waitForText(page, "#scanState", "走査中");
 }
 
 /**

@@ -22,6 +22,21 @@
   </header>
 
   <nav class="tabbar" aria-label="主要画面">
+    <!--
+      支援者の世界（タブ群）から利用者の世界（home）へ戻る導線
+      （実機確認2026-07-04で発覚：タブビューへ入ると強制終了以外に戻れなかった。
+      basic-design.md §3.2）。走査順の先頭に置き、home/start/result（利用者の
+      世界）では neuronodeApp.js の renderAll() が hidden を立てて隠す。
+    -->
+    <button
+      class="home-return"
+      id="homeReturn"
+      type="button"
+      data-scan
+      aria-label="ホームへもどる"
+    >
+      ← ホームへ
+    </button>
     <button class="tab" data-view="matching" data-scan>マッチング</button>
     <button class="tab" data-view="voca" data-scan>VOCA</button>
     <button class="tab" data-view="letters" data-scan>文字学習</button>

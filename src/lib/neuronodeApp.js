@@ -54,6 +54,21 @@ const VIEW_ELEMENT_IDS = {
   result: "resultView",
 };
 
+// 支援者の世界（タブ群）を構成するビュー名（basic-design.md §3.2）。
+// #homeReturn（「← ホームへ」導線）はこの集合に属するビューでだけ表示する。
+// 利用者の世界（start/home/game/result）では、home 自体も含めて非表示にする
+// （実機確認2026-07-04：タブビューから戻れない導線欠落の修正、detailed-design.md §10）。
+const TAB_WORLD_VIEWS = new Set([
+  "matching",
+  "voca",
+  "letters",
+  "operation",
+  "evaluation",
+  "research",
+  "log",
+  "settings",
+]);
+
 export function initNeuroNodeApp() {
   // --- 状態と要素 ---
   const elements = collectElements();
@@ -141,6 +156,7 @@ export function initNeuroNodeApp() {
       view.classList.toggle("is-active", view.id === nextViewElementId);
     });
     document.body.classList.toggle("game-mode", nextView === "game");
+    elements.homeReturn.hidden = !TAB_WORLD_VIEWS.has(nextView);
 
     ctx.views.home.render();
     ctx.views.matching.render();
@@ -181,6 +197,14 @@ export function initNeuroNodeApp() {
   // --- 画面横断のイベント配線 ---
   elements.tabs.forEach((tab) => {
     tab.addEventListener("click", () => ctx.switchView(tab.dataset.view));
+  });
+
+  // 「← ホームへ」: 支援者の世界（タブ群）から利用者の世界（home）へ戻る唯一の
+  // 導線。data-scan を付けているため、スイッチ利用者が誤ってタブ世界に入っても
+  // 走査で自力到達できる（実機確認2026-07-04で発覚した欠落の修正）。
+  elements.homeReturn.addEventListener("click", () => {
+    ctx.switchView("home");
+    ctx.announce("メニューにもどります");
   });
 
   // 入力ファネルの対象要素: 通常の入力ボタン、スタート画面のステージ、

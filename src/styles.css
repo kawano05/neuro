@@ -227,6 +227,28 @@ h3 {
   box-shadow: var(--shadow-sm);
 }
 
+/* 「← ホームへ」: 支援者の世界（タブ群）から利用者の世界（home）へ戻る導線
+   （実機確認2026-07-04で発覚。basic-design.md §3.2）。.tab の意匠（高さ・
+   角丸・太字）を流用しつつ、「タブ」ではなく「戻る」と分かるよう区切りの
+   ある枠線・控えめな背景色にする。表示可否は neuronodeApp.js の renderAll()
+   が hidden 属性で切り替える（start/home/game/result では常に非表示）。 */
+.home-return {
+  flex: 0 0 auto;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.home-return:hover {
+  background: var(--surface-soft);
+  border-color: var(--line-strong);
+}
+
 /* 研究者モード（設定画面のトグル、既定OFF）が有効なときだけ
    支援者向けタブ（操作訓練・効果測定・研究）を表示する。P0-0 §0.2 手順3。 */
 .researcher-tab {
@@ -1503,7 +1525,8 @@ input[type="checkbox"] {
     top: 8px;
   }
 
-  .tab {
+  .tab,
+  .home-return {
     min-height: 50px;
     white-space: normal;
   }
