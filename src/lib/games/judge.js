@@ -105,3 +105,68 @@ export function sweepExpired(now, pendingBeats, W, C) {
   }
   return expired;
 }
+
+/**
+ * gonogo（games/gonogo.js）用の Go/No-Go 乱数列生成（detailed-design.md §6.4）。
+ * 純粋関数（DOM/AudioContext に非依存）として切り出してあるため、
+ * tests/judge.test.mjs から直接検証できる（detailed-design.md §12 タスク12 の
+ * SHOULD 事項）。呼び出し側（games/rhythm.js の buildGonogoPlan）が
+ * セッション開始時に1回だけ呼び、結果の配列をそのまま
+ * session.config.seedSequence に全量記録する（再現性、MUST）。
+ * ここでいう「乱数列」は RNG の生シードではなく、確定した Go/No-Go の
+ * 種類の列そのものを指す（記録して後から追跡できることが目的のため）。
+ *
+ * アルゴリズム: 「3連続禁止（＝最大2連続まで）」を、シャッフル→検査→
+ * 再試行ではなく構成的に満たす。goCount 個の "go" が作る
+ * goCount+1 個の隙間（先頭・go 同士の間・末尾）へ、隙間あたり最大2個までの
+ * 制約付きでランダムに No-Go を配ることで、結果として「3連続以上」が
+ * 原理的に発生しない（シャッフル＋再試行方式より単純で必ず停止する）。
+ *
+ * @param {number} length - 生成するビート数（targetBeats）
+ * @param {number} goRatio - Go の比率（0〜1）
+ * @param {() => number} [rng] - [0,1) を返す乱数源。既定は Math.random。
+ *   単体テストでは決定的な rng を渡して再現性を検証する。
+ * @returns {Array<"go"|"nogo">} 長さ length の配列
+ */
+export function generateGoNoGoSequence(length, goRatio, rng = Math.random) {
+  const MAX_NOGO_RUN = 2; // 「3連続禁止」＝連続最大2まで（detailed-design.md §6.4）
+  const goCount = Math.round(length * goRatio);
+  const nogoCount = length - goCount;
+  const gapCount = goCount + 1; // go の前・go 同士の間・go の後にできる隙間の数
+
+  const gapSizes = distributeWithCap(nogoCount, gapCount, MAX_NOGO_RUN, rng);
+
+  const sequence = [];
+  gapSizes.forEach((size, index) => {
+    for (let i = 0; i < size; i += 1) sequence.push("nogo");
+    if (index < goCount) sequence.push("go");
+  });
+  return sequence;
+}
+
+/**
+ * total 個を count 個の枠へランダムに1個ずつ配る。各枠は最大 cap 個までしか
+ * 受け取れない（枠あたり上限つきのランダム分割）。
+ *
+ * count*cap < total（現行プリセットの goRatio では起こらない極端な設定）の
+ * 場合は、全枠が上限に達してもなお余りが出る。この場合は制約より
+ * 「全試行を記録すること」を優先し、余りを先頭の枠に積み増す
+ * （3連続禁止の制約を諦めてでもビート数を優先するフォールバック。
+ * gonogo のプリセット（goRatio 0.6）では発生しない経路）。
+ */
+function distributeWithCap(total, count, cap, rng) {
+  const sizes = new Array(count).fill(0);
+  for (let i = 0; i < total; i += 1) {
+    const available = [];
+    for (let gap = 0; gap < count; gap += 1) {
+      if (sizes[gap] < cap) available.push(gap);
+    }
+    if (available.length === 0) {
+      sizes[0] += 1;
+      continue;
+    }
+    const pick = available[Math.floor(rng() * available.length)];
+    sizes[pick] += 1;
+  }
+  return sizes;
+}

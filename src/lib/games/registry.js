@@ -6,9 +6,10 @@
 // GameModule（契約は detailed-design.md §3.1）の配列として提供する。
 //
 // color-legacy は継承（旧 views/switcher.js の「色変化」を
-// games/colorLegacy.js へ移植）。rhythm-l1/rhythm-l2 は games/rhythm.js の
-// createRhythmGame(gameId)（パラメータ違いの同一エンジン、基本設計書 §5）で
-// 結合する（P2-3・P4-1）。gonogo・calibration は P4-2/P4-3 でここに追加する。
+// games/colorLegacy.js へ移植）。rhythm-l1/rhythm-l2/gonogo は
+// games/rhythm.js の createRhythmGame(gameId)（パラメータ違いの同一エンジン、
+// 基本設計書 §5）で結合する（P2-3・P4-1・P4-2、gonogo は games/gonogo.js の
+// 薄いラッパ経由）。calibration は P4-3 でここに追加する。
 // gameTiles の enabled は仕様（§4.1）どおり true のままにし、未実装ゲームには
 // createPlaceholderGame() を暫定 create として割り当てる（画面を壊さず
 // 「じゅんびちゅう」を表示するだけ。おわる/Esc は gameHost がゲーム本体に
@@ -19,6 +20,7 @@
 import { gameTiles } from "../content.js";
 import { createColorLegacyGame } from "./colorLegacy.js";
 import { createRhythmGame } from "./rhythm.js";
+import { createGonogoGame } from "./gonogo.js";
 
 /**
  * 未実装ゲーム用の暫定 create。
@@ -46,6 +48,7 @@ const creators = {
   "color-legacy": createColorLegacyGame,
   "rhythm-l1": createRhythmGame("rhythm-l1"),
   "rhythm-l2": createRhythmGame("rhythm-l2"),
+  gonogo: createGonogoGame,
 };
 
 /** タイル情報（content.js）と create を結合した GameModule 配列（order 昇順）。 */

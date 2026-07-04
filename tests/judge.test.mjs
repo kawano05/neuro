@@ -16,8 +16,38 @@
 // =====================================================================
 
 import assert from "node:assert/strict";
-import { judgeInput, sweepExpired, computeEffectiveWindowMs } from "../src/lib/games/judge.js";
+import {
+  judgeInput,
+  sweepExpired,
+  computeEffectiveWindowMs,
+  generateGoNoGoSequence,
+} from "../src/lib/games/judge.js";
 import { createInputDeduper } from "../src/lib/utils.js";
+
+/**
+ * mulberry32: 決定的な擬似乱数生成器（32bit シード）。
+ * generateGoNoGoSequence の純粋性（同じ rng 列なら同じ結果）と、
+ * 3連続禁止制約の検証に使う（Math.random ではテストを再現できないため）。
+ */
+function mulberry32(seed) {
+  let state = seed | 0;
+  return function rng() {
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** 配列内に "nogo" が3つ以上連続する箇所が無いかを確認する。 */
+function hasTripleNogoRun(sequence) {
+  let run = 0;
+  for (const kind of sequence) {
+    run = kind === "nogo" ? run + 1 : 0;
+    if (run >= 3) return true;
+  }
+  return false;
+}
 
 let passed = 0;
 let failed = 0;
@@ -155,6 +185,37 @@ test("createInputDeduper collapses events within the threshold into a single acc
   assert.equal(shouldAccept(1100), false); // 100ms後、閾値内なので棄却
   assert.equal(shouldAccept(1149), false); // 149ms後、まだ閾値内
   assert.equal(shouldAccept(1160), true); // 直前の受理(1000)から160ms後なので受理
+});
+
+// 9. gonogo の乱数列生成（generateGoNoGoSequence、detailed-design.md §6.4・§12 タスク12）
+test("generateGoNoGoSequence returns the requested length with the go/nogo counts implied by goRatio", () => {
+  const sequence = generateGoNoGoSequence(20, 0.6, mulberry32(1));
+  assert.equal(sequence.length, 20);
+  const goCount = sequence.filter((kind) => kind === "go").length;
+  const nogoCount = sequence.filter((kind) => kind === "nogo").length;
+  assert.equal(goCount, 12); // round(20*0.6)
+  assert.equal(nogoCount, 8);
+  assert.ok(sequence.every((kind) => kind === "go" || kind === "nogo"));
+});
+
+test("generateGoNoGoSequence never produces 3 or more consecutive No-Go beats", () => {
+  // 複数のシードで確認する（構成的アルゴリズムなので毎回満たされるはず、MUST）。
+  for (let seed = 0; seed < 20; seed += 1) {
+    const sequence = generateGoNoGoSequence(20, 0.6, mulberry32(seed));
+    assert.equal(hasTripleNogoRun(sequence), false, `seed=${seed}: ${sequence.join(",")}`);
+  }
+});
+
+test("generateGoNoGoSequence is a pure function of its rng: same seed -> identical sequence", () => {
+  const first = generateGoNoGoSequence(20, 0.6, mulberry32(42));
+  const second = generateGoNoGoSequence(20, 0.6, mulberry32(42));
+  assert.deepEqual(first, second);
+});
+
+test("generateGoNoGoSequence handles the goRatio=1 edge case (no No-Go at all)", () => {
+  const sequence = generateGoNoGoSequence(10, 1, mulberry32(7));
+  assert.equal(sequence.length, 10);
+  assert.ok(sequence.every((kind) => kind === "go"));
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

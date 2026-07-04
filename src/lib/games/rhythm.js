@@ -1,11 +1,13 @@
 // =====================================================================
 // games/rhythm.js — リズムL1/L2の共通エンジン（detailed-design.md §7）
 //
-// P2-3 で mode="cued"（rhythm-l1）を実装し、P4-1 で mode="continuous"
-// （rhythm-l2）を buildPlan() に追加した（createRhythmGame(gameId) の
-// gameId ごとに resolveParams() が rhythmPresets を切り替える構造の
-// おかげで、パラメータ違いのモードは buildXxxPlan() を1つ足すだけで
-// 済んだ）。gonogo / calibration は P4-2/P4-3 でここに追加する。
+// P2-3 で mode="cued"（rhythm-l1）を実装し、P4-1/P4-2 で mode="continuous"
+// （rhythm-l2）・mode="gonogo" を buildPlan() に追加した
+// （createRhythmGame(gameId) の gameId ごとに resolveParams() が
+// rhythmPresets を切り替える構造のおかげで、パラメータ違いのモードは
+// buildXxxPlan() を1つ足すだけで済んだ）。games/gonogo.js は
+// createRhythmGame("gonogo") を呼ぶだけの薄いラッパ。calibration は
+// P4-3 でここに追加する。
 //
 // 計時の方針（detailed-design.md §6.3、MUST）:
 //   - 内部判定（judgeInput/sweepExpired）は audio 絶対時刻（ms）で行う。
@@ -37,7 +39,13 @@
 // =====================================================================
 
 import { rhythmPresets, cueTones } from "../content.js";
-import { judgeInput, sweepExpired, computeEffectiveWindowMs, computeBeatIntervalMs } from "./judge.js";
+import {
+  judgeInput,
+  sweepExpired,
+  computeEffectiveWindowMs,
+  computeBeatIntervalMs,
+  generateGoNoGoSequence,
+} from "./judge.js";
 
 // フィードバック音（detailed-design.md §5.3）: hit は既定音量、miss/extra は
 // 小音量・短めにして罰的にしない。
@@ -51,6 +59,7 @@ const TRIAL_GAP_BEATS = 1.5;
 const STAGE_LABELS = {
   "rhythm-l1": "おとに あわせて おそう",
   "rhythm-l2": "おとに あわせて つづけて おそう",
+  gonogo: "たかい おとの ときだけ おそう",
   default: "おとに あわせて おそう",
 };
 
@@ -146,9 +155,49 @@ function buildContinuousPlan({ bpm, countInBeats, targetBeats }) {
   return { audioBeats, judgedBeats, beatIntervalS };
 }
 
+/**
+ * mode="gonogo" の1セッション分のビート計画を作る（detailed-design.md §6.4）。
+ * カウントイン（低音 × countInBeats）は最初の1回のみ。以後、高音（Go）／
+ * 低音330Hz（No-Go）を goRatio に従って targetBeats 回並べる。
+ * 乱数列（Go/No-Go の種類の列）はここで1回だけ生成し、plan.seedSequence として
+ * 返す（呼び出し側の mount() が session.config.seedSequence に全量記録する。
+ * detailed-design.md §9.2、MUST）。連続 No-Go は2回まで
+ * （judge.js の generateGoNoGoSequence が構成的に保証する。§5節参照）。
+ *
+ * @returns buildCuedPlan と同じ形 ＋ seedSequence（Array<"go"|"nogo">）
+ */
+function buildGonogoPlan({ bpm, countInBeats, targetBeats, goRatio }) {
+  const beatIntervalS = 60 / bpm;
+  const audioBeats = [];
+  const judgedBeats = [];
+  let runningIndex = 0;
+
+  for (let k = 0; k < countInBeats; k += 1) {
+    audioBeats.push({
+      index: runningIndex,
+      timeS: k * beatIntervalS,
+      tone: cueTones.low,
+      gain: FEEDBACK_GAIN_HIT,
+    });
+    runningIndex += 1;
+  }
+
+  const sequence = generateGoNoGoSequence(targetBeats, goRatio);
+  sequence.forEach((kind, i) => {
+    const timeS = (countInBeats + i) * beatIntervalS;
+    const tone = kind === "go" ? cueTones.high : cueTones.noGo;
+    audioBeats.push({ index: runningIndex, timeS, tone, gain: FEEDBACK_GAIN_HIT });
+    runningIndex += 1;
+    judgedBeats.push({ index: i, kind, timeS });
+  });
+
+  return { audioBeats, judgedBeats, beatIntervalS, seedSequence: sequence };
+}
+
 /** mode に応じてビート計画のビルダーを振り分ける（detailed-design.md §7.1、P4）。 */
 function buildPlan(params) {
   if (params.mode === "continuous") return buildContinuousPlan(params);
+  if (params.mode === "gonogo") return buildGonogoPlan(params);
   return buildCuedPlan(params);
 }
 
@@ -200,8 +249,8 @@ function computeSummary(trials) {
 }
 
 /**
- * @param {string} gameId - "rhythm-l1" | "rhythm-l2"（P4-2/P4-3 で
- *   "gonogo" | "calibration" を追加する）
+ * @param {string} gameId - "rhythm-l1" | "rhythm-l2" | "gonogo"（P4-3 で
+ *   "calibration" を追加する）
  * @returns {(ctx: import("./gameHost.js").GameCtx) => import("./gameHost.js").GameInstance}
  */
 export function createRhythmGame(gameId) {
@@ -401,7 +450,8 @@ export function createRhythmGame(gameId) {
           baselineOffsetMs: settings.baselineOffsetMs,
           mode: params.mode,
           goRatio: params.goRatio,
-          seedSequence: [],
+          // gonogo のみ generateGoNoGoSequence() の結果を持つ（再現性、MUST）。
+          seedSequence: plan.seedSequence || [],
         },
         device: audio.getDeviceInfo(),
         trials: [],
