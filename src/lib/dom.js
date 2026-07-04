@@ -96,6 +96,7 @@ export function collectElements() {
     soundEnabled: document.querySelector("#soundEnabled"),
     largeText: document.querySelector("#largeText"),
     highContrast: document.querySelector("#highContrast"),
+    researcherMode: document.querySelector("#researcherMode"),
     toggleScan: document.querySelector("#toggleScan"),
     primarySwitch: document.querySelector("#primarySwitch"),
   };

@@ -7,8 +7,15 @@
 // 追加する場合は switchModules に新モジュールを足すのが起点になる。
 // =====================================================================
 
-/** localStorage の保存キー。state の構造を壊す変更をしたら v3 に上げる。 */
-export const storageKey = "neuronode-prototype-state-v2";
+/**
+ * localStorage の保存キー。state の構造を壊す変更をしたら次のバージョンへ上げる。
+ *
+ * v2 → v3（P0-0, detailed-design.md §9.5）: 起動経路を src/lib 分割版に一本化した
+ * ことに伴うバンプ。旧キー（v2: "neuronode-prototype-state-v2"、
+ * v1: "neuro-trainer-state-v1"）は state.js の loadState() が v3 未保存時にのみ
+ * 読み、settings・logs・evaluation を移行する。旧キー自体は削除しない。
+ */
+export const storageKey = "neuronode-prototype-state-v3";
 
 /**
  * スイッチ教材モジュールの一覧。
@@ -220,8 +227,23 @@ export const environmentLabels = {
 
 /**
  * タブから到達できる画面の集合。
- * 注意: "operation" / "evaluation" / "research" はマークアップ上は存在するが
- * ここに含まれておらず、現状ユーザーからは到達できない（既知の制約）。
- * タブ常設にするか「研究者モード」で出すかはメンバー間で要確認。
+ *
+ * P0-0 で "operation" / "evaluation" / "research" を追加し、
+ * リファクタリングノート（2026-06-10）記載のP1課題「導線がない」を解消した。
+ * この3画面は支援者向けのため、タブ自体の表示/非表示は
+ * settings.researcherMode（設定画面「研究者モード」トグル、既定OFF）で
+ * 出し分ける（App.svelte の .researcher-tab クラス + styles.css）。
+ * switchView() のフォールバック判定にはこのSetをそのまま使うため、
+ * 研究者モードがOFFでも（既にそのビューにいた場合等は）到達自体は可能。
  */
-export const visibleViews = new Set(["switcher", "matching", "voca", "letters", "log", "settings"]);
+export const visibleViews = new Set([
+  "switcher",
+  "matching",
+  "voca",
+  "letters",
+  "operation",
+  "evaluation",
+  "research",
+  "log",
+  "settings",
+]);
