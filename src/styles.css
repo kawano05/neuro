@@ -444,6 +444,30 @@ main {
   box-shadow: var(--shadow-sm);
 }
 
+/* P2-3: リズム系ゲームのパルス円（detailed-design.md §7.4）。
+   40vmin の単一 div。位相にあわせた transform 更新は rhythm.js が rAF で行う
+   （CSS transition は使わない。判定には使わずあくまで見た目の補助）。 */
+.rhythm-pulse {
+  width: 40vmin;
+  height: 40vmin;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    inset 0 -18px 30px rgba(0, 0, 0, 0.12),
+    0 18px 38px rgba(0, 0, 0, 0.18);
+}
+
+.rhythm-pulse.is-hit-flash {
+  box-shadow:
+    0 0 0 10px rgba(255, 255, 255, 0.55),
+    0 0 46px 14px rgba(255, 255, 255, 0.85);
+}
+
+body.high-contrast .rhythm-pulse {
+  outline: 6px solid var(--ink);
+  outline-offset: -6px;
+}
+
 /* ゲーム実行中はタブバー・走査UI・ヘッダを非表示にする（detailed-design.md §10）。 */
 body.game-mode .topbar,
 body.game-mode .tabbar,

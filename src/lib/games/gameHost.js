@@ -16,13 +16,71 @@
 // 定義しているが、既存の評価/ログ連動（views/evaluation.js の countEntry が
 // entry.type を見て自動集計する仕組み、基本設計書 §1.3 の「継承」領域）を
 // ゲーム契約の外から壊さずに使えるよう、ここでは logEvent（アプリ全体の
-// ログ関数）も GameCtx に含めて渡す。logTrial（§9.2 のリズム試行スキーマ）は
-// P2-3（games/rhythm.js）で実装するまでの間はプレースホルダーとして
-// no-op にしてある。
+// ログ関数）も GameCtx に含めて渡す。
+//
+// P2-3 で logTrial を実装した（それまでは no-op スタブ）。GameCtx にはさらに
+// 2つの実用上のパススルーを追加した（games/rhythm.js 冒頭のコメント参照）:
+//   - participantId … state.evaluation.participantId のスナップショット
+//     （リズムセッション記録の participantId 用）。
+//   - setProgress(text) … #gameProgress（gameHost 管轄のDOM）を更新する。
+//     mount(stageEl) で渡るのは gameStageContent だけなので、そこに無い
+//     兄弟要素を更新するための小さな抜け道。
+//
+// logTrial(session) の設計判断: rhythm.js は state / save を持たないため、
+// 「セッションの現時点までの全体スナップショット（trials 配列を含む）」を
+// 毎回渡してもらい、ここで sessionId をキーに state.rhythm.sessions へ
+// upsert する（同一セッション内の複数回呼び出しは同じ session オブジェクトを
+// 指すため、実質的には「最新状態で置き換える」だけで良い）。この方式なら
+// 支援者操作/Esc/visibilitychange による中断（destroy() 経由、finish() を
+// 経由しない）でも、直前までの trials が確実に永続化される
+// （detailed-design.md §7.3 の aborted:true 確定要件）。
 // =====================================================================
 
 import { findGameModule } from "./registry.js";
-import { escapeHtml } from "../utils.js";
+import { MAX_RHYTHM_SESSIONS } from "../state.js";
+
+/** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
+function formatSignedMs(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "--";
+  const rounded = Math.round(value);
+  return `${rounded > 0 ? "+" : ""}${rounded}ms`;
+}
+
+/** オフセットの符号を「はやめ/おそめ」に言い換える（detailed-design.md §2.5・§5.2規則4）。 */
+function offsetDirectionLabel(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "";
+  if (value < 0) return "（はやめに おせたよ）";
+  if (value > 0) return "（おそめに おせたよ）";
+  return "（ぴったり！）";
+}
+
+/** リザルト画面の成績表示（detailed-design.md §2.5）。 */
+function renderResultStats(summary) {
+  const totalGoBeats = summary.hits + summary.misses;
+  const hitRatePercent = totalGoBeats ? Math.round((summary.hits / totalGoBeats) * 100) : 0;
+  const sdLabel = typeof summary.sdRawOffsetMs === "number" ? `${Math.round(summary.sdRawOffsetMs)}ms` : "--";
+  return `
+    <div class="summary-grid">
+      <div class="summary-tile">
+        <span class="metric-label">たっせいりつ</span>
+        <strong>${hitRatePercent}% <small>(${summary.hits}/${totalGoBeats})</small></strong>
+      </div>
+      <div class="summary-tile">
+        <span class="metric-label">へいきんオフセット</span>
+        <strong>${formatSignedMs(summary.meanRawOffsetMs)}</strong>
+        <p>${offsetDirectionLabel(summary.meanRawOffsetMs)}</p>
+      </div>
+      <div class="summary-tile">
+        <span class="metric-label">ばらつき（SD）</span>
+        <strong>${sdLabel}</strong>
+      </div>
+      <div class="summary-tile">
+        <span class="metric-label">よぶんな入力</span>
+        <strong>${summary.extras}</strong>
+      </div>
+    </div>
+  `;
+}
 
 export function createGameHost(ctx) {
   const { state, elements, scan, announce, save, logEvent } = ctx;
@@ -43,14 +101,35 @@ export function createGameHost(ctx) {
     activeInstance = null;
   }
 
+  /**
+   * リズム系セッションのスナップショットを state.rhythm.sessions へ upsert する
+   * （sessionId をキーに置き換え。直近 MAX_RHYTHM_SESSIONS 件のみ保持、§9.1）。
+   */
+  function persistRhythmSession(session) {
+    if (!session || !session.sessionId) return;
+    const sessions = state.rhythm.sessions;
+    const index = sessions.findIndex((existing) => existing.sessionId === session.sessionId);
+    if (index >= 0) {
+      sessions[index] = session;
+    } else {
+      sessions.push(session);
+    }
+    state.rhythm.sessions = sessions.slice(-MAX_RHYTHM_SESSIONS);
+    save();
+  }
+
   /** ゲームに渡す共有コンテキスト（detailed-design.md §3.1、上記コメントの拡張含む）。 */
   function buildGameCtx() {
     return {
       settings: state.settings,
       audio: ctx.audio,
       announce,
-      logTrial() {
-        // P1-3 時点では未実装（P2-3 で games/rhythm.js が §9.2 のスキーマで実装する）。
+      participantId: state.evaluation.participantId,
+      setProgress(text) {
+        elements.gameProgress.textContent = text;
+      },
+      logTrial(session) {
+        persistRhythmSession(session);
       },
       logEvent,
       finish(summary) {
@@ -77,9 +156,22 @@ export function createGameHost(ctx) {
     activeInstance.mount(elements.gameStageContent);
   }
 
-  /** ゲーム側の正常終了（規定試行数の完了等）。リザルトへ遷移する。 */
+  /**
+   * ゲーム側の正常終了（規定試行数の完了等）。リザルトへ遷移する。
+   *
+   * リズム系ゲームの summary（judge.js の分類を集計した §9.2 の summary
+   * サブスキーマ、goHitRate 等を持つ）が渡された場合のみ、操作ログと
+   * 読み上げを行う。color-legacy のように finish() を呼ばないゲームは
+   * このブロックには来ない。evaluation への失敗系連動（detailed-design.md
+   * §9.4）は P3-1（views/evaluation.js）で追加する。
+   */
   function finishGame(summary) {
     lastResultSummary = summary || null;
+    if (summary && typeof summary.goHitRate === "number") {
+      const percent = Math.round(summary.goHitRate * 100);
+      logEvent({ type: "game", label: `${activeGameId} 終了 go命中率${percent}%` });
+      ctx.audio.speak(`たっせいりつ ${percent}パーセントでした`);
+    }
     destroyActive();
     state.currentView = "result";
     save();
@@ -132,11 +224,12 @@ export function createGameHost(ctx) {
       const activeModule = activeGameId ? findGameModule(activeGameId) : null;
       elements.gameProgress.textContent = activeModule ? activeModule.title : "";
 
-      if (lastResultSummary) {
-        elements.resultStats.innerHTML = `<p>けっか: ${escapeHtml(JSON.stringify(lastResultSummary))}</p>`;
+      if (lastResultSummary && typeof lastResultSummary.goHitRate === "number") {
+        elements.resultStats.innerHTML = renderResultStats(lastResultSummary);
+      } else if (lastResultSummary) {
+        elements.resultStats.innerHTML = '<p class="panel-note">このあそびには せいせき表示がありません。</p>';
       } else {
-        elements.resultStats.innerHTML =
-          '<p class="panel-note">せいせきの表示は次のフェーズ（リズム実装時）で追加します。</p>';
+        elements.resultStats.innerHTML = '<p class="panel-note">まだ けっかがありません。</p>';
       }
     },
   };
