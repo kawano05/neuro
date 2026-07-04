@@ -5,16 +5,15 @@
 // （detailed-design.md §4.1）。ここで各ゲームの create(ctx) を結合し、
 // GameModule（契約は detailed-design.md §3.1）の配列として提供する。
 //
-// rhythm-l2・gonogo・calibration は P4 で実装する（rhythm.js の
-// createRhythmGame(gameId) を他の gameId で呼ぶだけで済むよう設計してある。
-// games/rhythm.js 冒頭のコメント参照）。color-legacy は継承（旧
-// views/switcher.js の「色変化」を games/colorLegacy.js へ移植）、rhythm-l1 は
-// P2-3 で新規実装した（games/rhythm.js）。gameTiles の enabled は仕様（§4.1）
-// どおり true のままにし、未実装ゲームには createPlaceholderGame() を暫定
-// create として割り当てる（画面を壊さず「じゅんびちゅう」を表示するだけ。
-// おわる/Esc は gameHost がゲーム本体に関わらずホスト側で処理するため、
-// この段階でも安全に終了できる）。実装が入り次第、creators の対応エントリを
-// 追加するだけでよい。
+// color-legacy は継承（旧 views/switcher.js の「色変化」を
+// games/colorLegacy.js へ移植）。rhythm-l1/rhythm-l2 は games/rhythm.js の
+// createRhythmGame(gameId)（パラメータ違いの同一エンジン、基本設計書 §5）で
+// 結合する（P2-3・P4-1）。gonogo・calibration は P4-2/P4-3 でここに追加する。
+// gameTiles の enabled は仕様（§4.1）どおり true のままにし、未実装ゲームには
+// createPlaceholderGame() を暫定 create として割り当てる（画面を壊さず
+// 「じゅんびちゅう」を表示するだけ。おわる/Esc は gameHost がゲーム本体に
+// 関わらずホスト側で処理するため、この段階でも安全に終了できる）。実装が
+// 入り次第、creators の対応エントリを追加するだけでよい。
 // =====================================================================
 
 import { gameTiles } from "../content.js";
@@ -46,6 +45,7 @@ function createPlaceholderGame() {
 const creators = {
   "color-legacy": createColorLegacyGame,
   "rhythm-l1": createRhythmGame("rhythm-l1"),
+  "rhythm-l2": createRhythmGame("rhythm-l2"),
 };
 
 /** タイル情報（content.js）と create を結合した GameModule 配列（order 昇順）。 */

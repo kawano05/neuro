@@ -1,12 +1,11 @@
 // =====================================================================
-// games/rhythm.js — リズムL1（時報型合図入力）エンジン（detailed-design.md §7）
+// games/rhythm.js — リズムL1/L2の共通エンジン（detailed-design.md §7）
 //
-// P2-3 の実装範囲は mode="cued"（rhythm-l1）のみ。rhythm-l2 / gonogo /
-// calibration（同じ判定エンジンの上のパラメータ違い、基本設計書 §5）は
-// P4 でこのファイルに continuous / gonogo 分岐を足す想定
-// （createRhythmGame(gameId) の gameId ごとに resolveParams() が
-// rhythmPresets を切り替える構造にしてあるので、P4 は buildPlan() に
-// 分岐を足すだけで済むはず）。
+// P2-3 で mode="cued"（rhythm-l1）を実装し、P4-1 で mode="continuous"
+// （rhythm-l2）を buildPlan() に追加した（createRhythmGame(gameId) の
+// gameId ごとに resolveParams() が rhythmPresets を切り替える構造の
+// おかげで、パラメータ違いのモードは buildXxxPlan() を1つ足すだけで
+// 済んだ）。gonogo / calibration は P4-2/P4-3 でここに追加する。
 //
 // 計時の方針（detailed-design.md §6.3、MUST）:
 //   - 内部判定（judgeInput/sweepExpired）は audio 絶対時刻（ms）で行う。
@@ -47,6 +46,13 @@ const FEEDBACK_GAIN_MISS = 0.018;
 
 // 試行間の休止は beatInterval の1.5倍（detailed-design.md §6.4）。
 const TRIAL_GAP_BEATS = 1.5;
+
+/** ステージの案内文言（gameId ごと、detailed-design.md §7.4）。 */
+const STAGE_LABELS = {
+  "rhythm-l1": "おとに あわせて おそう",
+  "rhythm-l2": "おとに あわせて つづけて おそう",
+  default: "おとに あわせて おそう",
+};
 
 /** "r-YYYYMMDD-HHMMSS-xx" 形式のセッションID（detailed-design.md §9.2）。 */
 function generateSessionId() {
@@ -104,7 +110,46 @@ function buildCuedPlan({ bpm, countInBeats, targetBeats }) {
     judgedBeats.push({ index: trial, kind: "go", timeS: highTimeS });
   }
 
+  return { audioBeats, judgedBeats, beatIntervalS, trialPeriodS };
+}
+
+/**
+ * mode="continuous" の1セッション分のビート計画を作る（detailed-design.md §6.4）。
+ * カウントイン（低音 × countInBeats）は最初の1回のみ。以後は高音（押しどころ）が
+ * beatInterval ごとに targetBeats 回連続する（試行間の休止はない、cued との違い）。
+ *
+ * @returns buildCuedPlan と同じ形（trialPeriodS は無し。試行の概念が無いため）。
+ */
+function buildContinuousPlan({ bpm, countInBeats, targetBeats }) {
+  const beatIntervalS = 60 / bpm;
+  const audioBeats = [];
+  const judgedBeats = [];
+  let runningIndex = 0;
+
+  for (let k = 0; k < countInBeats; k += 1) {
+    audioBeats.push({
+      index: runningIndex,
+      timeS: k * beatIntervalS,
+      tone: cueTones.low,
+      gain: FEEDBACK_GAIN_HIT,
+    });
+    runningIndex += 1;
+  }
+
+  for (let i = 0; i < targetBeats; i += 1) {
+    const timeS = (countInBeats + i) * beatIntervalS;
+    audioBeats.push({ index: runningIndex, timeS, tone: cueTones.high, gain: FEEDBACK_GAIN_HIT });
+    runningIndex += 1;
+    judgedBeats.push({ index: i, kind: "go", timeS });
+  }
+
   return { audioBeats, judgedBeats, beatIntervalS };
+}
+
+/** mode に応じてビート計画のビルダーを振り分ける（detailed-design.md §7.1、P4）。 */
+function buildPlan(params) {
+  if (params.mode === "continuous") return buildContinuousPlan(params);
+  return buildCuedPlan(params);
 }
 
 function average(values) {
@@ -155,7 +200,8 @@ function computeSummary(trials) {
 }
 
 /**
- * @param {string} gameId - "rhythm-l1"（P4 で "rhythm-l2" 等を追加する想定）
+ * @param {string} gameId - "rhythm-l1" | "rhythm-l2"（P4-2/P4-3 で
+ *   "gonogo" | "calibration" を追加する）
  * @returns {(ctx: import("./gameHost.js").GameCtx) => import("./gameHost.js").GameInstance}
  */
 export function createRhythmGame(gameId) {
@@ -187,7 +233,7 @@ export function createRhythmGame(gameId) {
     function renderStageMarkup() {
       stageEl.innerHTML = `
         <div class="rhythm-pulse" aria-hidden="true"></div>
-        <span class="reaction-label">おとに あわせて おそう</span>
+        <span class="reaction-label">${STAGE_LABELS[gameId] || STAGE_LABELS.default}</span>
       `;
       pulseEl = stageEl.querySelector(".rhythm-pulse");
     }
@@ -316,7 +362,7 @@ export function createRhythmGame(gameId) {
 
       params = resolveParams(gameId, settings);
       effectiveWindowMs = computeEffectiveWindowMs(params.mode, params.bpm, settings.judgmentWindowMs);
-      plan = buildCuedPlan(params);
+      plan = buildPlan(params);
 
       // §6.3: 対応ペアの取得は「セッション開始時に1回」。perfMs/audioS を
       // 隣接する行で取得し、以降のずれ（クロックドリフト）は許容誤差内とする。
