@@ -7,14 +7,21 @@
 // 追加する場合は switchModules に新モジュールを足すのが起点になる。
 // =====================================================================
 
-/** localStorage の保存キー。state の構造を壊す変更をしたら v3 に上げる。 */
-export const storageKey = "neuronode-prototype-state-v2";
+/**
+ * localStorage の保存キー。state の構造を壊す変更をしたら次のバージョンへ上げる。
+ *
+ * v2 → v3（P0-0, detailed-design.md §9.5）: 起動経路を src/lib 分割版に一本化した
+ * ことに伴うバンプ。旧キー（v2: "neuronode-prototype-state-v2"、
+ * v1: "neuro-trainer-state-v1"）は state.js の loadState() が v3 未保存時にのみ
+ * 読み、settings・logs・evaluation を移行する。旧キー自体は削除しない。
+ */
+export const storageKey = "neuronode-prototype-state-v3";
 
 /**
- * スイッチ教材モジュールの一覧。
- * ここに { id, name, description, tones } を追加すると、
- * スイッチ教材画面のモジュール選択グリッドに自動で並ぶ。
- * （ゲーム追加時の拡張ポイント。描画ロジックの分岐は views/switcher.js 側）
+ * スイッチ教材モジュールの一覧（現状 "color" の1件のみ）。
+ * 旧 views/switcher.js の選択UIはゲーム基盤への移行に伴い削除し、
+ * この "color" データは games/colorLegacy.js（アプリ選択の「いろがかわる」
+ * タイル、content.js の gameTiles 参照）が読み込む。
  */
 export const switchModules = [
   {
@@ -27,6 +34,65 @@ export const switchModules = [
 
 /** スイッチ教材ステージの背景色サイクル */
 export const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747"];
+
+/**
+ * ゲームタイル（アプリ選択画面の表示に使う純粋データ）。detailed-design.md §4.1。
+ *
+ * ロジックを持つ create はここには置かない。games/registry.js が
+ * このタイル情報と各ゲームの create(ctx) を結合して GameModule（契約は
+ * detailed-design.md §3.1）の配列を組み立てる。
+ *
+ * 将来のテーマスキン（寿司・鬼等。基本設計書 §2.2 の非スコープ）用の口として、
+ * 各タイルへ `skin`（例: "sushi" | "oni" | null）フィールドを追加できる構造に
+ * してある。本リファクタでは skin フィールド自体を追加しない（未実装）。
+ */
+export const gameTiles = [
+  // icon / accent / accentSoft はアプリ選択タイルの見た目専用（views/home.js が
+  // 描画時に使う）。ゲームロジックからは参照しない。accentSoft はアイコン
+  // バッジの下地色で、color-mix() 非対応環境も考慮して静的な対で持つ。
+  { id: "color-legacy", title: "いろがかわる", description: "おすと いろと おとが かわるよ", order: 1, enabled: true, icon: "🎨", accent: "#c2497c", accentSoft: "#f9e4ee" },
+  { id: "rhythm-l1", title: "リズム れんしゅう", description: "おとの あいずに あわせて おそう", order: 2, enabled: true, icon: "🥁", accent: "#b06718", accentSoft: "#f7ebda" },
+  { id: "rhythm-l2", title: "リズム つづけて", description: "おとに あわせて つづけて おそう", order: 3, enabled: true, icon: "🎵", accent: "#315f9d", accentSoft: "#e4ecf8" },
+  { id: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true, icon: "🔔", accent: "#7050b0", accentSoft: "#ece6f8" },
+  { id: "calibration", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 5, enabled: true, icon: "⏱️", accent: "#147d78", accentSoft: "#dff1ef" },
+  { id: "future-slot", title: "じゅんびちゅう", description: "", order: 6, enabled: false, icon: "🌱", accent: "#62716d", accentSoft: "#eef3f1" },
+];
+
+/**
+ * 学習・コミュニケーション系タイル（ホームの「まなぶ・つたえる」セクション）。
+ * 旧タブのマッチング/VOCA/文字学習は利用者向けアクティビティなので、支援者
+ * 機能のタブバーからホームのタイルへ移した。ゲーム契約（§3.1）には乗せず、
+ * view は既存の .view セクション id（switchView() の引数）をそのまま指す。
+ * 見た目のフィールド構成は gameTiles と同じ（views/home.js が共通処理で描画）。
+ */
+export const activityTiles = [
+  { view: "matching", title: "マッチング", description: "おだいに あうものを えらぼう", icon: "🧩", accent: "#247a4d", accentSoft: "#e3f4ea" },
+  { view: "voca", title: "VOCA", description: "ことばを えらんで つたえよう", icon: "💬", accent: "#2a7ab5", accentSoft: "#e1eff9" },
+  { view: "letters", title: "文字学習", description: "もじを よんで えらぼう", icon: "✏️", accent: "#a66321", accentSoft: "#f5efd9" },
+];
+
+/**
+ * リズム系ゲームのプリセット値（bpm・カウントイン拍数・目標ビート数等）。
+ * detailed-design.md §4.1 / §7.1。state.settings 側の同名値（null 以外）が
+ * 優先される（games/rhythm.js が優先順位を解決する。P2-3 で実装）。
+ *
+ * mode: "cued"（L1・キャリブレーション、時報→高音1回）/
+ *       "continuous"（L2、カウントインは最初の1回のみで以後は毎拍が高音）/
+ *       "gonogo"（高音Go・低音No-GoをgoRatioで擬似乱数配列、P4-1〜P4-2）。
+ * excludedTrialCount: キャリブレーション専用（detailed-design.md §8.2）。
+ * 最初のN試行を集計から除外する（記録はする）。games/rhythm.js の
+ * resolveParams() がここから読み、gameId 分岐をエンジン側に持ち込まずに
+ * 済ませている（データ駆動、P4-3）。他ゲームは undefined（=0扱い）。
+ */
+export const rhythmPresets = {
+  "rhythm-l1": { bpm: 40, countInBeats: 3, targetBeats: 10, mode: "cued" },
+  "rhythm-l2": { bpm: 60, countInBeats: 4, targetBeats: 20, mode: "continuous" },
+  gonogo: { bpm: 50, countInBeats: 3, targetBeats: 20, mode: "gonogo", goRatio: 0.6 },
+  calibration: { bpm: 50, countInBeats: 4, targetBeats: 12, mode: "cued", excludedTrialCount: 2 },
+};
+
+/** 聴覚キューの周波数（Hz）。detailed-design.md §4.1 / §6.4。 */
+export const cueTones = { low: 440, high: 880, noGo: 330, hit: 660, miss: 220 };
 
 /** マッチング教材の出題 */
 export const matchingTasks = [
@@ -121,8 +187,10 @@ export const evaluationTasks = [
   {
     id: "switch-5",
     title: "スイッチ教材を5回入力",
-    guide: "スイッチ教材画面で同じ入力を5回行い、支援者が達成を確認したら成功で終了します。",
-    view: "switcher",
+    guide: "アプリ選択から「いろがかわる」を開き、同じ入力を5回行い、支援者が達成を確認したら成功で終了します。",
+    // 旧 "switcher" 画面は削除済み（P1-2/P1-3）。「タスク画面へ」ボタンは
+    // アプリ選択（home）へ遷移し、そこから色変化タイルを選ぶ動線にする。
+    view: "home",
   },
   {
     id: "matching-1",
@@ -220,8 +288,32 @@ export const environmentLabels = {
 
 /**
  * タブから到達できる画面の集合。
- * 注意: "operation" / "evaluation" / "research" はマークアップ上は存在するが
- * ここに含まれておらず、現状ユーザーからは到達できない（既知の制約）。
- * タブ常設にするか「研究者モード」で出すかはメンバー間で要確認。
+ *
+ * P0-0 で "operation" / "evaluation" / "research" を追加し、
+ * リファクタリングノート（2026-06-10）記載のP1課題「導線がない」を解消した。
+ * この3画面は支援者向けのため、タブ自体の表示/非表示は
+ * settings.researcherMode（設定画面「研究者モード」トグル、既定OFF）で
+ * 出し分ける（App.svelte の .researcher-tab クラス + styles.css）。
+ * switchView() のフォールバック判定にはこのSetをそのまま使うため、
+ * 研究者モードがOFFでも（既にそのビューにいた場合等は）到達自体は可能。
+ *
+ * P1-2（detailed-design.md §2.1）: 利用者向けフロー "start" / "home" /
+ * "game" / "result" を追加する。この4画面はタブを持たず、スタート導線・
+ * アプリ選択・ゲーム実行・リザルトの各遷移でのみ到達する。旧 "switcher"
+ * （スイッチ教材ソフト画面）は games/colorLegacy.js への移植に伴い削除した
+ * （views/switcher.js 削除、detailed-design.md §12 の作業順）。
  */
-export const visibleViews = new Set(["switcher", "matching", "voca", "letters", "log", "settings"]);
+export const visibleViews = new Set([
+  "start",
+  "home",
+  "game",
+  "result",
+  "matching",
+  "voca",
+  "letters",
+  "operation",
+  "evaluation",
+  "research",
+  "log",
+  "settings",
+]);

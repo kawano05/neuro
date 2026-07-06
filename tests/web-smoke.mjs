@@ -1,6 +1,7 @@
 import { chromium, devices, webkit } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
+import { storageKey } from "../src/lib/content.js";
 
 const baseUrl = "http://127.0.0.1:4173";
 const headed = process.argv.includes("--headed");
@@ -20,8 +21,11 @@ const projects = [
 
 const checks = [
   ["loads the main learning app", checkMainApp],
-  ["records switch input from stage and keyboard fallback", checkSwitchInput],
+  ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
+  ["picks rhythm-l1, hides the shell chrome, and records an aborted session on Esc", checkRhythmL1GameFlow],
   ["moves between visible feature tabs", checkFeatureTabs],
+  ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
+  ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
 ];
 
@@ -87,31 +91,263 @@ async function waitForServer() {
 }
 
 async function checkMainApp(page) {
-  await waitForText(page, "h1", "neuro trainer");
-  await waitForCount(page, ".tab", 4);
-  await waitForClass(page, "#training", "is-active");
-  await page.locator(".training-stage").waitFor({ state: "visible" });
+  await waitForText(page, "h1", "neuro");
+  // 5 tabs exist in the DOM (2 always-visible supporter tabs — log/settings —
+  // + 3 researcher-mode tabs that stay hidden until settings.researcherMode
+  // is enabled, see App.svelte / styles.css .researcher-tab). The former
+  // matching/voca/letters tabs moved into the home screen's
+  // "まなぶ・つたえる" tile section (#activityTileGrid) since they are
+  // user-facing activities, not supporter tools.
+  await waitForCount(page, ".tab", 5);
+  // The app always boots into the start screen (detailed-design.md §2.1:
+  // MUST start from "start" even on revisit, to guarantee the AudioContext
+  // unlock + input continuity check every time).
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").waitFor({ state: "visible" });
+
+  // Design-deviation regression check (detailed-design.md §2.1/§8.4): the
+  // start screen has no scan targets and scanning MUST stay fully stopped,
+  // not merely "not yet started". Before this fix, scan.js's start()/
+  // restartIfNeeded() guards only checked currentView==="game", so the
+  // default autoScan=true (state.js) would keep scanning the tabbar behind
+  // the start screen and the header badge would read "走査中". Confirm the
+  // badge reads stopped and that no element ever gains .scan-focus even
+  // after waiting past the default scanInterval (1600ms, state.js).
+  await waitForText(page, "#scanState", "走査停止中");
+  await page.waitForTimeout(1900);
+  await waitForText(page, "#scanState", "走査停止中");
+  const scanFocusCount = await page.locator(".scan-focus").count();
+  assert(scanFocusCount === 0, `Expected no .scan-focus elements on the start screen, found ${scanFocusCount}`);
 }
 
-async function checkSwitchInput(page) {
-  await waitForText(page, ".metric-tile.primary strong", "0");
+/**
+ * Plays through the primary user flow end to end: start screen -> (one
+ * input) -> home (game tile grid) -> pick the color-legacy tile -> game
+ * screen (scan/tabbar/header hidden) -> input registers -> exit back to
+ * home. This is the P1-3 completion criterion from detailed-design.md §12.
+ */
+async function checkStartToHomeToGameFlow(page) {
+  await waitForClass(page, "#startView", "is-active");
 
-  await page.locator(".training-stage").click();
-  await waitForText(page, ".metric-tile.primary strong", "1");
+  // One input on the start stage unlocks audio, plays a confirmation tone,
+  // logs a "switch" event, and advances to home (detailed-design.md §2.2).
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForCount(page, "#gameTileGrid .game-tile", 6);
 
+  // The color-legacy tile is enabled and first by order (content.js gameTiles).
+  const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
+  await tiles.first().click();
+
+  // Entering a game stops scanning and hides the tabbar/header/dock
+  // (detailed-design.md §2.4, body.game-mode).
+  await waitForClass(page, "#gameView", "is-active");
+  await page.waitForFunction(() => document.body.classList.contains("game-mode"));
+  await page.locator(".tabbar").waitFor({ state: "hidden" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // Design-deviation regression check (basic-design.md §3.1 "画面全体が単一の
+  // スイッチ"): #gameStage must cover the full viewport with no dead margin
+  // at the bottom. Before this fix, .game-stage used a stale
+  // `calc(100vh - 300px)` sized for the (now-hidden) header/tabbar/dock,
+  // which left an unreachable strip at the bottom of tall viewports (found
+  // on iPad portrait, 834x1210, during on-device verification). #gameView is
+  // now position:fixed; inset:0 while body.game-mode is active, so the stage
+  // should span from y=0 to the full viewport height.
+  const stageBox = await page.locator("#gameStage").boundingBox();
+  const viewportSize = page.viewportSize();
+  assert(stageBox, "Expected #gameStage to have a bounding box while in game mode");
+  assert(Math.abs(stageBox.y) <= 1, `Expected #gameStage to start at the top of the viewport, got y=${stageBox.y}`);
+  assert(
+    Math.abs(stageBox.y + stageBox.height - viewportSize.height) <= 1,
+    `Expected #gameStage to cover the full viewport height, got bottom=${stageBox.y + stageBox.height} viewport=${viewportSize.height}`
+  );
+
+  // The shell dedupes switch-input events within 150ms of each other (the
+  // startStage press above still counts as the "last accepted input" for
+  // that window; see utils.js createInputDeduper / detailed-design.md §3.3).
+  // A real switch user could not physically traverse start -> home -> game
+  // and press again within 150ms, but Playwright can, so wait past the
+  // window before treating this as a distinct input.
+  await page.waitForTimeout(200);
+
+  // Tapping the full-screen game stage is a switch input for color-legacy:
+  // it changes color/tone and announces via the live region. Click the
+  // center (default) rather than a corner, since #gameProgress/#gameExit are
+  // absolutely positioned in the corners and would intercept a corner click.
+  await page.locator("#gameStage").click();
+  await waitForText(page, "#liveRegion", "色変化に入力しました");
+
+  // The keyboard fallback (Space) goes through the same input funnel and
+  // reaches the game too (detailed-design.md §3.3). Wait past the dedupe
+  // window again (same reasoning as above).
+  await page.evaluate(() => document.querySelector("#liveRegion").textContent = "");
+  await page.waitForTimeout(200);
+  await page.keyboard.press("Space");
+  await waitForText(page, "#liveRegion", "色変化に入力しました");
+
+  // Esc aborts the game and returns to home directly (no result screen for
+  // color-legacy; see games/colorLegacy.js for the design rationale).
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(1000);
-  await page.locator(".training-stage").click();
-  await waitForText(page, ".metric-tile.primary strong", "2");
+  await waitForClass(page, "#homeView", "is-active");
+  await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
+  await page.locator(".tabbar").waitFor({ state: "visible" });
+}
+
+/**
+ * Regression check for the on-device gap found 2026-07-04 (basic-design.md
+ * §3.2): once a switch user (or a supporter) moved from home into the
+ * supporter's world (any tab), there was no way back to the user's world
+ * short of force-quitting the app. #homeReturn ("← ホームへ") is the fix:
+ * it must stay hidden while in the user's world (start/home/game/result) and
+ * appear the moment a tab view is entered, and clicking/scanning to it must
+ * take the user all the way back to #homeView and restart scanning there.
+ */
+async function checkHomeReturnFromTabs(page) {
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
+  // In the user's world (home), the return-to-home button makes no sense
+  // and must not be shown or reachable by scanning (detailed-design.md §10).
+  await page.locator("#homeReturn").waitFor({ state: "hidden" });
+
+  // Enter the supporter's world through an ordinary tab click.
+  await page.locator('.tab[data-view="settings"]').click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator("#homeReturn").waitFor({ state: "visible" });
+
+  // Clicking it must announce in hiragana, switch back to home, and hide
+  // itself again now that we're back in the user's world.
+  await page.evaluate(() => {
+    document.querySelector("#liveRegion").textContent = "";
+  });
+  await page.locator("#homeReturn").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForText(page, "#liveRegion", "メニューにもどります");
+  await page.locator("#homeReturn").waitFor({ state: "hidden" });
+
+  // switchView("home") calls scan.restartIfNeeded(); with the default
+  // autoScan=true (state.js) scanning must actually resume against home's
+  // tiles, not stay stale/stopped from whatever the settings view left it in.
+  await waitForText(page, "#scanState", "走査中");
+}
+
+/**
+ * P5-1 (detailed-design.md §11.2 items 2-3): pick the rhythm-l1 tile, confirm
+ * the game screen hides the shell chrome and stops scanning the same way
+ * color-legacy does, then abort with Esc and confirm the shell returns to
+ * home directly (no result screen for an aborted session, detailed-design.md
+ * §2.4) *and* that an aborted session was actually persisted to
+ * state.rhythm.sessions (games/rhythm.js destroy(), detailed-design.md §7.3).
+ */
+async function checkRhythmL1GameFlow(page) {
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForCount(page, "#gameTileGrid .game-tile", 6);
+
+  // Tile order (content.js gameTiles): color-legacy, rhythm-l1, rhythm-l2,
+  // gonogo, calibration, future-slot(disabled). rhythm-l1 is the 2nd enabled tile.
+  const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
+  await tiles.nth(1).click();
+
+  await waitForClass(page, "#gameView", "is-active");
+  await page.waitForFunction(() => document.body.classList.contains("game-mode"));
+  // Same shell-chrome-hidden assertions as the color-legacy flow above
+  // (detailed-design.md §2.4/§10): tabbar/switch-dock (and with them the
+  // scan toggle + scan state readout) are gone while a game is active.
+  await page.locator(".tabbar").waitFor({ state: "hidden" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // Let the countdown/first beat render a moment before aborting.
+  await page.waitForTimeout(500);
+
+  // Esc aborts the game and returns to home *directly* (no result screen;
+  // detailed-design.md §2.4 terminates the flow via gameHost.abort()).
+  await page.keyboard.press("Escape");
+  await waitForClass(page, "#homeView", "is-active");
+  await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
+  await page.locator(".tabbar").waitFor({ state: "visible" });
+
+  // The abort path (games/rhythm.js destroy(), gameHost.js persistRhythmSession)
+  // must still have written an aborted session for rhythm-l1 (detailed-design.md
+  // §7.3 MUST: trials recorded so far are confirmed with aborted:true, no
+  // silent data loss on early exit).
+  const hasAbortedSession = await page.evaluate((key) => {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    const state = JSON.parse(raw);
+    return (state.rhythm?.sessions || []).some(
+      (session) => session.gameId === "rhythm-l1" && session.aborted === true
+    );
+  }, storageKey);
+  assert(hasAbortedSession, "Expected an aborted rhythm-l1 session in state.rhythm.sessions");
 }
 
 async function checkFeatureTabs(page) {
-  const tabTargets = ["voca", "records", "settings", "training"];
+  // The start screen hides the whole shell (topbar/tabbar, body.start-mode)
+  // since the design pass, so enter the home screen first to make the tabs
+  // clickable — same as a real supporter would.
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
 
+  // matching/voca/letters are user-facing activities and now live on the
+  // home screen as "まなぶ・つたえる" tiles (#activityTileGrid), not as
+  // tabs. Each visit returns home via #homeReturn, the same path a switch
+  // user would scan to.
+  const activityTargets = ["matching", "voca", "letters"];
+  for (const target of activityTargets) {
+    await page.locator(`#activityTileGrid [data-view="${target}"]`).click();
+    await waitForClass(page, `#${target}`, "is-active");
+    await page.locator("#homeReturn").click();
+    await waitForClass(page, "#homeView", "is-active");
+  }
+
+  // Only the always-visible supporter tabs; operation/evaluation/research
+  // stay hidden until "researcher mode" is turned on in settings
+  // (P0-0, detailed-design.md §0.2).
+  const tabTargets = ["log", "settings"];
   for (const target of tabTargets) {
     await page.locator(`.tab[data-view="${target}"]`).click();
     await waitForClass(page, `#${target}`, "is-active");
   }
+}
+
+/**
+ * P5-1 (detailed-design.md §11.2 item 4): confirm the researcher-only tabs
+ * (evaluation/operation/research, gated by settings.researcherMode since
+ * P0-0) still render correctly after this phase's changes, and specifically
+ * that the P3-1/P4 additions to the evaluation tab (rhythm CSV export
+ * button) are present and unaffected — this is the "既存タブ(評価・設定)
+ * 不退行" no-regression check the task calls out by name.
+ */
+async function checkResearcherModeTabsNoRegression(page) {
+  // The tabbar is hidden on the start screen (body.start-mode, design pass);
+  // go through home first.
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
+  await page.locator('.tab[data-view="settings"]').click();
+  await waitForClass(page, "#settings", "is-active");
+
+  // researcherMode defaults to OFF (P0-0); flip it on to reveal the tab.
+  await page.locator("#researcherMode").click();
+  await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
+
+  await page.locator('.tab[data-view="evaluation"]').click();
+  await waitForClass(page, "#evaluation", "is-active");
+  await page.locator("#participantId").waitFor({ state: "visible" });
+  await page.locator("#exportEvaluationCsv").waitFor({ state: "visible" });
+  // P3-1's rhythm CSV export button lives alongside the pre-existing
+  // evaluation CSV export; both must still be there (no regression).
+  await page.locator("#exportRhythmCsv").waitFor({ state: "visible" });
+
+  // Settings itself must keep working too (the tab we just used to flip
+  // researcherMode on).
+  await page.locator('.tab[data-view="settings"]').click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator("#researcherMode").waitFor({ state: "visible" });
 }
 
 async function checkMobileLayout(page) {
@@ -122,7 +358,7 @@ async function checkMobileLayout(page) {
 
   assert(overflow <= 2, `Expected horizontal overflow <= 2px, got ${overflow}px`);
   await page.locator(".switch-dock").waitFor({ state: "visible" });
-  await page.locator(".primary-switch").waitFor({ state: "visible" });
+  await page.locator("#primarySwitch").waitFor({ state: "visible" });
 }
 
 async function waitForText(page, selector, expected) {

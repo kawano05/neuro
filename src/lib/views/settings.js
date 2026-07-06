@@ -15,12 +15,14 @@ export function initSettings(ctx) {
     elements.soundEnabled.checked = settings.soundEnabled;
     elements.largeText.checked = settings.largeText;
     elements.highContrast.checked = settings.highContrast;
+    elements.researcherMode.checked = settings.researcherMode;
   }
 
-  /** body へ表示系クラス（大きい文字・高コントラスト）を反映する */
+  /** body へ表示系クラス（大きい文字・高コントラスト・研究者モード）を反映する */
   function applyClasses() {
     document.body.classList.toggle("large-text", state.settings.largeText);
     document.body.classList.toggle("high-contrast", state.settings.highContrast);
+    document.body.classList.toggle("researcher-mode", state.settings.researcherMode);
   }
 
   elements.scanInterval.addEventListener("input", (event) => {
@@ -36,12 +38,14 @@ export function initSettings(ctx) {
     ["soundEnabled", elements.soundEnabled],
     ["largeText", elements.largeText],
     ["highContrast", elements.highContrast],
+    ["researcherMode", elements.researcherMode],
   ].forEach(([key, element]) => {
     element.addEventListener("change", () => {
       state.settings[key] = element.checked;
       save();
       applyClasses();
-      if (key === "autoScan") scan.restartIfNeeded();
+      // researcherMode はタブの表示/非表示を切り替えるため、走査対象の再収集が要る。
+      if (key === "autoScan" || key === "researcherMode") scan.restartIfNeeded();
     });
   });
 

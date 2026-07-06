@@ -6,6 +6,15 @@
 //
 // 注意: この画面はマークアップ上は存在するが、現状タブからは到達できない
 // （content.js の visibleViews 参照、既知の制約）。
+//
+// P3-1（detailed-design.md §9.3・§9.4）: リズム計測CSV（state.rhythm.sessions
+// の trials を1試行1行に平坦化した18列）と、リズムセッション終了時の
+// evaluation 連動（失敗系のみ。taskTimingMissed += misses、
+// taskMistakes += commissions + extras。早め/遅めの hit は失敗ではないため
+// taskTimingEarly/Late へは連動しない、MUST）を追加する。
+// recordRhythmSessionOutcome() は games/gameHost.js の finishGame() から、
+// 効果測定タスクが実行中のときだけ加算する（既存の countEntry() と同じ
+// gating。研究計画セッション外の日常プレイまで taskMistakes に混ぜない）。
 // =====================================================================
 
 import { evaluationTasks, researchConditionProfiles } from "../content.js";
@@ -240,6 +249,25 @@ export function initEvaluation(ctx) {
     render();
   }
 
+  /**
+   * リズムセッション終了時の evaluation 連動（detailed-design.md §9.4、失敗系のみ、MUST）。
+   * games/gameHost.js の finishGame() から、summary（judge.js の分類集計、
+   * §9.2 の summary サブスキーマ）を渡して呼ばれる。
+   *   - taskTimingMissed += misses
+   *   - taskMistakes += commissions + extras
+   *   - taskTimingEarly / taskTimingLate へは連動しない（窓内 hit の早め/遅めは
+   *     失敗ではないため。傾向分析はリズムCSVの rawOffsetMs 側で行う）
+   * 既存 countEntry() と同じく、効果測定タスクが実行中のときだけ加算する
+   * （研究計画セッション外の日常プレイの成績を測定データに混ぜない）。
+   */
+  function recordRhythmSessionOutcome(summary) {
+    if (!state.evaluation.isActive || !state.evaluation.taskStartedAt) return;
+    state.evaluation.taskTimingMissed += summary.misses || 0;
+    state.evaluation.taskMistakes += (summary.commissions || 0) + (summary.extras || 0);
+    save();
+    render();
+  }
+
   /** 測定データをリセットする（参加者IDと条件は保持） */
   function reset() {
     state.evaluation = {
@@ -341,6 +369,76 @@ export function initEvaluation(ctx) {
     const link = document.createElement("a");
     link.href = url;
     link.download = `neuronode-evaluation-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * リズム計測結果をBOM付きCSV（18列、ロング形式）で書き出す
+   * （detailed-design.md §9.3）。1試行1行。summary は含めない
+   * （解析側で再計算可能なため、二重管理を避ける）。
+   * correctRejection / miss の行は inputMs / rawOffsetMs が空欄になる
+   * （trials 側で null にしてあるため、そのまま escapeCsv に渡せば空欄になる）。
+   */
+  function exportRhythmCsv() {
+    const sessions = state.rhythm.sessions;
+    if (!sessions.length) {
+      announce("書き出すリズム計測データがありません");
+      return;
+    }
+    const rows = [
+      [
+        "sessionId",
+        "participantId",
+        "gameId",
+        "startedAtIso",
+        "aborted",
+        "mode",
+        "bpm",
+        "countInBeats",
+        "judgmentWindowMs",
+        "effectiveWindowMs",
+        "appliedBaselineMs",
+        "beatIndex",
+        "beatKind",
+        "scheduledMs",
+        "inputMs",
+        "rawOffsetMs",
+        "judgment",
+        "excluded",
+      ],
+    ];
+    sessions.forEach((session) => {
+      const config = session.config || {};
+      (session.trials || []).forEach((trial) => {
+        rows.push([
+          session.sessionId,
+          session.participantId || "",
+          session.gameId,
+          session.startedAtIso,
+          session.aborted,
+          config.mode ?? "",
+          config.bpm ?? "",
+          config.countInBeats ?? "",
+          config.judgmentWindowMs ?? "",
+          config.effectiveWindowMs ?? "",
+          trial.appliedBaselineMs ?? "",
+          trial.beatIndex ?? "",
+          trial.beatKind ?? "",
+          trial.scheduledMs ?? "",
+          trial.inputMs ?? "",
+          trial.rawOffsetMs ?? "",
+          trial.judgment,
+          trial.excluded,
+        ]);
+      });
+    });
+    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `neuronode-rhythm-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -464,7 +562,8 @@ export function initEvaluation(ctx) {
     save();
   });
   elements.exportEvaluationCsv.addEventListener("click", exportCsv);
+  elements.exportRhythmCsv.addEventListener("click", exportRhythmCsv);
   elements.resetEvaluation.addEventListener("click", reset);
 
-  return { render, countEntry };
+  return { render, countEntry, recordRhythmSessionOutcome };
 }

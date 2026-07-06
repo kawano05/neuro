@@ -1,18 +1,55 @@
 # neuro
 
-`neuro` は、NeuroNode 利用開始時の導入訓練を支援する iPad 向けアプリの Web プロトタイプです。  
-単なる教材集ではなく、入力反応の確認、合図に合わせた入力、選択入力、VOCAによる意思表示までを段階的に練習できる構成にしています。
+`neuro` は、NeuroNode 利用開始時の導入訓練を支援する iPad 向けアプリの Web プロトタイプです。
+単なる教材集ではなく、**タイミング入力課題（リズムゲーム）を中核に据えた導入訓練アプリ**として構成しています。
 
 ## 目的
 
 本プロジェクトでは、NeuroNode 利用者が支援者と一緒に入力操作へ慣れるための訓練アプリを開発します。Web版で素早く試作・検証し、Capacitor によって iOS アプリ化することを前提にしています。
 
-研究上の独自性は、既存の一入力教材を参考にしつつ、NeuroNode の導入訓練に特化した以下の要素を持たせる点です。
+研究上の位置づけは、リズムゲームを「音楽ゲームのオマージュ」としてではなく、**感覚運動同期（sensorimotor synchronization; SMS）研究のタッピング課題をゲーミフィケーションした計測器**として設計する点にあります。聴覚キュー（時報型パターン: 低音のカウントイン→高音で押す）に対する入力時刻のオフセット（ズレ）を全試行で記録し、
 
-- 段階式トレーニング: 反応確認、合図入力、選択入力、意思表示
-- NeuroNode向け調整: 走査間隔、入力後待機、ボタンサイズ、音声/効果音、高コントラスト
-- 支援者記録: 利用者ID、利用場面、入力結果、設定値、支援者メモ、CSV出力
-- iOS移植前提: Web先行開発、Capacitor同期、GitHub ActionsでのiOSビルド確認
+- 利用者ごとの入力遅延の平均・分散の把握
+- 走査間隔（scanInterval）等の設定値推奨の根拠データ
+- 訓練前後の比較（導入訓練の効果測定）
+
+に用います。キューは聴覚優先（画面注視が困難な利用者にも適用できるよう、視覚は補助表示に格下げ）とし、支援者向けの効果測定・評価記録機能はこの計測を下支えする継承機能として維持しています。
+
+設計の詳細は `basic-design.md`（基本設計）・`detailed-design.md`（詳細設計）を参照してください。
+
+## 画面フロー
+
+利用者の世界（スタート〜ゲーム）と支援者の世界（タブ）を分離しています。
+
+```
+[スタート画面] → (1押しで AudioContext アンロック + 入力導通確認)
+      │
+      ▼
+[アプリ選択]   → ゲームタイルのグリッド。走査で巡回、スイッチで決定
+      │
+      ▼
+[ゲーム実行]   → 走査を完全停止し、画面全体が単一のスイッチになる
+      │           （NeuroNode等の Switch Control との二重走査を構造的に防ぐ）
+      ▼
+[リザルト]     → 達成率・平均オフセット・ばらつき等を表示 → アプリ選択へ戻る
+```
+
+支援者向けビュー（効果測定・評価ログ・研究・操作訓練・設定）は既存タブとして残っています。操作訓練・効果測定・研究タブは「設定」画面の「研究者モード」トグル（既定OFF）で表示を切り替えます。
+
+## あそび（ゲームタイル）一覧
+
+アプリ選択画面には6枚のタイルが並びます。6種の別ゲームではなく、**同一の判定エンジンとログ基盤の上の難易度階段**です（パラメータだけが異なる同一エンジン、`src/lib/games/rhythm.js`）。
+
+| タイル | ゲームID | 訓練段階 | 内容 |
+|---|---|---|---|
+| いろがかわる | `color-legacy` | L0 反応確認 | 押すと色と音が変わる（既存移植） |
+| リズム れんしゅう | `rhythm-l1` | L1 合図入力（予告あり） | 時報型カウントイン→高音（押しどころ）で押す |
+| リズム つづけて | `rhythm-l2` | L1-2 合図入力（連続） | カウントインは最初の1回のみ、以後は毎拍が押しどころ |
+| たかいおとだけ | `gonogo` | L2→L3 橋渡し | 高音（Go）なら押す・低音（No-Go）なら見送る抑制課題 |
+| そくてい | `calibration` | 計測補助 | 基準オフセット測定。支援者向け導線（候補値の保存） |
+| じゅんびちゅう | `future-slot` | — | 非表示相当（`enabled:false`、走査対象外） |
+
+いずれのゲームも入力時刻はゲーム側ではなくシェル（`src/lib/neuronodeApp.js` の入力ファネル）が `performance.now()` で確定し、契約経由でゲームへ渡します。全ゲームが同じ入口を通ることで、入力系遅延の測定条件が課題間で揃います。
 
 ## 起動
 
@@ -29,10 +66,10 @@ npm run serve
 
 ```powershell
 npm run check
-npm run test:web
+npm test
 ```
 
-`npm run test:web` は本番ビルドを作成し、Chromiumデスクトップ相当とiPhone/WebKit相当で主要画面、訓練入力、タブ移動、モバイル幅の崩れを確認します。
+`npm test` は `test:unit`（`tests/judge.test.mjs`、判定ロジック・実効判定窓のクランプ・Go/No-Go乱数列生成などの純粋関数の単体テスト）と `test:web`（本番ビルド後にPlaywrightでスモークテスト）を順に実行します。`test:web` は Chromiumデスクトップ相当とiPhone/WebKit相当で、スタート→アプリ選択→ゲームの一連の流れ、タブバー/走査停止、Escでの中断とセッション記録、既存タブの不退行、モバイル幅の崩れを確認します。
 
 ## iOS化
 
@@ -48,30 +85,26 @@ npm run cap:open:ios
 
 `cap:add:ios` は CocoaPods 版の Xcode workspace を生成します。CI とローカル検証では `ios/App/App.xcworkspace` を `App` scheme でビルドします。
 
-Windows上ではXcodeや本物のiOS Simulatorは使えないため、GitHub Actions の macOS runner で Capacitor iOS プロジェクト生成とXcodeビルド確認を行います。最終的な Switch Control、Guided Access、NeuroNode実機操作は iPad 実機で確認します。
-
-## 主な画面
-
-- `訓練`: 4段階の導入トレーニング
-- `VOCA`: 病院・施設で使いやすい定型句
-- `記録`: 支援者メモ、設定値、操作ログ、CSV書き出し
-- `設定`: 利用者ごとの入力しやすさ調整
+Windows上ではXcodeや本物のiOS Simulatorは使えないため、GitHub Actions の macOS runner で Capacitor iOS プロジェクト生成とXcodeビルド確認を行います。最終的な Switch Control、Guided Access、NeuroNode実機操作は iPad 実機で確認します（`basic-design.md` §10・`docs/testing-without-apple-devices.md` 参照）。
 
 ## 操作
 
-- `Space` または `Enter`: 現在ハイライトされている項目を選択
-- `ArrowRight`: 走査ハイライトを手動で次へ移動
-- `Escape`: 走査停止
-- 画面下部の「入力」ボタン: 単一スイッチ入力の代替
+- `Space` または `Enter`: シェル画面ではハイライト中の項目を選択／ゲーム中は画面全体への入力として扱う
+- `ArrowRight`: 走査ハイライトを手動で次へ移動（シェル画面のみ）
+- `Escape`: シェル画面では走査停止／ゲーム中はゲームを中断してホーム（またはアプリ選択）へ戻る
+- 画面下部の「入力」ボタン: 単一スイッチ入力の代替（シェル画面）
+- ゲーム画面は全画面が単一のスイッチ（タップ・クリック・Space/Enter）
 
 ## 実装メモ
 
 - フロントエンド: Svelte + Vite
+- 音: Web Audio（オシレータ合成、先読みスケジューラ `createBeatScheduler`）。音源ファイルは使用しない
 - iOS化: Capacitor
-- データ保存: localStorage
+- データ保存: localStorage（`neuronode-prototype-state-v3`。リズム計測CSVが研究の主データ、既存の効果測定CSVは補助データ）
 - 公開: GitHub Pages
 - CI: Web煙テスト + macOS上のCapacitor iOSビルド確認
 
-研究目的、関連研究の評価軸、実験タスク案は `docs/research-summary.md` に整理しています。  
-iOS版ビルド手順は `docs/ios-build-steps.md` にまとめています。  
-旧プロトタイプのモジュール分割メモは `docs/refactoring-notes-2026-06-10.md` に残しています。
+研究目的、関連研究の評価軸、実験タスク案は `docs/research-summary.md` に整理しています。
+iOS版ビルド手順は `docs/ios-build-steps.md` にまとめています。
+Apple実機なしでの確認方針と実機確認チェックリストは `docs/testing-without-apple-devices.md` にまとめています。
+旧プロトタイプのモジュール分割メモ（2026-06-10時点、その後の起動経路一本化・ゲーム基盤化で構成は変わっています）は `docs/refactoring-notes-2026-06-10.md` に残しています。

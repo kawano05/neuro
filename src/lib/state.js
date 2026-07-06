@@ -9,9 +9,22 @@
 
 import { storageKey, readinessItems } from "./content.js";
 
+/**
+ * 旧保存キー（P0-0 移行元、detailed-design.md §9.5）。
+ * v2 … src/lib 分割版（リファクタリングノート2026-06-10時点）。
+ * v1 … App.svelte モノリス版（P0-0 で起動経路を一本化する前の実装）。
+ * どちらも削除はせず、v3 が空のときの移行元としてのみ参照する。
+ */
+const legacyStorageKeyV2 = "neuronode-prototype-state-v2";
+const legacyStorageKeyV1 = "neuro-trainer-state-v1";
+
 /** 状態の初期値。localStorage が空・壊れている場合のフォールバック。 */
 export const defaultState = {
-  currentView: "switcher",
+  // P1-2（detailed-design.md §2.1）: 利用者向けフローの入口は常に "start"。
+  // loadState() 呼び出し側（neuronodeApp.js）が読み込み後に必ず "start" へ
+  // 上書きするため実質的にはこの初期値は上書きされるが、defaultState 自体も
+  // 現行フローと矛盾しない値にしておく。
+  currentView: "start",
   activeSwitchModule: "color",
   switchStep: 0,
   hitCount: 0,
@@ -40,6 +53,18 @@ export const defaultState = {
     soundEnabled: true,
     largeText: true,
     highContrast: false,
+    // 既定OFF。ONで操作訓練/効果測定/研究タブを表示する（P0-0, detailed-design.md §0.2）。
+    researcherMode: false,
+    // P0-2（ゲーム系設定、detailed-design.md §9.1）。judgmentWindowMs は判定窓の
+    // 設定半幅（既定600・範囲200〜1500）、baselineOffsetMs はキャリブレーション由来の
+    // 窓中心補正（既定0）。rhythmBpm/countInBeats/targetBeats は null のとき
+    // content.js の rhythmPresets の値を使う（games/rhythm.js が優先順位を解決する。
+    // P2-3 で実装）。
+    judgmentWindowMs: 600,
+    baselineOffsetMs: 0,
+    rhythmBpm: null,
+    countInBeats: null,
+    targetBeats: null,
   },
   logs: [],
   evaluation: {
@@ -71,21 +96,133 @@ export const defaultState = {
     deploymentNotes: "",
     readiness: readinessItems.reduce((items, item) => ({ ...items, [item.id]: false }), {}),
   },
+  // P0-2（detailed-design.md §9.1）。リズムゲームのセッション記録（games/rhythm.js が
+  // P2-3 で実際の記録処理を実装するまでは常に空）。直近50セッションのみを保持し、
+  // 超過分は古い順に破棄する（loadState() のマージ処理・保存経路の双方で担保する）。
+  rhythm: {
+    sessions: [],
+  },
 };
+
+/**
+ * rhythm.sessions の保持件数上限（detailed-design.md §9.1・§14 未決事項4）。
+ * セッションを追加する側（games/rhythm.js、P2-3 で実装）も保存時にこの定数で
+ * 古い順に破棄する想定。
+ */
+export const MAX_RHYTHM_SESSIONS = 50;
 
 /** defaultState の深いコピーを返す。 */
 export function cloneDefaultState() {
   return JSON.parse(JSON.stringify(defaultState));
 }
 
+/** localStorage の生値を読み、JSON として壊れていれば null を返す。 */
+function readLegacyState(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 旧 settings から、現行 defaultState.settings に「同名キーのみ」を写す。
+ * v1 の inputLockMs / buttonScale のように v3 に対応先がないキーは無視する
+ * （detailed-design.md §9.5 手順3）。
+ */
+function migrateSettingsKeys(sourceSettings) {
+  if (!sourceSettings || typeof sourceSettings !== "object") return {};
+  const migrated = {};
+  Object.keys(defaultState.settings).forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(sourceSettings, key)) {
+      migrated[key] = sourceSettings[key];
+    }
+  });
+  return migrated;
+}
+
+/**
+ * v1（App.svelte モノリス版）のログ1件を v3 のログ形状へ写す。
+ * v1 は時刻キーが `at`（v3 は `time`）で、`view` を持たないなど形が異なるため、
+ * そのまま複製すると views/log.js の formatTime(entry.time) 等が
+ * undefined を渡されて壊れる。ここで安全な形へ正規化する。
+ */
+function migrateLegacyLogEntryV1(entry) {
+  return {
+    time: typeof entry?.at === "string" ? entry.at : new Date().toISOString(),
+    view: "legacy-v1",
+    type: typeof entry?.type === "string" ? entry.type : "legacy",
+    label: typeof entry?.label === "string" ? entry.label : "",
+    success: entry?.success,
+  };
+}
+
+/**
+ * v3 が空のときに、v2 → v1 の順で旧保存を読み、移行できる範囲を v3 へ写す
+ * （detailed-design.md §9.5）。移行できるのは settings（同名キーのみ）・logs・
+ * evaluation（v2 のみ保有、participantId・completedSessions 等）まで。
+ * v1 の metrics 構造は v3 に対応先がないため移行しない。移行元・移行範囲は
+ * logs の先頭に記録する（旧キー自体は削除しない）。
+ * @returns {object|null} 移行後の state。移行元が1つも無ければ null。
+ */
+function migrateLegacyState() {
+  const v2 = readLegacyState(legacyStorageKeyV2);
+  if (v2) {
+    const migrated = cloneDefaultState();
+    migrated.settings = { ...migrated.settings, ...migrateSettingsKeys(v2.settings) };
+    migrated.logs = Array.isArray(v2.logs) ? v2.logs.slice(0, 300) : [];
+    if (v2.evaluation && typeof v2.evaluation === "object") {
+      migrated.evaluation = {
+        ...migrated.evaluation,
+        ...v2.evaluation,
+        results: Array.isArray(v2.evaluation.results) ? v2.evaluation.results : [],
+        completedSessions: Array.isArray(v2.evaluation.completedSessions)
+          ? v2.evaluation.completedSessions
+          : [],
+      };
+    }
+    migrated.logs.unshift({
+      time: new Date().toISOString(),
+      view: "system",
+      type: "migration",
+      label: `旧保存(${legacyStorageKeyV2})から移行しました（settings/logs/evaluationのみ）。`,
+      success: true,
+    });
+    return migrated;
+  }
+
+  const v1 = readLegacyState(legacyStorageKeyV1);
+  if (v1) {
+    const migrated = cloneDefaultState();
+    migrated.settings = { ...migrated.settings, ...migrateSettingsKeys(v1.settings) };
+    migrated.logs = Array.isArray(v1.logs)
+      ? v1.logs.slice(0, 300).map(migrateLegacyLogEntryV1)
+      : [];
+    // v1 から移行・metrics は引き継ぎ対象外（v3 に対応するスキーマがないため）。
+    migrated.logs.unshift({
+      time: new Date().toISOString(),
+      view: "system",
+      type: "migration",
+      label: `旧保存(${legacyStorageKeyV1})から移行しました。metricsは引き継ぎ対象外です。`,
+      success: true,
+    });
+    return migrated;
+  }
+
+  return null;
+}
+
 /**
  * localStorage から状態を読み込む。
  * 保存形式の差分（古い保存・欠落キー）は defaultState とマージして吸収する。
+ * v3 キーが空の場合は v2 → v1 の順で旧保存からの移行を試みる（§9.5）。
  */
 export function loadState() {
   try {
     const raw = localStorage.getItem(storageKey);
-    if (!raw) return cloneDefaultState();
+    if (!raw) return migrateLegacyState() || cloneDefaultState();
     const parsed = JSON.parse(raw);
     return {
       ...cloneDefaultState(),
@@ -111,6 +248,15 @@ export function loadState() {
           ...defaultState.research.readiness,
           ...(parsed.research?.readiness || {}),
         },
+      },
+      rhythm: {
+        ...defaultState.rhythm,
+        ...(parsed.rhythm || {}),
+        // 直近 MAX_RHYTHM_SESSIONS 件のみ保持（古い順に破棄。§9.1）。
+        // セッションは古い→新しいの順で push される前提（配列末尾が最新）。
+        sessions: Array.isArray(parsed.rhythm?.sessions)
+          ? parsed.rhythm.sessions.slice(-MAX_RHYTHM_SESSIONS)
+          : [],
       },
       logs: Array.isArray(parsed.logs) ? parsed.logs : [],
       hitTimes: Array.isArray(parsed.hitTimes) ? parsed.hitTimes : [],

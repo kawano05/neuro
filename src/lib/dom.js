@@ -13,15 +13,27 @@ export function collectElements() {
     liveRegion: document.querySelector("#liveRegion"),
     tabs: [...document.querySelectorAll(".tab")],
     views: [...document.querySelectorAll(".view")],
-    switchModuleGrid: document.querySelector("#switchModuleGrid"),
-    switchStage: document.querySelector("#switchStage"),
-    activityVisual: document.querySelector("#activityVisual"),
-    switchTitle: document.querySelector("#switchTitle"),
-    switchHint: document.querySelector("#switchHint"),
-    hitCount: document.querySelector("#hitCount"),
-    averageInterval: document.querySelector("#averageInterval"),
-    lastReaction: document.querySelector("#lastReaction"),
-    resetSwitch: document.querySelector("#resetSwitch"),
+    // 支援者の世界（タブ群）から home へ戻る導線（detailed-design.md §10）。
+    homeReturn: document.querySelector("#homeReturn"),
+    // P1-1（新4ビュー、detailed-design.md §10）。start/home/game/result。
+    startStage: document.querySelector("#startStage"),
+    startSettingsLink: document.querySelector("#startSettingsLink"),
+    gameTileGrid: document.querySelector("#gameTileGrid"),
+    // ホームの「まなぶ・つたえる」タイル（旧タブのマッチング/VOCA/文字学習）。
+    activityTileGrid: document.querySelector("#activityTileGrid"),
+    gameStage: document.querySelector("#gameStage"),
+    gameStageContent: document.querySelector("#gameStageContent"),
+    gameProgress: document.querySelector("#gameProgress"),
+    gameExit: document.querySelector("#gameExit"),
+    resultStats: document.querySelector("#resultStats"),
+    resultRetry: document.querySelector("#resultRetry"),
+    resultHome: document.querySelector("#resultHome"),
+    // P4-3（detailed-design.md §8.2）: キャリブレーションの「候補値を保存
+    // しますか」導線。走査対象外・タップ専用（data-scan を付けない、
+    // games/gameHost.js が stopPropagation で入力ファネル外にする）。
+    calibrationOffer: document.querySelector("#calibrationOffer"),
+    calibrationOfferText: document.querySelector("#calibrationOfferText"),
+    calibrationSaveOffset: document.querySelector("#calibrationSaveOffset"),
     matchingPrompt: document.querySelector("#matchingPrompt"),
     matchingGrid: document.querySelector("#matchingGrid"),
     nextMatching: document.querySelector("#nextMatching"),
@@ -64,6 +76,7 @@ export function collectElements() {
     engagementRatingValue: document.querySelector("#engagementRatingValue"),
     observerNotes: document.querySelector("#observerNotes"),
     exportEvaluationCsv: document.querySelector("#exportEvaluationCsv"),
+    exportRhythmCsv: document.querySelector("#exportRhythmCsv"),
     resetEvaluation: document.querySelector("#resetEvaluation"),
     evaluationStatus: document.querySelector("#evaluationStatus"),
     currentTaskTitle: document.querySelector("#currentTaskTitle"),
@@ -96,6 +109,7 @@ export function collectElements() {
     soundEnabled: document.querySelector("#soundEnabled"),
     largeText: document.querySelector("#largeText"),
     highContrast: document.querySelector("#highContrast"),
+    researcherMode: document.querySelector("#researcherMode"),
     toggleScan: document.querySelector("#toggleScan"),
     primarySwitch: document.querySelector("#primarySwitch"),
   };
