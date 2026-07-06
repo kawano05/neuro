@@ -92,12 +92,13 @@ async function waitForServer() {
 
 async function checkMainApp(page) {
   await waitForText(page, "h1", "neuro");
-  // 8 tabs exist in the DOM (5 always-visible + 3 researcher-mode tabs that
-  // stay hidden until settings.researcherMode is enabled, see App.svelte /
-  // styles.css .researcher-tab). The former "switcher" tab was removed when
-  // its "color change" behavior was migrated into games/colorLegacy.js
-  // (P1-2/P1-3, detailed-design.md §12).
-  await waitForCount(page, ".tab", 8);
+  // 5 tabs exist in the DOM (2 always-visible supporter tabs — log/settings —
+  // + 3 researcher-mode tabs that stay hidden until settings.researcherMode
+  // is enabled, see App.svelte / styles.css .researcher-tab). The former
+  // matching/voca/letters tabs moved into the home screen's
+  // "まなぶ・つたえる" tile section (#activityTileGrid) since they are
+  // user-facing activities, not supporter tools.
+  await waitForCount(page, ".tab", 5);
   // The app always boots into the start screen (detailed-design.md §2.1:
   // MUST start from "start" even on revisit, to guarantee the AudioContext
   // unlock + input continuity check every time).
@@ -285,10 +286,28 @@ async function checkRhythmL1GameFlow(page) {
 }
 
 async function checkFeatureTabs(page) {
-  // Only the always-visible tabs; operation/evaluation/research stay hidden
-  // until "researcher mode" is turned on in settings (P0-0, detailed-design.md §0.2).
-  const tabTargets = ["matching", "voca", "letters", "log", "settings"];
+  // The start screen hides the whole shell (topbar/tabbar, body.start-mode)
+  // since the design pass, so enter the home screen first to make the tabs
+  // clickable — same as a real supporter would.
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
 
+  // matching/voca/letters are user-facing activities and now live on the
+  // home screen as "まなぶ・つたえる" tiles (#activityTileGrid), not as
+  // tabs. Each visit returns home via #homeReturn, the same path a switch
+  // user would scan to.
+  const activityTargets = ["matching", "voca", "letters"];
+  for (const target of activityTargets) {
+    await page.locator(`#activityTileGrid [data-view="${target}"]`).click();
+    await waitForClass(page, `#${target}`, "is-active");
+    await page.locator("#homeReturn").click();
+    await waitForClass(page, "#homeView", "is-active");
+  }
+
+  // Only the always-visible supporter tabs; operation/evaluation/research
+  // stay hidden until "researcher mode" is turned on in settings
+  // (P0-0, detailed-design.md §0.2).
+  const tabTargets = ["log", "settings"];
   for (const target of tabTargets) {
     await page.locator(`.tab[data-view="${target}"]`).click();
     await waitForClass(page, `#${target}`, "is-active");
@@ -304,6 +323,11 @@ async function checkFeatureTabs(page) {
  * 不退行" no-regression check the task calls out by name.
  */
 async function checkResearcherModeTabsNoRegression(page) {
+  // The tabbar is hidden on the start screen (body.start-mode, design pass);
+  // go through home first.
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
   await page.locator('.tab[data-view="settings"]').click();
   await waitForClass(page, "#settings", "is-active");
 

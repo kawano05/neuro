@@ -19,6 +19,8 @@ export function collectElements() {
     startStage: document.querySelector("#startStage"),
     startSettingsLink: document.querySelector("#startSettingsLink"),
     gameTileGrid: document.querySelector("#gameTileGrid"),
+    // ホームの「まなぶ・つたえる」タイル（旧タブのマッチング/VOCA/文字学習）。
+    activityTileGrid: document.querySelector("#activityTileGrid"),
     gameStage: document.querySelector("#gameStage"),
     gameStageContent: document.querySelector("#gameStageContent"),
     gameProgress: document.querySelector("#gameProgress"),

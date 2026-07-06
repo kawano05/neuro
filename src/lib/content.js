@@ -47,12 +47,28 @@ export const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747
  * してある。本リファクタでは skin フィールド自体を追加しない（未実装）。
  */
 export const gameTiles = [
-  { id: "color-legacy", title: "いろがかわる", description: "おすと いろと おとが かわるよ", order: 1, enabled: true },
-  { id: "rhythm-l1", title: "リズム れんしゅう", description: "おとの あいずに あわせて おそう", order: 2, enabled: true },
-  { id: "rhythm-l2", title: "リズム つづけて", description: "おとに あわせて つづけて おそう", order: 3, enabled: true },
-  { id: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true },
-  { id: "calibration", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 5, enabled: true },
-  { id: "future-slot", title: "じゅんびちゅう", description: "", order: 6, enabled: false },
+  // icon / accent / accentSoft はアプリ選択タイルの見た目専用（views/home.js が
+  // 描画時に使う）。ゲームロジックからは参照しない。accentSoft はアイコン
+  // バッジの下地色で、color-mix() 非対応環境も考慮して静的な対で持つ。
+  { id: "color-legacy", title: "いろがかわる", description: "おすと いろと おとが かわるよ", order: 1, enabled: true, icon: "🎨", accent: "#c2497c", accentSoft: "#f9e4ee" },
+  { id: "rhythm-l1", title: "リズム れんしゅう", description: "おとの あいずに あわせて おそう", order: 2, enabled: true, icon: "🥁", accent: "#b06718", accentSoft: "#f7ebda" },
+  { id: "rhythm-l2", title: "リズム つづけて", description: "おとに あわせて つづけて おそう", order: 3, enabled: true, icon: "🎵", accent: "#315f9d", accentSoft: "#e4ecf8" },
+  { id: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true, icon: "🔔", accent: "#7050b0", accentSoft: "#ece6f8" },
+  { id: "calibration", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 5, enabled: true, icon: "⏱️", accent: "#147d78", accentSoft: "#dff1ef" },
+  { id: "future-slot", title: "じゅんびちゅう", description: "", order: 6, enabled: false, icon: "🌱", accent: "#62716d", accentSoft: "#eef3f1" },
+];
+
+/**
+ * 学習・コミュニケーション系タイル（ホームの「まなぶ・つたえる」セクション）。
+ * 旧タブのマッチング/VOCA/文字学習は利用者向けアクティビティなので、支援者
+ * 機能のタブバーからホームのタイルへ移した。ゲーム契約（§3.1）には乗せず、
+ * view は既存の .view セクション id（switchView() の引数）をそのまま指す。
+ * 見た目のフィールド構成は gameTiles と同じ（views/home.js が共通処理で描画）。
+ */
+export const activityTiles = [
+  { view: "matching", title: "マッチング", description: "おだいに あうものを えらぼう", icon: "🧩", accent: "#247a4d", accentSoft: "#e3f4ea" },
+  { view: "voca", title: "VOCA", description: "ことばを えらんで つたえよう", icon: "💬", accent: "#2a7ab5", accentSoft: "#e1eff9" },
+  { view: "letters", title: "文字学習", description: "もじを よんで えらぼう", icon: "✏️", accent: "#a66321", accentSoft: "#f5efd9" },
 ];
 
 /**

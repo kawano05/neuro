@@ -156,6 +156,10 @@ export function initNeuroNodeApp() {
       view.classList.toggle("is-active", view.id === nextViewElementId);
     });
     document.body.classList.toggle("game-mode", nextView === "game");
+    // スタート画面では支援者向けシェル（ヘッダ・タブバー）を CSS で隠し、
+    // 「はじめる」への集中を保つ（styles.css の body.start-mode ルール参照）。
+    // 支援者のタップ導線は #startSettingsLink（せってい）が残る。
+    document.body.classList.toggle("start-mode", nextView === "start");
     elements.homeReturn.hidden = !TAB_WORLD_VIEWS.has(nextView);
 
     ctx.views.home.render();

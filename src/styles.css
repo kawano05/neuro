@@ -23,12 +23,20 @@
   --shadow-sm: 0 1px 2px rgba(20, 33, 31, 0.08);
   --shadow-md: 0 14px 36px rgba(20, 33, 31, 0.12);
   --shadow-lg: 0 24px 60px rgba(20, 33, 31, 0.16);
-  --radius: 8px;
-  --radius-sm: 6px;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 20px;
   --dock-height: 112px;
   font-family:
     Inter, "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, system-ui,
     sans-serif;
+  /* 利用者向けの大きな文言（はじめる・タイル見出し・ゲーム内表示）だけ
+     丸ゴシックにして印象を和らげる。iOS/macOS 内蔵の Hiragino Maru Gothic
+     ProN は W4 単ウェイトなので、太字は合成ボールドになる（大きい文字なら
+     視認上問題ない）。非Apple環境は通常のゴシックへフォールバック。 */
+  --font-round:
+    "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", "Yu Gothic UI",
+    "Yu Gothic", Meiryo, system-ui, sans-serif;
 }
 
 * {
@@ -131,10 +139,10 @@ textarea {
 }
 
 .topbar {
-  min-height: 92px;
+  min-height: 60px;
   justify-content: space-between;
-  margin-bottom: 14px;
-  padding: 22px 24px;
+  margin-bottom: 12px;
+  padding: 12px 20px;
   border: 1px solid rgba(216, 226, 223, 0.9);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.76);
@@ -143,11 +151,11 @@ textarea {
 }
 
 .eyebrow {
-  margin: 0 0 5px;
-  color: var(--accent-strong);
-  font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0;
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -160,43 +168,61 @@ p {
 
 h1 {
   margin-bottom: 0;
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  font-weight: 900;
-  letter-spacing: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   line-height: 1;
 }
 
 h2 {
   margin-bottom: 0;
-  font-size: clamp(1.45rem, 2.4vw, 2.1rem);
-  font-weight: 900;
+  font-size: clamp(1.4rem, 2.4vw, 1.9rem);
+  font-weight: 800;
   letter-spacing: 0;
-  line-height: 1.12;
+  line-height: 1.15;
 }
 
 h3 {
   margin-bottom: 0;
-  font-size: 1.15rem;
-  font-weight: 900;
-  line-height: 1.2;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.topbar .eyebrow {
+  margin-bottom: 2px;
 }
 
 .status-pill {
-  min-width: 148px;
-  padding: 11px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 16px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
   color: var(--accent-strong);
-  font-weight: 900;
+  font-size: 0.9rem;
+  font-weight: 700;
   text-align: center;
   box-shadow: var(--shadow-sm);
+}
+
+.status-pill::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.65;
 }
 
 .tabbar {
   position: sticky;
   top: 10px;
   z-index: 4;
+  gap: 6px;
   padding: 6px;
   border: 1px solid rgba(216, 226, 223, 0.92);
   border-radius: var(--radius);
@@ -206,13 +232,16 @@ h3 {
 }
 
 .tab {
-  flex: 1 1 0;
+  /* タブは支援者機能（評価ログ・設定＋研究者モード）だけになったので、
+     全幅に伸ばさずコンテンツ幅＋余白で並べる。 */
+  flex: 0 1 auto;
   min-height: 52px;
-  padding: 0 10px;
+  padding: 0 26px;
   border-color: transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
-  font-weight: 900;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -222,8 +251,9 @@ h3 {
 }
 
 .tab.is-active {
-  background: var(--ink);
-  color: #ffffff;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 800;
   box-shadow: var(--shadow-sm);
 }
 
@@ -240,7 +270,7 @@ h3 {
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--accent-strong);
-  font-weight: 900;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -284,7 +314,7 @@ main {
 .prompt {
   margin: 0;
   color: var(--muted);
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .trainer-layout {
@@ -336,8 +366,9 @@ main {
 
 .reaction-label {
   display: block;
+  font-family: var(--font-round);
   font-size: clamp(2.4rem, 6.2vw, 5.6rem);
-  font-weight: 950;
+  font-weight: 800;
   line-height: 1.03;
 }
 
@@ -347,7 +378,7 @@ main {
   margin-top: 18px;
   color: rgba(255, 255, 255, 0.9);
   font-size: clamp(1rem, 2vw, 1.35rem);
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.6;
 }
 
@@ -358,47 +389,84 @@ main {
    相対フォントサイズ）にそのまま乗る新規セレクタとして追加する。
    ===================================================================== */
 
+/* スタート画面は利用者の世界の入り口なので、支援者向けのシェル
+   （ヘッダ・タブバー）を隠して「はじめる」だけに集中させる
+   （body.start-mode は neuronodeApp.js の renderAll() が同期する）。
+   タップ操作の支援者導線は #startSettingsLink（せってい）が担う。 */
+body.start-mode .topbar,
+body.start-mode .tabbar {
+  display: none;
+}
+
+body.start-mode main {
+  margin-top: 0;
+}
+
 .start-screen {
   display: grid;
-  min-height: calc(100vh - 260px);
+  min-height: calc(100dvh - var(--dock-height) - 72px);
   justify-items: center;
   align-content: center;
-  gap: 20px;
+  gap: 16px;
   text-align: center;
+}
+
+.start-screen .eyebrow {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  letter-spacing: 0.22em;
 }
 
 .start-stage {
   display: grid;
-  width: min(720px, 92vw);
-  min-height: 62vh;
+  width: min(680px, 100%);
+  min-height: min(56vh, 520px);
   padding: 32px;
   border: 0;
-  border-radius: var(--radius);
-  background: var(--accent);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(165deg, #1b968f 0%, var(--accent) 45%, var(--accent-strong) 100%);
   color: #ffffff;
   place-items: center;
   box-shadow: var(--shadow-lg);
 }
 
 .start-stage-label {
-  font-size: clamp(2.4rem, 7vw, 5.2rem);
-  font-weight: 950;
+  font-family: var(--font-round);
+  font-size: clamp(2.4rem, 7vw, 4.6rem);
+  font-weight: 800;
+  animation: start-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes start-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.045);
+  }
 }
 
 .start-settings-link {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 16px;
   border-color: transparent;
   background: transparent;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.9rem;
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .game-tile:disabled {
-  opacity: 0.55;
+  border-style: dashed;
+  background: var(--surface-strong);
+  opacity: 0.65;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .game-stage {
@@ -459,6 +527,7 @@ body.game-mode .game-exit {
   text-align: center;
   gap: 12px;
   padding: 32px;
+  font-family: var(--font-round);
 }
 
 .game-progress {
@@ -467,8 +536,9 @@ body.game-mode .game-exit {
   left: 18px;
   z-index: 1;
   color: #ffffff;
+  font-family: var(--font-round);
   font-size: clamp(1.1rem, 2vw, 1.6rem);
-  font-weight: 900;
+  font-weight: 800;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
@@ -483,7 +553,7 @@ body.game-mode .game-exit {
   border-color: rgba(255, 255, 255, 0.6);
   background: rgba(0, 0, 0, 0.28);
   color: #ffffff;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .game-exit:hover {
@@ -558,8 +628,8 @@ body.game-mode .app-shell {
 
 .module-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
   margin-bottom: 16px;
 }
 
@@ -584,14 +654,50 @@ body.game-mode .app-shell {
 
 .module-button strong {
   font-size: 1.12rem;
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .module-button span {
   color: var(--muted);
   font-size: 0.92rem;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.5;
+}
+
+/* あそび選択タイル（home）。--tile-accent / --tile-accent-soft は
+   content.js の gameTiles データから views/home.js がインラインで与える。 */
+.game-tile {
+  align-content: start;
+  min-height: 158px;
+  padding: 18px;
+  gap: 4px;
+}
+
+.game-tile .tile-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--tile-accent-soft, var(--accent-soft));
+  place-items: center;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.game-tile strong {
+  font-family: var(--font-round);
+  font-size: 1.22rem;
+  font-weight: 800;
+}
+
+.game-tile:hover {
+  border-color: var(--tile-accent, var(--accent));
+}
+
+.game-tile:disabled .tile-icon {
+  filter: grayscale(1);
+  opacity: 0.7;
 }
 
 .module-button.is-active {
@@ -707,8 +813,9 @@ body.game-mode .app-shell {
 
 .metric-label {
   color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 900;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .metrics strong,
@@ -717,7 +824,7 @@ body.game-mode .app-shell {
   display: block;
   margin-top: 6px;
   font-size: 1.82rem;
-  font-weight: 950;
+  font-weight: 800;
   line-height: 1.1;
 }
 
@@ -757,7 +864,7 @@ body.game-mode .app-shell {
   border-color: var(--line);
   background: var(--surface);
   color: var(--ink);
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .choice-button:hover,
@@ -810,7 +917,7 @@ body.game-mode .app-shell {
   display: block;
   margin-top: 8px;
   font-size: clamp(1.65rem, 3.6vw, 2.8rem);
-  font-weight: 950;
+  font-weight: 800;
   line-height: 1.25;
 }
 
@@ -829,7 +936,7 @@ body.game-mode .app-shell {
   border-color: var(--line);
   background: var(--surface);
   color: var(--ink);
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .match-card {
@@ -926,7 +1033,7 @@ body.game-mode .app-shell {
 
 .operation-guide {
   color: var(--muted);
-  font-weight: 750;
+  font-weight: 500;
   line-height: 1.6;
 }
 
@@ -943,7 +1050,7 @@ body.game-mode .app-shell {
   margin-bottom: 14px;
   color: var(--ink);
   font-size: clamp(1.15rem, 2.2vw, 1.55rem);
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .operation-item-grid {
@@ -959,7 +1066,7 @@ body.game-mode .app-shell {
   background: var(--surface);
   color: var(--ink);
   font-size: clamp(1.35rem, 2.8vw, 2.05rem);
-  font-weight: 950;
+  font-weight: 800;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1000,7 +1107,7 @@ body.game-mode .app-shell {
   border-radius: 50%;
   background: #ffffff;
   color: var(--bad);
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .point-line {
@@ -1038,7 +1145,7 @@ body.game-mode .app-shell {
   min-height: 136px;
   border-radius: var(--radius);
   place-items: center;
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .drag-zone {
@@ -1107,7 +1214,7 @@ body.game-mode .app-shell {
 .panel-note {
   margin: 8px 0 0;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.55;
 }
 
@@ -1129,7 +1236,7 @@ body.game-mode .app-shell {
   display: block;
   margin-top: 6px;
   color: var(--accent-strong);
-  font-weight: 850;
+  font-weight: 700;
   line-height: 1.35;
 }
 
@@ -1173,7 +1280,7 @@ body.game-mode .app-shell {
 
 .research-protocol p {
   color: var(--ink);
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.65;
 }
 
@@ -1181,7 +1288,7 @@ body.game-mode .app-shell {
   margin: 14px 0 0;
   padding-left: 1.2rem;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.7;
 }
 
@@ -1218,7 +1325,7 @@ body.game-mode .app-shell {
 .scale-row span,
 .note-row span {
   color: var(--muted);
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .field-row input,
@@ -1247,7 +1354,7 @@ body.game-mode .app-shell {
   border-color: var(--accent-strong);
   background: var(--accent-strong);
   color: #ffffff;
-  font-weight: 950;
+  font-weight: 700;
 }
 
 .primary-small:hover {
@@ -1270,14 +1377,14 @@ body.game-mode .app-shell {
   display: block;
   margin-top: 8px;
   font-size: clamp(1.25rem, 2.6vw, 1.9rem);
-  font-weight: 950;
+  font-weight: 800;
   line-height: 1.25;
 }
 
 .current-task p {
   margin: 10px 0 0;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.6;
 }
 
@@ -1297,13 +1404,13 @@ body.game-mode .app-shell {
 .task-card strong {
   display: block;
   margin-top: 4px;
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .task-card p {
   margin: 8px 0 0;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.45;
 }
 
@@ -1332,7 +1439,7 @@ body.game-mode .app-shell {
 
 .log-item strong {
   font-size: 1.05rem;
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .empty-state {
@@ -1341,7 +1448,7 @@ body.game-mode .app-shell {
   border-radius: var(--radius);
   color: var(--muted);
   background: var(--surface);
-  font-weight: 750;
+  font-weight: 500;
   text-align: center;
 }
 
@@ -1361,7 +1468,7 @@ body.game-mode .app-shell {
   display: block;
   margin-top: 3px;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .toggle-row {
@@ -1370,13 +1477,80 @@ body.game-mode .app-shell {
 
 input[type="range"] {
   width: 100%;
+  height: 44px;
+  appearance: none;
+  background: transparent;
   accent-color: var(--accent);
+  cursor: pointer;
 }
 
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -10px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 2px 8px rgba(20, 33, 31, 0.28);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 2px 8px rgba(20, 33, 31, 0.28);
+}
+
+/* 設定のオン/オフはチェックボックスではなく iOS 風トグルとして描く
+   （マークアップは input[type=checkbox][role=switch] のまま。
+   走査対象なので高さは44px以上を維持し、.scan-focus の枠も効く）。 */
 input[type="checkbox"] {
-  width: 44px;
+  width: 76px;
   height: 44px;
-  accent-color: var(--accent);
+  appearance: none;
+  border: 2px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+input[type="checkbox"]::before {
+  content: "";
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin: 4px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(20, 33, 31, 0.3);
+  transition: transform 0.16s ease;
+}
+
+input[type="checkbox"]:checked {
+  border-color: var(--accent-strong);
+  background: var(--accent);
+}
+
+input[type="checkbox"]:checked::before {
+  transform: translateX(32px);
 }
 
 .secondary,
@@ -1386,7 +1560,7 @@ input[type="checkbox"] {
   border-color: var(--line);
   background: var(--surface);
   color: var(--ink);
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .danger {
@@ -1409,10 +1583,10 @@ input[type="checkbox"] {
   margin: 0 auto;
   padding: 10px;
   border: 1px solid rgba(216, 226, 223, 0.92);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.92);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.86);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px) saturate(150%);
 }
 
 .scan-control {
@@ -1423,10 +1597,12 @@ input[type="checkbox"] {
   flex: 1 1 auto;
   min-height: 78px;
   border-color: var(--accent-strong);
-  background: var(--accent-strong);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
   color: #ffffff;
+  font-family: var(--font-round);
   font-size: 1.45rem;
-  font-weight: 950;
+  font-weight: 800;
   box-shadow: var(--shadow-md);
 }
 
@@ -1489,14 +1665,19 @@ input[type="checkbox"] {
     padding: 14px 12px calc(var(--dock-height) + 18px);
   }
 
-  .topbar,
   .section-head {
     align-items: stretch;
     flex-direction: column;
   }
 
+  /* ヘッダーはスリム化したので、モバイルでも1行（ブランド＋走査バッジ）を
+     保てる。縦積みにすると走査バッジが全幅に伸びて悪目立ちしていた。 */
   .topbar {
-    padding: 18px;
+    padding: 12px 16px;
+  }
+
+  .topbar .eyebrow {
+    display: none;
   }
 
   .trainer-layout,
@@ -1522,13 +1703,26 @@ input[type="checkbox"] {
   .tabbar {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
     top: 8px;
+    padding: 8px;
   }
 
+  /* モバイルではタブが2列グリッドに折り返すため、文字だけだと
+     「押せる場所」に見えない。チップ状の枠を付けて明示する。 */
   .tab,
   .home-return {
-    min-height: 50px;
+    min-height: 56px;
     white-space: normal;
+  }
+
+  .tab {
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .tab.is-active {
+    border-color: var(--accent-strong);
   }
 
   .field-row,
