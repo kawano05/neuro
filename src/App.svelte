@@ -16,8 +16,19 @@
       <p class="eyebrow">neuro Web Prototype</p>
       <h1>neuro</h1>
     </div>
-    <div class="status-pill" aria-live="polite">
-      <span id="scanState">走査停止中</span>
+    <div class="topbar-actions">
+      <div class="status-pill" aria-live="polite">
+        <span id="scanState">走査停止中</span>
+      </div>
+      <button
+        class="supporter-edit-toggle"
+        id="supporterEditToggle"
+        type="button"
+        aria-pressed="false"
+        hidden
+      >
+        支援者編集を開始
+      </button>
     </div>
   </header>
 
@@ -110,7 +121,12 @@
       -->
       <div class="calibration-offer" id="calibrationOffer" hidden>
         <p id="calibrationOfferText"></p>
-        <button class="secondary calibration-save" id="calibrationSaveOffset" type="button">
+        <button
+          class="secondary calibration-save"
+          id="calibrationSaveOffset"
+          type="button"
+          data-supporter-edit
+        >
           この値を保存する
         </button>
       </div>
@@ -176,7 +192,7 @@
           <p class="eyebrow">iOS Switch Control training</p>
           <h2 id="operation-title">iOS操作訓練</h2>
         </div>
-        <button class="secondary" id="resetOperation" data-scan>訓練記録をリセット</button>
+        <button class="secondary" id="resetOperation" data-supporter-edit>訓練記録をリセット</button>
       </div>
 
       <div class="module-grid" id="operationModeGrid" aria-label="操作訓練の種類"></div>

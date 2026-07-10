@@ -10,24 +10,34 @@ export function escapeHtml(value) {
   });
 }
 
-/** CSVセルのエスケープ */
+/**
+ * CSVセルのエスケープ。
+ *
+ * 文字列セルの先頭（空白類を除く）が = / + / - / @ の場合、Excel等で
+ * 数式として評価されないよう先頭へアポストロフィを付ける。数値型の負数は
+ * 正当な数値としてそのまま出力する。
+ */
 export function escapeCsv(value) {
-  const text = String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  const text = value == null ? "" : String(value);
+  const safeText =
+    typeof value === "string" && /^[\s\ufeff]*[=+\-@]/u.test(text) ? `'${text}` : text;
+  return /[",\r\n]/.test(safeText) ? `"${safeText.replace(/"/g, '""')}"` : safeText;
 }
 
 /** ISO文字列 → "HH:MM:SS"（ja-JP） */
 export function formatTime(isoString) {
+  const date = new Date(isoString);
+  if (!Number.isFinite(date.getTime())) return "--:--:--";
   return new Intl.DateTimeFormat("ja-JP", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-  }).format(new Date(isoString));
+  }).format(date);
 }
 
 /** ミリ秒 → "X分Y秒" / "Y秒" / "--" */
 export function formatDuration(milliseconds) {
-  if (!milliseconds || milliseconds < 0) return "--";
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return "--";
   const totalSeconds = Math.round(milliseconds / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;

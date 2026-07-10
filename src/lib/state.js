@@ -4,10 +4,24 @@
 // 変更点（旧 neuronodeApp.js からの改善）:
 //   saveState が try/catch で保護され、localStorage への書き込み失敗
 //   （容量不足・プライベートブラウズ等）が黙って握り潰されなくなった。
-//   失敗時は console.error と onError コールバック（初回のみ）で通知する。
+//   失敗時は console.error と onError コールバック（連続失敗の初回のみ）で通知する。
 // =====================================================================
 
-import { storageKey, readinessItems } from "./content.js";
+import {
+  storageKey,
+  readinessItems,
+  visibleViews,
+  switchModules,
+  phraseCategories,
+  matchingTasks,
+  letterTasks,
+  operationModes,
+  operationItemTasks,
+  operationPointTargets,
+  evaluationTasks,
+  researchConditionProfiles,
+  environmentLabels,
+} from "./content.js";
 
 /**
  * 旧保存キー（P0-0 移行元、detailed-design.md §9.5）。
@@ -111,9 +125,670 @@ export const defaultState = {
  */
 export const MAX_RHYTHM_SESSIONS = 50;
 
+/** 操作ログの保持件数上限。配列先頭が最新。 */
+export const MAX_LOG_ENTRIES = 300;
+
+/** 効果測定セッションの保持件数上限。配列先頭が最新。 */
+export const MAX_EVALUATION_SESSIONS = 20;
+
+const MAX_COUNTER_VALUE = 1_000_000_000;
+const MAX_EVALUATION_DISTANCES = 1_000;
+const MAX_BASELINE_OFFSET_MS = 5_000;
+const MAX_RHYTHM_TRIALS_PER_SESSION = 1_000;
+const RHYTHM_GAME_IDS = new Set(["rhythm-l1", "rhythm-l2", "gonogo", "calibration"]);
+const RHYTHM_MODES = new Set(["cued", "continuous", "gonogo"]);
+const RHYTHM_MODE_BY_GAME_ID = new Map([
+  ["rhythm-l1", "cued"],
+  ["rhythm-l2", "continuous"],
+  ["gonogo", "gonogo"],
+  ["calibration", "cued"],
+]);
+const RHYTHM_BEAT_KINDS = new Set(["go", "nogo"]);
+const RHYTHM_JUDGMENTS = new Set([
+  "hit",
+  "miss",
+  "extra",
+  "commission",
+  "correctRejection",
+]);
+const SWITCH_MODULE_IDS = new Set(switchModules.map((module) => module.id));
+const PHRASE_CATEGORIES = new Set(Object.keys(phraseCategories));
+const OPERATION_MODE_IDS = new Set(operationModes.map((mode) => mode.id));
+const EVALUATION_CONDITIONS = new Set(
+  researchConditionProfiles.map((profile) => profile.evaluationValue)
+);
+const RESEARCH_PROFILE_IDS = new Set(researchConditionProfiles.map((profile) => profile.id));
+const RESEARCH_ENVIRONMENTS = new Set(Object.keys(environmentLabels));
+const POINT_PHASES = new Set(["x", "y"]);
+const DRAG_PHASES = new Set(["start", "end"]);
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function stringOr(value, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function booleanOr(value, fallback) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function enumOr(value, allowed, fallback) {
+  return typeof value === "string" && allowed.has(value) ? value : fallback;
+}
+
+function numberInRange(value, fallback, min, max, integer = false) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  const bounded = Math.min(max, Math.max(min, value));
+  return integer ? Math.trunc(bounded) : bounded;
+}
+
+function nullableNumberInRange(value, fallback, min, max, integer = false) {
+  if (value === null) return null;
+  return numberInRange(value, fallback, min, max, integer);
+}
+
+function isoStringOr(value, fallback = null) {
+  return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value))
+    ? value
+    : fallback;
+}
+
+function sanitizeNumberArray(value, { min = -Infinity, max = Infinity, limit = 1_000 } = {}) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => typeof item === "number" && Number.isFinite(item))
+    .map((item) => Math.min(max, Math.max(min, item)))
+    .slice(-limit);
+}
+
+function sanitizeLogEntry(entry) {
+  if (!isRecord(entry)) return null;
+  const sanitized = {
+    // 不正日時は空欄で保持する。formatTime() は空欄を "--:--:--" として描画する。
+    time: isoStringOr(entry.time, ""),
+    view:
+      visibleViews.has(entry.view) || entry.view === "legacy-v1" || entry.view === "system"
+        ? entry.view
+        : "system",
+    type: stringOr(entry.type, "legacy"),
+    label: stringOr(entry.label),
+  };
+  if (typeof entry.correct === "boolean") sanitized.correct = entry.correct;
+  if (typeof entry.success === "boolean") sanitized.success = entry.success;
+  if (typeof entry.skipEvaluation === "boolean") sanitized.skipEvaluation = entry.skipEvaluation;
+  if (typeof entry.distance === "number" && Number.isFinite(entry.distance)) {
+    sanitized.distance = Math.max(0, entry.distance);
+  }
+  return sanitized;
+}
+
+function sanitizeEvaluationResult(result) {
+  if (!isRecord(result)) return null;
+  const fallback = defaultState.evaluation;
+  return {
+    participantId: stringOr(result.participantId),
+    condition: enumOr(result.condition, EVALUATION_CONDITIONS, fallback.condition),
+    taskId: stringOr(result.taskId, "unknown"),
+    taskTitle: stringOr(result.taskTitle, "不明なタスク"),
+    success: booleanOr(result.success, false),
+    startedAt: isoStringOr(result.startedAt, ""),
+    endedAt: isoStringOr(result.endedAt, ""),
+    durationSeconds: numberInRange(result.durationSeconds, 0, 0, MAX_COUNTER_VALUE),
+    inputs: numberInRange(result.inputs, 0, 0, MAX_COUNTER_VALUE, true),
+    mistakes: numberInRange(result.mistakes, 0, 0, MAX_COUNTER_VALUE, true),
+    backs: numberInRange(result.backs, 0, 0, MAX_COUNTER_VALUE, true),
+    timingMissed: numberInRange(result.timingMissed, 0, 0, MAX_COUNTER_VALUE, true),
+    timingEarly: numberInRange(result.timingEarly, 0, 0, MAX_COUNTER_VALUE, true),
+    timingLate: numberInRange(result.timingLate, 0, 0, MAX_COUNTER_VALUE, true),
+    timingErrors: numberInRange(result.timingErrors, 0, 0, MAX_COUNTER_VALUE, true),
+    assists: numberInRange(result.assists, 0, 0, MAX_COUNTER_VALUE, true),
+    scanIntervalMs: numberInRange(result.scanIntervalMs, defaultState.settings.scanInterval, 800, 3200, true),
+    inputsPerMinute: numberInRange(result.inputsPerMinute, 0, 0, MAX_COUNTER_VALUE),
+    averageTargetDistance:
+      result.averageTargetDistance === ""
+        ? ""
+        : numberInRange(result.averageTargetDistance, "", 0, MAX_COUNTER_VALUE),
+    selectionErrorRate: numberInRange(result.selectionErrorRate, 0, 0, MAX_COUNTER_VALUE),
+    totalScanningErrorRate: numberInRange(
+      result.totalScanningErrorRate,
+      0,
+      0,
+      MAX_COUNTER_VALUE
+    ),
+    effortRating: numberInRange(result.effortRating, fallback.effortRating, 1, 5, true),
+    easeRating: numberInRange(result.easeRating, fallback.easeRating, 1, 5, true),
+    engagementRating: numberInRange(
+      result.engagementRating,
+      fallback.engagementRating,
+      1,
+      5,
+      true
+    ),
+    observerNotes: stringOr(result.observerNotes),
+  };
+}
+
+function sanitizeCompletedSession(session) {
+  if (!isRecord(session)) return null;
+  const fallback = defaultState.evaluation;
+  return {
+    participantId: stringOr(session.participantId),
+    condition: enumOr(session.condition, EVALUATION_CONDITIONS, fallback.condition),
+    startedAt: isoStringOr(session.startedAt, ""),
+    endedAt: isoStringOr(session.endedAt, ""),
+    effortRating: numberInRange(session.effortRating, fallback.effortRating, 1, 5, true),
+    easeRating: numberInRange(session.easeRating, fallback.easeRating, 1, 5, true),
+    engagementRating: numberInRange(
+      session.engagementRating,
+      fallback.engagementRating,
+      1,
+      5,
+      true
+    ),
+    observerNotes: stringOr(session.observerNotes),
+    taskResults: Array.isArray(session.taskResults)
+      ? session.taskResults.map(sanitizeEvaluationResult).filter(Boolean).slice(-100)
+      : [],
+  };
+}
+
+function sanitizeRhythmTrial(trial) {
+  if (!isRecord(trial)) return null;
+  // 判定値が壊れた行を miss 等へ読み替えると研究結果そのものを捏造するため、
+  // 必須列や判断値別の組合せが不正な試行は捨てる。
+  if (!RHYTHM_JUDGMENTS.has(trial.judgment)) return null;
+  if (typeof trial.excluded !== "boolean") return null;
+  if (
+    typeof trial.appliedBaselineMs !== "number" ||
+    !Number.isFinite(trial.appliedBaselineMs) ||
+    Math.abs(trial.appliedBaselineMs) > MAX_BASELINE_OFFSET_MS
+  ) return null;
+
+  const hasBeatIndex =
+    Number.isInteger(trial.beatIndex) &&
+    trial.beatIndex >= 0 &&
+    trial.beatIndex <= MAX_COUNTER_VALUE;
+  const hasScheduledMs =
+    typeof trial.scheduledMs === "number" &&
+    Number.isFinite(trial.scheduledMs) &&
+    trial.scheduledMs >= 0 &&
+    trial.scheduledMs <= MAX_COUNTER_VALUE;
+  const hasInputMs =
+    typeof trial.inputMs === "number" &&
+    Number.isFinite(trial.inputMs) &&
+    trial.inputMs >= 0 &&
+    trial.inputMs <= MAX_COUNTER_VALUE;
+  const hasRawOffsetMs =
+    typeof trial.rawOffsetMs === "number" &&
+    Number.isFinite(trial.rawOffsetMs) &&
+    Math.abs(trial.rawOffsetMs) <= MAX_COUNTER_VALUE;
+
+  if (trial.judgment === "extra") {
+    // 窓外入力はどのビートにも帰属せず、入力時刻だけを持つ。
+    if (
+      trial.beatIndex !== null ||
+      trial.beatKind !== null ||
+      trial.scheduledMs !== null ||
+      !hasInputMs ||
+      trial.rawOffsetMs !== null
+    ) return null;
+  } else {
+    if (!hasBeatIndex || !hasScheduledMs) return null;
+    const expectedBeatKind =
+      trial.judgment === "hit" || trial.judgment === "miss" ? "go" : "nogo";
+    if (trial.beatKind !== expectedBeatKind) return null;
+
+    const judgmentHasInput = trial.judgment === "hit" || trial.judgment === "commission";
+    if (judgmentHasInput) {
+      if (!hasInputMs || !hasRawOffsetMs) return null;
+    } else if (trial.inputMs !== null || trial.rawOffsetMs !== null) {
+      // miss / correctRejection は入力が発生していない確定行。
+      return null;
+    }
+  }
+
+  return {
+    beatIndex: trial.beatIndex,
+    beatKind: trial.beatKind,
+    scheduledMs: trial.scheduledMs,
+    inputMs: trial.inputMs,
+    rawOffsetMs: trial.rawOffsetMs,
+    appliedBaselineMs: trial.appliedBaselineMs,
+    judgment: trial.judgment,
+    excluded: trial.excluded,
+  };
+}
+
+/**
+ * sanitized trials からリズム集計を再計算する。
+ * games/rhythm.js の computeSummary() と同じ規則を保存復元時にも適用し、
+ * 破損trialを除外した後のCSV行とsummaryが矛盾しないようにする。
+ */
+export function summarizeRhythmTrials(trials) {
+  const included = trials.filter((trial) => !trial.excluded);
+  const hits = included.filter((trial) => trial.judgment === "hit");
+  const misses = included.filter((trial) => trial.judgment === "miss").length;
+  const extras = included.filter((trial) => trial.judgment === "extra").length;
+  const commissions = included.filter((trial) => trial.judgment === "commission").length;
+  const correctRejections = included.filter(
+    (trial) => trial.judgment === "correctRejection"
+  ).length;
+  const goCount = included.filter((trial) => trial.beatKind === "go").length;
+  const nogoCount = included.filter((trial) => trial.beatKind === "nogo").length;
+  const rawOffsets = hits
+    .map((trial) => trial.rawOffsetMs)
+    .filter((value) => typeof value === "number" && Number.isFinite(value));
+  const meanRawOffsetMs = rawOffsets.length
+    ? rawOffsets.reduce((sum, value) => sum + value, 0) / rawOffsets.length
+    : null;
+  const sdRawOffsetMs =
+    rawOffsets.length >= 2 && meanRawOffsetMs !== null
+      ? Math.sqrt(
+          rawOffsets.reduce((sum, value) => sum + (value - meanRawOffsetMs) ** 2, 0) /
+            (rawOffsets.length - 1)
+        )
+      : null;
+  const sortedOffsets = [...rawOffsets].sort((a, b) => a - b);
+  const middle = Math.floor(sortedOffsets.length / 2);
+  const medianRawOffsetMs = sortedOffsets.length
+    ? sortedOffsets.length % 2
+      ? sortedOffsets[middle]
+      : (sortedOffsets[middle - 1] + sortedOffsets[middle]) / 2
+    : null;
+
+  return {
+    hits: hits.length,
+    misses,
+    extras,
+    commissions,
+    correctRejections,
+    goHitRate: goCount ? hits.length / goCount : 0,
+    commissionRate: nogoCount ? commissions / nogoCount : 0,
+    meanRawOffsetMs,
+    sdRawOffsetMs,
+    medianRawOffsetMs,
+  };
+}
+
+/** 正常完了セッションに必要な、1ビート1行の計画整合性を確認する。 */
+function hasCompleteRhythmPlan(trials, config) {
+  const primaryTrials = trials.filter((trial) => trial.judgment !== "extra");
+  if (primaryTrials.length !== config.targetBeats) return false;
+
+  const seenBeatIndexes = new Set();
+  for (const trial of primaryTrials) {
+    if (trial.beatIndex >= config.targetBeats || seenBeatIndexes.has(trial.beatIndex)) {
+      return false;
+    }
+    seenBeatIndexes.add(trial.beatIndex);
+
+    if (config.mode === "gonogo") {
+      if (config.seedSequence[trial.beatIndex] !== trial.beatKind) return false;
+    } else if (trial.beatKind !== "go") {
+      return false;
+    }
+  }
+  return seenBeatIndexes.size === config.targetBeats;
+}
+
+function sanitizeRhythmSession(session) {
+  if (!isRecord(session)) return null;
+  const config = isRecord(session.config) ? session.config : {};
+  const device = isRecord(session.device) ? session.device : {};
+  const sanitizedConfig = {
+    mode: enumOr(config.mode, RHYTHM_MODES, "cued"),
+    bpm: numberInRange(config.bpm, 40, 20, 240, true),
+    countInBeats: numberInRange(config.countInBeats, 3, 1, 16, true),
+    targetBeats: numberInRange(config.targetBeats, 10, 1, 200, true),
+    judgmentWindowMs: numberInRange(config.judgmentWindowMs, 600, 200, 1500, true),
+    effectiveWindowMs: numberInRange(config.effectiveWindowMs, 600, 1, 1500),
+    baselineOffsetMs: numberInRange(
+      config.baselineOffsetMs,
+      0,
+      -MAX_BASELINE_OFFSET_MS,
+      MAX_BASELINE_OFFSET_MS
+    ),
+    goRatio: nullableNumberInRange(config.goRatio, null, 0, 1),
+    seedSequence: Array.isArray(config.seedSequence)
+      ? config.seedSequence
+          .filter((kind) => RHYTHM_BEAT_KINDS.has(kind))
+          .slice(0, 200)
+      : [],
+  };
+  const rawTrials = Array.isArray(session.trials) ? session.trials : null;
+  const sanitizedTrialSlots = rawTrials?.map(sanitizeRhythmTrial) || [];
+  const allTrialsRetained =
+    rawTrials !== null &&
+    rawTrials.length <= MAX_RHYTHM_TRIALS_PER_SESSION &&
+    sanitizedTrialSlots.every(Boolean);
+  const trials = sanitizedTrialSlots.filter(Boolean).slice(0, MAX_RHYTHM_TRIALS_PER_SESSION);
+
+  const planConfigIsValid =
+    RHYTHM_GAME_IDS.has(session.gameId) &&
+    RHYTHM_MODE_BY_GAME_ID.get(session.gameId) === config.mode &&
+    Number.isInteger(config.targetBeats) &&
+    config.targetBeats >= 1 &&
+    config.targetBeats <= 200 &&
+    (config.mode !== "gonogo" ||
+      (Array.isArray(config.seedSequence) &&
+        config.seedSequence.length === config.targetBeats &&
+        config.seedSequence.every((kind) => RHYTHM_BEAT_KINDS.has(kind))));
+  // 実ゲームは正常終了時に finished:true / aborted:false を同時保存する。
+  // それ以外（リロード・クラッシュ中の途中snapshotを含む）は再開不能なので、
+  // 復元時に中断セッションへ倒し、正常完了データとしてCSVへ混入させない。
+  // trialが1件でも除外/切詰めされた場合や、primary beat計画が不完全な場合も
+  // 完了扱いにはしない（欠落した研究データを静かに正常群へ混ぜない）。
+  const completedNormally =
+    session.finished === true &&
+    session.aborted === false &&
+    allTrialsRetained &&
+    planConfigIsValid &&
+    hasCompleteRhythmPlan(trials, sanitizedConfig);
+  return {
+    sessionId: stringOr(session.sessionId, "unknown"),
+    gameId: enumOr(session.gameId, RHYTHM_GAME_IDS, "rhythm-l1"),
+    participantId: stringOr(session.participantId),
+    startedAtIso: isoStringOr(session.startedAtIso, ""),
+    aborted: !completedNormally,
+    finished: completedNormally,
+    config: sanitizedConfig,
+    device: {
+      outputLatencyS: nullableNumberInRange(device.outputLatencyS, null, 0, 60),
+      baseLatencyS: nullableNumberInRange(device.baseLatencyS, null, 0, 60),
+      userAgent: stringOr(device.userAgent),
+    },
+    trials,
+    // 保存済みsummaryは派生値。破損・改変されていても採用せずtrialを正本にする。
+    summary: summarizeRhythmTrials(trials),
+  };
+}
+
 /** defaultState の深いコピーを返す。 */
 export function cloneDefaultState() {
   return JSON.parse(JSON.stringify(defaultState));
+}
+
+/**
+ * JSONから復元した値を、現在のstateスキーマへ防御的に正規化する。
+ *
+ * 欠落キーを補うだけでなく、画面分岐に使う列挙値、タイマー/配列添字に使う
+ * 数値範囲、描画時に配列として扱う入れ子を検証する。未知のキーは保存状態へ
+ * 持ち込まず、壊れた1項目だけを既定値へ戻すことで他の有効データは維持する。
+ */
+export function sanitizeState(candidate) {
+  const fallback = cloneDefaultState();
+  if (!isRecord(candidate)) return fallback;
+
+  const settings = isRecord(candidate.settings) ? candidate.settings : {};
+  const operation = isRecord(candidate.operation) ? candidate.operation : {};
+  const evaluation = isRecord(candidate.evaluation) ? candidate.evaluation : {};
+  const research = isRecord(candidate.research) ? candidate.research : {};
+  const readiness = isRecord(research.readiness) ? research.readiness : {};
+  const rhythm = isRecord(candidate.rhythm) ? candidate.rhythm : {};
+
+  const operationTrials = numberInRange(
+    operation.trials,
+    fallback.operation.trials,
+    0,
+    MAX_COUNTER_VALUE,
+    true
+  );
+  const sessionStartedAt = isoStringOr(evaluation.sessionStartedAt, null);
+  const isActive =
+    booleanOr(evaluation.isActive, fallback.evaluation.isActive) && Boolean(sessionStartedAt);
+
+  return {
+    currentView: enumOr(candidate.currentView, visibleViews, fallback.currentView),
+    activeSwitchModule: enumOr(
+      candidate.activeSwitchModule,
+      SWITCH_MODULE_IDS,
+      fallback.activeSwitchModule
+    ),
+    switchStep: numberInRange(
+      candidate.switchStep,
+      fallback.switchStep,
+      0,
+      MAX_COUNTER_VALUE,
+      true
+    ),
+    hitCount: numberInRange(candidate.hitCount, fallback.hitCount, 0, MAX_COUNTER_VALUE, true),
+    hitTimes: sanitizeNumberArray(candidate.hitTimes, {
+      min: 0,
+      max: MAX_COUNTER_VALUE,
+      limit: 1_000,
+    }),
+    matchingIndex: numberInRange(
+      candidate.matchingIndex,
+      fallback.matchingIndex,
+      0,
+      Math.max(0, matchingTasks.length - 1),
+      true
+    ),
+    letterIndex: numberInRange(
+      candidate.letterIndex,
+      fallback.letterIndex,
+      0,
+      Math.max(0, letterTasks.length - 1),
+      true
+    ),
+    currentPhrase: stringOr(candidate.currentPhrase, fallback.currentPhrase),
+    currentCategory: enumOr(
+      candidate.currentCategory,
+      PHRASE_CATEGORIES,
+      fallback.currentCategory
+    ),
+    operation: {
+      mode: enumOr(operation.mode, OPERATION_MODE_IDS, fallback.operation.mode),
+      itemIndex: numberInRange(
+        operation.itemIndex,
+        fallback.operation.itemIndex,
+        0,
+        Math.max(0, operationItemTasks.length - 1),
+        true
+      ),
+      pointIndex: numberInRange(
+        operation.pointIndex,
+        fallback.operation.pointIndex,
+        0,
+        Math.max(0, operationPointTargets.length - 1),
+        true
+      ),
+      pointPhase: enumOr(operation.pointPhase, POINT_PHASES, fallback.operation.pointPhase),
+      pointStartedAt: nullableNumberInRange(
+        operation.pointStartedAt,
+        null,
+        0,
+        MAX_COUNTER_VALUE * 10_000,
+        true
+      ),
+      selectedX: nullableNumberInRange(operation.selectedX, null, 0, 100),
+      selectedY: nullableNumberInRange(operation.selectedY, null, 0, 100),
+      dragPhase: enumOr(operation.dragPhase, DRAG_PHASES, fallback.operation.dragPhase),
+      trials: operationTrials,
+      successes: Math.min(
+        operationTrials,
+        numberInRange(
+          operation.successes,
+          fallback.operation.successes,
+          0,
+          MAX_COUNTER_VALUE,
+          true
+        )
+      ),
+      distances: sanitizeNumberArray(operation.distances, {
+        min: 0,
+        max: MAX_COUNTER_VALUE,
+        limit: 40,
+      }),
+    },
+    settings: {
+      scanInterval: numberInRange(
+        settings.scanInterval,
+        fallback.settings.scanInterval,
+        800,
+        3200,
+        true
+      ),
+      autoScan: booleanOr(settings.autoScan, fallback.settings.autoScan),
+      speechEnabled: booleanOr(settings.speechEnabled, fallback.settings.speechEnabled),
+      soundEnabled: booleanOr(settings.soundEnabled, fallback.settings.soundEnabled),
+      largeText: booleanOr(settings.largeText, fallback.settings.largeText),
+      highContrast: booleanOr(settings.highContrast, fallback.settings.highContrast),
+      researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),
+      judgmentWindowMs: numberInRange(
+        settings.judgmentWindowMs,
+        fallback.settings.judgmentWindowMs,
+        200,
+        1500,
+        true
+      ),
+      baselineOffsetMs: numberInRange(
+        settings.baselineOffsetMs,
+        fallback.settings.baselineOffsetMs,
+        -MAX_BASELINE_OFFSET_MS,
+        MAX_BASELINE_OFFSET_MS,
+        true
+      ),
+      rhythmBpm: nullableNumberInRange(settings.rhythmBpm, null, 20, 240, true),
+      countInBeats: nullableNumberInRange(settings.countInBeats, null, 1, 16, true),
+      targetBeats: nullableNumberInRange(settings.targetBeats, null, 1, 200, true),
+    },
+    logs: Array.isArray(candidate.logs)
+      ? candidate.logs.map(sanitizeLogEntry).filter(Boolean).slice(0, MAX_LOG_ENTRIES)
+      : [],
+    evaluation: {
+      participantId: stringOr(evaluation.participantId, fallback.evaluation.participantId),
+      condition: enumOr(
+        evaluation.condition,
+        EVALUATION_CONDITIONS,
+        fallback.evaluation.condition
+      ),
+      isActive,
+      // 終了後も直前セッションの開始・終了時刻は履歴表示/CSVの補助値として保持する。
+      sessionStartedAt,
+      sessionEndedAt: isoStringOr(evaluation.sessionEndedAt, null),
+      activeTaskIndex: numberInRange(
+        evaluation.activeTaskIndex,
+        fallback.evaluation.activeTaskIndex,
+        0,
+        evaluationTasks.length,
+        true
+      ),
+      taskStartedAt: isActive ? isoStringOr(evaluation.taskStartedAt, null) : null,
+      taskInputs: numberInRange(
+        evaluation.taskInputs,
+        fallback.evaluation.taskInputs,
+        0,
+        MAX_COUNTER_VALUE,
+        true
+      ),
+      taskMistakes: numberInRange(
+        evaluation.taskMistakes,
+        fallback.evaluation.taskMistakes,
+        0,
+        MAX_COUNTER_VALUE,
+        true
+      ),
+      taskBacks: numberInRange(
+        evaluation.taskBacks,
+        fallback.evaluation.taskBacks,
+        0,
+        MAX_COUNTER_VALUE,
+        true
+      ),
+      taskTimingMissed: numberInRange(
+        evaluation.taskTimingMissed,
+        fallback.evaluation.taskTimingMissed,
+        0,
+        MAX_COUNTER_VALUE,
+        true
+      ),
+      taskTimingEarly: numberInRange(
+        evaluation.taskTimingEarly,
+        fallback.evaluation.taskTimingEarly,
+        0,
+        MAX_COUNTER_VALUE,
+        true
+      ),
+      taskTimingLate: numberInRange(
+        evaluation.taskTimingLate,
+        fallback.evaluation.taskTimingLate,
+        0,
+        MAX_COUNTER_VALUE,
+        true
+      ),
+      taskAssists: numberInRange(
+        evaluation.taskAssists,
+        fallback.evaluation.taskAssists,
+        0,
+        MAX_COUNTER_VALUE,
+        true
+      ),
+      taskDistances: sanitizeNumberArray(evaluation.taskDistances, {
+        min: 0,
+        max: MAX_COUNTER_VALUE,
+        limit: MAX_EVALUATION_DISTANCES,
+      }),
+      effortRating: numberInRange(
+        evaluation.effortRating,
+        fallback.evaluation.effortRating,
+        1,
+        5,
+        true
+      ),
+      easeRating: numberInRange(
+        evaluation.easeRating,
+        fallback.evaluation.easeRating,
+        1,
+        5,
+        true
+      ),
+      engagementRating: numberInRange(
+        evaluation.engagementRating,
+        fallback.evaluation.engagementRating,
+        1,
+        5,
+        true
+      ),
+      observerNotes: stringOr(evaluation.observerNotes, fallback.evaluation.observerNotes),
+      results: Array.isArray(evaluation.results)
+        ? evaluation.results.map(sanitizeEvaluationResult).filter(Boolean).slice(-100)
+        : [],
+      completedSessions: Array.isArray(evaluation.completedSessions)
+        ? evaluation.completedSessions
+            .map(sanitizeCompletedSession)
+            .filter(Boolean)
+            .slice(0, MAX_EVALUATION_SESSIONS)
+        : [],
+    },
+    research: {
+      conditionProfile: enumOr(
+        research.conditionProfile,
+        RESEARCH_PROFILE_IDS,
+        fallback.research.conditionProfile
+      ),
+      environment: enumOr(
+        research.environment,
+        RESEARCH_ENVIRONMENTS,
+        fallback.research.environment
+      ),
+      deploymentNotes: stringOr(research.deploymentNotes, fallback.research.deploymentNotes),
+      readiness: readinessItems.reduce((items, item) => {
+        items[item.id] = booleanOr(readiness[item.id], fallback.research.readiness[item.id]);
+        return items;
+      }, {}),
+    },
+    rhythm: {
+      sessions: Array.isArray(rhythm.sessions)
+        ? rhythm.sessions
+            .map(sanitizeRhythmSession)
+            .filter(Boolean)
+            .slice(-MAX_RHYTHM_SESSIONS)
+        : [],
+    },
+  };
 }
 
 /** localStorage の生値を読み、JSON として壊れていれば null を返す。 */
@@ -121,7 +796,8 @@ function readLegacyState(key) {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return isRecord(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -133,7 +809,7 @@ function readLegacyState(key) {
  * （detailed-design.md §9.5 手順3）。
  */
 function migrateSettingsKeys(sourceSettings) {
-  if (!sourceSettings || typeof sourceSettings !== "object") return {};
+  if (!isRecord(sourceSettings)) return {};
   const migrated = {};
   Object.keys(defaultState.settings).forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(sourceSettings, key)) {
@@ -172,8 +848,8 @@ function migrateLegacyState() {
   if (v2) {
     const migrated = cloneDefaultState();
     migrated.settings = { ...migrated.settings, ...migrateSettingsKeys(v2.settings) };
-    migrated.logs = Array.isArray(v2.logs) ? v2.logs.slice(0, 300) : [];
-    if (v2.evaluation && typeof v2.evaluation === "object") {
+    migrated.logs = Array.isArray(v2.logs) ? v2.logs.slice(0, MAX_LOG_ENTRIES - 1) : [];
+    if (isRecord(v2.evaluation)) {
       migrated.evaluation = {
         ...migrated.evaluation,
         ...v2.evaluation,
@@ -190,7 +866,7 @@ function migrateLegacyState() {
       label: `旧保存(${legacyStorageKeyV2})から移行しました（settings/logs/evaluationのみ）。`,
       success: true,
     });
-    return migrated;
+    return sanitizeState(migrated);
   }
 
   const v1 = readLegacyState(legacyStorageKeyV1);
@@ -198,7 +874,7 @@ function migrateLegacyState() {
     const migrated = cloneDefaultState();
     migrated.settings = { ...migrated.settings, ...migrateSettingsKeys(v1.settings) };
     migrated.logs = Array.isArray(v1.logs)
-      ? v1.logs.slice(0, 300).map(migrateLegacyLogEntryV1)
+      ? v1.logs.slice(0, MAX_LOG_ENTRIES - 1).map(migrateLegacyLogEntryV1)
       : [];
     // v1 から移行・metrics は引き継ぎ対象外（v3 に対応するスキーマがないため）。
     migrated.logs.unshift({
@@ -208,7 +884,7 @@ function migrateLegacyState() {
       label: `旧保存(${legacyStorageKeyV1})から移行しました。metricsは引き継ぎ対象外です。`,
       success: true,
     });
-    return migrated;
+    return sanitizeState(migrated);
   }
 
   return null;
@@ -224,43 +900,7 @@ export function loadState() {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return migrateLegacyState() || cloneDefaultState();
     const parsed = JSON.parse(raw);
-    return {
-      ...cloneDefaultState(),
-      ...parsed,
-      settings: { ...defaultState.settings, ...(parsed.settings || {}) },
-      operation: {
-        ...defaultState.operation,
-        ...(parsed.operation || {}),
-        distances: Array.isArray(parsed.operation?.distances) ? parsed.operation.distances : [],
-      },
-      evaluation: {
-        ...defaultState.evaluation,
-        ...(parsed.evaluation || {}),
-        results: Array.isArray(parsed.evaluation?.results) ? parsed.evaluation.results : [],
-        completedSessions: Array.isArray(parsed.evaluation?.completedSessions)
-          ? parsed.evaluation.completedSessions
-          : [],
-      },
-      research: {
-        ...defaultState.research,
-        ...(parsed.research || {}),
-        readiness: {
-          ...defaultState.research.readiness,
-          ...(parsed.research?.readiness || {}),
-        },
-      },
-      rhythm: {
-        ...defaultState.rhythm,
-        ...(parsed.rhythm || {}),
-        // 直近 MAX_RHYTHM_SESSIONS 件のみ保持（古い順に破棄。§9.1）。
-        // セッションは古い→新しいの順で push される前提（配列末尾が最新）。
-        sessions: Array.isArray(parsed.rhythm?.sessions)
-          ? parsed.rhythm.sessions.slice(-MAX_RHYTHM_SESSIONS)
-          : [],
-      },
-      logs: Array.isArray(parsed.logs) ? parsed.logs : [],
-      hitTimes: Array.isArray(parsed.hitTimes) ? parsed.hitTimes : [],
-    };
+    return sanitizeState(parsed);
   } catch {
     return cloneDefaultState();
   }
@@ -269,22 +909,40 @@ export function loadState() {
 /**
  * 保存関数を生成する。
  * @param {object} state - 保存対象の状態（参照を保持する）
- * @param {(error: Error) => void} [onError] - 保存失敗時に「初回のみ」呼ばれる通知
- * @returns {() => void} saveState
+ * @param {(error: Error) => void} [onError] - 連続する保存失敗の「初回のみ」呼ばれる通知
+ * @returns {() => boolean} saveState - 保存成功なら true、失敗なら false
  */
 export function createStateSaver(state, onError) {
   let notified = false;
+  let notificationVersion = 0;
   return function saveState() {
     try {
       localStorage.setItem(storageKey, JSON.stringify(state));
+      // 一度保存できた後に再び失敗した場合は、新しい障害として再通知する。
+      notified = false;
+      notificationVersion += 1;
+      return true;
     } catch (error) {
       // 旧実装ではここで例外がそのまま伝播し、以降の描画処理が
       // 中断される可能性があった（localStorage黙落ち問題）。
       console.error("[neuro] 状態の保存に失敗しました", error);
       if (!notified) {
         notified = true;
-        onError?.(error);
+        const version = ++notificationVersion;
+        // 多くの呼び出し元は save() 直後に成功メッセージをannounceする。
+        // 同期通知だと保存失敗が即座に上書きされるため、現在のイベント処理が
+        // 終わった直後に通知する。後続saveが成功済みなら通知は取り消す。
+        queueMicrotask(() => {
+          if (!notified || version !== notificationVersion) return;
+          try {
+            onError?.(error);
+          } catch (notificationError) {
+            // 通知UI側の例外でも、呼び出し元の描画や入力処理を止めない。
+            console.error("[neuro] 保存失敗の通知処理に失敗しました", notificationError);
+          }
+        });
       }
+      return false;
     }
   };
 }

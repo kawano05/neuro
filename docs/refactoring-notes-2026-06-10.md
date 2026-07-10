@@ -36,6 +36,8 @@ iOS化の前段として、`src/lib/neuronodeApp.js` に集中していた全ロ
 
 **P2: デプロイ経路の混在。** `index.html` に localhost 分岐の二重ローダがあり、リポジトリルートにもビルド成果物（`assets/main-v9.js` 等の旧版含む）がコミットされている一方、GitHub Actions は `dist/` を Pages にデプロイしている。「Pagesはdistから、ルート直置きは廃止」に一本化し、ルートの `assets/`・`sw.js`・`manifest.webmanifest`・`icon.svg`（public配下と重複）は削除してよいはず。先方確認用URLが現在どちらを向いているかだけ確認してから整理すること。
 
+> 2026-07-10対応済み: Pages workflowが`dist/`を公開することを確認し、ルート直置きの旧成果物を削除。Vite標準のコンテンツハッシュを使い、ビルド後にindex・hashed JS/CSS・manifest・iconのprecache一覧と内容ハッシュ版cache名を持つSWを自動生成する構成へ一本化した。install時に全資産を不変cacheへprecacheし、オンライン時はnetwork-firstで最新応答を返す。cacheは次版SWのinstall時に版単位で更新するため、旧cacheへ新indexだけが混入しない。
+
 **P3: 自前走査とiOS Switch Controlの二重走査。** 本アプリの走査エンジンはWeb上でSwitch Controlを「模擬」するためのもので、iOS実機でSwitch Controlを有効にすると走査が二重に走る。iOS版では「自前走査OFF（autoScan=false＋走査UI非表示）でOSのSwitch Controlに委ねるモード」を用意するのが研究計画（参照構成/最適化構成の比較）とも整合する。走査が `scan.js` に独立したので、エンジン差し替え・無効化は局所変更で済む。
 
 **P3: WKWebViewでの音まわり。** `AudioContext` はユーザー操作起点で初期化される現実装でOKだが、iPadのサイレントスイッチONだと効果音が鳴らない場合がある（打合せで「音が操作実感に直結する」と確認された要件なので実機で必ず検証）。`speechSynthesis` の日本語ボイスは取得タイミングに癖があるため、初回読み上げが無音にならないかも確認項目。必要ならネイティブTTSプラグインへの差し替えを検討（`audio.js` に集約済み）。

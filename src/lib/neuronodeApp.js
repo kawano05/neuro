@@ -23,7 +23,7 @@
 // =====================================================================
 
 import { visibleViews } from "./content.js";
-import { loadState, createStateSaver } from "./state.js";
+import { loadState, createStateSaver, MAX_LOG_ENTRIES } from "./state.js";
 import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
 import { createScanEngine } from "./scan.js";
@@ -69,10 +69,17 @@ const TAB_WORLD_VIEWS = new Set([
   "settings",
 ]);
 
+// 設定・記録・研究データを変更できる支援者専用ビュー。利用者向けの
+// matching / voca / letters と、利用者が課題を実行する operation は含めない。
+// ロックは認証ではなく、自前走査からの誤操作を防ぐためのセッション内ガード。
+const SUPPORTER_EDIT_VIEWS = new Set(["evaluation", "research", "log", "settings"]);
+const SUPPORTER_UNLOCK_VIEWS = new Set([...SUPPORTER_EDIT_VIEWS, "operation"]);
+
 export function initNeuroNodeApp() {
   // --- 状態と要素 ---
   const elements = collectElements();
   const state = loadState();
+  let supporterEditing = false;
   // MUST（detailed-design.md §2.1）: 再訪時でも必ず start から始める。
   // AudioContext のアンロックと入力導通確認を毎回保証するため、保存されていた
   // 画面に関わらず無条件で上書きする（旧「visibleViews にない場合 switcher へ」
@@ -85,6 +92,44 @@ export function initNeuroNodeApp() {
   ctx.announce = (message) => {
     elements.liveRegion.textContent = message;
   };
+
+  /** 支援者向けビューの編集可否を、動的に再描画された要素にも適用する。 */
+  function applySupporterEditState() {
+    const hasCalibrationOffer = state.currentView === "result" && !elements.calibrationOffer.hidden;
+    const canEditHere = SUPPORTER_UNLOCK_VIEWS.has(state.currentView) || hasCalibrationOffer;
+    if (!canEditHere) supporterEditing = false;
+    const locked = !supporterEditing;
+    elements.supporterEditToggle.hidden = !canEditHere;
+    elements.supporterEditToggle.textContent = supporterEditing ? "支援者編集をロック" : "支援者編集を開始";
+    elements.supporterEditToggle.setAttribute("aria-pressed", String(supporterEditing));
+    document.body.classList.toggle("supporter-editing", supporterEditing);
+
+    const protectedControls = new Set(document.querySelectorAll("[data-supporter-edit]"));
+    elements.views
+      .filter((view) => SUPPORTER_EDIT_VIEWS.has(view.id))
+      .forEach((view) => {
+        view.querySelectorAll("button, input, select, textarea").forEach((control) => {
+          protectedControls.add(control);
+        });
+      });
+    protectedControls.forEach((control) => {
+      control.disabled = locked;
+      if (locked) {
+        control.setAttribute("aria-disabled", "true");
+      } else {
+        control.removeAttribute("aria-disabled");
+      }
+    });
+  }
+
+  function setSupporterEditing(enabled, announce = true) {
+    supporterEditing = Boolean(enabled);
+    applySupporterEditState();
+    ctx.scan?.refresh();
+    if (announce) {
+      ctx.announce(supporterEditing ? "支援者編集を開始しました" : "支援者編集をロックしました");
+    }
+  }
 
   ctx.save = createStateSaver(state, () =>
     ctx.announce("データの保存に失敗しました。端末の空き容量を確認してください。")
@@ -107,7 +152,7 @@ export function initNeuroNodeApp() {
       view: state.currentView,
       ...entry,
     });
-    state.logs = state.logs.slice(0, 300);
+    state.logs = state.logs.slice(0, MAX_LOG_ENTRIES);
     ctx.views.evaluation.countEntry(entry);
     ctx.save();
     ctx.views.log.render();
@@ -117,6 +162,7 @@ export function initNeuroNodeApp() {
   /** 画面の切り替え。visibleViews にない画面は start へフォールバックする。 */
   ctx.switchView = function switchView(viewName) {
     const nextView = visibleViews.has(viewName) ? viewName : "start";
+    if (!SUPPORTER_UNLOCK_VIEWS.has(nextView)) supporterEditing = false;
     state.currentView = nextView;
     ctx.save();
     ctx.renderAll();
@@ -149,8 +195,10 @@ export function initNeuroNodeApp() {
     const nextView = state.currentView;
     const nextViewElementId = VIEW_ELEMENT_IDS[nextView] || nextView;
     elements.tabs.forEach((tab) => {
-      tab.classList.toggle("is-active", tab.dataset.view === nextView);
-      tab.setAttribute("aria-selected", String(tab.dataset.view === nextView));
+      const isActive = tab.dataset.view === nextView;
+      tab.classList.toggle("is-active", isActive);
+      if (isActive) tab.setAttribute("aria-current", "page");
+      else tab.removeAttribute("aria-current");
     });
     elements.views.forEach((view) => {
       view.classList.toggle("is-active", view.id === nextViewElementId);
@@ -173,6 +221,7 @@ export function initNeuroNodeApp() {
     ctx.views.log.render();
     ctx.gameHost.render();
     ctx.views.settings.applyClasses();
+    applySupporterEditState();
   };
 
   // --- 入力ファネル（シェル側一元計時、detailed-design.md §3.3） ---
@@ -211,21 +260,72 @@ export function initNeuroNodeApp() {
     ctx.announce("メニューにもどります");
   });
 
+  // 自前走査の対象には含めないが、通常のキーボード・VoiceOverでは操作可能な
+  // 支援者用トグル。利用者向け画面へ戻ると自動的に再ロックされる。
+  elements.supporterEditToggle.addEventListener("click", () => {
+    setSupporterEditing(!supporterEditing);
+  });
+
   // 入力ファネルの対象要素: 通常の入力ボタン、スタート画面のステージ、
   // ゲームステージ（全画面スイッチ）。pointerdown と click の両方を受ける
   // （iOS Switch Control 等では synthetic click のみが届く環境があるため
   // pointerdown 単独に寄せない。§3.3）。同一物理入力からの重複発火は
   // dedupe が吸収する。
   [elements.primarySwitch, elements.startStage, elements.gameStage].forEach((target) => {
-    target.addEventListener("pointerdown", () => acceptSwitchEvent("pointer"));
-    target.addEventListener("click", () => acceptSwitchEvent("pointer"));
+    // pointerdown で低遅延に採時しつつ、同じ物理操作から後続する click は
+    // 時間差に関係なく1回だけ消費する。click しか送らない Switch Control / AT
+    // は pending がないため、そのまま入力として受理される。
+    let suppressPairedClick = false;
+    let activePointerId = null;
+    let clearPairedClickTimer = null;
+
+    const clearPairedClick = () => {
+      suppressPairedClick = false;
+      activePointerId = null;
+      if (clearPairedClickTimer) {
+        window.clearTimeout(clearPairedClickTimer);
+        clearPairedClickTimer = null;
+      }
+    };
+
+    target.addEventListener("pointerdown", (event) => {
+      if (!event.isPrimary || event.button !== 0) return;
+      suppressPairedClick = true;
+      activePointerId = event.pointerId;
+      acceptSwitchEvent("pointer");
+    });
+
+    const finishPointerSequence = (event) => {
+      if (event.pointerId !== activePointerId) return;
+      activePointerId = null;
+      // Native click is dispatched after pointerup and before this timer.
+      clearPairedClickTimer = window.setTimeout(() => {
+        suppressPairedClick = false;
+        clearPairedClickTimer = null;
+      }, 0);
+    };
+    // pointerdown が画面遷移を起こしたり、外へドラッグされた場合でも確実に
+    // シーケンスを閉じられるよう、終了イベントは window のcaptureで受ける。
+    window.addEventListener("pointerup", finishPointerSequence, true);
+    window.addEventListener("pointercancel", finishPointerSequence, true);
+
+    target.addEventListener("click", (event) => {
+      // detail=0 はpointerdownを伴わないAT/プログラム由来のclickとして受理する。
+      if (suppressPairedClick && event.detail !== 0) {
+        clearPairedClick();
+        return;
+      }
+      clearPairedClick();
+      acceptSwitchEvent("pointer");
+    });
   });
 
   elements.toggleScan.addEventListener("click", () => ctx.scan.toggle());
 
   document.addEventListener("keydown", (event) => {
-    const tag = event.target.tagName.toLowerCase();
-    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    const target = event.target instanceof Element ? event.target : null;
+    const tag = target?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable) return;
     if (event.key === "Escape") {
       // ゲーム中の Esc はホスト側の強制終了（home へ直帰）。
       // それ以外は従来どおり走査停止（detailed-design.md §2.4）。
@@ -237,6 +337,17 @@ export function initNeuroNodeApp() {
       return;
     }
     if (event.key === " " || event.key === "Enter") {
+      // Tab移動でフォーカスした通常のボタン等はブラウザ本来の操作に任せる。
+      // スタート／ゲーム／画面下部の入力面だけは同じ入力ファネルへ通す。
+      const interactive = target?.closest?.("button, a[href], summary, [role='button']");
+      const switchSurface =
+        interactive === elements.primarySwitch ||
+        interactive === elements.startStage ||
+        interactive === elements.gameStage;
+      if (interactive && !switchSurface) {
+        if (event.repeat) event.preventDefault();
+        return;
+      }
       event.preventDefault();
       if (event.repeat) return; // 押しっぱなしの連続 keydown は無視する（MUST, §3.3）
       acceptSwitchEvent("keyboard");
@@ -250,19 +361,13 @@ export function initNeuroNodeApp() {
   // ゲーム中にタブが非アクティブ化したらセッションを中断して home へ直帰する
   // （detailed-design.md §2.4 終了条件3。計時汚染防止のため再開はしない）。
   document.addEventListener("visibilitychange", () => {
+    if (document.hidden && supporterEditing) setSupporterEditing(false, false);
     if (document.hidden && state.currentView === "game") {
       ctx.gameHost.abort();
     }
   });
 
   window.addEventListener("resize", () => ctx.scan.refresh());
-
-  // Service Worker は本番ビルド時のみ登録（開発時のキャッシュ事故防止）
-  if (import.meta.env.PROD && "serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js").catch(() => {});
-    });
-  }
 
   // タスク計測中の経過時間表示（1秒）とポイントスキャンのカーソル（200ms）
   window.setInterval(() => {

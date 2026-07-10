@@ -8,15 +8,15 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 5173",
-    "serve": "vite --host 0.0.0.0 --port 5173",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 5173",
-    "check": "vite build",
+    "dev": "vite --host 0.0.0.0",
+    "serve": "vite --host 0.0.0.0",
+    "build": "vite build && node scripts/generate-sw.mjs",
+    "preview": "vite preview --host 0.0.0.0",
+    "check": "npm run build",
     "test": "npm run test:unit && npm run test:web",
-    "test:unit": "node tests/judge.test.mjs",
-    "test:web": "npm run build && node tests/web-smoke.mjs",
-    "test:web:headed": "npm run build && node tests/web-smoke.mjs --headed",
+    "test:unit": "node tests/judge.test.mjs && node tests/data-integrity.test.mjs",
+    "test:web": "npm run build && node tests/web-smoke.mjs && node tests/pwa-update-race.mjs",
+    "test:web:headed": "npm run build && node tests/web-smoke.mjs --headed && node tests/pwa-update-race.mjs --headed",
     "cap:add:ios": "npx cap add ios --packagemanager cocoapods",
     "cap:sync": "npm run build && npx cap sync ios",
     "cap:open:ios": "npx cap open ios"
@@ -30,6 +30,6 @@
     "@capacitor/ios": "^8.0.0",
     "@playwright/test": "^1.61.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
-    "vite": "^6.0.0"
+    "vite": "^6.4.3"
   }
 }

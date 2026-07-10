@@ -3,6 +3,7 @@
 // =====================================================================
 
 import { escapeHtml, escapeCsv, formatTime } from "../utils.js";
+import { MAX_LOG_ENTRIES } from "../state.js";
 
 export function initLog(ctx) {
   const { state, elements, save, announce } = ctx;
@@ -27,6 +28,15 @@ export function initLog(ctx) {
       empty.textContent = "まだログはありません。教材、マッチング、VOCA、文字学習で入力すると記録されます。";
       elements.logList.append(empty);
       return;
+    }
+
+    if (state.logs.length >= MAX_LOG_ENTRIES) {
+      const retentionWarning = document.createElement("div");
+      retentionWarning.className = "empty-state";
+      retentionWarning.textContent =
+        `保存上限の直近${MAX_LOG_ENTRIES}件に達しています。` +
+        "次の入力から最も古いログが置き換わるため、必要なら先にCSVを書き出してください。";
+      elements.logList.append(retentionWarning);
     }
 
     state.logs.slice(0, 32).forEach((entry) => {

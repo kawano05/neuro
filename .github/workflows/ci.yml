@@ -27,8 +27,8 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium webkit
 
-      - name: Run browser tests
-        run: npm run test:web
+      - name: Run unit and browser tests
+        run: npm test
 
   capacitor-ios:
     name: Capacitor iOS build

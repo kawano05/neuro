@@ -34,7 +34,7 @@
 [リザルト]     → 達成率・平均オフセット・ばらつき等を表示 → アプリ選択へ戻る
 ```
 
-支援者向けビュー（効果測定・評価ログ・研究・操作訓練・設定）は既存タブとして残っています。操作訓練・効果測定・研究タブは「設定」画面の「研究者モード」トグル（既定OFF）で表示を切り替えます。
+支援者向けビュー（効果測定・評価ログ・研究・操作訓練・設定）は既存タブとして残っています。操作訓練・効果測定・研究タブは「設定」画面の「研究者モード」トグル（既定OFF）で表示を切り替えます。設定・記録・研究データの変更は、各支援者ビューで「支援者編集を開始」を押したセッション中だけ有効です。このロックは認証ではなく、利用者の自前走査による誤操作を防ぐためのものです。
 
 ## あそび（ゲームタイル）一覧
 
@@ -69,7 +69,7 @@ npm run check
 npm test
 ```
 
-`npm test` は `test:unit`（`tests/judge.test.mjs`、判定ロジック・実効判定窓のクランプ・Go/No-Go乱数列生成などの純粋関数の単体テスト）と `test:web`（本番ビルド後にPlaywrightでスモークテスト）を順に実行します。`test:web` は Chromiumデスクトップ相当とiPhone/WebKit相当で、スタート→アプリ選択→ゲームの一連の流れ、タブバー/走査停止、Escでの中断とセッション記録、既存タブの不退行、モバイル幅の崩れを確認します。
+`npm test` は `test:unit`（判定ロジック・状態復元・CSV安全化・評価セッション整合性の単体テスト）と `test:web`（本番ビルド後にPlaywrightでスモークテスト）を順に実行します。`test:web` は Chromiumデスクトップ相当とiPhone/WebKit相当で、スタート→アプリ選択→ゲーム、長押しとclick-only支援入力、キーボード操作、支援者ロック、自動走査停止、サブパスでのPWA配信と初回ロード直後のオフライン再読込、旧SW制御中に次版indexだけ取得する更新レース、既存タブの不退行、モバイル幅を確認します。
 
 ## iOS化
 
@@ -102,7 +102,8 @@ Windows上ではXcodeや本物のiOS Simulatorは使えないため、GitHub Act
 - iOS化: Capacitor
 - データ保存: localStorage（`neuronode-prototype-state-v3`。リズム計測CSVが研究の主データ、既存の効果測定CSVは補助データ）
 - 公開: GitHub Pages
-- CI: Web煙テスト + macOS上のCapacitor iOSビルド確認
+- オフライン: ビルド時にindex・ハッシュ付きWeb資産・manifest・iconを列挙し、Service Workerのinstall時に内容ハッシュ版の不変cacheへprecache。オンライン時はnetwork-firstで最新応答を返し、cacheは次版SWのinstall時に版単位で更新（Capacitorでは登録しない）
+- CI: 単体・Web煙テストでPages公開をゲート + macOS上のCapacitor iOSビルド確認
 
 研究目的、関連研究の評価軸、実験タスク案は `docs/research-summary.md` に整理しています。
 iOS版ビルド手順は `docs/ios-build-steps.md` にまとめています。
