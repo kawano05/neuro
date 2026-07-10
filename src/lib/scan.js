@@ -32,7 +32,10 @@ export function createScanEngine(ctx) {
       elements.toggleScan,
     ].filter((target) => {
       const rect = target.getBoundingClientRect();
-      return !target.disabled && rect.width > 0 && rect.height > 0;
+      // 現在表示中のタブを再選択しても画面が再描画されるだけなので、
+      // 自前走査からは除外する（通常のTab/VoiceOver操作はそのまま残る）。
+      const isCurrentTab = target.matches?.(".tab.is-active");
+      return !target.disabled && !isCurrentTab && rect.width > 0 && rect.height > 0;
     });
     if (scanIndex >= scanTargets.length) scanIndex = 0;
     updateFocus();

@@ -18,8 +18,66 @@
 // =====================================================================
 
 import { evaluationTasks, researchConditionProfiles } from "../content.js";
-import { cloneDefaultState } from "../state.js";
+import { cloneDefaultState, MAX_EVALUATION_SESSIONS } from "../state.js";
 import { escapeHtml, escapeCsv, formatDuration } from "../utils.js";
+
+function evaluationResultKey(result) {
+  return JSON.stringify([
+    result?.taskId ?? "",
+    result?.startedAt ?? "",
+    result?.endedAt ?? "",
+    result?.participantId ?? "",
+    result?.condition ?? "",
+  ]);
+}
+
+/**
+ * 進行中の結果と保存済みセッションをCSV用に平坦化する。
+ *
+ * 旧版はfinishSession後もevaluation.resultsを残していたため、同じ結果が
+ * completedSessionsとの両方に存在し得る。タスクIDと計測時刻等が一致する行を
+ * 1行に畳み、保存済み側のセッション情報を優先する。
+ */
+export function flattenEvaluationResults(evaluation) {
+  const completed = [];
+  const completedKeys = new Set();
+  const sessions = Array.isArray(evaluation?.completedSessions)
+    ? evaluation.completedSessions
+    : [];
+
+  sessions.forEach((session) => {
+    const taskResults = Array.isArray(session?.taskResults) ? session.taskResults : [];
+    taskResults.forEach((result) => {
+      if (!result || typeof result !== "object" || Array.isArray(result)) return;
+      const key = evaluationResultKey(result);
+      if (completedKeys.has(key)) return;
+      completedKeys.add(key);
+      completed.push({
+        ...result,
+        sessionStartedAt: session.startedAt,
+        sessionEndedAt: session.endedAt,
+        effortRating: session.effortRating,
+        easeRating: session.easeRating,
+        engagementRating: session.engagementRating,
+        observerNotes: session.observerNotes,
+      });
+    });
+  });
+
+  const active = [];
+  const activeKeys = new Set();
+  const results = Array.isArray(evaluation?.results) ? evaluation.results : [];
+  results.forEach((result) => {
+    if (!result || typeof result !== "object" || Array.isArray(result)) return;
+    const key = evaluationResultKey(result);
+    if (completedKeys.has(key) || activeKeys.has(key)) return;
+    activeKeys.add(key);
+    active.push(result);
+  });
+
+  // 現在のセッションを先頭に出す既存の並び順は維持する。
+  return [...active, ...completed];
+}
 
 export function initEvaluation(ctx) {
   const { state, elements, save, announce, logEvent, switchView } = ctx;
@@ -74,7 +132,14 @@ export function initEvaluation(ctx) {
 
   /** セッションを終了し、結果を completedSessions に保存する */
   function finishSession() {
-    if (!state.evaluation.isActive && state.evaluation.results.length === 0) return;
+    if (!state.evaluation.isActive) {
+      announce(
+        state.evaluation.sessionEndedAt
+          ? "この効果測定セッションはすでに終了しています"
+          : "先に効果測定セッションを開始してください"
+      );
+      return;
+    }
     if (state.evaluation.taskStartedAt) completeTask(false);
     const session = {
       participantId: state.evaluation.participantId,
@@ -88,9 +153,15 @@ export function initEvaluation(ctx) {
       taskResults: [...state.evaluation.results],
     };
     state.evaluation.completedSessions.unshift(session);
-    state.evaluation.completedSessions = state.evaluation.completedSessions.slice(0, 20);
+    state.evaluation.completedSessions = state.evaluation.completedSessions.slice(
+      0,
+      MAX_EVALUATION_SESSIONS
+    );
     state.evaluation.isActive = false;
     state.evaluation.sessionEndedAt = session.endedAt;
+    // 完了結果の正本はcompletedSessionsへ移したので、進行中バッファを空にする。
+    // 旧実装のまま残すとCSVに同じタスクが2行出て、終了ボタンも再度反応していた。
+    state.evaluation.results = [];
     state.evaluation.taskStartedAt = null;
     state.evaluation.taskInputs = 0;
     state.evaluation.taskMistakes = 0;
@@ -137,7 +208,11 @@ export function initEvaluation(ctx) {
       return;
     }
     const endedAt = new Date().toISOString();
-    const durationMs = new Date(endedAt).getTime() - new Date(state.evaluation.taskStartedAt).getTime();
+    // 端末時刻が計測中に巻き戻っても負の所要時間を保存しない。
+    const durationMs = Math.max(
+      0,
+      new Date(endedAt).getTime() - new Date(state.evaluation.taskStartedAt).getTime()
+    );
     const timingErrors =
       state.evaluation.taskTimingMissed +
       state.evaluation.taskTimingEarly +
@@ -282,18 +357,7 @@ export function initEvaluation(ctx) {
 
   /** 進行中の結果と保存済みセッションの結果を1つの配列に平坦化する */
   function flattenResults() {
-    const completed = state.evaluation.completedSessions.flatMap((session) =>
-      session.taskResults.map((result) => ({
-        ...result,
-        sessionStartedAt: session.startedAt,
-        sessionEndedAt: session.endedAt,
-        effortRating: session.effortRating,
-        easeRating: session.easeRating,
-        engagementRating: session.engagementRating,
-        observerNotes: session.observerNotes,
-      }))
-    );
-    return [...state.evaluation.results, ...completed];
+    return flattenEvaluationResults(state.evaluation);
   }
 
   /** 測定結果をBOM付きCSV（27列）でダウンロードする */
@@ -448,6 +512,10 @@ export function initEvaluation(ctx) {
     if (!elements.evaluationStatus) return;
     const task = activeTask();
     const isRunningTask = Boolean(state.evaluation.taskStartedAt);
+    const displayedResults =
+      state.evaluation.results.length > 0 || state.evaluation.isActive
+        ? state.evaluation.results
+        : state.evaluation.completedSessions[0]?.taskResults || [];
     elements.participantId.value = state.evaluation.participantId;
     elements.evaluationCondition.value = state.evaluation.condition;
     elements.effortRating.value = state.evaluation.effortRating;
@@ -482,7 +550,7 @@ export function initEvaluation(ctx) {
 
     elements.evaluationTaskList.innerHTML = "";
     evaluationTasks.forEach((item, index) => {
-      const done = state.evaluation.results.some((result) => result.taskId === item.id);
+      const done = displayedResults.some((result) => result.taskId === item.id);
       const card = document.createElement("article");
       card.className = "task-card";
       card.classList.toggle("is-current", index === state.evaluation.activeTaskIndex);
@@ -496,7 +564,7 @@ export function initEvaluation(ctx) {
     });
 
     elements.evaluationResultList.innerHTML = "";
-    const results = [...state.evaluation.results].reverse();
+    const results = [...displayedResults].reverse();
     if (results.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty-state";

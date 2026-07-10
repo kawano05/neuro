@@ -10,6 +10,7 @@
 export function collectElements() {
   return {
     scanState: document.querySelector("#scanState"),
+    supporterEditToggle: document.querySelector("#supporterEditToggle"),
     liveRegion: document.querySelector("#liveRegion"),
     tabs: [...document.querySelectorAll(".tab")],
     views: [...document.querySelectorAll(".view")],

@@ -44,8 +44,14 @@ export function initSettings(ctx) {
       state.settings[key] = element.checked;
       save();
       applyClasses();
+      if (key === "autoScan") {
+        // restartIfNeeded() はON時だけ再始動する。OFFへ切り替えた
+        // ときは既存の interval を明示的に止める必要がある。
+        if (element.checked) scan.restartIfNeeded();
+        else scan.stop();
+      }
       // researcherMode はタブの表示/非表示を切り替えるため、走査対象の再収集が要る。
-      if (key === "autoScan" || key === "researcherMode") scan.restartIfNeeded();
+      if (key === "researcherMode") scan.restartIfNeeded();
     });
   });
 
