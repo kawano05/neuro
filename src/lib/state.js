@@ -22,6 +22,8 @@ import {
   researchConditionProfiles,
   environmentLabels,
 } from "./content.js";
+import { graspOutcome } from "./games/pointing.js";
+import { judgeReaction } from "./games/reaction.js";
 
 /**
  * 旧保存キー（P0-0 移行元、detailed-design.md §9.5）。
@@ -67,6 +69,8 @@ export const defaultState = {
     soundEnabled: true,
     largeText: true,
     highContrast: false,
+    // 視覚を必要とする課題（現在は crane）をロビーから隠す。
+    hideVisualTasks: false,
     // 既定OFF。ONで操作訓練/効果測定/研究タブを表示する（P0-0, detailed-design.md §0.2）。
     researcherMode: false,
     // P0-2（ゲーム系設定、detailed-design.md §9.1）。judgmentWindowMs は判定窓の
@@ -110,20 +114,26 @@ export const defaultState = {
     deploymentNotes: "",
     readiness: readinessItems.reduce((items, item) => ({ ...items, [item.id]: false }), {}),
   },
-  // P0-2（detailed-design.md §9.1）。リズムゲームのセッション記録（games/rhythm.js が
-  // P2-3 で実際の記録処理を実装するまでは常に空）。直近50セッションのみを保持し、
-  // 超過分は古い順に破棄する（loadState() のマージ処理・保存経路の双方で担保する）。
+  // 旧v3データとの読み書き互換用。中立UIでは新規付与・表示を行わない。
+  arcade: {
+    medals: 0,
+    history: [],
+  },
+  // 課題横断のセッション正本。taskType ごとに config/summary の形を分ける。
+  sessions: [],
+  // v3旧構造の切り戻し口。実データは上の sessions へ移送する。
   rhythm: {
+    // v3 旧データの移送元としてキーを残す。新規保存は state.sessions を使う。
     sessions: [],
   },
 };
 
 /**
- * rhythm.sessions の保持件数上限（detailed-design.md §9.1・§14 未決事項4）。
- * セッションを追加する側（games/rhythm.js、P2-3 で実装）も保存時にこの定数で
+ * 全 taskType 合計の保持件数上限（detailed-design.md §9.1）。
+ * セッションを追加する側（games/gameHost.js）も保存時にこの定数で
  * 古い順に破棄する想定。
  */
-export const MAX_RHYTHM_SESSIONS = 50;
+export const MAX_SESSIONS = 50;
 
 /** 操作ログの保持件数上限。配列先頭が最新。 */
 export const MAX_LOG_ENTRIES = 300;
@@ -134,8 +144,12 @@ export const MAX_EVALUATION_SESSIONS = 20;
 const MAX_COUNTER_VALUE = 1_000_000_000;
 const MAX_EVALUATION_DISTANCES = 1_000;
 const MAX_BASELINE_OFFSET_MS = 5_000;
-const MAX_RHYTHM_TRIALS_PER_SESSION = 1_000;
+const MAX_TRIALS_PER_SESSION = 1_000;
+const MAX_ARCADE_HISTORY = 100;
+const TASK_TYPES = new Set(["sms", "gonogo", "scan", "rt"]);
 const RHYTHM_GAME_IDS = new Set(["rhythm-l1", "rhythm-l2", "gonogo", "calibration"]);
+const SCAN_GAME_IDS = new Set(["crane"]);
+const RT_GAME_IDS = new Set(["fishing"]);
 const RHYTHM_MODES = new Set(["cued", "continuous", "gonogo"]);
 const RHYTHM_MODE_BY_GAME_ID = new Map([
   ["rhythm-l1", "cued"],
@@ -294,7 +308,7 @@ function sanitizeCompletedSession(session) {
   };
 }
 
-function sanitizeRhythmTrial(trial) {
+function sanitizeRhythmTrial(trial, rowIndex) {
   if (!isRecord(trial)) return null;
   // 判定値が壊れた行を miss 等へ読み替えると研究結果そのものを捏造するため、
   // 必須列や判断値別の組合せが不正な試行は捨てる。
@@ -350,6 +364,7 @@ function sanitizeRhythmTrial(trial) {
   }
 
   return {
+    index: numberInRange(trial.index, rowIndex, 0, MAX_COUNTER_VALUE, true),
     beatIndex: trial.beatIndex,
     beatKind: trial.beatKind,
     scheduledMs: trial.scheduledMs,
@@ -359,6 +374,26 @@ function sanitizeRhythmTrial(trial) {
     judgment: trial.judgment,
     excluded: trial.excluded,
   };
+}
+
+function average(values) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+function standardDeviation(values, mean = average(values)) {
+  if (values.length < 2 || mean === null) return null;
+  return Math.sqrt(
+    values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1)
+  );
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 /**
@@ -433,7 +468,7 @@ function hasCompleteRhythmPlan(trials, config) {
   return seenBeatIndexes.size === config.targetBeats;
 }
 
-function sanitizeRhythmSession(session) {
+function sanitizeRhythmSession(session, taskType) {
   if (!isRecord(session)) return null;
   const config = isRecord(session.config) ? session.config : {};
   const device = isRecord(session.device) ? session.device : {};
@@ -458,15 +493,17 @@ function sanitizeRhythmSession(session) {
       : [],
   };
   const rawTrials = Array.isArray(session.trials) ? session.trials : null;
-  const sanitizedTrialSlots = rawTrials?.map(sanitizeRhythmTrial) || [];
+  const sanitizedTrialSlots =
+    rawTrials?.map((trial, index) => sanitizeRhythmTrial(trial, index)) || [];
   const allTrialsRetained =
     rawTrials !== null &&
-    rawTrials.length <= MAX_RHYTHM_TRIALS_PER_SESSION &&
+    rawTrials.length <= MAX_TRIALS_PER_SESSION &&
     sanitizedTrialSlots.every(Boolean);
-  const trials = sanitizedTrialSlots.filter(Boolean).slice(0, MAX_RHYTHM_TRIALS_PER_SESSION);
+  const trials = sanitizedTrialSlots.filter(Boolean).slice(0, MAX_TRIALS_PER_SESSION);
 
   const planConfigIsValid =
     RHYTHM_GAME_IDS.has(session.gameId) &&
+    taskType === (session.gameId === "gonogo" ? "gonogo" : "sms") &&
     RHYTHM_MODE_BY_GAME_ID.get(session.gameId) === config.mode &&
     Number.isInteger(config.targetBeats) &&
     config.targetBeats >= 1 &&
@@ -488,6 +525,7 @@ function sanitizeRhythmSession(session) {
     hasCompleteRhythmPlan(trials, sanitizedConfig);
   return {
     sessionId: stringOr(session.sessionId, "unknown"),
+    taskType,
     gameId: enumOr(session.gameId, RHYTHM_GAME_IDS, "rhythm-l1"),
     participantId: stringOr(session.participantId),
     startedAtIso: isoStringOr(session.startedAtIso, ""),
@@ -503,6 +541,291 @@ function sanitizeRhythmSession(session) {
     // 保存済みsummaryは派生値。破損・改変されていても採用せずtrialを正本にする。
     summary: summarizeRhythmTrials(trials),
   };
+}
+
+function sanitizeDevice(device) {
+  const value = isRecord(device) ? device : {};
+  return {
+    outputLatencyS: nullableNumberInRange(value.outputLatencyS, null, 0, 60),
+    baseLatencyS: nullableNumberInRange(value.baseLatencyS, null, 0, 60),
+    userAgent: stringOr(value.userAgent),
+  };
+}
+
+function sanitizeScanTrial(trial, rowIndex) {
+  if (!isRecord(trial)) return null;
+  const judgment = enumOr(trial.judgment, new Set(["grip", "slip", "miss"]), null);
+  if (!judgment) return null;
+  const numericKeys = [
+    "targetX",
+    "targetY",
+    "toleranceR",
+    "selectedX",
+    "selectedY",
+    "xPhaseMs",
+    "yPhaseMs",
+  ];
+  if (numericKeys.some((key) => typeof trial[key] !== "number" || !Number.isFinite(trial[key]))) {
+    return null;
+  }
+  if (
+    trial.targetX < 0 ||
+    trial.targetX > 100 ||
+    trial.targetY < 0 ||
+    trial.targetY > 100 ||
+    trial.selectedX < 0 ||
+    trial.selectedX > 100 ||
+    trial.selectedY < 0 ||
+    trial.selectedY > 100 ||
+    trial.toleranceR <= 0 ||
+    trial.toleranceR > 100 ||
+    trial.xPhaseMs < 0 ||
+    trial.yPhaseMs < 0
+  ) return null;
+
+  const dx = trial.selectedX - trial.targetX;
+  const dy = trial.selectedY - trial.targetY;
+  const distance = Math.hypot(dx, dy);
+  if (graspOutcome(distance, trial.toleranceR) !== judgment) return null;
+
+  return {
+    index: numberInRange(trial.index, rowIndex, 0, MAX_COUNTER_VALUE, true),
+    targetX: trial.targetX,
+    targetY: trial.targetY,
+    toleranceR: trial.toleranceR,
+    selectedX: trial.selectedX,
+    selectedY: trial.selectedY,
+    dx,
+    dy,
+    distance,
+    xPhaseMs: trial.xPhaseMs,
+    yPhaseMs: trial.yPhaseMs,
+    judgment,
+  };
+}
+
+function summarizeScanTrials(trials) {
+  const distances = trials.map((trial) => trial.distance);
+  const xPhases = trials.map((trial) => trial.xPhaseMs);
+  const yPhases = trials.map((trial) => trial.yPhaseMs);
+  const grips = trials.filter((trial) => trial.judgment === "grip").length;
+  const slips = trials.filter((trial) => trial.judgment === "slip").length;
+  const misses = trials.filter((trial) => trial.judgment === "miss").length;
+  const meanDistance = average(distances);
+  return {
+    trials: trials.length,
+    grips,
+    slips,
+    misses,
+    gripRate: trials.length ? grips / trials.length : 0,
+    meanDistance,
+    sdDistance: standardDeviation(distances, meanDistance),
+    medianDistance: median(distances),
+    meanXPhaseMs: average(xPhases),
+    meanYPhaseMs: average(yPhases),
+  };
+}
+
+function sanitizeScanSession(session) {
+  if (!isRecord(session) || !SCAN_GAME_IDS.has(session.gameId)) return null;
+  const config = isRecord(session.config) ? session.config : {};
+  const sanitizedConfig = {
+    sweepMs: numberInRange(config.sweepMs, 2400, 400, 10_000, true),
+    toleranceR: numberInRange(config.toleranceR, 12, 1, 50),
+    targetTrials: numberInRange(config.targetTrials, 5, 1, 100, true),
+    graspAnimMs: numberInRange(config.graspAnimMs, 1200, 100, 10_000, true),
+    targetSequence: Array.isArray(config.targetSequence)
+      ? config.targetSequence
+          .filter(
+            (target) =>
+              isRecord(target) &&
+              typeof target.x === "number" &&
+              Number.isFinite(target.x) &&
+              target.x >= 0 &&
+              target.x <= 100 &&
+              typeof target.y === "number" &&
+              Number.isFinite(target.y) &&
+              target.y >= 0 &&
+              target.y <= 100
+          )
+          .map((target) => ({ x: target.x, y: target.y }))
+          .slice(0, 100)
+      : [],
+  };
+  const rawTrials = Array.isArray(session.trials) ? session.trials : null;
+  const slots = rawTrials?.map((trial, index) => sanitizeScanTrial(trial, index)) || [];
+  const trials = slots.filter(Boolean).slice(0, MAX_TRIALS_PER_SESSION);
+  const completedNormally =
+    session.finished === true &&
+    session.aborted === false &&
+    rawTrials !== null &&
+    rawTrials.length <= MAX_TRIALS_PER_SESSION &&
+    slots.every(Boolean) &&
+    trials.length === sanitizedConfig.targetTrials;
+  return {
+    sessionId: stringOr(session.sessionId, "unknown"),
+    taskType: "scan",
+    gameId: session.gameId,
+    participantId: stringOr(session.participantId),
+    startedAtIso: isoStringOr(session.startedAtIso, ""),
+    aborted: !completedNormally,
+    finished: completedNormally,
+    config: sanitizedConfig,
+    device: sanitizeDevice(session.device),
+    trials,
+    summary: summarizeScanTrials(trials),
+  };
+}
+
+function sanitizeReactionTrial(trial, rowIndex) {
+  if (!isRecord(trial)) return null;
+  const kind = enumOr(trial.kind, new Set(["real", "fake"]), null);
+  const judgment = enumOr(
+    trial.judgment,
+    new Set(["hit", "timeout", "falseStart", "commission", "correctRejection"]),
+    null
+  );
+  if (!kind || !judgment || typeof trial.excluded !== "boolean") return null;
+  if (
+    typeof trial.foreperiodMs !== "number" ||
+    !Number.isFinite(trial.foreperiodMs) ||
+    trial.foreperiodMs < 0 ||
+    typeof trial.cueMs !== "number" ||
+    !Number.isFinite(trial.cueMs) ||
+    trial.cueMs < 0
+  ) return null;
+  const inputMs =
+    typeof trial.inputMs === "number" && Number.isFinite(trial.inputMs) && trial.inputMs >= 0
+      ? trial.inputMs
+      : null;
+  const inferredLimitMs =
+    typeof trial.limitMs === "number" && Number.isFinite(trial.limitMs) && trial.limitMs >= 0
+      ? trial.limitMs
+      : Number.MAX_SAFE_INTEGER;
+  if (judgeReaction(inputMs, trial.cueMs, inferredLimitMs, kind) !== judgment) return null;
+  const reactionTimeMs = judgment === "hit" ? inputMs - trial.cueMs : null;
+  return {
+    index: numberInRange(trial.index, rowIndex, 0, MAX_COUNTER_VALUE, true),
+    kind,
+    foreperiodMs: trial.foreperiodMs,
+    cueMs: trial.cueMs,
+    inputMs,
+    reactionTimeMs,
+    judgment,
+    excluded: trial.excluded,
+  };
+}
+
+function summarizeReactionTrials(trials) {
+  const included = trials.filter((trial) => !trial.excluded);
+  const hits = included.filter((trial) => trial.judgment === "hit");
+  const timeouts = included.filter((trial) => trial.judgment === "timeout").length;
+  const falseStarts = included.filter((trial) => trial.judgment === "falseStart").length;
+  const commissions = included.filter((trial) => trial.judgment === "commission").length;
+  const correctRejections = included.filter(
+    (trial) => trial.judgment === "correctRejection"
+  ).length;
+  const realCount = included.filter((trial) => trial.kind === "real").length;
+  const fakeCount = included.filter((trial) => trial.kind === "fake").length;
+  const reactionTimes = hits.map((trial) => trial.reactionTimeMs);
+  const meanRtMs = average(reactionTimes);
+  return {
+    trials: included.length,
+    hits: hits.length,
+    timeouts,
+    falseStarts,
+    commissions,
+    correctRejections,
+    hitRate: realCount ? hits.length / realCount : 0,
+    commissionRate: fakeCount ? commissions / fakeCount : 0,
+    falseStartRate: included.length ? falseStarts / included.length : 0,
+    meanRtMs,
+    sdRtMs: standardDeviation(reactionTimes, meanRtMs),
+    medianRtMs: median(reactionTimes),
+  };
+}
+
+function sanitizeReactionSession(session) {
+  if (!isRecord(session) || !RT_GAME_IDS.has(session.gameId)) return null;
+  const config = isRecord(session.config) ? session.config : {};
+  const targetTrials = numberInRange(config.targetTrials, 8, 1, 200, true);
+  const limitMs = numberInRange(config.limitMs, 2000, 100, 10_000, true);
+  const sanitizedConfig = {
+    foreperiodMinMs: numberInRange(config.foreperiodMinMs, 1500, 100, 60_000, true),
+    foreperiodMaxMs: numberInRange(config.foreperiodMaxMs, 5000, 100, 60_000, true),
+    limitMs,
+    targetTrials,
+    fakeRatio: numberInRange(config.fakeRatio, 0.25, 0, 1),
+    seedSequence: Array.isArray(config.seedSequence)
+      ? config.seedSequence
+          .filter((value) => typeof value === "number" && Number.isFinite(value))
+          .map((value) => numberInRange(value, 1500, 0, 60_000, true))
+          .slice(0, 200)
+      : [],
+    kindSequence: Array.isArray(config.kindSequence)
+      ? config.kindSequence.filter((kind) => kind === "real" || kind === "fake").slice(0, 200)
+      : [],
+  };
+  const rawTrials = Array.isArray(session.trials) ? session.trials : null;
+  const withLimit =
+    rawTrials?.map((trial) => (isRecord(trial) ? { ...trial, limitMs } : trial)) || [];
+  const slots = withLimit.map((trial, index) => sanitizeReactionTrial(trial, index));
+  const trials = slots.filter(Boolean).slice(0, MAX_TRIALS_PER_SESSION);
+  const completedNormally =
+    session.finished === true &&
+    session.aborted === false &&
+    rawTrials !== null &&
+    rawTrials.length <= MAX_TRIALS_PER_SESSION &&
+    slots.every(Boolean) &&
+    trials.length === targetTrials;
+  return {
+    sessionId: stringOr(session.sessionId, "unknown"),
+    taskType: "rt",
+    gameId: session.gameId,
+    participantId: stringOr(session.participantId),
+    startedAtIso: isoStringOr(session.startedAtIso, ""),
+    aborted: !completedNormally,
+    finished: completedNormally,
+    config: sanitizedConfig,
+    device: sanitizeDevice(session.device),
+    trials,
+    summary: summarizeReactionTrials(trials),
+  };
+}
+
+function inferredTaskType(session) {
+  if (TASK_TYPES.has(session?.taskType)) return session.taskType;
+  if (session?.gameId === "gonogo") return "gonogo";
+  if (RHYTHM_GAME_IDS.has(session?.gameId)) return "sms";
+  if (SCAN_GAME_IDS.has(session?.gameId)) return "scan";
+  if (RT_GAME_IDS.has(session?.gameId)) return "rt";
+  return null;
+}
+
+function sanitizeSession(session) {
+  const taskType = inferredTaskType(session);
+  if (taskType === "sms" || taskType === "gonogo") {
+    return sanitizeRhythmSession(session, taskType);
+  }
+  if (taskType === "scan") return sanitizeScanSession(session);
+  if (taskType === "rt") return sanitizeReactionSession(session);
+  return null;
+}
+
+function sanitizeSessions(currentSessions, legacyRhythmSessions) {
+  const candidates = [
+    ...(Array.isArray(currentSessions) ? currentSessions : []),
+    ...(Array.isArray(legacyRhythmSessions) ? legacyRhythmSessions : []),
+  ];
+  const seen = new Set();
+  return candidates
+    .map(sanitizeSession)
+    .filter((session) => {
+      if (!session || seen.has(session.sessionId)) return false;
+      seen.add(session.sessionId);
+      return true;
+    })
+    .slice(-MAX_SESSIONS);
 }
 
 /** defaultState の深いコピーを返す。 */
@@ -526,6 +849,7 @@ export function sanitizeState(candidate) {
   const evaluation = isRecord(candidate.evaluation) ? candidate.evaluation : {};
   const research = isRecord(candidate.research) ? candidate.research : {};
   const readiness = isRecord(research.readiness) ? research.readiness : {};
+  const arcade = isRecord(candidate.arcade) ? candidate.arcade : {};
   const rhythm = isRecord(candidate.rhythm) ? candidate.rhythm : {};
 
   const operationTrials = numberInRange(
@@ -636,6 +960,10 @@ export function sanitizeState(candidate) {
       soundEnabled: booleanOr(settings.soundEnabled, fallback.settings.soundEnabled),
       largeText: booleanOr(settings.largeText, fallback.settings.largeText),
       highContrast: booleanOr(settings.highContrast, fallback.settings.highContrast),
+      hideVisualTasks: booleanOr(
+        settings.hideVisualTasks,
+        fallback.settings.hideVisualTasks
+      ),
       researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),
       judgmentWindowMs: numberInRange(
         settings.judgmentWindowMs,
@@ -780,13 +1108,29 @@ export function sanitizeState(candidate) {
         return items;
       }, {}),
     },
-    rhythm: {
-      sessions: Array.isArray(rhythm.sessions)
-        ? rhythm.sessions
-            .map(sanitizeRhythmSession)
-            .filter(Boolean)
-            .slice(-MAX_RHYTHM_SESSIONS)
+    arcade: {
+      medals: numberInRange(
+        arcade.medals,
+        fallback.arcade.medals,
+        0,
+        MAX_COUNTER_VALUE,
+        true
+      ),
+      history: Array.isArray(arcade.history)
+        ? arcade.history
+            .filter((entry) => isRecord(entry))
+            .map((entry) => ({
+              at: isoStringOr(entry.at, ""),
+              gameId: stringOr(entry.gameId),
+              medalsAdded: numberInRange(entry.medalsAdded, 0, 0, MAX_COUNTER_VALUE, true),
+            }))
+            .slice(-MAX_ARCADE_HISTORY)
         : [],
+    },
+    sessions: sanitizeSessions(candidate.sessions, rhythm.sessions),
+    rhythm: {
+      // 旧v3データは上の sessions へ移送済み。キー自体は切り戻し用に残す。
+      sessions: [],
     },
   };
 }

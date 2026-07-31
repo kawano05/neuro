@@ -12,14 +12,18 @@
 
 <div class="app-shell">
   <header class="topbar">
-    <div>
-      <p class="eyebrow">neuro Web Prototype</p>
-      <h1>neuro</h1>
+    <div class="brand-lockup">
+      <i class="fa-solid fa-circle-nodes brand-mark" aria-hidden="true"></i>
+      <h1>NEURONODE</h1>
+    </div>
+    <div class="status-pill" aria-live="polite">
+      <span id="scanState">走査停止中</span>
     </div>
     <div class="topbar-actions">
-      <div class="status-pill" aria-live="polite">
-        <span id="scanState">走査停止中</span>
-      </div>
+      <button class="home-supporter-menu" id="homeSupporterMenu" type="button" hidden>
+        <i class="fa-solid fa-user" aria-hidden="true"></i>
+        <span>支援者メニュー</span>
+      </button>
       <button
         class="supporter-edit-toggle"
         id="supporterEditToggle"
@@ -50,7 +54,7 @@
     </button>
     <!--
       マッチング・VOCA・文字学習は利用者向けアクティビティなので、タブでは
-      なくホームのタイル（#activityTileGrid、views/home.js）から入る。
+      なくホームの「まなぶ・つたえる」二階層から入る。
       タブバーに残るのは支援者機能（評価ログ・設定＋研究者モードの3タブ）のみ。
     -->
     <button class="tab researcher-tab" data-view="operation" data-scan>操作訓練</button>
@@ -77,23 +81,12 @@
     </section>
 
     <section class="view" id="homeView" aria-labelledby="home-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Choose a game</p>
-          <h2 id="home-title">あそびを えらぶ</h2>
-        </div>
+      <div class="home-intro">
+        <p class="eyebrow" id="homeEyebrow">Home</p>
+        <h2 id="home-title">アクティビティ</h2>
+        <p class="home-guide" id="homeGuide">やりたいことを えらびます</p>
       </div>
-      <div class="module-grid" id="gameTileGrid" aria-label="あそびの一覧"></div>
-
-      <!-- 学習・コミュニケーション系（旧タブのマッチング/VOCA/文字学習）。
-           タイルデータは content.js の activityTiles、描画は views/home.js。 -->
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Learn &amp; communicate</p>
-          <h2 id="home-activity-title">まなぶ・つたえる</h2>
-        </div>
-      </div>
-      <div class="module-grid" id="activityTileGrid" aria-label="まなびの一覧"></div>
+      <div class="activity-list" id="gameTileGrid" aria-label="アクティビティの一覧"></div>
     </section>
 
     <section class="view" id="gameView" aria-labelledby="game-title">
@@ -234,6 +227,8 @@
         <div class="action-row">
           <button class="secondary" id="exportEvaluationCsv" data-scan>測定CSV</button>
           <button class="secondary" id="exportRhythmCsv" data-scan>リズムCSV</button>
+          <button class="secondary" id="exportScanCsv" data-scan>走査CSV</button>
+          <button class="secondary" id="exportRtCsv" data-scan>反応CSV</button>
           <button class="danger" id="resetEvaluation" data-scan>測定リセット</button>
         </div>
       </div>
@@ -467,6 +462,16 @@
         </div>
       </div>
 
+      <div class="supporter-actions">
+        <div>
+          <strong>入力タイミングの測定</strong>
+          <span>利用者ホームには表示せず、支援者と一緒に実施します。</span>
+        </div>
+        <button class="secondary" id="startCalibration" type="button" data-supporter-edit>
+          そくていを始める
+        </button>
+      </div>
+
       <div class="settings-grid">
         <label class="setting-row">
           <span>
@@ -519,6 +524,14 @@
 
         <label class="setting-row toggle-row">
           <span>
+            <strong>視覚課題を隠す</strong>
+            <small>画面注視が必要なUFOキャッチャーをロビーから外します</small>
+          </span>
+          <input id="hideVisualTasks" type="checkbox" role="switch" data-scan />
+        </label>
+
+        <label class="setting-row toggle-row">
+          <span>
             <strong>研究者モード</strong>
             <small>操作訓練・効果測定・研究タブを表示します</small>
           </span>
@@ -529,8 +542,14 @@
   </main>
 
   <footer class="switch-dock">
-    <button class="scan-control" id="toggleScan" data-scan>走査開始</button>
-    <button class="primary-switch" id="primarySwitch">入力</button>
+    <button class="scan-control" id="toggleScan" data-scan>
+      <i class="fa-solid fa-circle-stop" aria-hidden="true"></i>
+      <span id="toggleScanLabel">走査開始</span>
+    </button>
+    <button class="primary-switch" id="primarySwitch">
+      <i class="fa-solid fa-circle" aria-hidden="true"></i>
+      <span id="primarySwitchLabel">入力</span>
+    </button>
   </footer>
 </div>
 

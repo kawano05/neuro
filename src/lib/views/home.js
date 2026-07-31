@@ -9,59 +9,179 @@
 // =====================================================================
 
 import { gameModules } from "../games/registry.js";
-import { activityTiles, cueTones } from "../content.js";
+import {
+  activityTiles,
+  cueTones,
+  learningCornerTile,
+  rhythmCornerTile,
+} from "../content.js";
 
 export function initHome(ctx) {
   const { state, elements, save, announce, logEvent, scan } = ctx;
+  let activeCorner = null;
+  let blockNextHomeClick = false;
+  let homeClickGuardTimer = null;
+  let postStartClickListenerAttached = false;
 
-  /** タイルボタンの共通生成（ゲーム・アクティビティ兼用）。装飾（アイコン・
-      アクセント色）は content.js の純粋データを CSS 変数経由で styles.css の
-      .game-tile に渡す。 */
-  function createTileButton(tile) {
+  function gameById(id) {
+    return gameModules.find((game) => game.id === id);
+  }
+
+  /** 走査順が視覚的にも分かる、横長アクティビティ行を生成する。 */
+  function createTileButton(tile, index) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "module-button game-tile";
     button.dataset.scan = "";
-    if (tile.accent) button.style.setProperty("--tile-accent", tile.accent);
-    if (tile.accentSoft) button.style.setProperty("--tile-accent-soft", tile.accentSoft);
-    const icon = tile.icon ? `<span class="tile-icon" aria-hidden="true">${tile.icon}</span>` : "";
-    button.innerHTML = `${icon}<strong>${tile.title}</strong><span>${tile.description}</span>`;
+    button.dataset.tileId = tile.id || tile.view;
+    if (tile.view) button.dataset.view = tile.view;
+    button.setAttribute("aria-label", tile.title);
+    const icon = tile.iconClass
+      ? `<span class="tile-icon" aria-hidden="true"><i class="${tile.iconClass}"></i></span>`
+      : "";
+    button.innerHTML = `
+      <span class="scan-order" aria-hidden="true">${index + 1}</span>
+      ${icon}
+      <strong>${tile.title}</strong>
+      <span class="scan-current-label" aria-hidden="true">いま えらんでいます</span>
+    `;
     return button;
   }
 
-  /** ゲームタイルグリッドの描画（§2.3）。enabled:false は「じゅんびちゅう」表示＋走査除外。 */
+  function homeClickIsGuarded(event) {
+    if (!blockNextHomeClick) return false;
+    clearStartInputGuard();
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  function armStartInputGuard() {
+    blockNextHomeClick = true;
+    if (!postStartClickListenerAttached) {
+      window.addEventListener("click", interceptPostStartClick, true);
+      postStartClickListenerAttached = true;
+    }
+    if (homeClickGuardTimer) window.clearTimeout(homeClickGuardTimer);
+    homeClickGuardTimer = window.setTimeout(clearStartInputGuard, 500);
+  }
+
+  function interceptPostStartClick(event) {
+    if (!blockNextHomeClick) return;
+    const fellThroughToHome = event.target instanceof Element
+      ? event.target.closest("#gameTileGrid .game-tile")
+      : null;
+    clearStartInputGuard();
+    if (!fellThroughToHome) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function clearStartInputGuard() {
+    blockNextHomeClick = false;
+    if (postStartClickListenerAttached) {
+      window.removeEventListener("click", interceptPostStartClick, true);
+      postStartClickListenerAttached = false;
+    }
+    if (homeClickGuardTimer) {
+      window.clearTimeout(homeClickGuardTimer);
+      homeClickGuardTimer = null;
+    }
+  }
+
+  function cornerBackTile() {
+    return {
+      id: "home-back",
+      title: "アクティビティへ もどる",
+      iconClass: "fa-solid fa-arrow-left",
+    };
+  }
+
+  /** 利用者ホームまたは二階層目を、同じ5項目以内の走査リストで描画する。 */
   function renderTiles() {
     elements.gameTileGrid.innerHTML = "";
-    gameModules.forEach((game) => {
-      const button = createTileButton(game);
 
-      if (game.enabled === false) {
-        // disabled 属性を立てると scan.refresh() のフィルタ（!target.disabled）から
-        // 自動的に除外される（detailed-design.md §2.3）。
-        button.disabled = true;
-        button.innerHTML = `${button.querySelector(".tile-icon")?.outerHTML || ""}<strong>${game.title || "じゅんびちゅう"}</strong><span>じゅんびちゅう</span>`;
+    if (activeCorner === "rhythm") {
+      elements.homeEyebrow.textContent = "Rhythm";
+      elements.homeTitle.textContent = "リズム";
+      elements.homeGuide.textContent = "おとの アクティビティを えらびます";
+      const cornerGames = ["rhythm-l1", "rhythm-l2", "gonogo"]
+        .map(gameById)
+        .filter(Boolean);
+      [...cornerGames, cornerBackTile()].forEach((game, index) => {
+        const button = createTileButton(game, index);
+        button.addEventListener("click", (event) => {
+          if (homeClickIsGuarded(event)) return;
+          if (game.id === "home-back") {
+            showLobby();
+            renderTiles();
+            scan.restartIfNeeded();
+          } else {
+            ctx.gameHost.launch(game.id);
+          }
+        });
+        elements.gameTileGrid.append(button);
+      });
+      return;
+    }
+
+    if (activeCorner === "learning") {
+      elements.homeEyebrow.textContent = "Learn & communicate";
+      elements.homeTitle.textContent = "まなぶ・つたえる";
+      elements.homeGuide.textContent = "アクティビティを えらびます";
+      [...activityTiles, cornerBackTile()].forEach((tile, index) => {
+        const button = createTileButton(tile, index);
+        button.addEventListener("click", (event) => {
+          if (homeClickIsGuarded(event)) return;
+          if (tile.id === "home-back") {
+            showLobby();
+            renderTiles();
+            scan.restartIfNeeded();
+          } else {
+            ctx.switchView(tile.view);
+          }
+        });
+        elements.gameTileGrid.append(button);
+      });
+      return;
+    }
+
+    elements.homeEyebrow.textContent = "Home";
+    elements.homeTitle.textContent = "アクティビティ";
+    elements.homeGuide.textContent = "やりたいことを えらびます";
+    const homeTiles = [
+      gameById("color-legacy"),
+      rhythmCornerTile,
+      !state.settings.hideVisualTasks ? gameById("crane") : null,
+      gameById("fishing"),
+      learningCornerTile,
+    ].filter(Boolean);
+
+    homeTiles.forEach((game, index) => {
+      const button = createTileButton(game, index);
+      if (game.id === "rhythm-corner") {
+        button.addEventListener("click", (event) => {
+          if (homeClickIsGuarded(event)) return;
+          activeCorner = "rhythm";
+          renderTiles();
+          scan.restartIfNeeded();
+          announce("リズムを えらびます");
+        });
+      } else if (game.id === "learning-corner") {
+        button.addEventListener("click", (event) => {
+          if (homeClickIsGuarded(event)) return;
+          activeCorner = "learning";
+          renderTiles();
+          scan.restartIfNeeded();
+          announce("まなぶ・つたえるを えらびます");
+        });
       } else {
-        button.addEventListener("click", () => {
+        button.addEventListener("click", (event) => {
+          if (homeClickIsGuarded(event)) return;
           ctx.gameHost.launch(game.id);
         });
       }
-
       elements.gameTileGrid.append(button);
-    });
-  }
-
-  /** 「まなぶ・つたえる」タイルの描画。旧タブのマッチング/VOCA/文字学習は
-      利用者向けアクティビティなのでホームから入る（タブバーは支援者機能のみ）。
-      ゲーム契約には乗せず、既存ビューへ switchView() で遷移するだけ。 */
-  function renderActivityTiles() {
-    elements.activityTileGrid.innerHTML = "";
-    activityTiles.forEach((tile) => {
-      const button = createTileButton(tile);
-      button.dataset.view = tile.view;
-      button.addEventListener("click", () => {
-        ctx.switchView(tile.view);
-      });
-      elements.activityTileGrid.append(button);
     });
   }
 
@@ -72,6 +192,10 @@ export function initHome(ctx) {
    */
   function leaveStart(/* t */) {
     if (state.currentView !== "start") return;
+    // pointerdown で画面が切り替わった直後、同じ物理操作の pointerup/click が
+    // 新しく現れたホーム行へ落ちるのを防ぐ。入力ファネルのdedupeを通らない
+    // 通常ボタンのclickにも効く、画面遷移側のガード。
+    armStartInputGuard();
     ctx.audio.unlock();
     ctx.audio.playTone(cueTones.high);
     logEvent({ type: "switch", label: "スタート" });
@@ -87,11 +211,16 @@ export function initHome(ctx) {
     ctx.switchView("settings");
   });
 
+  function showLobby() {
+    activeCorner = null;
+  }
+
   return {
     render() {
       renderTiles();
-      renderActivityTiles();
     },
     leaveStart,
+    clearStartInputGuard,
+    showLobby,
   };
 }

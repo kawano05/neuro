@@ -74,6 +74,7 @@ const TAB_WORLD_VIEWS = new Set([
 // ロックは認証ではなく、自前走査からの誤操作を防ぐためのセッション内ガード。
 const SUPPORTER_EDIT_VIEWS = new Set(["evaluation", "research", "log", "settings"]);
 const SUPPORTER_UNLOCK_VIEWS = new Set([...SUPPORTER_EDIT_VIEWS, "operation"]);
+const USER_ACTIVITY_VIEWS = new Set(["matching", "voca", "letters"]);
 
 export function initNeuroNodeApp() {
   // --- 状態と要素 ---
@@ -204,11 +205,15 @@ export function initNeuroNodeApp() {
       view.classList.toggle("is-active", view.id === nextViewElementId);
     });
     document.body.classList.toggle("game-mode", nextView === "game");
+    document.body.classList.toggle("home-mode", nextView === "home");
+    document.body.classList.toggle("user-activity-mode", USER_ACTIVITY_VIEWS.has(nextView));
     // スタート画面では支援者向けシェル（ヘッダ・タブバー）を CSS で隠し、
     // 「はじめる」への集中を保つ（styles.css の body.start-mode ルール参照）。
     // 支援者のタップ導線は #startSettingsLink（せってい）が残る。
     document.body.classList.toggle("start-mode", nextView === "start");
     elements.homeReturn.hidden = !TAB_WORLD_VIEWS.has(nextView);
+    elements.homeSupporterMenu.hidden = nextView !== "home";
+    elements.primarySwitchLabel.textContent = nextView === "home" ? "入力して決定" : "入力";
 
     ctx.views.home.render();
     ctx.views.matching.render();
@@ -256,8 +261,16 @@ export function initNeuroNodeApp() {
   // 導線。data-scan を付けているため、スイッチ利用者が誤ってタブ世界に入っても
   // 走査で自力到達できる（実機確認2026-07-04で発覚した欠落の修正）。
   elements.homeReturn.addEventListener("click", () => {
+    ctx.views.home.showLobby();
     ctx.switchView("home");
     ctx.announce("メニューにもどります");
+  });
+
+  // 利用者の走査順には入らない、タップ／キーボード専用の支援者入口。
+  elements.homeSupporterMenu.addEventListener("click", (event) => {
+    event.stopPropagation();
+    ctx.switchView("settings");
+    ctx.announce("支援者メニューです");
   });
 
   // 自前走査の対象には含めないが、通常のキーボード・VoiceOverでは操作可能な
@@ -312,11 +325,15 @@ export function initNeuroNodeApp() {
     target.addEventListener("click", (event) => {
       // detail=0 はpointerdownを伴わないAT/プログラム由来のclickとして受理する。
       if (suppressPairedClick && event.detail !== 0) {
+        if (target === elements.startStage) ctx.views.home.clearStartInputGuard();
         clearPairedClick();
         return;
       }
       clearPairedClick();
       acceptSwitchEvent("pointer");
+      // click-only のAT入力はこのclick自体で物理シーケンスが完了しており、
+      // 新しいホームへ落ちる後続clickがないためガードを即時解除できる。
+      if (target === elements.startStage) ctx.views.home.clearStartInputGuard();
     });
   });
 

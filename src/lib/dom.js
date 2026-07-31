@@ -10,6 +10,7 @@
 export function collectElements() {
   return {
     scanState: document.querySelector("#scanState"),
+    homeSupporterMenu: document.querySelector("#homeSupporterMenu"),
     supporterEditToggle: document.querySelector("#supporterEditToggle"),
     liveRegion: document.querySelector("#liveRegion"),
     tabs: [...document.querySelectorAll(".tab")],
@@ -20,8 +21,9 @@ export function collectElements() {
     startStage: document.querySelector("#startStage"),
     startSettingsLink: document.querySelector("#startSettingsLink"),
     gameTileGrid: document.querySelector("#gameTileGrid"),
-    // ホームの「まなぶ・つたえる」タイル（旧タブのマッチング/VOCA/文字学習）。
-    activityTileGrid: document.querySelector("#activityTileGrid"),
+    homeEyebrow: document.querySelector("#homeEyebrow"),
+    homeTitle: document.querySelector("#home-title"),
+    homeGuide: document.querySelector("#homeGuide"),
     gameStage: document.querySelector("#gameStage"),
     gameStageContent: document.querySelector("#gameStageContent"),
     gameProgress: document.querySelector("#gameProgress"),
@@ -78,6 +80,8 @@ export function collectElements() {
     observerNotes: document.querySelector("#observerNotes"),
     exportEvaluationCsv: document.querySelector("#exportEvaluationCsv"),
     exportRhythmCsv: document.querySelector("#exportRhythmCsv"),
+    exportScanCsv: document.querySelector("#exportScanCsv"),
+    exportRtCsv: document.querySelector("#exportRtCsv"),
     resetEvaluation: document.querySelector("#resetEvaluation"),
     evaluationStatus: document.querySelector("#evaluationStatus"),
     currentTaskTitle: document.querySelector("#currentTaskTitle"),
@@ -110,8 +114,12 @@ export function collectElements() {
     soundEnabled: document.querySelector("#soundEnabled"),
     largeText: document.querySelector("#largeText"),
     highContrast: document.querySelector("#highContrast"),
+    hideVisualTasks: document.querySelector("#hideVisualTasks"),
     researcherMode: document.querySelector("#researcherMode"),
+    startCalibration: document.querySelector("#startCalibration"),
     toggleScan: document.querySelector("#toggleScan"),
+    toggleScanLabel: document.querySelector("#toggleScanLabel"),
     primarySwitch: document.querySelector("#primarySwitch"),
+    primarySwitchLabel: document.querySelector("#primarySwitchLabel"),
   };
 }

@@ -340,7 +340,7 @@ export function createRhythmGame(gameId) {
 
     /** 1件の trial 行をセッションへ追加し、gameHost へ永続化を依頼する。 */
     function recordTrial(row) {
-      session.trials.push(row);
+      session.trials.push({ index: session.trials.length, ...row });
       session.summary = computeSummary(session.trials);
       logTrial(session);
     }
@@ -468,12 +468,13 @@ export function createRhythmGame(gameId) {
 
       session = {
         sessionId: generateSessionId(),
+        taskType: gameId === "gonogo" ? "gonogo" : "sms",
         gameId,
         participantId: ctx.participantId || "",
         startedAtIso: new Date().toISOString(),
         aborted: false,
         // finished は §9.2 のスキーマに無い内部フラグ（destroy() が finish() 経由の
-        // 正常終了と中断を区別するためだけに使う）。state.rhythm.sessions へは
+        // 正常終了と中断を区別するためだけに使う）。state.sessions へは
         // そのまま保存されるが、CSV/リザルト表示は aborted/summary/trials しか
         // 参照しないため実害はない。
         finished: false,

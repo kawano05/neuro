@@ -7,12 +7,12 @@
 // 注意: この画面はマークアップ上は存在するが、現状タブからは到達できない
 // （content.js の visibleViews 参照、既知の制約）。
 //
-// P3-1（detailed-design.md §9.3・§9.4）: リズム計測CSV（state.rhythm.sessions
+// P3-1（detailed-design.md §9.3・§9.4）: リズム計測CSV（state.sessions
 // の trials を1試行1行に平坦化した18列）と、リズムセッション終了時の
 // evaluation 連動（失敗系のみ。taskTimingMissed += misses、
 // taskMistakes += commissions + extras。早め/遅めの hit は失敗ではないため
 // taskTimingEarly/Late へは連動しない、MUST）を追加する。
-// recordRhythmSessionOutcome() は games/gameHost.js の finishGame() から、
+// recordSessionOutcome() は games/gameHost.js の finishGame() から、
 // 効果測定タスクが実行中のときだけ加算する（既存の countEntry() と同じ
 // gating。研究計画セッション外の日常プレイまで taskMistakes に混ぜない）。
 // =====================================================================
@@ -77,6 +77,104 @@ export function flattenEvaluationResults(evaluation) {
 
   // 現在のセッションを先頭に出す既存の並び順は維持する。
   return [...active, ...completed];
+}
+
+const COMMON_TASK_HEADERS = [
+  "sessionId",
+  "taskType",
+  "participantId",
+  "gameId",
+  "startedAtIso",
+  "aborted",
+  "trialIndex",
+];
+
+/** scan / rt の課題別CSV行を作る。列意味が異なるため単一表には統合しない。 */
+export function buildTaskCsvRows(sessions, taskType) {
+  if (taskType === "scan") {
+    const rows = [
+      [
+        ...COMMON_TASK_HEADERS,
+        "targetX",
+        "targetY",
+        "toleranceR",
+        "selectedX",
+        "selectedY",
+        "dx",
+        "dy",
+        "distance",
+        "xPhaseMs",
+        "yPhaseMs",
+        "judgment",
+      ],
+    ];
+    sessions
+      .filter((session) => session.taskType === "scan")
+      .forEach((session) => {
+        (session.trials || []).forEach((trial) => {
+          rows.push([
+            session.sessionId,
+            session.taskType,
+            session.participantId || "",
+            session.gameId,
+            session.startedAtIso,
+            session.aborted,
+            trial.index,
+            trial.targetX,
+            trial.targetY,
+            trial.toleranceR,
+            trial.selectedX,
+            trial.selectedY,
+            trial.dx,
+            trial.dy,
+            trial.distance,
+            trial.xPhaseMs,
+            trial.yPhaseMs,
+            trial.judgment,
+          ]);
+        });
+      });
+    return rows;
+  }
+
+  if (taskType === "rt") {
+    const rows = [
+      [
+        ...COMMON_TASK_HEADERS,
+        "kind",
+        "foreperiodMs",
+        "cueMs",
+        "inputMs",
+        "reactionTimeMs",
+        "judgment",
+        "excluded",
+      ],
+    ];
+    sessions
+      .filter((session) => session.taskType === "rt")
+      .forEach((session) => {
+        (session.trials || []).forEach((trial) => {
+          rows.push([
+            session.sessionId,
+            session.taskType,
+            session.participantId || "",
+            session.gameId,
+            session.startedAtIso,
+            session.aborted,
+            trial.index,
+            trial.kind,
+            trial.foreperiodMs,
+            trial.cueMs,
+            trial.inputMs ?? "",
+            trial.reactionTimeMs ?? "",
+            trial.judgment,
+            trial.excluded,
+          ]);
+        });
+      });
+    return rows;
+  }
+  return [];
 }
 
 export function initEvaluation(ctx) {
@@ -335,10 +433,19 @@ export function initEvaluation(ctx) {
    * 既存 countEntry() と同じく、効果測定タスクが実行中のときだけ加算する
    * （研究計画セッション外の日常プレイの成績を測定データに混ぜない）。
    */
-  function recordRhythmSessionOutcome(summary) {
+  function recordSessionOutcome(taskType, summary) {
     if (!state.evaluation.isActive || !state.evaluation.taskStartedAt) return;
-    state.evaluation.taskTimingMissed += summary.misses || 0;
-    state.evaluation.taskMistakes += (summary.commissions || 0) + (summary.extras || 0);
+    if (taskType === "sms" || taskType === "gonogo") {
+      state.evaluation.taskTimingMissed += summary.misses || 0;
+      state.evaluation.taskMistakes += (summary.commissions || 0) + (summary.extras || 0);
+    } else if (taskType === "scan") {
+      state.evaluation.taskTimingMissed += summary.misses || 0;
+      state.evaluation.taskMistakes += summary.slips || 0;
+    } else if (taskType === "rt") {
+      state.evaluation.taskTimingMissed += summary.timeouts || 0;
+      state.evaluation.taskMistakes +=
+        (summary.falseStarts || 0) + (summary.commissions || 0);
+    }
     save();
     render();
   }
@@ -445,7 +552,9 @@ export function initEvaluation(ctx) {
    * （trials 側で null にしてあるため、そのまま escapeCsv に渡せば空欄になる）。
    */
   function exportRhythmCsv() {
-    const sessions = state.rhythm.sessions;
+    const sessions = state.sessions.filter(
+      (session) => session.taskType === "sms" || session.taskType === "gonogo"
+    );
     if (!sessions.length) {
       announce("書き出すリズム計測データがありません");
       return;
@@ -503,6 +612,27 @@ export function initEvaluation(ctx) {
     const link = document.createElement("a");
     link.href = url;
     link.download = `neuronode-rhythm-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportTaskCsv(taskType) {
+    const sessions = state.sessions.filter((session) => session.taskType === taskType);
+    if (!sessions.length) {
+      announce(
+        taskType === "scan"
+          ? "書き出す走査課題データがありません"
+          : "書き出す反応課題データがありません"
+      );
+      return;
+    }
+    const rows = buildTaskCsvRows(sessions, taskType);
+    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `neuronode-${taskType}-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -631,7 +761,9 @@ export function initEvaluation(ctx) {
   });
   elements.exportEvaluationCsv.addEventListener("click", exportCsv);
   elements.exportRhythmCsv.addEventListener("click", exportRhythmCsv);
+  elements.exportScanCsv.addEventListener("click", () => exportTaskCsv("scan"));
+  elements.exportRtCsv.addEventListener("click", () => exportTaskCsv("rt"));
   elements.resetEvaluation.addEventListener("click", reset);
 
-  return { render, countEntry, recordRhythmSessionOutcome };
+  return { render, countEntry, recordSessionOutcome };
 }

@@ -8,7 +8,8 @@
 // =====================================================================
 
 /**
- * localStorage の保存キー。state の構造を壊す変更をしたら次のバージョンへ上げる。
+ * localStorage の保存キー。取得済みv3研究データを孤立させないため、ゲーム拡張時も
+ * キーは据え置き、state.js 内で rhythm.sessions → sessions を移送する。
  *
  * v2 → v3（P0-0, detailed-design.md §9.5）: 起動経路を src/lib 分割版に一本化した
  * ことに伴うバンプ。旧キー（v2: "neuronode-prototype-state-v2"、
@@ -47,16 +48,32 @@ export const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747
  * してある。本リファクタでは skin フィールド自体を追加しない（未実装）。
  */
 export const gameTiles = [
-  // icon / accent / accentSoft はアプリ選択タイルの見た目専用（views/home.js が
-  // 描画時に使う）。ゲームロジックからは参照しない。accentSoft はアイコン
-  // バッジの下地色で、color-mix() 非対応環境も考慮して静的な対で持つ。
-  { id: "color-legacy", title: "いろがかわる", description: "おすと いろと おとが かわるよ", order: 1, enabled: true, icon: "🎨", accent: "#c2497c", accentSoft: "#f9e4ee" },
-  { id: "rhythm-l1", title: "リズム れんしゅう", description: "おとの あいずに あわせて おそう", order: 2, enabled: true, icon: "🥁", accent: "#b06718", accentSoft: "#f7ebda" },
-  { id: "rhythm-l2", title: "リズム つづけて", description: "おとに あわせて つづけて おそう", order: 3, enabled: true, icon: "🎵", accent: "#315f9d", accentSoft: "#e4ecf8" },
-  { id: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true, icon: "🔔", accent: "#7050b0", accentSoft: "#ece6f8" },
-  { id: "calibration", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 5, enabled: true, icon: "⏱️", accent: "#147d78", accentSoft: "#dff1ef" },
-  { id: "future-slot", title: "じゅんびちゅう", description: "", order: 6, enabled: false, icon: "🌱", accent: "#62716d", accentSoft: "#eef3f1" },
+  // iconClass は Font Awesome Free の統一アイコン。製品アイコンに絵文字を
+  // 使わず、年齢を限定しない視覚言語に揃える。
+  { id: "color-legacy", taskType: null, title: "いろと おと", description: "おすと いろと おとが かわるよ", order: 1, enabled: true, iconClass: "fa-solid fa-palette" },
+  { id: "rhythm-l1", taskType: "sms", title: "リズム れんしゅう", description: "おとの あいずに あわせて おそう", order: 2, enabled: true, iconClass: "fa-solid fa-drum" },
+  { id: "rhythm-l2", taskType: "sms", title: "リズム つづけて", description: "おとに あわせて つづけて おそう", order: 3, enabled: true, iconClass: "fa-solid fa-music" },
+  { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true, iconClass: "fa-solid fa-bell" },
+  { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
+  { id: "fishing", taskType: "rt", title: "さかなつり", description: "アタリの おとを まって おそう", order: 6, enabled: true, iconClass: "fa-solid fa-fish" },
+  { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 7, enabled: true, iconClass: "fa-solid fa-stopwatch" },
 ];
+
+/** ロビーで複数のリズム課題をまとめる二階層目への入口。 */
+export const rhythmCornerTile = {
+  id: "rhythm-corner",
+  title: "リズム",
+  description: "3つの おとの あそびから えらぼう",
+  iconClass: "fa-solid fa-music",
+};
+
+/** 学習・コミュニケーション系を1つの走査項目へまとめる入口。 */
+export const learningCornerTile = {
+  id: "learning-corner",
+  title: "まなぶ・つたえる",
+  description: "3つの アクティビティから えらぶ",
+  iconClass: "fa-solid fa-book-open-reader",
+};
 
 /**
  * 学習・コミュニケーション系タイル（ホームの「まなぶ・つたえる」セクション）。
@@ -66,9 +83,9 @@ export const gameTiles = [
  * 見た目のフィールド構成は gameTiles と同じ（views/home.js が共通処理で描画）。
  */
 export const activityTiles = [
-  { view: "matching", title: "マッチング", description: "おだいに あうものを えらぼう", icon: "🧩", accent: "#247a4d", accentSoft: "#e3f4ea" },
-  { view: "voca", title: "VOCA", description: "ことばを えらんで つたえよう", icon: "💬", accent: "#2a7ab5", accentSoft: "#e1eff9" },
-  { view: "letters", title: "文字学習", description: "もじを よんで えらぼう", icon: "✏️", accent: "#a66321", accentSoft: "#f5efd9" },
+  { view: "matching", title: "マッチング", description: "おだいに あうものを えらぼう", iconClass: "fa-solid fa-puzzle-piece" },
+  { view: "voca", title: "VOCA", description: "ことばを えらんで つたえよう", iconClass: "fa-solid fa-comments" },
+  { view: "letters", title: "文字学習", description: "もじを よんで えらぼう", iconClass: "fa-solid fa-pen" },
 ];
 
 /**
@@ -89,6 +106,21 @@ export const rhythmPresets = {
   "rhythm-l2": { bpm: 60, countInBeats: 4, targetBeats: 20, mode: "continuous" },
   gonogo: { bpm: 50, countInBeats: 3, targetBeats: 20, mode: "gonogo", goRatio: 0.6 },
   calibration: { bpm: 50, countInBeats: 4, targetBeats: 12, mode: "cued", excludedTrialCount: 2 },
+};
+
+export const cranePresets = {
+  sweepMs: 2400,
+  toleranceR: 12,
+  targetTrials: 5,
+  graspAnimMs: 1200,
+};
+
+export const fishingPresets = {
+  foreperiodMinMs: 1500,
+  foreperiodMaxMs: 5000,
+  limitMs: 2000,
+  targetTrials: 8,
+  fakeRatio: 0.25,
 };
 
 /** 聴覚キューの周波数（Hz）。detailed-design.md §4.1 / §6.4。 */

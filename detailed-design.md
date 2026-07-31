@@ -48,6 +48,10 @@
 | src/lib/games/registry.js | 新規 | ゲーム定義の配列と検索関数 |
 | src/lib/games/gameHost.js | 新規 | ゲームの起動・入力振り分け・終了処理 |
 | src/lib/games/judge.js | 新規 | 判定・オフセット計算（純粋関数） |
+| src/lib/games/pointing.js | 追加 | 2軸走査位置・距離・決定的な掴み判定（純粋関数） |
+| src/lib/games/reaction.js | 追加 | 変動前刺激間隔・単純反応判定（純粋関数） |
+| src/lib/games/crane.js | 追加 | UFOキャッチャー（走査選択課題） |
+| src/lib/games/fishing.js | 追加 | さかなつり（単純反応時間課題） |
 | src/lib/games/rhythm.js | 新規 | リズムL1/L2（共通エンジン＋パラメータ） |
 | src/lib/games/gonogo.js | 新規 | Go・No-Go 課題 |
 | src/lib/games/calibration.js | 新規 | キャリブレーション |
@@ -55,15 +59,15 @@
 | src/lib/views/home.js | 新規 | スタート画面＋アプリ選択 |
 | src/lib/views/switcher.js | 削除 | home.js と colorLegacy.js に分割吸収 |
 | src/lib/audio.js | 変更 | createBeatScheduler 追加、playTone の時刻指定版追加 |
-| src/lib/content.js | 変更 | storageKey v3、gameModules、rhythmPresets 追加 |
-| src/lib/state.js | 変更 | defaultState 拡張（settings 追加・rhythm 追加）、loadState マージ追加 |
+| src/lib/content.js | 変更 | storageKey v3、gameModules、各課題プリセット追加 |
+| src/lib/state.js | 変更 | taskType 横断の sessions、hideVisualTasks、旧 rhythm.sessions 移送。arcade は互換キーとしてのみ保持 |
 | src/lib/neuronodeApp.js | 変更 | 入力ファネル一元化、gameHost 配線、home 初期化 |
 | src/lib/scan.js | 変更 | game 中の start/restartIfNeeded ガード、activate の switcher 分岐削除 |
 | src/lib/dom.js | 変更 | 新画面の要素登録 |
 | src/App.svelte | **大幅変更** | **モノリス script（約560行）を削除しマークアップ骨格＋onMount(initNeuroNodeApp) に縮退（§0）**。スタート画面・アプリ選択・ゲームステージ・リザルトの HTML 追加 |
 | src/styles.css | 変更 | ゲームステージ・パルス円・タイルグリッドのスタイル |
-| src/lib/views/evaluation.js | 変更 | リズム集計の連動、リズムCSV出力ボタン |
-| tests/web-smoke.mjs | 変更 | 新フローのスモーク追加 |
+| src/lib/views/evaluation.js | 変更 | taskType 別の失敗集計、リズム/走査/反応CSV |
+| tests/web-smoke.mjs | 変更 | 新フローと新2ゲームのスモーク追加 |
 | README.md, docs/ | 変更 | フロー図・運用ノート更新 |
 
 既存の views/matching.js, voca.js, letters.js, operation.js, research.js, log.js,
@@ -103,10 +107,20 @@ settings.js は本リファクタでは原則変更しない。
 - この1押しは L0（反応確認）を兼ねるため、logEvent({type:"switch", label:"スタート"})
   を記録する。
 
-### 2.3 アプリ選択画面仕様
+### 2.3 アクティビティホーム仕様
 
-- gameModules（§4.1）を order 昇順でタイル表示。タイルは既存 .module-button の意匠を
-  流用し、`data-scan` を付与。走査はタブバーを含め現行 scan.js の収集規則のまま。
+- home は年齢中立の「アクティビティ」として表示する。利用者向け項目は
+  `color-legacy` / リズムコーナー / `crane` / `fishing` / `calibration` の5件。
+  リズム二階層目で `rhythm-l1` / `rhythm-l2` / `gonogo` / ホームへ戻る、の
+  4件を表示する。すべて既存 `.module-button` の意匠と `data-scan` を使う。
+- `settings.hideVisualTasks` が ON のとき、視覚必須の `crane` はホームDOMへ
+  生成せず、走査対象からも外す。`calibration` は現段階では従来どおり表示する。
+- シェルではゲームセンター、クレジット、メダルなど年齢・文化的文脈を限定する表現を
+  既定表示しない。ゲーム固有の演出は `gameView` 内だけで使用する。
+- 支援者向け入口は利用者の走査対象外とし、設定・評価・ログ・研究画面は
+  落ち着いた業務UIとして利用者ホームから視覚的に分離する。
+- スタート決定に使った同一入力イベントが、遷移後のホーム項目まで決定してはならない。
+  `start → home` の遷移境界で同一イベント系列を消費済みとして扱う。
 - `enabled: false` のタイルは「じゅんびちゅう」表示で走査対象から除外
   （disabled 属性を立てれば scan.refresh() のフィルタで自動除外される）。
 - タイル決定で gameHost.launch(gameId) を呼ぶ。
@@ -145,6 +159,7 @@ settings.js は本リファクタでは原則変更しない。
 /**
  * @typedef {object} GameModule
  * @property {string} id            一意ID（例 "rhythm-l1"）
+ * @property {"sms"|"gonogo"|"scan"|"rt"|null} taskType
  * @property {string} title         タイル表示名（ひらがな主体）
  * @property {string} description   タイル副文
  * @property {number} order         タイル表示順
@@ -164,10 +179,12 @@ settings.js は本リファクタでは原則変更しない。
  * @typedef {object} GameCtx  gameHost が構築してゲームへ渡す
  * @property {object} settings       state.settings への参照（読み取り専用扱い）
  * @property {object} audio          { speak, playTone, scheduler }（§6）
- * @property {(record) => void} logTrial    1試行の記録（§9.2 の trial 形式）
+ * @property {(session) => void} logTrial   現時点のセッション全体を upsert（§9.2）
  * @property {(summary) => void} finish     セッション正常終了（gameHost がリザルトへ）
  * @property {(message) => void} announce   aria-live 通知
  * @property {() => void} abort             異常終了（home へ直帰）
+ * @property {string} participantId         評価セッションの参加者ID
+ * @property {(text:string) => void} setProgress  ホストの進捗表示を更新
  */
 ```
 
@@ -247,12 +264,13 @@ function acceptSwitchEvent(event, source) {
 export const storageKey = "neuronode-prototype-state-v3";  // v2 → v3
 
 export const gameTiles = [
-  { id: "color-legacy", title: "いろがかわる", description: "おすと いろと おとが かわるよ", order: 1, enabled: true },
-  { id: "rhythm-l1",    title: "リズム れんしゅう", description: "おとの あいずに あわせて おそう", order: 2, enabled: true },
-  { id: "rhythm-l2",    title: "リズム つづけて", description: "おとに あわせて つづけて おそう", order: 3, enabled: true },
-  { id: "gonogo",       title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true },
-  { id: "calibration",  title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 5, enabled: true },
-  { id: "future-slot",  title: "じゅんびちゅう", description: "", order: 6, enabled: false },
+  { id: "color-legacy", taskType: null, title: "いろがかわる", order: 1, enabled: true },
+  { id: "rhythm-l1", taskType: "sms", title: "リズム れんしゅう", order: 2, enabled: true },
+  { id: "rhythm-l2", taskType: "sms", title: "リズム つづけて", order: 3, enabled: true },
+  { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", order: 4, enabled: true },
+  { id: "crane", taskType: "scan", title: "UFOキャッチャー", order: 5, enabled: true },
+  { id: "fishing", taskType: "rt", title: "さかなつり", order: 6, enabled: true },
+  { id: "calibration", taskType: "sms", title: "そくてい", order: 7, enabled: true },
 ];
 
 export const rhythmPresets = {
@@ -499,20 +517,29 @@ settings: {
   rhythmBpm: null,          // null = preset 値を使用
   countInBeats: null,
   targetBeats: null,
+  hideVisualTasks: false,
 },
+sessions: [],                 // 全 taskType 合計で直近50件
+arcade: { medals: 0, history: [] }, // 旧v3互換用。既定UIでは表示・付与しない
 rhythm: {
-  sessions: [],             // 直近 50 セッションを保持（超過分は古い順に破棄）
+  sessions: [],               // 旧v3移送元としてキーのみ残す
 },
 ```
 
-loadState() のマージ処理に settings 追加キーと rhythm を組み込む
-（既存の evaluation / research と同じ防御的マージ方式）。
+保存キーは `neuronode-prototype-state-v3` のまま変更しない。`loadState()` は
+旧 `state.rhythm.sessions` を読み、`gameId === "gonogo"` なら `gonogo`、
+その他のリズム系なら `sms` を補って `state.sessions` へ移送する。移送後も
+`state.rhythm` キー自体は切り戻し用に残す。
+
+`gameHost.launch()` はクレジット投入や残高判定を行わず、すべてのゲームを無条件で起動する。
+`arcade` は既存保存データを失わないため保持するが、新規のメダル付与には使わない。
 
 ### 9.2 セッション記録スキーマ
 
 ```js
 {
   sessionId: "r-20260703-143005-x7",   // r-日時-乱数
+  taskType: "sms",                     // sms | gonogo | scan | rt
   gameId: "rhythm-l1",
   participantId: state.evaluation.participantId,  // 評価セッション連動
   startedAtIso: "...",
@@ -522,7 +549,7 @@ loadState() のマージ処理に settings 追加キーと rhythm を組み込�
             baselineOffsetMs, mode, goRatio, seedSequence: [...] },
   device: { outputLatencyS: 0.012 | null, baseLatencyS: ..., userAgent: ... },
   trials: [
-    { beatIndex: 0, beatKind: "go",          // go | nogo
+    { index: 0, beatIndex: 0, beatKind: "go", // index/judgment は全課題共通
       scheduledMs: 4500.0,                    // セッション相対（§6.3）
       inputMs: 4562.3 | null,                 // セッション相対。correctRejection/miss は null
       rawOffsetMs: 62.3 | null,
@@ -535,6 +562,20 @@ loadState() のマージ処理に settings 追加キーと rhythm を組み込�
              meanRawOffsetMs, sdRawOffsetMs, medianRawOffsetMs },
 }
 ```
+
+共通化するのは `sessionId` / `taskType` / `gameId` / `participantId` /
+`startedAtIso` / `aborted` / `device` / `trials[].index` /
+`trials[].judgment` の9点だけとする。`config` と `summary` は単位を守るため
+課題固有の形を維持する。
+
+- `scan` trial: targetX/Y, toleranceR, selectedX/Y, dx/dy, distance,
+  xPhaseMs/yPhaseMs, judgment（grip / slip / miss）
+- `scan` summary: grips/slips/misses, gripRate, distance の平均・SD・中央値、
+  X/Y各位相の平均所要時間
+- `rt` trial: kind（real / fake）, foreperiodMs, cueMs, inputMs,
+  reactionTimeMs, judgment, excluded
+- `rt` summary: hits/timeouts/falseStarts/commissions/correctRejections、
+  hit/commission/falseStart率、反応時間の平均・SD・中央値
 
 ### 9.3 リズム CSV 仕様
 
@@ -551,15 +592,26 @@ beatIndex, beatKind, scheduledMs, inputMs, rawOffsetMs, judgment, excluded
 - judgment 列は5値（hit / miss / extra / commission / correctRejection）。
   correctRejection と miss の行は inputMs / rawOffsetMs が空欄。
 - summary は CSV に含めない（解析側で再計算可能なため。二重管理を避ける）。
+- この18列は既存データ互換のため変更しない。taskType 列も追加しない。
+
+走査と反応は別ファイルへ出力する。いずれも先頭7列を
+`sessionId, taskType, participantId, gameId, startedAtIso, aborted, trialIndex`
+で統一し、後続は課題固有列とする。
+
+- `neuronode-scan-YYYY-MM-DD.csv`: 18列
+- `neuronode-rt-YYYY-MM-DD.csv`: 14列
+- BOM付きUTF-8、`escapeCsv` 使用。単一ファイルには統合しない。
 
 ### 9.4 evaluation 連動（失敗系のみ）
 
-**研究の主データはリズム CSV。既存 evaluation は互換維持の補助データとする。**
+**研究の主データは課題別 CSV。既存 evaluation は互換維持の補助データとする。**
 既存の taskTimingEarly/Late は「タイミングエラー」寄りの意味を持つため、
 窓内 hit の早遅（失敗ではない）を流し込むと意味が混線する。よって:
 
 - taskTimingMissed += misses（連動する）
 - taskMistakes += commissions + extras（連動する）
+- scan: taskTimingMissed += misses、taskMistakes += slips
+- rt: taskTimingMissed += timeouts、taskMistakes += falseStarts + commissions
 - taskTimingEarly / taskTimingLate へは**連動しない**（早遅の傾向分析は
   リズム CSV の rawOffsetMs で行う）
 - logEvent({type:"game", label:`${gameId} 終了 go命中率${...}%`})
@@ -574,7 +626,7 @@ loadState() は v3 キーが空のとき次の順で移行を試みる（MUST）
    （participantId・completedSessions 等、v2 のみ保有）を v3 へ写す。
    v1 の metrics 構造は v3 に対応先がないため移行しない（logEvent に
    「v1 から移行・metrics は引き継ぎ対象外」と記録）
-4. rhythm は常に新規初期化
+4. 同じv3キー内の `rhythm.sessions` は taskType を補って `sessions` へ移送
 5. 旧キーは削除しない（切り戻し用に残置。容量が問題になった時点で再検討）
 
 ---
@@ -594,7 +646,7 @@ loadState() は v3 キーが空のとき次の順で移行を試みる（MUST）
 
 ## 11. テスト
 
-### 11.1 単体（新規: tests/judge.test.mjs、node 実行）
+### 11.1 単体（node 実行）
 
 judge.js を対象に最低限以下を検証:
 
@@ -608,21 +660,29 @@ judge.js を対象に最低限以下を検証:
    cued では W = W₀ のまま）
 8. 入力 dedupe（150ms 以内の連続イベントが1入力に潰れること）
 
-package.json に `"test:unit": "node tests/judge.test.mjs"` を追加し、
-`test` を `test:unit && test:web` に更新。
+package.json の `test:unit` は judge / pointing / reaction / data-integrity を
+順に実行し、`test` は `test:unit && test:web` とする。
+
+追加の `pointing.test.mjs` は三角波の折り返しと grip/slip/miss 境界、
+`reaction.test.mjs` は hit/timeout/falseStart/commission/correctRejection と
+前刺激間隔生成を検証する。`data-integrity.test.mjs` は4つの taskType、
+旧セッション移送、registry/preset整合、scan/rt CSV列数を検証する。
 
 ### 11.2 スモーク（tests/web-smoke.mjs 追加分）
 
 1. 起動 → start 表示 → 入力 → home 表示
 2. rhythm-l1 タイル決定 → game 表示・タブバー非表示・走査停止表示
-3. Esc で home へ復帰（aborted セッションが rhythm.sessions に記録）
-4. 既存タブ（評価・設定）が従来どおり表示される（不退行）
+3. Esc で home へ復帰（aborted セッションが sessions に記録）
+4. fishing 起動 → 1試行 → おわる（taskType=rt, aborted=true）
+5. crane 起動 → X/Y/GRASPで1試行 → おわる（taskType=scan, aborted=true）
+6. 既存タブ（評価・設定）が従来どおり表示される（不退行）
 
 ### 11.3 実機確認チェックリスト（docs に追記）
 
 - 内蔵スピーカーでのキュー再生、サイレントスイッチON時の挙動
 - NeuroNode（Switch Control 経由）入力での L1 プレイとオフセット記録
 - 二重走査が発生しないこと（ゲーム中）
+- crane の X/Y/GRASP 各位相で二重走査が発生しないこと
 
 ---
 
@@ -714,7 +774,6 @@ docs/measurement-protocol.md を新設し以下を固定する:
 
 | # | 事項 | 暫定案 |
 |---|---|---|
-| 1 | future-slot タイルの扱い（非表示 or 準備中表示） | 準備中表示・走査除外 |
-| 2 | matching / voca / letters をアプリ選択に統合する時期 | 本リファクタ後の別課題 |
-| 3 | gonogo の No-Go 音を 330Hz とするか無音予告つきにするか | 330Hz（弁別しやすさ優先） |
-| 4 | セッション保持件数 50 の妥当性（iPad の localStorage 容量） | 50 で開始し実測で調整 |
+| 1 | matching / voca / letters をゲーム契約へ統合する時期 | 別課題。利用者ホーム下の既存セクションは維持 |
+| 2 | gonogo の No-Go 音を 330Hz とするか無音予告つきにするか | 330Hz（弁別しやすさ優先） |
+| 3 | セッション保持件数 50 の妥当性（iPad の localStorage 容量） | 50 で開始し実測で調整 |

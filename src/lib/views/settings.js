@@ -15,6 +15,7 @@ export function initSettings(ctx) {
     elements.soundEnabled.checked = settings.soundEnabled;
     elements.largeText.checked = settings.largeText;
     elements.highContrast.checked = settings.highContrast;
+    elements.hideVisualTasks.checked = settings.hideVisualTasks;
     elements.researcherMode.checked = settings.researcherMode;
   }
 
@@ -38,6 +39,7 @@ export function initSettings(ctx) {
     ["soundEnabled", elements.soundEnabled],
     ["largeText", elements.largeText],
     ["highContrast", elements.highContrast],
+    ["hideVisualTasks", elements.hideVisualTasks],
     ["researcherMode", elements.researcherMode],
   ].forEach(([key, element]) => {
     element.addEventListener("change", () => {
@@ -52,7 +54,15 @@ export function initSettings(ctx) {
       }
       // researcherMode はタブの表示/非表示を切り替えるため、走査対象の再収集が要る。
       if (key === "researcherMode") scan.restartIfNeeded();
+      if (key === "hideVisualTasks") {
+        ctx.views.home.render();
+        scan.restartIfNeeded();
+      }
     });
+  });
+
+  elements.startCalibration.addEventListener("click", () => {
+    ctx.gameHost.launch("calibration");
   });
 
   return { render, applyClasses };

@@ -1,5 +1,6 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
+import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./styles.css";
 
 const app = mount(App, {

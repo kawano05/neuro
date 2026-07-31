@@ -10,10 +10,8 @@
 // すべて games/rhythm.js の createRhythmGame(gameId)（パラメータ違いの同一
 // エンジン、基本設計書 §5）で、gonogo/calibration は games/gonogo.js /
 // games/calibration.js の薄いラッパ経由で結合する（P2-3・P4-1〜P4-3）。
-// future-slot は enabled:false（content.js の gameTiles 参照）なので
-// createPlaceholderGame() を割り当てる（「じゅんびちゅう」表示のみ。
-// おわる/Esc は gameHost がゲーム本体に関わらずホスト側で処理するため、
-// この段階でも安全に終了できる）。
+// crane/fishing は専用エンジンへ結合する。gameTiles の全IDに実装が必須で、
+// data-integrity.test.mjs が未結線を検出する。
 // =====================================================================
 
 import { gameTiles } from "../content.js";
@@ -21,34 +19,17 @@ import { createColorLegacyGame } from "./colorLegacy.js";
 import { createRhythmGame } from "./rhythm.js";
 import { createGonogoGame } from "./gonogo.js";
 import { createCalibrationGame } from "./calibration.js";
+import { createCraneGame } from "./crane.js";
+import { createFishingGame } from "./fishing.js";
 
-/**
- * 未実装ゲーム用の暫定 create。
- * P1-2 で color-legacy 用の実装（games/colorLegacy.js）に置き換える。
- */
-function createPlaceholderGame() {
-  return {
-    mount(stageEl) {
-      stageEl.innerHTML = `
-        <span class="reaction-label">じゅんびちゅう</span>
-        <span class="reaction-detail">このあそびは じゅんびちゅうです。「おわる」で もどれます。</span>
-      `;
-    },
-    handleInput() {
-      // 未実装。何もしない（安全なノーオペレーション）。
-    },
-    destroy() {
-      // 後片付けするタイマー・音は無い。
-    },
-  };
-}
-
-/** id → create のひも付け。ここに無い id は createPlaceholderGame にフォールバックする。 */
-const creators = {
+/** id → create のひも付け。gameTiles の全idに実装を持たせる。 */
+export const gameCreators = {
   "color-legacy": createColorLegacyGame,
   "rhythm-l1": createRhythmGame("rhythm-l1"),
   "rhythm-l2": createRhythmGame("rhythm-l2"),
   gonogo: createGonogoGame,
+  crane: createCraneGame,
+  fishing: createFishingGame,
   calibration: createCalibrationGame,
 };
 
@@ -57,7 +38,7 @@ export const gameModules = [...gameTiles]
   .sort((a, b) => a.order - b.order)
   .map((tile) => ({
     ...tile,
-    create: creators[tile.id] || createPlaceholderGame,
+    create: gameCreators[tile.id],
   }));
 
 /** id からゲームモジュールを探す（gameHost.launch() 用）。無ければ null。 */

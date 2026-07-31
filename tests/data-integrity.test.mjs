@@ -12,7 +12,17 @@ import {
   summarizeRhythmTrials,
 } from "../src/lib/state.js";
 import { escapeCsv, formatTime } from "../src/lib/utils.js";
-import { flattenEvaluationResults } from "../src/lib/views/evaluation.js";
+import {
+  buildTaskCsvRows,
+  flattenEvaluationResults,
+} from "../src/lib/views/evaluation.js";
+import {
+  cranePresets,
+  fishingPresets,
+  gameTiles,
+  rhythmPresets,
+} from "../src/lib/content.js";
+import { gameCreators, gameModules } from "../src/lib/games/registry.js";
 
 class MemoryStorage {
   constructor() {
@@ -153,14 +163,16 @@ test("sanitizeState rejects invalid shapes, enums and unsafe ranges item by item
   assert.equal(sanitized.research.conditionProfile, "optimized");
   assert.equal(sanitized.research.environment, "hospital");
   assert.equal(sanitized.research.readiness.localRun, false);
-  assert.equal(sanitized.rhythm.sessions[0].trials[0].beatIndex, null);
-  assert.equal(sanitized.rhythm.sessions[0].trials[0].beatKind, null);
-  assert.equal(sanitized.rhythm.sessions[0].trials[0].scheduledMs, null);
-  assert.equal(sanitized.rhythm.sessions[0].trials.length, 1);
-  assert.equal(sanitized.rhythm.sessions[0].summary.hits, 0);
-  assert.equal(sanitized.rhythm.sessions[0].summary.extras, 1);
-  assert.equal(sanitized.rhythm.sessions[0].finished, false);
-  assert.equal(sanitized.rhythm.sessions[0].aborted, true);
+  assert.equal(sanitized.sessions[0].taskType, "sms");
+  assert.equal(sanitized.sessions[0].trials[0].beatIndex, null);
+  assert.equal(sanitized.sessions[0].trials[0].beatKind, null);
+  assert.equal(sanitized.sessions[0].trials[0].scheduledMs, null);
+  assert.equal(sanitized.sessions[0].trials.length, 1);
+  assert.equal(sanitized.sessions[0].summary.hits, 0);
+  assert.equal(sanitized.sessions[0].summary.extras, 1);
+  assert.equal(sanitized.sessions[0].finished, false);
+  assert.equal(sanitized.sessions[0].aborted, true);
+  assert.deepEqual(sanitized.rhythm.sessions, []);
 });
 
 test("sanitizeState downgrades a completed session when inconsistent trials are dropped", () => {
@@ -232,7 +244,7 @@ test("sanitizeState downgrades a completed session when inconsistent trials are 
     },
   });
 
-  const session = sanitized.rhythm.sessions[0];
+  const session = sanitized.sessions[0];
   assert.equal(session.finished, false);
   assert.equal(session.aborted, true);
   assert.deepEqual(
@@ -341,10 +353,10 @@ test("sanitizeState keeps an intact finished session completed only when its bea
     },
   });
 
-  const intact = sanitized.rhythm.sessions.find((session) => session.sessionId === "r-intact");
+  const intact = sanitized.sessions.find((session) => session.sessionId === "r-intact");
   assert.equal(intact.finished, true);
   assert.equal(intact.aborted, false);
-  const duplicate = sanitized.rhythm.sessions.find(
+  const duplicate = sanitized.sessions.find(
     (session) => session.sessionId === "r-duplicate-beat"
   );
   assert.equal(duplicate.finished, false);
@@ -390,7 +402,7 @@ test("sanitizeState downgrades a completed session when the trial cap truncates 
     },
   });
 
-  const session = sanitized.rhythm.sessions[0];
+  const session = sanitized.sessions[0];
   assert.equal(session.trials.length, 1_000);
   assert.equal(session.finished, false);
   assert.equal(session.aborted, true);
@@ -570,6 +582,189 @@ test("flattenEvaluationResults removes legacy active/completed and double-finish
   assert.equal(flattened[1].taskId, "switch-5");
   assert.equal(flattened[1].sessionStartedAt, "session-new");
   assert.equal(flattened[1].observerNotes, "newest");
+});
+
+test("game registry, presets and persisted task types stay aligned", () => {
+  const knownTaskTypes = new Set(["sms", "gonogo", "scan", "rt"]);
+  assert.deepEqual(
+    gameModules.map((game) => game.id),
+    [...gameTiles].sort((a, b) => a.order - b.order).map((game) => game.id)
+  );
+  gameTiles
+    .filter((game) => game.taskType !== null)
+    .forEach((game) => assert(knownTaskTypes.has(game.taskType), `unknown taskType: ${game.id}`));
+  gameTiles.forEach((game) => assert.equal(typeof gameCreators[game.id], "function"));
+  assert.deepEqual(Object.keys(rhythmPresets).sort(), [
+    "calibration",
+    "gonogo",
+    "rhythm-l1",
+    "rhythm-l2",
+  ]);
+  assert.equal(cranePresets.targetTrials, 5);
+  assert.equal(fishingPresets.targetTrials, 8);
+
+  const migrated = sanitizeState({
+    rhythm: {
+      sessions: [
+        {
+          sessionId: "legacy-gonogo",
+          gameId: "gonogo",
+          startedAtIso: "2026-07-10T00:00:00.000Z",
+          finished: false,
+          aborted: true,
+          config: { mode: "gonogo", targetBeats: 1, seedSequence: ["go"] },
+          trials: [],
+        },
+      ],
+    },
+  });
+  assert.equal(migrated.sessions[0].taskType, "gonogo");
+  assert.deepEqual(migrated.rhythm.sessions, []);
+});
+
+test("scan and rt CSV builders keep task-specific column counts", () => {
+  const base = {
+    participantId: "P1",
+    startedAtIso: "2026-07-10T00:00:00.000Z",
+    aborted: false,
+  };
+  const scanRows = buildTaskCsvRows(
+    [
+      {
+        ...base,
+        sessionId: "s-1",
+        taskType: "scan",
+        gameId: "crane",
+        trials: [
+          {
+            index: 0,
+            targetX: 30,
+            targetY: 40,
+            toleranceR: 12,
+            selectedX: 31,
+            selectedY: 42,
+            dx: 1,
+            dy: 2,
+            distance: Math.sqrt(5),
+            xPhaseMs: 500,
+            yPhaseMs: 600,
+            judgment: "grip",
+          },
+        ],
+      },
+    ],
+    "scan"
+  );
+  assert.equal(scanRows[0].length, 18);
+  assert.equal(scanRows[1].length, 18);
+
+  const rtRows = buildTaskCsvRows(
+    [
+      {
+        ...base,
+        sessionId: "t-1",
+        taskType: "rt",
+        gameId: "fishing",
+        trials: [
+          {
+            index: 0,
+            kind: "real",
+            foreperiodMs: 1500,
+            cueMs: 1800,
+            inputMs: 2100,
+            reactionTimeMs: 300,
+            judgment: "hit",
+            excluded: false,
+          },
+        ],
+      },
+    ],
+    "rt"
+  );
+  assert.equal(rtRows[0].length, 14);
+  assert.equal(rtRows[1].length, 14);
+});
+
+test("sanitizeState restores valid scan/rt sessions and rejects unknown task types", () => {
+  const common = {
+    participantId: "P1",
+    startedAtIso: "2026-07-10T00:00:00.000Z",
+    aborted: false,
+    finished: true,
+    device: {},
+  };
+  const sanitized = sanitizeState({
+    sessions: [
+      {
+        ...common,
+        sessionId: "s-valid",
+        taskType: "scan",
+        gameId: "crane",
+        config: { sweepMs: 2400, toleranceR: 12, targetTrials: 1, graspAnimMs: 1200 },
+        trials: [
+          {
+            index: 0,
+            targetX: 30,
+            targetY: 40,
+            toleranceR: 12,
+            selectedX: 30,
+            selectedY: 40,
+            dx: 999,
+            dy: 999,
+            distance: 999,
+            xPhaseMs: 500,
+            yPhaseMs: 600,
+            judgment: "grip",
+          },
+        ],
+      },
+      {
+        ...common,
+        sessionId: "t-valid",
+        taskType: "rt",
+        gameId: "fishing",
+        config: {
+          foreperiodMinMs: 1500,
+          foreperiodMaxMs: 5000,
+          limitMs: 2000,
+          targetTrials: 1,
+          fakeRatio: 0,
+          seedSequence: [1500],
+          kindSequence: ["real"],
+        },
+        trials: [
+          {
+            index: 0,
+            kind: "real",
+            foreperiodMs: 1500,
+            cueMs: 1800,
+            inputMs: 2100,
+            reactionTimeMs: 999,
+            judgment: "hit",
+            excluded: false,
+          },
+        ],
+      },
+      {
+        ...common,
+        sessionId: "x-forged",
+        taskType: "unknown",
+        gameId: "forged",
+        config: {},
+        trials: [],
+      },
+    ],
+  });
+
+  assert.equal(sanitized.sessions.length, 2);
+  const scan = sanitized.sessions.find((session) => session.sessionId === "s-valid");
+  assert.equal(scan.finished, true);
+  assert.equal(scan.trials[0].distance, 0);
+  assert.equal(scan.summary.gripRate, 1);
+  const rt = sanitized.sessions.find((session) => session.sessionId === "t-valid");
+  assert.equal(rt.finished, true);
+  assert.equal(rt.trials[0].reactionTimeMs, 300);
+  assert.equal(rt.summary.meanRtMs, 300);
 });
 
 for (const { name, fn } of tests) {

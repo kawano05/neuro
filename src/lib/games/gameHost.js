@@ -28,7 +28,7 @@
 //
 // logTrial(session) の設計判断: rhythm.js は state / save を持たないため、
 // 「セッションの現時点までの全体スナップショット（trials 配列を含む）」を
-// 毎回渡してもらい、ここで sessionId をキーに state.rhythm.sessions へ
+// 毎回渡してもらい、ここで sessionId をキーに state.sessions へ
 // upsert する（同一セッション内の複数回呼び出しは同じ session オブジェクトを
 // 指すため、実質的には「最新状態で置き換える」だけで良い）。この方式なら
 // 支援者操作/Esc/visibilitychange による中断（destroy() 経由、finish() を
@@ -37,7 +37,7 @@
 // =====================================================================
 
 import { findGameModule } from "./registry.js";
-import { MAX_RHYTHM_SESSIONS } from "../state.js";
+import { MAX_SESSIONS } from "../state.js";
 
 /** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
 function formatSignedMs(value) {
@@ -64,8 +64,8 @@ function offsetDirectionLabel(value) {
   return "（ぴったり！）";
 }
 
-/** リザルト画面の成績表示（detailed-design.md §2.5）。 */
-function renderResultStats(summary) {
+/** 同期課題のリザルト。 */
+function renderSmsResult(summary) {
   const totalGoBeats = summary.hits + summary.misses;
   const hitRatePercent = totalGoBeats ? Math.round((summary.hits / totalGoBeats) * 100) : 0;
   const sdLabel = typeof summary.sdRawOffsetMs === "number" ? `${Math.round(summary.sdRawOffsetMs)}ms` : "--";
@@ -92,6 +92,60 @@ function renderResultStats(summary) {
   `;
 }
 
+function renderGonogoResult(summary) {
+  const goTrials = summary.hits + summary.misses;
+  const nogoTrials = summary.commissions + summary.correctRejections;
+  const hitRate = goTrials ? Math.round((summary.hits / goTrials) * 100) : 0;
+  const commissionRate = nogoTrials
+    ? Math.round((summary.commissions / nogoTrials) * 100)
+    : 0;
+  return `
+    <div class="summary-grid">
+      <div class="summary-tile"><span class="metric-label">Go せいこう</span><strong>${hitRate}%</strong></div>
+      <div class="summary-tile"><span class="metric-label">No-Go まちがい</span><strong>${commissionRate}%</strong></div>
+      <div class="summary-tile"><span class="metric-label">みのがし</span><strong>${summary.misses}</strong></div>
+      <div class="summary-tile"><span class="metric-label">よぶんな入力</span><strong>${summary.extras}</strong></div>
+    </div>
+  `;
+}
+
+function renderScanResult(summary) {
+  const distance =
+    typeof summary.meanDistance === "number" ? summary.meanDistance.toFixed(1) : "--";
+  const median =
+    typeof summary.medianDistance === "number" ? summary.medianDistance.toFixed(1) : "--";
+  return `
+    <div class="summary-grid">
+      <div class="summary-tile"><span class="metric-label">しっかり つかめた</span><strong>${summary.grips}/${summary.trials}</strong></div>
+      <div class="summary-tile"><span class="metric-label">へいきん きょり</span><strong>${distance}%</strong></div>
+      <div class="summary-tile"><span class="metric-label">ちゅうおう きょり</span><strong>${median}%</strong></div>
+      <div class="summary-tile"><span class="metric-label">おしかった</span><strong>${summary.slips}</strong></div>
+    </div>
+  `;
+}
+
+function renderReactionResult(summary) {
+  const hitRate = Math.round((summary.hitRate || 0) * 100);
+  const commissionRate = Math.round((summary.commissionRate || 0) * 100);
+  const meanRt =
+    typeof summary.meanRtMs === "number" ? `${Math.round(summary.meanRtMs)}ms` : "--";
+  return `
+    <div class="summary-grid">
+      <div class="summary-tile"><span class="metric-label">つれた</span><strong>${hitRate}%</strong></div>
+      <div class="summary-tile"><span class="metric-label">へいきん はんのう</span><strong>${meanRt}</strong></div>
+      <div class="summary-tile"><span class="metric-label">フライング</span><strong>${summary.falseStarts}</strong></div>
+      <div class="summary-tile"><span class="metric-label">にせアタリで入力</span><strong>${commissionRate}%</strong></div>
+    </div>
+  `;
+}
+
+const resultRenderers = {
+  sms: renderSmsResult,
+  gonogo: renderGonogoResult,
+  scan: renderScanResult,
+  rt: renderReactionResult,
+};
+
 export function createGameHost(ctx) {
   const { state, elements, scan, announce, save, logEvent } = ctx;
 
@@ -115,19 +169,19 @@ export function createGameHost(ctx) {
   }
 
   /**
-   * リズム系セッションのスナップショットを state.rhythm.sessions へ upsert する
-   * （sessionId をキーに置き換え。直近 MAX_RHYTHM_SESSIONS 件のみ保持、§9.1）。
+   * 課題横断セッションのスナップショットを state.sessions へ upsert する
+   * （sessionId をキーに置き換え。直近 MAX_SESSIONS 件のみ保持、§9.1）。
    */
-  function persistRhythmSession(session) {
+  function persistSession(session) {
     if (!session || !session.sessionId) return;
-    const sessions = state.rhythm.sessions;
+    const sessions = state.sessions;
     const index = sessions.findIndex((existing) => existing.sessionId === session.sessionId);
     if (index >= 0) {
       sessions[index] = session;
     } else {
       sessions.push(session);
     }
-    state.rhythm.sessions = sessions.slice(-MAX_RHYTHM_SESSIONS);
+    state.sessions = sessions.slice(-MAX_SESSIONS);
     save();
   }
 
@@ -142,7 +196,7 @@ export function createGameHost(ctx) {
         elements.gameProgress.textContent = text;
       },
       logTrial(session) {
-        persistRhythmSession(session);
+        persistSession(session);
       },
       logEvent,
       finish(summary) {
@@ -166,6 +220,7 @@ export function createGameHost(ctx) {
     state.currentView = "game";
     save();
     ctx.renderAll();
+    announce(`${module.title}を はじめます`);
     activeInstance = module.create(buildGameCtx());
     activeInstance.mount(elements.gameStageContent);
   }
@@ -180,11 +235,14 @@ export function createGameHost(ctx) {
    */
   function finishGame(summary) {
     lastResultSummary = summary || null;
-    if (summary && typeof summary.goHitRate === "number") {
-      ctx.views.evaluation.recordRhythmSessionOutcome(summary);
-      const percent = Math.round(summary.goHitRate * 100);
-      logEvent({ type: "game", label: `${activeGameId} 終了 go命中率${percent}%` });
-      ctx.audio.speak(`たっせいりつ ${percent}パーセントでした`);
+    const activeModule = activeGameId ? findGameModule(activeGameId) : null;
+    const taskType = activeModule?.taskType;
+    if (summary && taskType) {
+      ctx.views.evaluation.recordSessionOutcome(taskType, summary);
+      logEvent({
+        type: "game",
+        label: `${activeGameId} 終了 taskType=${taskType}`,
+      });
     }
     destroyActive();
     state.currentView = "result";
@@ -200,6 +258,7 @@ export function createGameHost(ctx) {
    */
   function returnHome() {
     destroyActive();
+    ctx.views.home?.showLobby();
     state.currentView = "home";
     save();
     ctx.renderAll();
@@ -266,8 +325,11 @@ export function createGameHost(ctx) {
       const activeModule = activeGameId ? findGameModule(activeGameId) : null;
       elements.gameProgress.textContent = activeModule ? activeModule.title : "";
 
-      if (lastResultSummary && typeof lastResultSummary.goHitRate === "number") {
-        elements.resultStats.innerHTML = renderResultStats(lastResultSummary);
+      const resultRenderer = activeModule?.taskType
+        ? resultRenderers[activeModule.taskType]
+        : null;
+      if (lastResultSummary && resultRenderer) {
+        elements.resultStats.innerHTML = resultRenderer(lastResultSummary);
       } else if (lastResultSummary) {
         elements.resultStats.innerHTML = '<p class="panel-note">このあそびには せいせき表示がありません。</p>';
       } else {

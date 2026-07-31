@@ -7,6 +7,7 @@
 
 import { operationModes, operationItemTasks, operationPointTargets } from "../content.js";
 import { cloneDefaultState } from "../state.js";
+import { evaluatePick, scanPercentAt } from "../games/pointing.js";
 
 export function initOperation(ctx) {
   const { state, elements, save, announce, logEvent, speak, playTone, scan } = ctx;
@@ -152,9 +153,8 @@ export function initOperation(ctx) {
   /** 往復するポイントスキャンカーソルの現在位置（%）を返す */
   function getPointScanPercent() {
     const startedAt = state.operation.pointStartedAt || Date.now();
-    const elapsed = (Date.now() - startedAt) % 3200;
-    const half = elapsed <= 1600 ? elapsed : 3200 - elapsed;
-    return Math.max(4, Math.min(96, Math.round((half / 1600) * 100)));
+    const percent = scanPercentAt(Date.now() - startedAt, 1600);
+    return Math.max(4, Math.min(96, Math.round(percent)));
   }
 
   /**
@@ -207,9 +207,10 @@ export function initOperation(ctx) {
     if (state.operation.pointPhase === "y") {
       state.operation.selectedY = getPointScanPercent();
       const target = operationPointTargets[state.operation.pointIndex % operationPointTargets.length];
-      const dx = state.operation.selectedX - target.x;
-      const dy = state.operation.selectedY - target.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const { distance } = evaluatePick(
+        { x: state.operation.selectedX, y: state.operation.selectedY },
+        { ...target, r: 16 }
+      );
       completeTrial("ポイントスキャン", distance <= 16, distance * 4);
       nextTarget();
     }

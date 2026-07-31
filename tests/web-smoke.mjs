@@ -21,12 +21,20 @@ const projects = [
     browserType: webkit,
     contextOptions: devices["iPhone 14"],
   },
+  {
+    name: "ipad-portrait",
+    browserType: webkit,
+    contextOptions: { viewport: { width: 834, height: 1194 } },
+  },
 ];
 
 const checks = [
   ["loads the main learning app", checkMainApp],
+  ["keeps the start press from falling through into a home activity", checkStartInputGuard],
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
   ["picks rhythm-l1, hides the shell chrome, and records an aborted session on Esc", checkRhythmL1GameFlow],
+  ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
+  ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
   ["moves between visible feature tabs", checkFeatureTabs],
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
@@ -34,6 +42,7 @@ const checks = [
   ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
+  ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
 ];
 
 const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
@@ -123,13 +132,13 @@ async function waitForServer() {
 }
 
 async function checkMainApp(page) {
-  await waitForText(page, "h1", "neuro");
+  await waitForText(page, "h1", "NEURONODE");
   // 5 tabs exist in the DOM (2 always-visible supporter tabs — log/settings —
   // + 3 researcher-mode tabs that stay hidden until settings.researcherMode
   // is enabled, see App.svelte / styles.css .researcher-tab). The former
   // matching/voca/letters tabs moved into the home screen's
-  // "まなぶ・つたえる" tile section (#activityTileGrid) since they are
-  // user-facing activities, not supporter tools.
+  // "まなぶ・つたえる" second level since they are user-facing activities,
+  // not supporter tools.
   await waitForCount(page, ".tab", 5);
   // The app always boots into the start screen (detailed-design.md §2.1:
   // MUST start from "start" even on revisit, to guarantee the AudioContext
@@ -152,6 +161,26 @@ async function checkMainApp(page) {
   assert(scanFocusCount === 0, `Expected no .scan-focus elements on the start screen, found ${scanFocusCount}`);
 }
 
+/** A physical start press must not retarget its release/click to the new home UI. */
+async function checkStartInputGuard(page) {
+  const startBox = await page.locator("#startStage").boundingBox();
+  assert(startBox, "Expected start stage bounds");
+  await page.mouse.move(startBox.x + startBox.width / 2, startBox.y + startBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.up();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForCount(page, "#gameTileGrid .game-tile", 5);
+  await page.waitForTimeout(600);
+  assert(
+    await page.locator("#homeView").evaluate((view) => view.classList.contains("is-active")),
+    "Expected the first physical press to stop on home instead of launching an activity"
+  );
+  assert(
+    !(await page.locator("#gameView").evaluate((view) => view.classList.contains("is-active"))),
+    "Expected game view to remain inactive after the start press"
+  );
+}
+
 /**
  * Plays through the primary user flow end to end: start screen -> (one
  * input) -> home (game tile grid) -> pick the color-legacy tile -> game
@@ -165,7 +194,7 @@ async function checkStartToHomeToGameFlow(page) {
   // logs a "switch" event, and advances to home (detailed-design.md §2.2).
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForCount(page, "#gameTileGrid .game-tile", 6);
+  await waitForCount(page, "#gameTileGrid .game-tile", 5);
 
   // The color-legacy tile is enabled and first by order (content.js gameTiles).
   const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
@@ -258,7 +287,8 @@ async function checkStartToHomeToGameFlow(page) {
   await page.keyboard.press("Escape");
   await waitForClass(page, "#homeView", "is-active");
   await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
-  await page.locator(".tabbar").waitFor({ state: "visible" });
+  await page.locator(".tabbar").waitFor({ state: "hidden" });
+  await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
 }
 
 /**
@@ -279,8 +309,8 @@ async function checkHomeReturnFromTabs(page) {
   // and must not be shown or reachable by scanning (detailed-design.md §10).
   await page.locator("#homeReturn").waitFor({ state: "hidden" });
 
-  // Enter the supporter's world through an ordinary tab click.
-  await page.locator('.tab[data-view="settings"]').click();
+  // Enter the supporter's world through the tap/keyboard-only menu entry.
+  await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
   await page.locator("#homeReturn").waitFor({ state: "visible" });
 
@@ -309,7 +339,8 @@ async function checkHomeReturnFromTabs(page) {
 async function checkKeyboardAndSwitchInput(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await page.locator('#activityTileGrid [data-view="voca"]').click();
+  await page.getByRole("button", { name: "まなぶ・つたえる", exact: true }).click();
+  await page.locator('#gameTileGrid [data-view="voca"]').click();
   await waitForClass(page, "#voca", "is-active");
 
   // Stop auto scan so an unfocused Space has no selected target and therefore
@@ -338,6 +369,9 @@ async function checkKeyboardAndSwitchInput(page) {
   assert(!(await page.locator("#primarySwitch").getAttribute("data-scan")), "Primary switch must not scan itself");
   await page.locator("#toggleScan").click();
   await waitForText(page, "#scanState", "走査中");
+  // toggleScan の pointerdown と物理入力代替の pointerdown は別入力。
+  // Playwrightは人間より速いため、150msの入力dedupe窓を越えてから押す。
+  await page.waitForTimeout(200);
   await page.locator("#primarySwitch").click();
   await waitForClass(page, "#homeView", "is-active");
 }
@@ -345,7 +379,7 @@ async function checkKeyboardAndSwitchInput(page) {
 async function checkSupporterEditingLock(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await page.locator('.tab[data-view="settings"]').click();
+  await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
 
   const editToggle = page.locator("#supporterEditToggle");
@@ -384,7 +418,7 @@ async function checkSupporterEditingLock(page) {
 
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await page.locator('.tab[data-view="settings"]').click();
+  await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
   assert((await editToggle.getAttribute("aria-pressed")) === "false", "Leaving supporter views must relock editing");
   assert(await page.locator("#scanInterval").isDisabled(), "Relocked settings must be disabled again");
@@ -396,18 +430,17 @@ async function checkSupporterEditingLock(page) {
  * color-legacy does, then abort with Esc and confirm the shell returns to
  * home directly (no result screen for an aborted session, detailed-design.md
  * §2.4) *and* that an aborted session was actually persisted to
- * state.rhythm.sessions (games/rhythm.js destroy(), detailed-design.md §7.3).
+ * state.sessions (games/rhythm.js destroy(), detailed-design.md §7.3).
  */
 async function checkRhythmL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForCount(page, "#gameTileGrid .game-tile", 6);
+  await waitForCount(page, "#gameTileGrid .game-tile", 5);
 
-  // Tile order (content.js gameTiles): color-legacy, rhythm-l1, rhythm-l2,
-  // gonogo, calibration, future-slot(disabled). rhythm-l1 is the 2nd enabled tile.
-  const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
-  await tiles.nth(1).click();
+  await page.getByRole("button", { name: "リズム", exact: true }).click();
+  await waitForCount(page, "#gameTileGrid .game-tile", 4);
+  await page.getByRole("button", { name: "リズム れんしゅう", exact: true }).click();
 
   await waitForClass(page, "#gameView", "is-active");
   await page.waitForFunction(() => document.body.classList.contains("game-mode"));
@@ -425,9 +458,10 @@ async function checkRhythmL1GameFlow(page) {
   await page.keyboard.press("Escape");
   await waitForClass(page, "#homeView", "is-active");
   await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
-  await page.locator(".tabbar").waitFor({ state: "visible" });
+  await page.locator(".tabbar").waitFor({ state: "hidden" });
+  await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
 
-  // The abort path (games/rhythm.js destroy(), gameHost.js persistRhythmSession)
+  // The abort path (games/rhythm.js destroy(), gameHost.js persistSession)
   // must still have written an aborted session for rhythm-l1 (detailed-design.md
   // §7.3 MUST: trials recorded so far are confirmed with aborted:true, no
   // silent data loss on early exit).
@@ -435,11 +469,69 @@ async function checkRhythmL1GameFlow(page) {
     const raw = localStorage.getItem(key);
     if (!raw) return false;
     const state = JSON.parse(raw);
-    return (state.rhythm?.sessions || []).some(
+    return (state.sessions || []).some(
       (session) => session.gameId === "rhythm-l1" && session.aborted === true
     );
   }, storageKey);
-  assert(hasAbortedSession, "Expected an aborted rhythm-l1 session in state.rhythm.sessions");
+  assert(hasAbortedSession, "Expected an aborted rhythm-l1 session in state.sessions");
+}
+
+async function checkFishingGameFlow(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.getByRole("button", { name: "さかなつり", exact: true }).click();
+  await waitForClass(page, "#gameView", "is-active");
+  await page.waitForTimeout(220);
+  // 前刺激区間の入力も falseStart / commission として1試行に確定する。
+  await page.locator("#gameStage").click();
+  await page.waitForFunction(
+    (key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      return (state.sessions || []).some(
+        (session) => session.gameId === "fishing" && session.trials?.length === 1
+      );
+    },
+    storageKey
+  );
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
+  const session = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return (state.sessions || []).find((item) => item.gameId === "fishing");
+  }, storageKey);
+  assert(session?.taskType === "rt", "Expected fishing to persist taskType=rt");
+  assert(session?.aborted === true, "Expected fishing exit to persist aborted=true");
+}
+
+async function checkCraneGameFlow(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.getByRole("button", { name: "アームを とめる", exact: true }).click();
+  await waitForClass(page, "#gameView", "is-active");
+  // 3拍カウントイン完了後、X/Yを止め、GRASP演出が1試行を確定するまで待つ。
+  await page.waitForTimeout(2250);
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(220);
+  await page.locator("#gameStage").click();
+  await page.waitForFunction(
+    (key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      return (state.sessions || []).some(
+        (session) => session.gameId === "crane" && session.trials?.length === 1
+      );
+    },
+    storageKey,
+    { timeout: 4_000 }
+  );
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
+  const session = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return (state.sessions || []).find((item) => item.gameId === "crane");
+  }, storageKey);
+  assert(session?.taskType === "scan", "Expected crane to persist taskType=scan");
+  assert(session?.trials?.length === 1, "Expected exactly one recorded crane trial");
+  assert(session?.aborted === true, "Expected crane exit to persist aborted=true");
 }
 
 async function checkFeatureTabs(page) {
@@ -450,12 +542,13 @@ async function checkFeatureTabs(page) {
   await waitForClass(page, "#homeView", "is-active");
 
   // matching/voca/letters are user-facing activities and now live on the
-  // home screen as "まなぶ・つたえる" tiles (#activityTileGrid), not as
-  // tabs. Each visit returns home via #homeReturn, the same path a switch
-  // user would scan to.
+  // home screen under the "まなぶ・つたえる" second level, not as tabs.
+  // Each visit returns home via #homeReturn, the same path a switch user
+  // would scan to.
   const activityTargets = ["matching", "voca", "letters"];
   for (const target of activityTargets) {
-    await page.locator(`#activityTileGrid [data-view="${target}"]`).click();
+    await page.getByRole("button", { name: "まなぶ・つたえる", exact: true }).click();
+    await page.locator(`#gameTileGrid [data-view="${target}"]`).click();
     await waitForClass(page, `#${target}`, "is-active");
     await page.locator("#homeReturn").click();
     await waitForClass(page, "#homeView", "is-active");
@@ -464,6 +557,8 @@ async function checkFeatureTabs(page) {
   // Only the always-visible supporter tabs; operation/evaluation/research
   // stay hidden until "researcher mode" is turned on in settings
   // (P0-0, detailed-design.md §0.2).
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
   const tabTargets = ["log", "settings"];
   for (const target of tabTargets) {
     await page.locator(`.tab[data-view="${target}"]`).click();
@@ -485,7 +580,7 @@ async function checkResearcherModeTabsNoRegression(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
 
-  await page.locator('.tab[data-view="settings"]').click();
+  await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
 
   // Research controls are protected from the user's scan order until a
@@ -504,12 +599,15 @@ async function checkResearcherModeTabsNoRegression(page) {
   // P3-1's rhythm CSV export button lives alongside the pre-existing
   // evaluation CSV export; both must still be there (no regression).
   await page.locator("#exportRhythmCsv").waitFor({ state: "visible" });
+  await page.locator("#exportScanCsv").waitFor({ state: "visible" });
+  await page.locator("#exportRtCsv").waitFor({ state: "visible" });
 
   // Settings itself must keep working too (the tab we just used to flip
   // researcherMode on).
   await page.locator('.tab[data-view="settings"]').click();
   await waitForClass(page, "#settings", "is-active");
   await page.locator("#researcherMode").waitFor({ state: "visible" });
+  await page.locator("#hideVisualTasks").click();
 
   // Destructive operation reset is supporter-only and never part of custom
   // scan, while the actual user training controls remain available when the
@@ -520,6 +618,13 @@ async function checkResearcherModeTabsNoRegression(page) {
   assert(!(await page.locator("#resetOperation").isDisabled()), "Operation reset is available during supporter editing");
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
+  await waitForCount(page, "#gameTileGrid .game-tile", 4);
+  assert(
+    (await page.getByRole("button", { name: "アームを とめる", exact: true }).count()) === 0,
+    "Visual-task setting must remove crane from the lobby and scan order"
+  );
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
   await page.locator('.tab[data-view="operation"]').click();
   await waitForClass(page, "#operation", "is-active");
   assert(await page.locator("#resetOperation").isDisabled(), "Operation reset must relock outside supporter editing");
@@ -632,7 +737,7 @@ async function checkPwaDelivery(page, project) {
   await page.context().setOffline(true);
   try {
     await page.reload({ waitUntil: "domcontentloaded", timeout: 10_000 });
-    await waitForText(page, "h1", "neuro");
+    await waitForText(page, "h1", "NEURONODE");
     assert(
       await page.evaluate(() =>
         Array.from(document.styleSheets).some((sheet) => {
@@ -651,6 +756,9 @@ async function checkPwaDelivery(page, project) {
 }
 
 async function checkMobileLayout(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
   const overflow = await page.evaluate(() => {
     const width = document.documentElement.clientWidth;
     return document.documentElement.scrollWidth - width;
@@ -659,6 +767,43 @@ async function checkMobileLayout(page) {
   assert(overflow <= 2, `Expected horizontal overflow <= 2px, got ${overflow}px`);
   await page.locator(".switch-dock").waitFor({ state: "visible" });
   await page.locator("#primarySwitch").waitFor({ state: "visible" });
+}
+
+async function checkIpadAccessibilityLayout(page, project) {
+  if (project.name !== "ipad-portrait") return;
+
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator("#supporterEditToggle").click();
+  await page.locator("#largeText").click();
+  await page.locator("#highContrast").click();
+  await page.locator("#homeReturn").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForCount(page, "#gameTileGrid .game-tile", 5);
+
+  const layout = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll("#gameTileGrid .game-tile")];
+    const dock = document.querySelector(".switch-dock")?.getBoundingClientRect();
+    const last = rows.at(-1)?.getBoundingClientRect();
+    return {
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      rowWritingModes: rows.map((row) => getComputedStyle(row).writingMode),
+      lastBottom: last ? last.bottom : null,
+      dockTop: dock ? dock.top : null,
+    };
+  });
+
+  assert(layout.overflow <= 2, `Expected iPad horizontal overflow <= 2px, got ${layout.overflow}px`);
+  assert(
+    layout.rowWritingModes.every((mode) => mode === "horizontal-tb"),
+    `Expected horizontal activity labels, got ${layout.rowWritingModes.join(", ")}`
+  );
+  assert(
+    layout.lastBottom !== null && layout.dockTop !== null && layout.lastBottom <= layout.dockTop,
+    `Expected all five rows above the input dock, got lastBottom=${layout.lastBottom} dockTop=${layout.dockTop}`
+  );
 }
 
 async function waitForText(page, selector, expected) {

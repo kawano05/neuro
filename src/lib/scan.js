@@ -72,7 +72,7 @@ export function createScanEngine(ctx) {
     updateFocus();
     scanTimer = window.setInterval(step, state.settings.scanInterval);
     elements.scanState.textContent = "走査中";
-    elements.toggleScan.textContent = "走査停止";
+    elements.toggleScanLabel.textContent = "走査停止";
   }
 
   /** 走査を停止する。clearFocus=false ならハイライト位置を保持する。 */
@@ -82,7 +82,7 @@ export function createScanEngine(ctx) {
       scanTimer = null;
     }
     elements.scanState.textContent = "走査停止中";
-    elements.toggleScan.textContent = "走査開始";
+    elements.toggleScanLabel.textContent = "走査開始";
     if (clearFocus) {
       scanIndex = -1;
       document.querySelectorAll(".scan-focus").forEach((target) => target.classList.remove("scan-focus"));
