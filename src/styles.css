@@ -613,12 +613,25 @@ body.game-mode .game-exit {
   right: max(18px, env(safe-area-inset-right));
 }
 
+/* ゲームの地。単色のベタ塗りだと画面が板に見えるので、同心円の地紋を薄く
+   敷き、上方に光、下方に沈みを置いて奥行きを作る。
+
+   ここで置くのは**動かない**地紋であることが重要。拍に同期して動く視覚を
+   足すと、脈打つ円が1個だけという版面が崩れる（basic-design.md §6）。 */
 .game-stage-content {
   position: absolute;
   inset: 0;
   display: grid;
   border-radius: inherit;
-  background: var(--stage-color, var(--accent));
+  background-color: var(--stage-color, var(--accent));
+  background-image:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.055) 0 1px,
+      rgba(255, 255, 255, 0) 1px 56px
+    ),
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.22) 100%);
   color: #ffffff;
   place-items: center;
   text-align: center;
@@ -627,16 +640,136 @@ body.game-mode .game-exit {
   font-family: var(--font-round);
 }
 
+/* 「円ひとつ＋下に説明文」の版面（リズム系・色変化）だけ、主役を画面の
+   ちょうど中央に置く。説明文をグリッドの並びに入れたままだと、円と文を
+   まとめた塊が中央に揃うぶん円自体は上へずれ、地紋の同心円と同心に
+   ならない。説明文は中央合わせから外して下端のキャプションにする。
+
+   クラスで範囲を限定しているのは、crane / fishing のように子要素の構成が
+   違うゲーム（シーン＋状態表示＋説明文の3つ）で、複数の要素が同じ位置へ
+   重なってしまうのを避けるため。 */
+.game-stage-content.module-rhythm,
+.game-stage-content.module-color {
+  gap: 0;
+}
+
+.game-stage-content.module-rhythm > :not(:first-child),
+.game-stage-content.module-color > :not(:first-child) {
+  position: absolute;
+  right: 32px;
+  bottom: clamp(20px, 6vh, 56px);
+  left: 32px;
+}
+
+/* 色変化は色そのものが課題の答えになる。地と円が同じ --stage-color だと
+   円の輪郭が白枠だけに頼ることになるので、地に暗い層を重ねて純色のままの
+   円が浮き上がるようにする。 */
+.game-stage-content.module-color {
+  background-image:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.06) 0 1px,
+      rgba(255, 255, 255, 0) 1px 56px
+    ),
+    linear-gradient(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.32));
+}
+
 .game-progress {
   position: absolute;
   top: 18px;
   left: 18px;
   z-index: 1;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.26);
   color: #ffffff;
   font-family: var(--font-round);
   font-size: clamp(1.1rem, 2vw, 1.6rem);
   font-weight: 800;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* =====================================================================
+   レディ画面（「やりかた」）— games/gameHost.js renderReady()
+
+   ゲームに入ってから最初のひと押しまでの間だけ出る。まだ計測が
+   始まっていない段階なので、図も手順も自由に使える（進行中に同じことを
+   やると拍の視覚キューになり測定が交絡する。basic-design.md §6）。
+   ===================================================================== */
+.game-ready {
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+  width: min(680px, 100%);
+}
+
+.game-ready-icon {
+  display: grid;
+  color: #ffffff;
+  font-size: clamp(2.6rem, 7vmin, 4rem);
+  place-items: center;
+}
+
+.game-ready-title {
+  font-size: clamp(1.7rem, 4.4vw, 2.6rem);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+/* 手順は1行1動作。番号を丸で振って、順番があることを形でも示す。 */
+.game-ready-steps {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  counter-reset: game-step;
+  list-style: none;
+  text-align: left;
+}
+
+.game-ready-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  counter-increment: game-step;
+  font-size: clamp(1.05rem, 2.4vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.game-ready-steps li::before {
+  content: counter(game-step);
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.9em;
+  height: 1.9em;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  place-items: center;
+  font-size: 0.82em;
+  font-weight: 800;
+}
+
+/* 手順が1行だけの場合は番号を振らない。 */
+.game-ready-steps li:only-child::before {
+  display: none;
+}
+
+.game-ready-go {
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.26);
+  font-size: clamp(0.98rem, 2vw, 1.2rem);
+  font-weight: 700;
+}
+
+body.high-contrast .game-stage-content.is-ready {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45));
+}
+
+body.high-contrast .game-ready-steps li::before,
+body.high-contrast .game-ready-go {
+  border-color: #ffffff;
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .game-exit {
@@ -692,24 +825,70 @@ body.game-mode .game-exit {
    40vmin の単一 div。位相にあわせた transform 更新は rhythm.js が rAF で行う
    （CSS transition は使わない。判定には使わずあくまで見た目の補助）。 */
 .rhythm-pulse {
+  position: relative;
   width: 40vmin;
   height: 40vmin;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
+  /* 平らな白面ではなく、上から光が当たった球の面。拍に合わせた
+     transform（rhythm.js が rAF で更新）はそのままこの面に効く。 */
+  background: radial-gradient(circle at 50% 36%, #ffffff 0%, #f5f8f7 52%, #dde7e5 100%);
   box-shadow:
-    inset 0 -18px 30px rgba(0, 0, 0, 0.12),
-    0 18px 38px rgba(0, 0, 0, 0.18);
+    0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* 円のまわりの静かなリング。脈打つ円と一緒に拡大縮小するので、円の動きが
+   読み取りやすくなる。それ自体は独立して動かない。 */
+.rhythm-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -7%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+}
+
+/* ヒット時の波紋（basic-design.md §6 の「ヒット時のフラッシュ」の実装）。
+   押せたその瞬間だけ外側へ一度広がって消える。予告ではなく事後の
+   フィードバックなので、次の拍のキューにはならない。 */
+.rhythm-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  opacity: 0;
 }
 
 .rhythm-pulse.is-hit-flash {
   box-shadow:
-    0 0 0 10px rgba(255, 255, 255, 0.55),
-    0 0 46px 14px rgba(255, 255, 255, 0.85);
+    0 0 0 6px rgba(255, 255, 255, 0.34),
+    0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+.rhythm-pulse.is-hit-flash::after {
+  animation: rhythm-hit-ripple 320ms ease-out;
+}
+
+@keyframes rhythm-hit-ripple {
+  from {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
 }
 
 body.high-contrast .rhythm-pulse {
+  background: #ffffff;
   outline: 6px solid var(--ink);
   outline-offset: -6px;
+}
+
+body.high-contrast .rhythm-pulse::before {
+  border-color: rgba(255, 255, 255, 0.85);
 }
 
 /* さかなつり。計時は fishing.js の AudioContext 時間軸、ここは演出のみ。 */
@@ -1042,14 +1221,54 @@ body.game-mode .app-shell {
   place-items: center;
 }
 
+/* 色変化（L0）の色面。この課題は色そのものが情報なので、面を大きく取り、
+   内側の影で色を濁らせない。
+
+   L0 は「押したら変わった」という因果が伝わることが目的なので、ここだけは
+   入力に対する視覚の反応を作り込む（リズム課題と違い、聴覚キューに対する
+   タイミングを測っていないため、視覚を足しても測定を交絡させない）。
+   colorLegacy.js は入力のたびにこの要素を作り直すので、下の2つの
+   アニメーションはひと押しごとに自然に再生される。 */
 .color-chip {
-  width: 142px;
-  height: 142px;
-  border: 8px solid rgba(255, 255, 255, 0.7);
+  position: relative;
+  width: min(38vmin, 320px);
+  height: min(38vmin, 320px);
+  border: 10px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  box-shadow:
-    inset 0 -18px 30px rgba(0, 0, 0, 0.12),
-    0 18px 38px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+  animation: color-chip-pop 380ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* 押した瞬間に外へ広がる波紋。 */
+.color-chip::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  animation: color-chip-ripple 620ms ease-out forwards;
+}
+
+@keyframes color-chip-pop {
+  from {
+    transform: scale(0.88);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes color-chip-ripple {
+  from {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
 }
 
 .balloon-shape {

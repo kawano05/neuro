@@ -38,6 +38,7 @@
 
 import { findGameModule } from "./registry.js";
 import { MAX_SESSIONS } from "../state.js";
+import { gameHowTo } from "../content.js";
 
 /** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
 function formatSignedMs(value) {
@@ -152,6 +153,9 @@ export function createGameHost(ctx) {
   let activeInstance = null;
   let activeGameId = null;
   let lastResultSummary = null;
+  // レディ画面（「やりかた」）を表示中のモジュール。null でなければ、
+  // 次のスイッチ入力はゲームへ渡さずセッション開始に使う。
+  let pendingModule = null;
   // P4-3: 今回のリザルトで既に候補値を保存したか（同一リザルト画面での
   // 二重保存を防ぎ、保存後は確認文言に切り替える。launch() のたびにリセット）。
   let calibrationOffsetSaved = false;
@@ -208,6 +212,55 @@ export function createGameHost(ctx) {
     };
   }
 
+  /**
+   * レディ画面（「やりかた」）を描く。
+   *
+   * 以前はタイルを押した瞬間に mount() が走り、先読みスケジューラが即座に
+   * 拍を鳴らしはじめていた。利用者にも支援者にも、その課題で何をするのかを
+   * 伝える場所がどこにも無い状態だった（とくに gonogo は、高音は押す・低音は
+   * 見送るというルールを知らなければ音だけからは推測できない）。
+   *
+   * 説明を課題の最中ではなく開始前に置くのは、進行中の視覚が拍のキューとして
+   * 働くと聴覚キューに対する入力という測定の前提が崩れるため
+   * （basic-design.md §6）。開始前ならまだ計測が始まっていないので、図も
+   * 手順も自由に使える。
+   */
+  function renderReady(module, steps) {
+    const items = steps.map((line) => `<li>${line}</li>`).join("");
+    const icon = module.iconClass
+      ? `<span class="game-ready-icon" aria-hidden="true"><i class="${module.iconClass}"></i></span>`
+      : "";
+    elements.gameStageContent.classList.add("is-ready");
+    elements.gameStageContent.innerHTML = `
+      <div class="game-ready">
+        ${icon}
+        <strong class="game-ready-title">${module.title}</strong>
+        <ol class="game-ready-steps">${items}</ol>
+        <span class="game-ready-go">がめんの どこでも おすと はじまります</span>
+      </div>
+    `;
+
+    // #gameStageContent は aria-hidden なので、説明は読み上げ経路で伝える。
+    // 画面注視が困難な利用者にも届かせる必要がある（basic-design.md §1.2）。
+    const spoken = [module.title, ...steps].join(" ");
+    announce(spoken);
+    ctx.audio.speak(spoken);
+  }
+
+  /** レディ画面のひと押しを受けて、実際にゲームを開始する。 */
+  function beginSession() {
+    const module = pendingModule;
+    pendingModule = null;
+    if (!module) return;
+    // 案内の読み上げを途中で打ち切る。読み終わるのを待たずに始められる以上、
+    // 放っておくと課題の合図音（低音・高音）に人の声が重なる。合図音を
+    // 聴き取ることがこの課題そのものなので、確実に黙らせてから始める。
+    ctx.audio.stopSpeech();
+    elements.gameStageContent.classList.remove("is-ready");
+    activeInstance = module.create(buildGameCtx());
+    activeInstance.mount(elements.gameStageContent);
+  }
+
   /** ゲームを起動する（detailed-design.md §3.2）。 */
   function launch(gameId) {
     const module = findGameModule(gameId);
@@ -216,11 +269,23 @@ export function createGameHost(ctx) {
     scan.stop(true);
     activeGameId = gameId;
     lastResultSummary = null;
+    pendingModule = null;
     calibrationOffsetSaved = false;
     state.currentView = "game";
     save();
     ctx.renderAll();
     announce(`${module.title}を はじめます`);
+
+    // content.js に「やりかた」を持つ課題は、レディ画面を挟んでから始める。
+    // 持たない課題（crane / fishing のように画面を見て操作するもの）は
+    // 説明の作り方が別なので、従来どおり即開始する。
+    const steps = gameHowTo[gameId];
+    if (steps && steps.length) {
+      pendingModule = module;
+      renderReady(module, steps);
+      return;
+    }
+
     activeInstance = module.create(buildGameCtx());
     activeInstance.mount(elements.gameStageContent);
   }
@@ -257,6 +322,11 @@ export function createGameHost(ctx) {
    * （detailed-design.md §2.4「aborted の場合は home へ直帰」）。
    */
   function returnHome() {
+    // レディ画面から「おわる」/Esc で抜けた場合は instance がまだ無い。
+    // 保留を落とし、読み上げも黙らせる（ホームに戻ってから喋り続けない）。
+    pendingModule = null;
+    ctx.audio.stopSpeech();
+    elements.gameStageContent.classList.remove("is-ready");
     destroyActive();
     ctx.views.home?.showLobby();
     state.currentView = "home";
@@ -267,6 +337,13 @@ export function createGameHost(ctx) {
 
   /** シェルが計時した入力を現在のゲームへ渡す（入力ファネル経由。§3.3）。 */
   function dispatchInput(t, source) {
+    // レディ画面のひと押しは「説明を読み終えた合図」であって課題の入力では
+    // ないので、ゲームへは渡さず、logEvent にも残さない。これを渡すと
+    // セッション開始前の入力が1件目の試行として記録されてしまう。
+    if (pendingModule) {
+      beginSession();
+      return;
+    }
     if (!activeInstance) return;
     activeInstance.handleInput(t, source);
   }

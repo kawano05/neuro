@@ -30,9 +30,12 @@ export function createColorLegacyGame(ctx) {
     if (!stageEl) return;
     const color = stageColors[step % stageColors.length];
     stageEl.style.setProperty("--stage-color", color);
+    // 画面の主役は色そのもの（L0 反応確認は「押したら変わった」が伝われば
+    // よい課題）。以前はここに legacyModule.name（"色変化"）を巨大な文字で
+    // 出していたが、ゲーム名は左上の #gameProgress が既に出しており、しかも
+    // タイル名「いろと おと」とも食い違って見えていたので外した。
     stageEl.innerHTML = `
       <span class="activity-visual"><span class="color-chip" style="background:${color}"></span></span>
-      <span class="reaction-label">${legacyModule.name}</span>
       <span class="reaction-detail">${legacyModule.description}</span>
     `;
   }

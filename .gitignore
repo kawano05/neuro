@@ -7,3 +7,9 @@ dist/
 *.log
 playwright-report/
 test-results/
+
+# Claude Code local dev config
+.claude/
+
+# OMC local session data
+.omc/

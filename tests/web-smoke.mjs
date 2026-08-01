@@ -232,10 +232,25 @@ async function checkStartToHomeToGameFlow(page) {
   // window before treating this as a distinct input.
   await page.waitForTimeout(200);
 
+  // Games that carry a "やりかた" entry in content.js now open on the ready
+  // screen (games/gameHost.js renderReady) so the rules are shown before any
+  // beat is scheduled. The first press dismisses it and starts the session;
+  // it is not a task input, so it must not be forwarded to the game nor
+  // recorded in the log.
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  const logsBeforeReadyDismiss = await readLogCount(page);
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  assert(
+    (await readLogCount(page)) === logsBeforeReadyDismiss,
+    "Expected the ready-screen press to start the session without logging an input"
+  );
+
   // Tapping the full-screen game stage is a switch input for color-legacy:
   // it changes color/tone and announces via the live region. Click the
   // center (default) rather than a corner, since #gameProgress/#gameExit are
   // absolutely positioned in the corners and would intercept a corner click.
+  await page.waitForTimeout(200);
   await page.locator("#gameStage").click();
   await waitForText(page, "#liveRegion", "色変化に入力しました");
 
@@ -449,6 +464,14 @@ async function checkRhythmL1GameFlow(page) {
   // scan toggle + scan state readout) are gone while a game is active.
   await page.locator(".tabbar").waitFor({ state: "hidden" });
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // The ready screen ("やりかた") comes first and no beat is scheduled until
+  // it is dismissed (games/gameHost.js renderReady/beginSession). Aborting
+  // from here would leave no session at all, so start the session before
+  // testing the abort path below.
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
 
   // Let the countdown/first beat render a moment before aborting.
   await page.waitForTimeout(500);
