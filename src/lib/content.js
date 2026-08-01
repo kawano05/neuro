@@ -115,13 +115,47 @@ export const cranePresets = {
   graspAnimMs: 1200,
 };
 
+/**
+ * さかなつりのパラメータ。
+ *
+ * 課題としては従来どおり「変動前刺激間隔つき単純反応時間課題」で、測るのは
+ * アタリ音から入力までの反応時間（taskType: "rt"）。見た目を釣りゲームに
+ * したあとも、判定と記録の仕組み（games/reaction.js の judgeReaction /
+ * generateForeperiods）は変えていない。
+ *
+ * 魚は「アタリ音が鳴る瞬間にちょうど糸の真下へ来る」ように泳ぐ。つまり
+ * 画面は音のキューを目でも追えるようにした表現であって、判定は音の時刻
+ * （cueMs）基準のまま。音を聴かずに画面だけを見ても遊べるが、画面を見ずに
+ * 音だけでも遊べる——という両立を崩さないための設計。
+ *
+ * sessionMs: 1ゲームの長さ。試行数ではなく時間で区切る（2分）。実際の
+ * 試行数は mount() 時に前刺激間隔の乱数から決まり、config.targetTrials へ
+ * 実数を書き込む（state.js の sanitizeReactionSession が
+ * trials.length === targetTrials を完走判定に使うため、ここがずれると
+ * 全セッションが中断扱いになる）。
+ */
 export const fishingPresets = {
-  foreperiodMinMs: 1500,
-  foreperiodMaxMs: 5000,
+  foreperiodMinMs: 1800,
+  foreperiodMaxMs: 4200,
   limitMs: 2000,
-  targetTrials: 8,
-  fakeRatio: 0.25,
+  sessionMs: 120_000,
+  fakeRatio: 0.22,
+  // 魚が画面右端から糸の位置（中央）へ泳いでくるのにかける時間。
+  // アタリ音が鳴る cueMs のちょうど手前 approachMs から動きはじめる。
+  approachMs: 1800,
+  // アタリを逃したあと、魚が画面左へ抜けていくまでの時間。
+  exitMs: 700,
 };
+
+/**
+ * 釣れる魚の種類。lengthCm の範囲は見た目の大きさと釣り合わせてある。
+ * weight は出現比。asset は src/assets/fishing/fish-<asset>.png に対応する。
+ */
+export const fishingSpecies = [
+  { id: "small", asset: "small", label: "こざかな", minCm: 8, maxCm: 16, weight: 0.45 },
+  { id: "medium", asset: "medium", label: "さかな", minCm: 18, maxCm: 30, weight: 0.38 },
+  { id: "large", asset: "large", label: "おおもの", minCm: 32, maxCm: 48, weight: 0.17 },
+];
 
 /** 聴覚キューの周波数（Hz）。detailed-design.md §4.1 / §6.4。 */
 /**
@@ -165,6 +199,12 @@ export const gameHowTo = {
   calibration: [
     "たかい おとに あわせて おします。",
     "しえんしゃと いっしょに つかう そくていです。",
+  ],
+  fishing: [
+    "さかなが みぎから およいで きます。",
+    "「アタリ」の たかい おとで おすと つれます。",
+    "ひくい おとは ながぐつです。おさずに まちます。",
+    "2ふんかん、たくさん つりましょう。",
   ],
 };
 

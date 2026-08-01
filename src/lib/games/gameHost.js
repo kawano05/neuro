@@ -130,8 +130,28 @@ function renderReactionResult(summary) {
   const commissionRate = Math.round((summary.commissionRate || 0) * 100);
   const meanRt =
     typeof summary.meanRtMs === "number" ? `${Math.round(summary.meanRtMs)}ms` : "--";
+
+  // 釣果（さかなつりの遊びの手応え）。state.js の rt スキーマには無い値なので
+  // 永続化された session からは復元されない。ここに来る summary は
+  // ctx.finish() でゲームから直接渡されたものなので、その回だけ表示できる
+  // （games/fishing.js 冒頭のコメント参照）。
+  const catchTiles =
+    typeof summary.totalLengthCm === "number"
+      ? `
+      <div class="summary-tile is-headline">
+        <span class="metric-label">つったながさ</span>
+        <strong>${summary.totalLengthCm}<small>cm</small></strong>
+        <p>${summary.catches ?? 0} ひき</p>
+      </div>
+      <div class="summary-tile">
+        <span class="metric-label">いちばん おおきい</span>
+        <strong>${typeof summary.longestCm === "number" ? `${summary.longestCm}cm` : "--"}</strong>
+      </div>`
+      : "";
+
   return `
     <div class="summary-grid">
+      ${catchTiles}
       <div class="summary-tile"><span class="metric-label">つれた</span><strong>${hitRate}%</strong></div>
       <div class="summary-tile"><span class="metric-label">へいきん はんのう</span><strong>${meanRt}</strong></div>
       <div class="summary-tile"><span class="metric-label">フライング</span><strong>${summary.falseStarts}</strong></div>

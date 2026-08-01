@@ -504,6 +504,11 @@ async function checkFishingGameFlow(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.getByRole("button", { name: "さかなつり", exact: true }).click();
   await waitForClass(page, "#gameView", "is-active");
+  // さかなつりも content.js の gameHowTo を持つようになったので、レディ画面を
+  // ひと押しで抜けてからでないとセッションが始まらない。
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
   await page.waitForTimeout(220);
   // 前刺激区間の入力も falseStart / commission として1試行に確定する。
   await page.locator("#gameStage").click();

@@ -145,7 +145,7 @@ settings.js は本リファクタでは原則変更しない。
   - 説明を進行中ではなく開始前に置くのは、課題中の視覚が拍のキューとして働くと
     聴覚キューに対する入力という測定の前提が崩れるため（基本設計書 §6）。
     開始前はまだ計測が始まっていないので、図・手順・色を自由に使える。
-  - `gameHowTo` に無い課題（crane / fishing のように画面を見て操作するもの）は
+  - `gameHowTo` に無い課題（crane のように画面を見て操作するもの）は
     説明の作り方が別なので、従来どおり即開始する。
   - #gameStageContent は aria-hidden のため、説明は announce() と
     audio.speak() で読み上げ経路にも流す。開始時と離脱時は audio.stopSpeech()
@@ -501,6 +501,37 @@ rhythmPresets[gameId]。settings 側が null のとき preset を使う。
   子要素の構成が違う crane / fishing にこの規則が及ばないよう、
   クラスで範囲を限定している。
 - highContrast 時は輪郭線を強調。色は stageColors から1色を使用。
+
+### 7.5 さかなつりの画面（games/fishing.js）
+
+課題としては従来どおり変動前刺激間隔つき単純反応時間課題（taskType: "rt"）で、
+判定は reaction.js の `judgeReaction`、前刺激間隔は `generateForeperiods`、
+real/fake の並びは `generateGoNoGoSequence`——いずれも変更していない。
+見た目だけを一般的な釣りゲームに寄せている。
+
+- 舟と釣り人は画面中央上部に固定する。NeuroNode は単一スイッチなので、
+  移動の概念を持ち込まない。利用者ができる操作は「押して糸を垂らす」だけ。
+- 魚は水中を右から左へ流れ、**アタリ音が鳴る瞬間（cueMs）にちょうど糸の
+  真下へ来る**。画面は音のキューを目でも追えるようにした表現であって、
+  判定の基準は音の時刻のまま。これにより「画面を見ずに音だけでも遊べる」
+  「音が聴こえにくくても画面で合わせられる」の両方が成り立つ
+  （基本設計書 §6 の聴覚優先を崩さない）。よって `visualRequired` は付けない。
+- 位置は `swimX()` が「右端→中央」「中央→左端」の2区間の線形補間で返し、
+  rAF で `left` を更新する。掛かったあとの巻き上げ中は rAF が位置を触らず、
+  CSS の遷移に任せる（`reelingIndex`）。
+- 1ゲームは2分（`fishingPresets.sessionMs`）。試行数ではなく時間で区切るため、
+  試行数は前刺激間隔の乱数で毎回変わる。**mount() で実際に計画した試行数を
+  `config.targetTrials` に書き戻すこと**（state.js の `sanitizeReactionSession`
+  が `trials.length === targetTrials` を完走判定に使うので、ここがずれると
+  全セッションが中断扱いで保存される）。
+- スコアと魚の長さ（`species` / `lengthCm` / `totalLengthCm` / `catches` /
+  `longestCm`）は遊びの手応えのための表示で、rt スキーマの外にあるため
+  永続化されない。記録・CSV に残るのは従来どおり反応時間と判定だけで、
+  研究データのスキーマは変えていない。リザルトには `ctx.finish(summary)` で
+  直接渡るので（sanitizer を通らない）その回だけ表示できる。
+- 素材（魚3種・長靴・舟）は `src/assets/fishing/*.png`。Vite 経由で import し、
+  base 付きの配信でもパスが壊れないようにする。Service Worker は dist 配下を
+  全ファイル事前キャッシュするため、合計サイズを小さく保つこと。
 
 ---
 

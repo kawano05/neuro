@@ -601,7 +601,13 @@ test("game registry, presets and persisted task types stay aligned", () => {
     "rhythm-l2",
   ]);
   assert.equal(cranePresets.targetTrials, 5);
-  assert.equal(fishingPresets.targetTrials, 8);
+  // さかなつりは試行数ではなく時間（2分）で1ゲームを区切るので、プリセットに
+  // targetTrials は持たない。実際の試行数は前刺激間隔の乱数で毎回変わり、
+  // games/fishing.js の mount() が計画した実数を config.targetTrials へ
+  // 書き戻す（sanitizeReactionSession の完走判定が
+  // trials.length === targetTrials を見るため）。
+  assert.equal(fishingPresets.sessionMs, 120_000);
+  assert.equal(fishingPresets.targetTrials, undefined);
 
   const migrated = sanitizeState({
     rhythm: {
