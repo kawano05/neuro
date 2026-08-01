@@ -916,13 +916,16 @@ body.high-contrast .rhythm-pulse::before {
   background: linear-gradient(#8fd0f2, #dff5ff);
 }
 
+/* 水中。同心円の波紋を敷いていたが、模様が強すぎて泳いでいる魚より目立ち、
+   魚の位置（＝糸に来たかどうか）が読み取りにくかったので外した。
+   深さの階調と、水面直下の明るい帯だけにする。 */
 .fishing-water {
   position: absolute;
   inset: 38% 0 0;
   overflow: hidden;
   background:
-    repeating-radial-gradient(ellipse at 50% 0, rgba(255, 255, 255, 0.24) 0 8px, transparent 9px 26px),
-    linear-gradient(#2d9ec1, #063f60);
+    linear-gradient(rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 14%),
+    linear-gradient(#2f9fc4, #06405f);
 }
 
 /* 舟と釣り人。水面（38%）にちょうど乗るように置く。

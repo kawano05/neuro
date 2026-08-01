@@ -302,19 +302,29 @@ export function createFishingGame(ctx) {
   }
 
   /**
-   * 泳ぎの位置。アタリ音が鳴る cueMs にちょうど糸の位置（中央）へ来るよう、
-   * 「右端 → 中央」と「中央 → 左端」の2区間に分けて線形に動かす。
+   * 泳ぎの位置（.fishing-scene に対する％）。3区間に分ける:
+   *   1. 寄ってくる  … 右端 → 糸の位置。cueMs にちょうど糸へ着く
+   *   2. 食いついている … 判定窓（cueMs 〜 cueMs+limitMs）のあいだ糸の位置に留まる
+   *   3. 逃げる      … 窓を過ぎたら左へ抜ける
    * 画面に出ていない区間では null を返す。
+   *
+   * 2 の「留まる」が要点。以前は cueMs から limitMs+exitMs をかけて左端まで
+   * 泳ぎ切らせていたため、判定窓の終わりには魚が画面外（x=-2%）にいた。
+   * 反応時間 600ms でも既に x=34% まで進んでおり、「押せるのに魚はもういない」
+   * という見た目と判定の食い違いが起きていた。アタリ＝魚が食いついている
+   * 状態なので、押せるあいだは糸の位置にいるのが正しい。
    */
   function swimX(nowRelativeMs, planned) {
     const appearMs = planned.cueMs - config.approachMs;
-    const leaveMs = planned.cueMs + config.limitMs + config.exitMs;
+    const holdEndMs = planned.cueMs + config.limitMs;
+    const leaveMs = holdEndMs + config.exitMs;
     if (nowRelativeMs < appearMs || nowRelativeMs > leaveMs) return null;
     if (nowRelativeMs <= planned.cueMs) {
       const t = (nowRelativeMs - appearMs) / config.approachMs;
       return SPAWN_X_PERCENT + (LINE_X_PERCENT - SPAWN_X_PERCENT) * t;
     }
-    const t = (nowRelativeMs - planned.cueMs) / (config.limitMs + config.exitMs);
+    if (nowRelativeMs <= holdEndMs) return LINE_X_PERCENT;
+    const t = (nowRelativeMs - holdEndMs) / config.exitMs;
     return LINE_X_PERCENT + (EXIT_X_PERCENT - LINE_X_PERCENT) * t;
   }
 
