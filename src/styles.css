@@ -1076,6 +1076,56 @@ body.high-contrast .rhythm-pulse::before {
   transform: translateX(-50%);
 }
 
+/* 連続記録。3から出す（1・2で出すと常時点灯して意味を失う）。 */
+.fishing-streak {
+  position: absolute;
+  top: 62px;
+  left: 50%;
+  z-index: 3;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffe27a;
+  font-family: var(--font-round);
+  font-size: clamp(0.9rem, 2vw, 1.15rem);
+  font-weight: 800;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, -6px);
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out;
+}
+
+.fishing-streak.is-shown {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* すばやく釣れたときの強調。 */
+.fishing-catch.is-bonus {
+  background: #b8860b;
+  color: #fffbe6;
+  box-shadow: 0 0 0 3px rgba(255, 226, 122, 0.6);
+}
+
+/* 終盤の夕暮れ。残り時間が少ないことを、警告音ではなく光の変化で伝える
+   （音で急かすとアタリ音と混ざり、聴覚キューの聴き取りを妨げる）。 */
+.fishing-scene.is-dusk .fishing-sky {
+  background: linear-gradient(#e8a15c, #ffd9a0);
+}
+
+.fishing-scene.is-dusk .fishing-water {
+  background:
+    linear-gradient(rgba(255, 214, 160, 0.28), rgba(255, 255, 255, 0) 14%),
+    linear-gradient(#2b7f9e, #05314a);
+}
+
+.fishing-sky,
+.fishing-water {
+  transition: background 1200ms linear;
+}
+
 /* 合計スコア（釣った長さの合計）。 */
 .fishing-score {
   position: absolute;
@@ -2544,6 +2594,7 @@ body.high-contrast .game-progress,
 body.high-contrast .game-exit,
 body.high-contrast .fishing-status,
 body.high-contrast .fishing-score,
+body.high-contrast .fishing-streak,
 body.high-contrast .fishing-catch {
   border: 2px solid #ffffff;
   background: #000000;

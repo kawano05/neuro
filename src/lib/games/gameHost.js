@@ -136,16 +136,24 @@ function renderReactionResult(summary) {
   // ctx.finish() でゲームから直接渡されたものなので、その回だけ表示できる
   // （games/fishing.js 冒頭のコメント参照）。
   const catchTiles =
-    typeof summary.totalLengthCm === "number"
+    typeof summary.scoreCm === "number"
       ? `
       <div class="summary-tile is-headline">
-        <span class="metric-label">つったながさ</span>
-        <strong>${summary.totalLengthCm}<small>cm</small></strong>
-        <p>${summary.catches ?? 0} ひき</p>
+        <span class="metric-label">スコア</span>
+        <strong>${summary.scoreCm}<small>cm</small></strong>
+        <p>${summary.catches ?? 0} ひき / ${summary.totalLengthCm ?? 0}cm ぶん</p>
       </div>
       <div class="summary-tile">
         <span class="metric-label">いちばん おおきい</span>
         <strong>${typeof summary.longestCm === "number" ? `${summary.longestCm}cm` : "--"}</strong>
+      </div>
+      <div class="summary-tile">
+        <span class="metric-label">れんぞく さいこう</span>
+        <strong>${summary.bestStreak ?? 0}</strong>
+      </div>
+      <div class="summary-tile">
+        <span class="metric-label">すばやい キャッチ</span>
+        <strong>${summary.speedBonuses ?? 0}</strong>
       </div>`
       : "";
 

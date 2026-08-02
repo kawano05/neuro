@@ -102,6 +102,21 @@ function formatRemaining(ms) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
+/**
+ * 「すばやい！」ボーナスの加点（cm）。
+ *
+ * 速さに報いる仕組みを入れるのは、判定窓が2秒あって見ていればまず外れず、
+ * 釣れる魚の長さも乱数なので、上手に押してもスコアに返ってこなかったため。
+ * ただし速さの基準は他人ではなく**その人自身のセッション内中央値**にする。
+ * 固定のしきい値にすると、反応の遅い利用者は一度も達成できない。この
+ * アプリの利用者は反応が遅いのが前提なので、遅さを罰する設計にはしない
+ * （窓を狭めるのではなく、速いときに上乗せするだけにしている）。
+ */
+const SPEED_BONUS_CM = 10;
+
+/** ボーナス判定に自己中央値を使いはじめるまでに必要な hit 数。 */
+const SPEED_BONUS_MIN_SAMPLES = 3;
+
 function computeSummary(trials) {
   const included = trials.filter((trial) => !trial.excluded);
   const hits = included.filter((trial) => trial.judgment === "hit");
@@ -119,6 +134,22 @@ function computeSummary(trials) {
   const caughtLengths = hits
     .map((trial) => trial.lengthCm)
     .filter((value) => typeof value === "number");
+  const totalLengthCm = caughtLengths.reduce((sum, value) => sum + value, 0);
+  const speedBonuses = included.filter((trial) => trial.speedBonus).length;
+
+  // 連続記録。長靴を見送れた（correctRejection）のも成功として数える。
+  // 抑制できたことを褒めないと、押し続けるのが最適な遊び方になってしまう。
+  let streak = 0;
+  let bestStreak = 0;
+  included.forEach((trial) => {
+    if (trial.judgment === "hit" || trial.judgment === "correctRejection") {
+      streak += 1;
+      bestStreak = Math.max(bestStreak, streak);
+    } else {
+      streak = 0;
+    }
+  });
+
   return {
     trials: included.length,
     hits: hits.length,
@@ -133,8 +164,12 @@ function computeSummary(trials) {
     sdRtMs: standardDeviation(reactionTimes, meanRtMs),
     medianRtMs: median(reactionTimes),
     catches: caughtLengths.length,
-    totalLengthCm: caughtLengths.reduce((sum, value) => sum + value, 0),
+    totalLengthCm,
     longestCm: caughtLengths.length ? Math.max(...caughtLengths) : null,
+    speedBonuses,
+    bestStreak,
+    currentStreak: streak,
+    scoreCm: totalLengthCm + speedBonuses * SPEED_BONUS_CM,
   };
 }
 
@@ -149,6 +184,7 @@ export function createFishingGame(ctx) {
   let swimmerArtEl = null;
   let catchEl = null;
   let scoreEl = null;
+  let streakEl = null;
   let rafId = null;
   let castTimer = null;
   let catchTimer = null;
@@ -188,6 +224,7 @@ export function createFishingGame(ctx) {
         <div class="fishing-swimmer"><img class="fishing-swimmer-art" src="" alt="" /></div>
         <div class="fishing-catch"></div>
         <div class="fishing-score">0 cm</div>
+        <div class="fishing-streak"></div>
         <div class="fishing-status">しずかに まとう</div>
       </div>
     `;
@@ -198,6 +235,7 @@ export function createFishingGame(ctx) {
     swimmerArtEl = stageEl.querySelector(".fishing-swimmer-art");
     catchEl = stageEl.querySelector(".fishing-catch");
     scoreEl = stageEl.querySelector(".fishing-score");
+    streakEl = stageEl.querySelector(".fishing-streak");
   }
 
   function updateProgress(nowRelativeMs) {
@@ -206,7 +244,23 @@ export function createFishingGame(ctx) {
 
   function updateScore() {
     if (!scoreEl || !session) return;
-    scoreEl.textContent = `${session.summary.totalLengthCm ?? 0} cm`;
+    scoreEl.textContent = `${session.summary.scoreCm ?? 0} cm`;
+  }
+
+  /**
+   * 連続記録の表示。3から出す（1・2で出すと常時点灯して意味を失う）。
+   * 長靴を見送れたのも連続に含めているので、「押さない」ことにも
+   * 手応えが返る。
+   */
+  function updateStreak() {
+    if (!streakEl || !session) return;
+    const streak = session.summary.currentStreak ?? 0;
+    if (streak >= 3) {
+      streakEl.textContent = `${streak} れんぞく`;
+      streakEl.classList.add("is-shown");
+    } else {
+      streakEl.classList.remove("is-shown");
+    }
   }
 
   /**
@@ -227,15 +281,18 @@ export function createFishingGame(ctx) {
   }
 
   /** 掛かった魚を舟まで巻き上げ、長さを表示する。 */
-  function reelIn(planned) {
+  function reelIn(planned, speedBonus = false) {
     if (!swimmerEl || !catchEl) return;
     reelingIndex = planned.index;
+    catchEl.classList.toggle("is-bonus", speedBonus);
     // 巻き上げ中は updateVisual が早期 return するため、食いつきの
     // アニメーションはここで明示的に外す（付けっぱなしにすると
     // transform が競合して巻き上げが揺れる）。
     swimmerEl.classList.remove("is-biting");
     swimmerEl.classList.add("is-hooked");
-    catchEl.textContent = `${planned.lengthCm} cm`;
+    catchEl.textContent = speedBonus
+      ? `★ ${planned.lengthCm} cm ＋${SPEED_BONUS_CM}`
+      : `${planned.lengthCm} cm`;
     catchEl.classList.add("is-shown");
     window.clearTimeout(catchTimer);
     catchTimer = window.setTimeout(() => {
@@ -244,6 +301,19 @@ export function createFishingGame(ctx) {
       if (swimmerEl) swimmerEl.style.opacity = "0";
       reelingIndex = -1;
     }, 900);
+  }
+
+  /**
+   * この hit が「その人にとって速い」かを、これまでの hit の中央値と比べて決める。
+   * 母数が少ないうちは判定しない（最初の1回が基準になってしまうため）。
+   */
+  function isSpeedBonus(judgment, reactionTimeMs) {
+    if (judgment !== "hit" || typeof reactionTimeMs !== "number") return false;
+    const priorRts = session.trials
+      .filter((trial) => trial.judgment === "hit" && typeof trial.reactionTimeMs === "number")
+      .map((trial) => trial.reactionTimeMs);
+    if (priorRts.length < SPEED_BONUS_MIN_SAMPLES) return false;
+    return reactionTimeMs < median(priorRts);
   }
 
   function recordCurrent(judgment, inputMs = null) {
@@ -266,7 +336,9 @@ export function createFishingGame(ctx) {
       // 以下は遊びの表示用（永続化されない。ファイル冒頭のコメント参照）。
       species: planned.species,
       lengthCm: judgment === "hit" ? planned.lengthCm : null,
+      speedBonus: false,
     };
+    row.speedBonus = isSpeedBonus(judgment, row.reactionTimeMs);
     session.trials.push(row);
     session.summary = computeSummary(session.trials);
     logTrial(session);
@@ -274,10 +346,16 @@ export function createFishingGame(ctx) {
     const now = audio.scheduler.now();
     if (judgment === "hit") {
       audio.playToneAt(cueTones.hit, now, FEEDBACK_GAIN);
-      statusEl.textContent = `${planned.lengthCm}cm つれた！`;
-      reelIn(planned);
+      statusEl.textContent = row.speedBonus
+        ? `すばやい！ ${planned.lengthCm}cm`
+        : `${planned.lengthCm}cm つれた！`;
+      reelIn(planned, row.speedBonus);
       updateScore();
-      announce(`${planned.lengthCm}センチの さかなが つれました`);
+      announce(
+        row.speedBonus
+          ? `すばやい。${planned.lengthCm}センチの さかなが つれました`
+          : `${planned.lengthCm}センチの さかなが つれました`
+      );
     } else if (judgment === "correctRejection") {
       statusEl.textContent = "よく まてたね";
       announce("にせアタリを みわけました");
@@ -295,6 +373,7 @@ export function createFishingGame(ctx) {
       announce("さかなに にげられました");
     }
 
+    updateStreak();
     currentIndex += 1;
     if (currentIndex >= trialsPlan.length) finalize();
   }
@@ -391,6 +470,9 @@ export function createFishingGame(ctx) {
     }
     updateVisual(nowRelativeMs);
     updateProgress(nowRelativeMs);
+    // 残りが少なくなったら空を夕方の色にする。音で急かすとアタリ音と
+    // 混ざるので、時間の経過は光の変化だけで伝える。
+    sceneEl?.classList.toggle("is-dusk", sessionEndMs - nowRelativeMs <= 20_000);
     rafId = window.requestAnimationFrame(loop);
   }
 
@@ -569,6 +651,7 @@ export function createFishingGame(ctx) {
     swimmerArtEl = null;
     catchEl = null;
     scoreEl = null;
+    streakEl = null;
   }
 
   return { mount, handleInput, destroy };
