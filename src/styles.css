@@ -1021,6 +1021,14 @@ body.high-contrast .rhythm-pulse::before {
   }
 }
 
+/* 決着済みの枠の魚（フライングで逃した／長靴を掛けたあと）。掛かる対象では
+   ないことを薄さで示す。消してしまうとアタリ音だけが鳴って画面に何も無い
+   状態になり、「早すぎた」という因果が分からなくなる。 */
+.fishing-swimmer.is-lost {
+  opacity: 0.42;
+  filter: grayscale(0.55);
+}
+
 /* 掛かったら舟まで巻き上げる。left は rAF が触らなくなる（fishing.js の
    reelingIndex）ので、ここで top/scale だけを遷移させれば足りる。 */
 .fishing-swimmer.is-hooked {

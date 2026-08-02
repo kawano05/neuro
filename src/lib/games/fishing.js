@@ -204,6 +204,19 @@ export function createFishingGame(ctx) {
   let sessionEndMs = 0;
   // 巻き上げ演出中は rAF による位置更新を止め、CSS の遷移に任せる。
   let reelingIndex = -1;
+  // 「その枠の試行が記録済みか」と「枠そのものが終わったか」を分けて持つ。
+  //
+  // 以前は記録した時点で currentIndex を次へ進めていた。すると開始直後から
+  // 連打された場合、各枠がフライング（falseStart）で即座に消費され、魚が
+  // 一度も画面に現れなくなる。ところがアタリ音は mount() で全ビートを
+  // 予約済みなので鳴り続ける。「音は鳴るのに魚がいない」状態になり、
+  // 音と絵が一致するというこのゲームの前提が崩れていた。
+  //
+  // 記録は1枠1回のまま（判定の意味は変えない）で、枠の進行は時間で行う。
+  // フライングしても魚はその枠の最後まで泳ぐので、「早すぎて逃した」ことが
+  // 目で見て分かる。
+  let resolvedIndex = -1;
+  let resolvedJudgment = null;
 
   function toAudioAbsMs(perfMs) {
     return perfMs - anchorPerfMs + sessionStartAudioMs;
@@ -324,6 +337,7 @@ export function createFishingGame(ctx) {
 
   function recordCurrent(judgment, inputMs = null) {
     if (finished || currentIndex >= trialsPlan.length) return;
+    if (resolvedIndex === currentIndex) return; // 1枠1行（多重記録を防ぐ）
     const planned = trialsPlan[currentIndex];
     const normalizedInput =
       judgment === "timeout" || judgment === "correctRejection" ? null : inputMs;
@@ -380,7 +394,24 @@ export function createFishingGame(ctx) {
     }
 
     updateStreak();
+    // ここでは枠を進めない。枠の進行は advanceSlot()（＝時間）が担う。
+    resolvedIndex = currentIndex;
+    resolvedJudgment = judgment;
+  }
+
+  /**
+   * 枠（1試行ぶんの時間）を1つ進める。判定窓を過ぎた時点で呼ぶ。
+   * 未決着なら見逃し（real）／見送り成功（fake）として確定してから進める。
+   */
+  function advanceSlot() {
+    const planned = trialsPlan[currentIndex];
+    if (!planned) return;
+    if (resolvedIndex !== currentIndex) {
+      recordCurrent(planned.kind === "real" ? "timeout" : "correctRejection", null);
+    }
     currentIndex += 1;
+    resolvedJudgment = null;
+    swimmerEl?.classList.remove("is-lost");
     if (currentIndex >= trialsPlan.length) finalize();
   }
 
@@ -433,6 +464,15 @@ export function createFishingGame(ctx) {
     // 巻き上げ演出中は CSS の遷移に任せる（rAF で位置を上書きしない）。
     if (reelingIndex >= 0) return;
 
+    // 釣り上げ済みの魚は画面へ戻さない。枠の終わりまで進めるように変えた
+    // ことで、巻き上げ演出が終わったあともまだ swimX() が座標を返す時間が
+    // 残る。そのままだと釣ったはずの魚が水中に再出現して泳ぎ去ってしまう。
+    if (resolvedIndex === currentIndex && resolvedJudgment === "hit") {
+      swimmerEl.style.opacity = "0";
+      swimmerEl.classList.remove("is-biting", "is-lost");
+      return;
+    }
+
     const x = swimX(nowRelativeMs, planned);
     if (x === null) {
       swimmerEl.style.opacity = "0";
@@ -449,6 +489,17 @@ export function createFishingGame(ctx) {
       }
       swimmerEl.style.opacity = "1";
       swimmerEl.style.left = `${x.toFixed(2)}%`;
+    }
+
+    // この枠は既に決着している（フライング／長靴を掛けた等）。魚は最後まで
+    // 泳がせるが、掛かる対象ではないので薄く表示し、状態表示も上書きしない。
+    // 「早すぎて逃した」という因果が目で見て分かるようにするための表示で、
+    // ここで魚を消してしまうと音だけが鳴って画面に何も無い状態になる。
+    const settled = resolvedIndex === currentIndex;
+    swimmerEl.classList.toggle("is-lost", settled);
+    if (settled) {
+      swimmerEl.classList.remove("is-biting");
+      return;
     }
 
     const beforeCue = nowRelativeMs < planned.cueMs;
@@ -468,10 +519,7 @@ export function createFishingGame(ctx) {
     const nowRelativeMs = toSessionRelativeMs(audio.scheduler.now() * 1000);
     const planned = trialsPlan[currentIndex];
     if (planned && nowRelativeMs > planned.cueMs + config.limitMs) {
-      recordCurrent(
-        planned.kind === "real" ? "timeout" : "correctRejection",
-        null
-      );
+      advanceSlot();
       if (finished || destroyed) return;
     }
     updateVisual(nowRelativeMs);
@@ -488,17 +536,18 @@ export function createFishingGame(ctx) {
     const inputMs = toSessionRelativeMs(toAudioAbsMs(t));
     let planned = trialsPlan[currentIndex];
 
-    // rAFの境界直前に入力が来ても、期限切れ試行を正常に確定してから
+    // rAFの境界直前に入力が来ても、期限切れの枠を正常に確定してから
     // 次の前刺激区間の入力として扱う。
     while (planned && inputMs > planned.cueMs + config.limitMs) {
-      recordCurrent(
-        planned.kind === "real" ? "timeout" : "correctRejection",
-        null
-      );
+      advanceSlot();
       if (finished) return;
       planned = trialsPlan[currentIndex];
     }
     if (!planned) return;
+
+    // この枠はもう決着している（フライング済みなど）。押しても何も起きない。
+    // ここで次の枠へ持ち越すと、連打で先の試行を食い潰すことになる。
+    if (resolvedIndex === currentIndex) return;
 
     // まだ受付の始まっていない試行に入力を当てない。
     //
@@ -574,6 +623,10 @@ export function createFishingGame(ctx) {
 
     const { trials, kindSequence, foreperiods } = buildPlan();
     trialsPlan = trials;
+    currentIndex = 0;
+    resolvedIndex = -1;
+    resolvedJudgment = null;
+    reelingIndex = -1;
     // 完走判定（state.js sanitizeReactionSession）が参照するため、
     // プリセットの固定値ではなく実際に計画した試行数を入れる。
     config.targetTrials = trials.length;
