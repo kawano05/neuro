@@ -506,7 +506,14 @@ export function createFishingGame(ctx) {
       cueMs: trial.cueMs + startOffsetMs,
       startMs: trial.startMs + startOffsetMs,
     }));
-    sessionEndMs = config.sessionMs + startOffsetMs;
+    // 残り時間の終端は sessionMs ではなく「最後の試行の枠が終わる時刻」。
+    // 計画は1試行が丸ごと収まるところで打ち切るため末尾に最大6秒ほどの
+    // 端数が残り、sessionMs を終端にすると「のこり 0:04」を表示したまま
+    // ゲームが終わってしまう（実測でそうなっていた）。
+    const lastTrial = trialsPlan[trialsPlan.length - 1];
+    sessionEndMs = lastTrial
+      ? lastTrial.cueMs + config.limitMs
+      : config.sessionMs + startOffsetMs;
 
     session = {
       sessionId: generateSessionId(),

@@ -681,7 +681,8 @@ body.game-mode .game-exit {
   z-index: 1;
   padding: 6px 14px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.26);
+  /* さかなつりの空は明るいので、薄い半透明だと白文字が沈む。 */
+  background: rgba(0, 0, 0, 0.45);
   color: #ffffff;
   font-family: var(--font-round);
   font-size: clamp(1.1rem, 2vw, 1.6rem);
@@ -781,7 +782,7 @@ body.high-contrast .game-ready-go {
   min-height: 44px;
   padding: 0 18px;
   border-color: rgba(255, 255, 255, 0.6);
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.45);
   color: #ffffff;
   font-weight: 700;
 }
@@ -1066,7 +1067,7 @@ body.high-contrast .rhythm-pulse::before {
   z-index: 3;
   padding: 8px 22px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.34);
+  background: rgba(0, 0, 0, 0.5);
   color: #ffffff;
   font-family: var(--font-round);
   font-size: clamp(1.1rem, 2.6vw, 1.8rem);
@@ -1084,7 +1085,7 @@ body.high-contrast .rhythm-pulse::before {
   z-index: 3;
   padding: 5px 14px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(0, 0, 0, 0.45);
   color: #ffffff;
   font-size: clamp(0.95rem, 2.2vw, 1.25rem);
   font-weight: 800;
@@ -2534,4 +2535,27 @@ input[type="checkbox"]:checked::before {
   .home-supporter-menu span {
     display: none;
   }
+}
+
+/* 高コントラスト設定は、これまでゲーム実行中のチップ類に効いていなかった。
+   魚や舟は画像なので設定に追従できないぶん、こちらで制御できる要素
+   （進捗・スコア・状態表示・おわる・釣り糸）は最大限はっきりさせる。 */
+body.high-contrast .game-progress,
+body.high-contrast .game-exit,
+body.high-contrast .fishing-status,
+body.high-contrast .fishing-score,
+body.high-contrast .fishing-catch {
+  border: 2px solid #ffffff;
+  background: #000000;
+  color: #ffffff;
+}
+
+body.high-contrast .fishing-line {
+  width: 6px;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.75);
+}
+
+body.high-contrast .fishing-water {
+  background: linear-gradient(#1d6f92, #032a41);
 }
