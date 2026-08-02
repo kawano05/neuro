@@ -128,7 +128,7 @@ export const cranePresets = {
  * （cueMs）基準のまま。音を聴かずに画面だけを見ても遊べるが、画面を見ずに
  * 音だけでも遊べる——という両立を崩さないための設計。
  *
- * sessionMs: 1ゲームの長さ。試行数ではなく時間で区切る（2分）。実際の
+ * sessionMs: 1ゲームの長さ。試行数ではなく時間で区切る（1分）。実際の
  * 試行数は mount() 時に前刺激間隔の乱数から決まり、config.targetTrials へ
  * 実数を書き込む（state.js の sanitizeReactionSession が
  * trials.length === targetTrials を完走判定に使うため、ここがずれると
@@ -138,7 +138,7 @@ export const fishingPresets = {
   foreperiodMinMs: 1800,
   foreperiodMaxMs: 4200,
   limitMs: 2000,
-  sessionMs: 120_000,
+  sessionMs: 60_000,
   fakeRatio: 0.22,
   // 魚が画面右端から糸の位置（中央）へ泳いでくるのにかける時間。
   // アタリ音が鳴る cueMs のちょうど手前 approachMs から動きはじめる。
@@ -157,7 +157,6 @@ export const fishingSpecies = [
   { id: "large", asset: "large", label: "おおもの", minCm: 32, maxCm: 48, weight: 0.17 },
 ];
 
-/** 聴覚キューの周波数（Hz）。detailed-design.md §4.1 / §6.4。 */
 /**
  * 各あそびの「やりかた」。ゲーム開始前に出す説明（views は持たず、
  * games/gameHost.js のレディ画面が読む純粋データ）。
@@ -172,8 +171,8 @@ export const fishingSpecies = [
  * 視覚をいくら使っても測定に影響しない。
  *
  * ここに id が無いゲームはレディ画面を出さず、従来どおり即開始する
- * （gameHost.js renderReady の呼び分け）。crane / fishing のような
- * 画面を見て操作する課題は説明の作り方が別なので、まだ載せていない。
+ * （gameHost.js renderReady の呼び分け）。crane は画面を見て操作する課題で
+ * 説明の作り方が別なので、まだ載せていない。
  *
  * 文言は利用者向けにひらがな主体・1行1動作。読み上げ（audio.speak）にも
  * そのまま渡すので、記号や英字を入れない。
@@ -205,7 +204,7 @@ export const gameHowTo = {
     "「アタリ」の たかい おとで おすと つれます。",
     "ひくい おとは ながぐつです。おさずに まちます。",
     "はやく おせると ★ボーナスが つきます。",
-    "2ふんかん、たくさん つりましょう。",
+    "1ぷんかん、たくさん つりましょう。",
   ],
 };
 

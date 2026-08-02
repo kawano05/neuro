@@ -537,7 +537,7 @@ real/fake の並びは `generateGoNoGoSequence`——いずれも変更してい
   する。中央に小さな海の四角を置いて下に巨大な状態表示と説明文を並べると、
   画面でいちばん大きい要素が文字になる。説明文はレディ画面と重複するので
   置かない。スコアは上中央（右上は `#gameExit` と重なる）。
-- 1ゲームは2分（`fishingPresets.sessionMs`）。試行数ではなく時間で区切るため、
+- 1ゲームは1分（`fishingPresets.sessionMs`）。試行数ではなく時間で区切るため、
   試行数は前刺激間隔の乱数で毎回変わる。**mount() で実際に計画した試行数を
   `config.targetTrials` に書き戻すこと**（state.js の `sanitizeReactionSession`
   が `trials.length === targetTrials` を完走判定に使うので、ここがずれると
@@ -553,7 +553,7 @@ real/fake の並びは `generateGoNoGoSequence`——いずれも変更してい
   - **連続**: hit と correctRejection を成功として数える。長靴を見送れた
     ことも褒めないと、押し続けるのが最適な遊び方になってしまう。表示は
     3から（1・2で出すと常時点灯して意味を失う）。
-  - **終盤の夕暮れ**: 残り20秒で空を夕方の色にする。音で急かすとアタリ音と
+  - **終盤の夕暮れ**: 残り12秒（`DUSK_MS`）で空を夕方の色にする。音で急かすとアタリ音と
     混ざって聴覚キューの聴き取りを妨げるので、時間の経過は光の変化だけで
     伝える。
 - スコアと魚の長さ（`species` / `lengthCm` / `totalLengthCm` / `catches` /

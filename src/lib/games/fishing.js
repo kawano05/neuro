@@ -17,7 +17,7 @@
 //     崩さずに、視覚的な手応えだけを足している。
 //   - 利用者ができる操作は「押して糸を垂らす」だけ。掛かったら自動で
 //     舟まで巻き上げ、魚の長さを表示してスコアに足す。
-//   - 1ゲームは2分。試行数ではなく時間で区切る（content.js の sessionMs）。
+//   - 1ゲームは1分。試行数ではなく時間で区切る（content.js の sessionMs）。
 //
 // スコアと魚の長さについて: これらは遊びの手応えのための表示で、
 // state.js の sanitizeReactionSession は rt スキーマの外の値を保持しない。
@@ -116,6 +116,12 @@ const SPEED_BONUS_CM = 10;
 
 /** ボーナス判定に自己中央値を使いはじめるまでに必要な hit 数。 */
 const SPEED_BONUS_MIN_SAMPLES = 3;
+
+/**
+ * 残りこの時間で空を夕方の色にする。セッション長（1分）のおよそ1/5。
+ * 長すぎると「終盤」の合図にならず、ずっと夕方の画面になってしまう。
+ */
+const DUSK_MS = 12_000;
 
 function computeSummary(trials) {
   const included = trials.filter((trial) => !trial.excluded);
@@ -472,7 +478,7 @@ export function createFishingGame(ctx) {
     updateProgress(nowRelativeMs);
     // 残りが少なくなったら空を夕方の色にする。音で急かすとアタリ音と
     // 混ざるので、時間の経過は光の変化だけで伝える。
-    sceneEl?.classList.toggle("is-dusk", sessionEndMs - nowRelativeMs <= 20_000);
+    sceneEl?.classList.toggle("is-dusk", sessionEndMs - nowRelativeMs <= DUSK_MS);
     rafId = window.requestAnimationFrame(loop);
   }
 
@@ -512,7 +518,7 @@ export function createFishingGame(ctx) {
   }
 
   /**
-   * 2分ぶんの試行計画を作る。試行数は前刺激間隔の乱数で決まるので、
+   * 1ゲームぶんの試行計画を作る。試行数は前刺激間隔の乱数で決まるので、
    * 多めに生成してから sessionMs に収まるところで切る。切ったあとの
    * 実数を config.targetTrials に書き戻すこと（state.js の完走判定が
    * trials.length === targetTrials を見るため）。
