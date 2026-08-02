@@ -899,20 +899,26 @@ body.high-contrast .rhythm-pulse::before {
    糸の真下（left: 50%）へ来る。位置の更新は fishing.js が rAF で行い、
    基準はすべて AudioContext 時間軸。ここは演出のみで判定には関与しない。
    ===================================================================== */
+/* 海をステージ全面に広げる。以前は中央に小さな四角の海を置き、その下に
+   巨大な状態表示と説明文を並べていたため、画面でいちばん大きい要素が
+   文字になり、ゲーム本体は画面の3割ほどしか無かった。 */
+.game-stage-content.module-fishing {
+  padding: 0;
+  background-color: #8fd0f2;
+  background-image: none;
+}
+
 .fishing-scene {
-  position: relative;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  width: min(760px, 88vw);
-  height: min(46vh, 380px);
-  border: 4px solid rgba(255, 255, 255, 0.8);
-  border-radius: 28px;
+  border-radius: inherit;
   background: #9bd9f2;
-  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.2);
 }
 
 .fishing-sky {
   position: absolute;
-  inset: 0 0 62%;
+  inset: 0 0 70%;
   background: linear-gradient(#8fd0f2, #dff5ff);
 }
 
@@ -921,7 +927,7 @@ body.high-contrast .rhythm-pulse::before {
    深さの階調と、水面直下の明るい帯だけにする。 */
 .fishing-water {
   position: absolute;
-  inset: 38% 0 0;
+  inset: 30% 0 0;
   overflow: hidden;
   background:
     linear-gradient(rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 14%),
@@ -934,43 +940,48 @@ body.high-contrast .rhythm-pulse::before {
    左へ寄せる。こうすると竿先の真下に糸が垂れて見える。 */
 .fishing-boat {
   position: absolute;
-  top: 38%;
+  top: 30%;
   left: 50%;
   z-index: 2;
-  width: min(190px, 34%);
+  width: min(280px, 30%);
   height: auto;
   transform: translate(-94%, -78%);
   pointer-events: none;
 }
 
-/* 糸。ふだんは水面すぐ下まで。押すと魚の泳ぐ深さまで伸びる。 */
+/* 糸は最初から魚のいる深さまで垂れている（釣り糸を垂らして待っている状態）。
+   押す＝合わせて引き上げる、なので短くなる。以前は逆で「押すと伸びる」
+   だったため、糸が水中に無いのに魚が食いつく（アタリ音が鳴る）ことになり、
+   釣りとして因果が逆立ちしていた。 */
 .fishing-line {
   position: absolute;
-  top: 38%;
+  top: 30%;
   left: 50%;
   z-index: 1;
   width: 3px;
-  height: 8%;
+  height: 32%;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.85);
   transform: translateX(-50%);
   transform-origin: top center;
-  transition: height 160ms ease-out;
+  transition: height 140ms ease-out;
 }
 
-.fishing-line.is-cast {
-  height: 34%;
+.fishing-line.is-pulled {
+  height: 8%;
 }
 
 /* 泳いでいる魚（または はずれの長靴）。left は fishing.js が更新する。 */
 .fishing-swimmer {
   position: absolute;
-  top: 66%;
+  top: 62%;
   left: 110%;
   z-index: 1;
   width: min(150px, 26%);
   opacity: 0;
-  transform: translate(-50%, -50%);
+  /* 基準点を魚の中心ではなく口元（左端寄り、幅の約18%）に置く。魚は左を
+     向いて泳いでくるので、こうすると糸が背中ではなく口に噛んで見える。 */
+  transform: translate(-18%, -50%);
   transition: opacity 140ms linear;
 }
 
@@ -983,19 +994,19 @@ body.high-contrast .rhythm-pulse::before {
 /* 魚種ごとの見た目の大きさ。content.js の lengthCm の範囲
    （こざかな 8-16 / さかな 18-30 / おおもの 32-48）と釣り合わせる。 */
 .fishing-swimmer[data-species="small"] {
-  width: min(104px, 18%);
+  width: min(132px, 15%);
 }
 
 .fishing-swimmer[data-species="medium"] {
-  width: min(142px, 25%);
+  width: min(178px, 19%);
 }
 
 .fishing-swimmer[data-species="large"] {
-  width: min(186px, 32%);
+  width: min(232px, 24%);
 }
 
 .fishing-swimmer.is-boot {
-  width: min(96px, 17%);
+  width: min(120px, 13%);
 }
 
 /* アタリの窓の間だけ、魚が糸に食いついている感じを出す。 */
@@ -1005,7 +1016,7 @@ body.high-contrast .rhythm-pulse::before {
 
 @keyframes fishing-bite {
   to {
-    transform: translate(-50%, -62%) rotate(-6deg);
+    transform: translate(-18%, -62%) rotate(-6deg);
   }
 }
 
@@ -1014,7 +1025,7 @@ body.high-contrast .rhythm-pulse::before {
 .fishing-swimmer.is-hooked {
   animation: none;
   top: 30%;
-  transform: translate(-50%, -50%) scale(0.62);
+  transform: translate(-18%, -50%) scale(0.62);
   transition:
     top 520ms cubic-bezier(0.3, 0.8, 0.4, 1),
     transform 520ms cubic-bezier(0.3, 0.8, 0.4, 1);
@@ -1023,7 +1034,7 @@ body.high-contrast .rhythm-pulse::before {
 /* 釣れた魚の長さ。 */
 .fishing-catch {
   position: absolute;
-  top: 9%;
+  top: 17%;
   left: 50%;
   z-index: 3;
   padding: 6px 16px;
@@ -1045,11 +1056,31 @@ body.high-contrast .rhythm-pulse::before {
   transform: translate(-50%, -60%);
 }
 
+/* 状態表示。海の上に重ねる脇役。以前は .reaction-label としてステージ直下に
+   置いていたため clamp(2.4rem, 6.2vw, 5.6rem) で描かれ、画面でいちばん
+   大きい要素になっていた。舟や魚より目立たない大きさに抑える。 */
+.fishing-status {
+  position: absolute;
+  bottom: 5%;
+  left: 50%;
+  z-index: 3;
+  padding: 8px 22px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.34);
+  color: #ffffff;
+  font-family: var(--font-round);
+  font-size: clamp(1.1rem, 2.6vw, 1.8rem);
+  font-weight: 800;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
 /* 合計スコア（釣った長さの合計）。 */
 .fishing-score {
   position: absolute;
-  top: 12px;
-  right: 14px;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 3;
   padding: 5px 14px;
   border-radius: 999px;

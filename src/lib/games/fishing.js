@@ -171,6 +171,13 @@ export function createFishingGame(ctx) {
     return audioAbsMs - sessionStartAudioMs;
   }
 
+  /**
+   * 画面は海が全面。舟・糸・魚が主役で、文字は海の上に小さく重ねる。
+   * 以前はステージ中央に小さな海の四角を置き、その下に巨大な状態表示と
+   * 説明文を並べていたため、画面でいちばん大きい要素が「アタリ！」の文字に
+   * なっていた（ゲーム本体は画面の3割ほど）。説明文はレディ画面と重複して
+   * いたので外した。
+   */
   function renderMarkup() {
     stageEl.innerHTML = `
       <div class="fishing-scene" aria-hidden="true">
@@ -181,9 +188,8 @@ export function createFishingGame(ctx) {
         <div class="fishing-swimmer"><img class="fishing-swimmer-art" src="" alt="" /></div>
         <div class="fishing-catch"></div>
         <div class="fishing-score">0 cm</div>
+        <div class="fishing-status">しずかに まとう</div>
       </div>
-      <span class="reaction-label fishing-status">しずかに まとう</span>
-      <span class="reaction-detail">アタリの おとで おそう</span>
     `;
     sceneEl = stageEl.querySelector(".fishing-scene");
     statusEl = stageEl.querySelector(".fishing-status");
@@ -203,14 +209,21 @@ export function createFishingGame(ctx) {
     scoreEl.textContent = `${session.summary.totalLengthCm ?? 0} cm`;
   }
 
-  /** 糸を垂らす演出（押したときは必ず動かす。空振りでも手応えを返す）。 */
-  function castLine() {
+  /**
+   * 合わせて引き上げる演出（押したときは必ず動かす。空振りでも手応えを返す）。
+   *
+   * 以前は「押したら糸が伸びる」だったが、それだと糸が水中に無いのに魚が
+   * 食いつく（アタリ音が鳴る）ことになり、釣りとして因果が逆立ちしていた。
+   * 糸は最初から魚のいる深さまで垂れていて、押す＝合わせて引き上げる、
+   * とすることで音・絵・操作の3つが揃う。
+   */
+  function pullLine() {
     if (!lineEl) return;
-    lineEl.classList.add("is-cast");
+    lineEl.classList.add("is-pulled");
     window.clearTimeout(castTimer);
     castTimer = window.setTimeout(() => {
-      lineEl?.classList.remove("is-cast");
-    }, 520);
+      lineEl?.classList.remove("is-pulled");
+    }, 420);
   }
 
   /** 掛かった魚を舟まで巻き上げ、長さを表示する。 */
@@ -383,7 +396,7 @@ export function createFishingGame(ctx) {
 
   function handleInput(t) {
     if (destroyed || finished || !session) return;
-    castLine();
+    pullLine();
     const inputMs = toSessionRelativeMs(toAudioAbsMs(t));
     let planned = trialsPlan[currentIndex];
 
@@ -398,6 +411,20 @@ export function createFishingGame(ctx) {
       planned = trialsPlan[currentIndex];
     }
     if (!planned) return;
+
+    // まだ受付の始まっていない試行に入力を当てない。
+    //
+    // 連打すると1回目で現在の試行が決着して currentIndex が進むため、
+    // 2回目以降が「まだ音の鳴っていない次の試行」に当たっていた。とくに
+    // fake は judgeReaction がタイミングを見ずに commission を返すので、
+    // 連打だけで先の試行が次々と食い潰される。痙性や振戦のある利用者では
+    // 起こりやすく、記録も実態と合わなくなる。
+    //
+    // 各試行の受付は前の試行の枠が終わった時点（startMs）から始まる。
+    // 決着済みの試行の残り時間に来た入力はどの試行にも属さないので、
+    // 記録せずに捨てる（誤った試行へ付け替えるより実態に近い）。
+    if (inputMs < planned.startMs) return;
+
     const judgment = judgeReaction(inputMs, planned.cueMs, config.limitMs, planned.kind);
     recordCurrent(judgment, inputMs);
   }
@@ -421,7 +448,10 @@ export function createFishingGame(ctx) {
     for (const foreperiodMs of foreperiods) {
       const cueMs = cursorMs + foreperiodMs;
       if (cueMs + config.limitMs > config.sessionMs) break;
-      planned.push({ index: planned.length, foreperiodMs, cueMs });
+      // startMs = この試行の受付が始まる時刻（前の試行の枠の終わり）。
+      // handleInput がこれを使って、決着済みの試行の残り時間に来た入力を
+      // 次の試行へ持ち越さないようにする。
+      planned.push({ index: planned.length, startMs: cursorMs, foreperiodMs, cueMs });
       cursorMs = cueMs + config.limitMs;
     }
 
@@ -474,6 +504,7 @@ export function createFishingGame(ctx) {
     trialsPlan = trialsPlan.map((trial) => ({
       ...trial,
       cueMs: trial.cueMs + startOffsetMs,
+      startMs: trial.startMs + startOffsetMs,
     }));
     sessionEndMs = config.sessionMs + startOffsetMs;
 
