@@ -12,6 +12,7 @@ import { gameModules } from "../games/registry.js";
 import {
   activityTiles,
   cueTones,
+  fishingCornerTile,
   learningCornerTile,
   rhythmCornerTile,
 } from "../content.js";
@@ -125,6 +126,28 @@ export function initHome(ctx) {
       return;
     }
 
+    if (activeCorner === "fishing") {
+      elements.homeEyebrow.textContent = "Fishing";
+      elements.homeTitle.textContent = "さかなつり";
+      elements.homeGuide.textContent = "つりかたを えらびます";
+      const cornerGames = ["fishing", "fishing-gonogo"].map(gameById).filter(Boolean);
+      [...cornerGames, cornerBackTile()].forEach((game, index) => {
+        const button = createTileButton(game, index);
+        button.addEventListener("click", (event) => {
+          if (homeClickIsGuarded(event)) return;
+          if (game.id === "home-back") {
+            showLobby();
+            renderTiles();
+            scan.restartIfNeeded();
+          } else {
+            ctx.gameHost.launch(game.id);
+          }
+        });
+        elements.gameTileGrid.append(button);
+      });
+      return;
+    }
+
     if (activeCorner === "learning") {
       elements.homeEyebrow.textContent = "Learn & communicate";
       elements.homeTitle.textContent = "まなぶ・つたえる";
@@ -153,7 +176,7 @@ export function initHome(ctx) {
       gameById("color-legacy"),
       rhythmCornerTile,
       !state.settings.hideVisualTasks ? gameById("crane") : null,
-      gameById("fishing"),
+      fishingCornerTile,
       learningCornerTile,
     ].filter(Boolean);
 
@@ -166,6 +189,14 @@ export function initHome(ctx) {
           renderTiles();
           scan.restartIfNeeded();
           announce("リズムを えらびます");
+        });
+      } else if (game.id === "fishing-corner") {
+        button.addEventListener("click", (event) => {
+          if (homeClickIsGuarded(event)) return;
+          activeCorner = "fishing";
+          renderTiles();
+          scan.restartIfNeeded();
+          announce("さかなつりを えらびます");
         });
       } else if (game.id === "learning-corner") {
         button.addEventListener("click", (event) => {

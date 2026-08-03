@@ -149,7 +149,7 @@ const MAX_ARCADE_HISTORY = 100;
 const TASK_TYPES = new Set(["sms", "gonogo", "scan", "rt"]);
 const RHYTHM_GAME_IDS = new Set(["rhythm-l1", "rhythm-l2", "gonogo", "calibration"]);
 const SCAN_GAME_IDS = new Set(["crane"]);
-const RT_GAME_IDS = new Set(["fishing"]);
+const RT_GAME_IDS = new Set(["fishing", "fishing-gonogo"]);
 const RHYTHM_MODES = new Set(["cued", "continuous", "gonogo"]);
 const RHYTHM_MODE_BY_GAME_ID = new Map([
   ["rhythm-l1", "cued"],

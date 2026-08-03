@@ -613,12 +613,25 @@ body.game-mode .game-exit {
   right: max(18px, env(safe-area-inset-right));
 }
 
+/* ゲームの地。単色のベタ塗りだと画面が板に見えるので、同心円の地紋を薄く
+   敷き、上方に光、下方に沈みを置いて奥行きを作る。
+
+   ここで置くのは**動かない**地紋であることが重要。拍に同期して動く視覚を
+   足すと、脈打つ円が1個だけという版面が崩れる（basic-design.md §6）。 */
 .game-stage-content {
   position: absolute;
   inset: 0;
   display: grid;
   border-radius: inherit;
-  background: var(--stage-color, var(--accent));
+  background-color: var(--stage-color, var(--accent));
+  background-image:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.055) 0 1px,
+      rgba(255, 255, 255, 0) 1px 56px
+    ),
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.22) 100%);
   color: #ffffff;
   place-items: center;
   text-align: center;
@@ -627,16 +640,137 @@ body.game-mode .game-exit {
   font-family: var(--font-round);
 }
 
+/* 「円ひとつ＋下に説明文」の版面（リズム系・色変化）だけ、主役を画面の
+   ちょうど中央に置く。説明文をグリッドの並びに入れたままだと、円と文を
+   まとめた塊が中央に揃うぶん円自体は上へずれ、地紋の同心円と同心に
+   ならない。説明文は中央合わせから外して下端のキャプションにする。
+
+   クラスで範囲を限定しているのは、crane / fishing のように子要素の構成が
+   違うゲーム（シーン＋状態表示＋説明文の3つ）で、複数の要素が同じ位置へ
+   重なってしまうのを避けるため。 */
+.game-stage-content.module-rhythm,
+.game-stage-content.module-color {
+  gap: 0;
+}
+
+.game-stage-content.module-rhythm > :not(:first-child),
+.game-stage-content.module-color > :not(:first-child) {
+  position: absolute;
+  right: 32px;
+  bottom: clamp(20px, 6vh, 56px);
+  left: 32px;
+}
+
+/* 色変化は色そのものが課題の答えになる。地と円が同じ --stage-color だと
+   円の輪郭が白枠だけに頼ることになるので、地に暗い層を重ねて純色のままの
+   円が浮き上がるようにする。 */
+.game-stage-content.module-color {
+  background-image:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.06) 0 1px,
+      rgba(255, 255, 255, 0) 1px 56px
+    ),
+    linear-gradient(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.32));
+}
+
 .game-progress {
   position: absolute;
   top: 18px;
   left: 18px;
   z-index: 1;
+  padding: 6px 14px;
+  border-radius: 999px;
+  /* さかなつりの空は明るいので、薄い半透明だと白文字が沈む。 */
+  background: rgba(0, 0, 0, 0.45);
   color: #ffffff;
   font-family: var(--font-round);
   font-size: clamp(1.1rem, 2vw, 1.6rem);
   font-weight: 800;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+/* =====================================================================
+   レディ画面（「やりかた」）— games/gameHost.js renderReady()
+
+   ゲームに入ってから最初のひと押しまでの間だけ出る。まだ計測が
+   始まっていない段階なので、図も手順も自由に使える（進行中に同じことを
+   やると拍の視覚キューになり測定が交絡する。basic-design.md §6）。
+   ===================================================================== */
+.game-ready {
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+  width: min(680px, 100%);
+}
+
+.game-ready-icon {
+  display: grid;
+  color: #ffffff;
+  font-size: clamp(2.6rem, 7vmin, 4rem);
+  place-items: center;
+}
+
+.game-ready-title {
+  font-size: clamp(1.7rem, 4.4vw, 2.6rem);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+/* 手順は1行1動作。番号を丸で振って、順番があることを形でも示す。 */
+.game-ready-steps {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  counter-reset: game-step;
+  list-style: none;
+  text-align: left;
+}
+
+.game-ready-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  counter-increment: game-step;
+  font-size: clamp(1.05rem, 2.4vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.game-ready-steps li::before {
+  content: counter(game-step);
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.9em;
+  height: 1.9em;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  place-items: center;
+  font-size: 0.82em;
+  font-weight: 800;
+}
+
+/* 手順が1行だけの場合は番号を振らない。 */
+.game-ready-steps li:only-child::before {
+  display: none;
+}
+
+.game-ready-go {
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.26);
+  font-size: clamp(0.98rem, 2vw, 1.2rem);
+  font-weight: 700;
+}
+
+body.high-contrast .game-stage-content.is-ready {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45));
+}
+
+body.high-contrast .game-ready-steps li::before,
+body.high-contrast .game-ready-go {
+  border-color: #ffffff;
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .game-exit {
@@ -648,7 +782,7 @@ body.game-mode .game-exit {
   min-height: 44px;
   padding: 0 18px;
   border-color: rgba(255, 255, 255, 0.6);
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.45);
   color: #ffffff;
   font-weight: 700;
 }
@@ -692,89 +826,328 @@ body.game-mode .game-exit {
    40vmin の単一 div。位相にあわせた transform 更新は rhythm.js が rAF で行う
    （CSS transition は使わない。判定には使わずあくまで見た目の補助）。 */
 .rhythm-pulse {
+  position: relative;
   width: 40vmin;
   height: 40vmin;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
+  /* 平らな白面ではなく、上から光が当たった球の面。拍に合わせた
+     transform（rhythm.js が rAF で更新）はそのままこの面に効く。 */
+  background: radial-gradient(circle at 50% 36%, #ffffff 0%, #f5f8f7 52%, #dde7e5 100%);
   box-shadow:
-    inset 0 -18px 30px rgba(0, 0, 0, 0.12),
-    0 18px 38px rgba(0, 0, 0, 0.18);
+    0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* 円のまわりの静かなリング。脈打つ円と一緒に拡大縮小するので、円の動きが
+   読み取りやすくなる。それ自体は独立して動かない。 */
+.rhythm-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -7%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+}
+
+/* ヒット時の波紋（basic-design.md §6 の「ヒット時のフラッシュ」の実装）。
+   押せたその瞬間だけ外側へ一度広がって消える。予告ではなく事後の
+   フィードバックなので、次の拍のキューにはならない。 */
+.rhythm-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  opacity: 0;
 }
 
 .rhythm-pulse.is-hit-flash {
   box-shadow:
-    0 0 0 10px rgba(255, 255, 255, 0.55),
-    0 0 46px 14px rgba(255, 255, 255, 0.85);
+    0 0 0 6px rgba(255, 255, 255, 0.34),
+    0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+.rhythm-pulse.is-hit-flash::after {
+  animation: rhythm-hit-ripple 320ms ease-out;
+}
+
+@keyframes rhythm-hit-ripple {
+  from {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
 }
 
 body.high-contrast .rhythm-pulse {
+  background: #ffffff;
   outline: 6px solid var(--ink);
   outline-offset: -6px;
 }
 
-/* さかなつり。計時は fishing.js の AudioContext 時間軸、ここは演出のみ。 */
+body.high-contrast .rhythm-pulse::before {
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+/* =====================================================================
+   さかなつり
+
+   舟と釣り人は中央上部に固定（NeuroNode は単一スイッチなので移動の概念を
+   持ち込まない）。魚は水中を右から左へ流れ、アタリ音が鳴る瞬間にちょうど
+   糸の真下（left: 50%）へ来る。位置の更新は fishing.js が rAF で行い、
+   基準はすべて AudioContext 時間軸。ここは演出のみで判定には関与しない。
+   ===================================================================== */
+/* 海をステージ全面に広げる。以前は中央に小さな四角の海を置き、その下に
+   巨大な状態表示と説明文を並べていたため、画面でいちばん大きい要素が
+   文字になり、ゲーム本体は画面の3割ほどしか無かった。 */
+.game-stage-content.module-fishing {
+  padding: 0;
+  background-color: #8fd0f2;
+  background-image: none;
+}
+
 .fishing-scene {
-  position: relative;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  width: min(760px, 88vw);
-  height: min(42vh, 360px);
-  border: 4px solid rgba(255, 255, 255, 0.8);
-  border-radius: 28px;
+  border-radius: inherit;
   background: #9bd9f2;
-  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.2);
 }
 
 .fishing-sky {
   position: absolute;
-  inset: 0 0 58%;
-  background: linear-gradient(#7bc7ef, #d9f4ff);
+  inset: 0 0 70%;
+  background: linear-gradient(#8fd0f2, #dff5ff);
 }
 
+/* 水中。同心円の波紋を敷いていたが、模様が強すぎて泳いでいる魚より目立ち、
+   魚の位置（＝糸に来たかどうか）が読み取りにくかったので外した。
+   深さの階調と、水面直下の明るい帯だけにする。 */
 .fishing-water {
   position: absolute;
-  inset: 42% 0 0;
+  inset: 30% 0 0;
   overflow: hidden;
   background:
-    repeating-radial-gradient(ellipse at 50% 0, rgba(255, 255, 255, 0.28) 0 8px, transparent 9px 24px),
-    linear-gradient(#2d9ec1, #075a84);
+    linear-gradient(rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 14%),
+    linear-gradient(#2f9fc4, #06405f);
 }
 
-.fishing-bobber {
+/* 舟と釣り人。水面（38%）にちょうど乗るように置く。
+   横位置は「舟の中央」ではなく「竿の先」が糸の位置（left: 50%）に来るよう
+   ずらす。素材の竿先は画像の右端近く（幅の約94%）にあるので、その分だけ
+   左へ寄せる。こうすると竿先の真下に糸が垂れて見える。 */
+.fishing-boat {
   position: absolute;
+  top: 30%;
   left: 50%;
-  top: 16%;
-  width: 30px;
-  height: 42px;
-  border: 4px solid #ffffff;
-  border-radius: 50% 50% 44% 44%;
-  background: linear-gradient(#e84646 0 50%, #ffffff 50%);
-  transform: translate(-50%, -50%);
-  transition: transform 120ms ease;
+  z-index: 2;
+  width: min(280px, 30%);
+  height: auto;
+  transform: translate(-94%, -78%);
+  pointer-events: none;
 }
 
-.fishing-bobber.is-biting {
-  transform: translate(-50%, 14%) rotate(8deg);
-  animation: bobber-bite 180ms ease-in-out infinite alternate;
-}
-
-.fishing-bobber.is-caught {
-  transform: translate(-50%, -180%);
-}
-
-.fishing-fish {
+/* 糸は最初から魚のいる深さまで垂れている（釣り糸を垂らして待っている状態）。
+   押す＝合わせて引き上げる、なので短くなる。以前は逆で「押すと伸びる」
+   だったため、糸が水中に無いのに魚が食いつく（アタリ音が鳴る）ことになり、
+   釣りとして因果が逆立ちしていた。 */
+.fishing-line {
   position: absolute;
-  left: 42%;
-  bottom: 12%;
-  font-size: clamp(2.5rem, 8vw, 5.2rem);
-  animation: fish-swim 4.8s ease-in-out infinite alternate;
+  top: 30%;
+  left: 50%;
+  z-index: 1;
+  width: 3px;
+  height: 32%;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateX(-50%);
+  transform-origin: top center;
+  transition: height 140ms ease-out;
 }
 
-@keyframes bobber-bite {
-  to { transform: translate(-50%, 35%) rotate(-8deg); }
+.fishing-line.is-pulled {
+  height: 8%;
 }
 
-@keyframes fish-swim {
-  to { transform: translateX(180%) scaleX(-1); }
+/* 泳いでいる魚（または はずれの長靴）。left は fishing.js が更新する。 */
+.fishing-swimmer {
+  position: absolute;
+  top: 62%;
+  left: 110%;
+  z-index: 1;
+  width: min(150px, 26%);
+  opacity: 0;
+  /* 基準点を魚の中心ではなく口元（左端寄り、幅の約18%）に置く。魚は左を
+     向いて泳いでくるので、こうすると糸が背中ではなく口に噛んで見える。 */
+  transform: translate(-18%, -50%);
+  transition: opacity 140ms linear;
+}
+
+.fishing-swimmer-art {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* 魚種ごとの見た目の大きさ。content.js の lengthCm の範囲
+   （こざかな 8-16 / さかな 18-30 / おおもの 32-48）と釣り合わせる。 */
+.fishing-swimmer[data-species="small"] {
+  width: min(132px, 15%);
+}
+
+.fishing-swimmer[data-species="medium"] {
+  width: min(178px, 19%);
+}
+
+.fishing-swimmer[data-species="large"] {
+  width: min(232px, 24%);
+}
+
+.fishing-swimmer.is-boot {
+  width: min(120px, 13%);
+}
+
+/* アタリの窓の間だけ、魚が糸に食いついている感じを出す。 */
+.fishing-swimmer.is-biting {
+  animation: fishing-bite 240ms ease-in-out infinite alternate;
+}
+
+@keyframes fishing-bite {
+  to {
+    transform: translate(-18%, -62%) rotate(-6deg);
+  }
+}
+
+/* 決着済みの枠の魚（フライングで逃した／長靴を掛けたあと）。掛かる対象では
+   ないことを薄さで示す。消してしまうとアタリ音だけが鳴って画面に何も無い
+   状態になり、「早すぎた」という因果が分からなくなる。 */
+.fishing-swimmer.is-lost {
+  opacity: 0.42;
+  filter: grayscale(0.55);
+}
+
+/* 掛かったら舟まで巻き上げる。left は rAF が触らなくなる（fishing.js の
+   reelingIndex）ので、ここで top/scale だけを遷移させれば足りる。 */
+.fishing-swimmer.is-hooked {
+  animation: none;
+  top: 30%;
+  transform: translate(-18%, -50%) scale(0.62);
+  transition:
+    top 520ms cubic-bezier(0.3, 0.8, 0.4, 1),
+    transform 520ms cubic-bezier(0.3, 0.8, 0.4, 1);
+}
+
+/* 釣れた魚の長さ。 */
+.fishing-catch {
+  position: absolute;
+  top: 17%;
+  left: 50%;
+  z-index: 3;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+  font-size: clamp(1.1rem, 3vw, 1.7rem);
+  font-weight: 800;
+  opacity: 0;
+  transform: translate(-50%, -30%);
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out;
+  pointer-events: none;
+}
+
+.fishing-catch.is-shown {
+  opacity: 1;
+  transform: translate(-50%, -60%);
+}
+
+/* 状態表示。海の上に重ねる脇役。以前は .reaction-label としてステージ直下に
+   置いていたため clamp(2.4rem, 6.2vw, 5.6rem) で描かれ、画面でいちばん
+   大きい要素になっていた。舟や魚より目立たない大きさに抑える。 */
+.fishing-status {
+  position: absolute;
+  bottom: 5%;
+  left: 50%;
+  z-index: 3;
+  padding: 8px 22px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+  font-family: var(--font-round);
+  font-size: clamp(1.1rem, 2.6vw, 1.8rem);
+  font-weight: 800;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* 連続記録。3から出す（1・2で出すと常時点灯して意味を失う）。 */
+.fishing-streak {
+  position: absolute;
+  top: 62px;
+  left: 50%;
+  z-index: 3;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffe27a;
+  font-family: var(--font-round);
+  font-size: clamp(0.9rem, 2vw, 1.15rem);
+  font-weight: 800;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, -6px);
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out;
+}
+
+.fishing-streak.is-shown {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* すばやく釣れたときの強調。 */
+.fishing-catch.is-bonus {
+  background: #b8860b;
+  color: #fffbe6;
+  box-shadow: 0 0 0 3px rgba(255, 226, 122, 0.6);
+}
+
+/* 終盤の夕暮れ。残り時間が少ないことを、警告音ではなく光の変化で伝える
+   （音で急かすとアタリ音と混ざり、聴覚キューの聴き取りを妨げる）。 */
+.fishing-scene.is-dusk .fishing-sky {
+  background: linear-gradient(#e8a15c, #ffd9a0);
+}
+
+.fishing-scene.is-dusk .fishing-water {
+  background:
+    linear-gradient(rgba(255, 214, 160, 0.28), rgba(255, 255, 255, 0) 14%),
+    linear-gradient(#2b7f9e, #05314a);
+}
+
+.fishing-sky,
+.fishing-water {
+  transition: background 1200ms linear;
+}
+
+/* 合計スコア（釣った長さの合計）。 */
+.fishing-score {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  font-size: clamp(0.95rem, 2.2vw, 1.25rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 /* UFOキャッチャー。走査線の位置だけを crane.js が rAF で更新する。 */
@@ -1042,14 +1415,54 @@ body.game-mode .app-shell {
   place-items: center;
 }
 
+/* 色変化（L0）の色面。この課題は色そのものが情報なので、面を大きく取り、
+   内側の影で色を濁らせない。
+
+   L0 は「押したら変わった」という因果が伝わることが目的なので、ここだけは
+   入力に対する視覚の反応を作り込む（リズム課題と違い、聴覚キューに対する
+   タイミングを測っていないため、視覚を足しても測定を交絡させない）。
+   colorLegacy.js は入力のたびにこの要素を作り直すので、下の2つの
+   アニメーションはひと押しごとに自然に再生される。 */
 .color-chip {
-  width: 142px;
-  height: 142px;
-  border: 8px solid rgba(255, 255, 255, 0.7);
+  position: relative;
+  width: min(38vmin, 320px);
+  height: min(38vmin, 320px);
+  border: 10px solid rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  box-shadow:
-    inset 0 -18px 30px rgba(0, 0, 0, 0.12),
-    0 18px 38px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+  animation: color-chip-pop 380ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* 押した瞬間に外へ広がる波紋。 */
+.color-chip::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  animation: color-chip-ripple 620ms ease-out forwards;
+}
+
+@keyframes color-chip-pop {
+  from {
+    transform: scale(0.88);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes color-chip-ripple {
+  from {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
 }
 
 .balloon-shape {
@@ -2180,4 +2593,28 @@ input[type="checkbox"]:checked::before {
   .home-supporter-menu span {
     display: none;
   }
+}
+
+/* 高コントラスト設定は、これまでゲーム実行中のチップ類に効いていなかった。
+   魚や舟は画像なので設定に追従できないぶん、こちらで制御できる要素
+   （進捗・スコア・状態表示・おわる・釣り糸）は最大限はっきりさせる。 */
+body.high-contrast .game-progress,
+body.high-contrast .game-exit,
+body.high-contrast .fishing-status,
+body.high-contrast .fishing-score,
+body.high-contrast .fishing-streak,
+body.high-contrast .fishing-catch {
+  border: 2px solid #ffffff;
+  background: #000000;
+  color: #ffffff;
+}
+
+body.high-contrast .fishing-line {
+  width: 6px;
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.75);
+}
+
+body.high-contrast .fishing-water {
+  background: linear-gradient(#1d6f92, #032a41);
 }

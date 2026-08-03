@@ -232,10 +232,25 @@ async function checkStartToHomeToGameFlow(page) {
   // window before treating this as a distinct input.
   await page.waitForTimeout(200);
 
+  // Games that carry a "やりかた" entry in content.js now open on the ready
+  // screen (games/gameHost.js renderReady) so the rules are shown before any
+  // beat is scheduled. The first press dismisses it and starts the session;
+  // it is not a task input, so it must not be forwarded to the game nor
+  // recorded in the log.
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  const logsBeforeReadyDismiss = await readLogCount(page);
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  assert(
+    (await readLogCount(page)) === logsBeforeReadyDismiss,
+    "Expected the ready-screen press to start the session without logging an input"
+  );
+
   // Tapping the full-screen game stage is a switch input for color-legacy:
   // it changes color/tone and announces via the live region. Click the
   // center (default) rather than a corner, since #gameProgress/#gameExit are
   // absolutely positioned in the corners and would intercept a corner click.
+  await page.waitForTimeout(200);
   await page.locator("#gameStage").click();
   await waitForText(page, "#liveRegion", "色変化に入力しました");
 
@@ -450,6 +465,14 @@ async function checkRhythmL1GameFlow(page) {
   await page.locator(".tabbar").waitFor({ state: "hidden" });
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
 
+  // The ready screen ("やりかた") comes first and no beat is scheduled until
+  // it is dismissed (games/gameHost.js renderReady/beginSession). Aborting
+  // from here would leave no session at all, so start the session before
+  // testing the abort path below.
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+
   // Let the countdown/first beat render a moment before aborting.
   await page.waitForTimeout(500);
 
@@ -479,8 +502,17 @@ async function checkRhythmL1GameFlow(page) {
 async function checkFishingGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
+  // さかなつりはコーナータイルになったので、二階層目で課題を選ぶ。
+  // fishing（純粋な単純反応時間）と fishing-gonogo（抑制つき）に分けたのは、
+  // taskType "rt" なのに No-Go 刺激が混ざっていた食い違いを解くため。
   await page.getByRole("button", { name: "さかなつり", exact: true }).click();
+  await page.getByRole("button", { name: "アタリで つる", exact: true }).click();
   await waitForClass(page, "#gameView", "is-active");
+  // さかなつりも content.js の gameHowTo を持つようになったので、レディ画面を
+  // ひと押しで抜けてからでないとセッションが始まらない。
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
   await page.waitForTimeout(220);
   // 前刺激区間の入力も falseStart / commission として1試行に確定する。
   await page.locator("#gameStage").click();

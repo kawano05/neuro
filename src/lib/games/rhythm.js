@@ -308,6 +308,10 @@ export function createRhythmGame(gameId) {
     }
 
     function renderStageMarkup() {
+      // module-rhythm は「円ひとつ＋下の説明文」というこの課題の版面を
+      // styles.css に伝えるための印。crane / fishing のように子要素の構成が
+      // 違うゲームへ中央配置の規則が及ばないよう、クラスで範囲を限定する。
+      stageEl.classList.add("module-rhythm");
       stageEl.innerHTML = `
         <div class="rhythm-pulse" aria-hidden="true"></div>
         <span class="reaction-label">${STAGE_LABELS[gameId] || STAGE_LABELS.default}</span>
@@ -319,9 +323,51 @@ export function createRhythmGame(gameId) {
       if (!pulseEl) return;
       pulseEl.classList.add("is-hit-flash");
       window.clearTimeout(hitFlashTimer);
+      // 120ms だと styles.css の波紋アニメーション（rhythm-hit-ripple、320ms）が
+      // 途中で切れる。クラスが外れると animation も止まるため、波紋が
+      // 一周する長さに合わせる。判定・記録には一切関与しない見た目だけの値で、
+      // 最短の拍間隔（L2 の bpm 60 = 1000ms）より十分短い。
       hitFlashTimer = window.setTimeout(() => {
         pulseEl?.classList.remove("is-hit-flash");
-      }, 120);
+      }, 340);
+    }
+
+    /**
+     * 拍位相（0=拍の瞬間、1=次の拍の直前）から円の倍率を返す。
+     *
+     * 以前は scale = 0.85 + 0.15 * phase の単純な鋸歯だった。これだと
+     *   - 円がいちばん大きくなるのは拍の「直前」
+     *   - 拍の瞬間は 1.0 から 0.85 へ一気に縮む
+     * となり、拍が「縮む」ことで表現されるうえ、あいだは等速で伸び続ける
+     * だけなので、拍ではなく単なる繰り返しの往復に見えていた。
+     *
+     * 訓練用の合図として読めるよう、拍のたびに「着地 → 沈む → 待つ →
+     * 溜める → 着地」という一巡りにする。倍率が最大になるのは拍の瞬間で、
+     * 直前の溜めが「つぎ来るぞ」を伝える。判定には一切使わない見た目だけの
+     * 計算で、音のスケジュール（AudioContext 基準）とは独立している。
+     */
+    function beatPulseScale(phase) {
+      const base = 0.86;
+      const peak = 1;
+      const decayUntil = 0.34; // 着地後、ここまでの区間で基準へ沈む
+      const anticipateFor = 0.28; // 次の拍のこの手前から溜めはじめる
+
+      if (phase < decayUntil) {
+        // 着地の直後。ease-out で勢いよく沈み、だんだんゆっくりになる。
+        const t = phase / decayUntil;
+        const eased = 1 - (1 - t) ** 3;
+        return peak + (base - peak) * eased;
+      }
+
+      const anticipateFrom = 1 - anticipateFor;
+      // 拍と拍のあいだは動かさない。この「静止」があることで、
+      // 動きが拍の前後だけの出来事になり、往復運動に見えなくなる。
+      if (phase < anticipateFrom) return base;
+
+      // 次の拍へ向けた溜め。ease-in で、最大までは上げきらない
+      // （上げきると着地の瞬間に差が出ず、拍が見えなくなる）。
+      const t = (phase - anticipateFrom) / anticipateFor;
+      return base + (peak - base) * 0.55 * t ** 2;
     }
 
     function updatePulseVisual(nowAudioAbsMs) {
@@ -329,8 +375,7 @@ export function createRhythmGame(gameId) {
       const elapsedS = nowAudioAbsMs / 1000 - plan.startAt;
       const interval = plan.beatIntervalS;
       const phase = (((elapsedS % interval) + interval) % interval) / interval;
-      const scale = 0.85 + 0.15 * phase;
-      pulseEl.style.transform = `scale(${scale.toFixed(3)})`;
+      pulseEl.style.transform = `scale(${beatPulseScale(phase).toFixed(3)})`;
     }
 
     function updateProgressText() {
@@ -515,7 +560,11 @@ export function createRhythmGame(gameId) {
         logTrial(session);
       }
 
-      if (stageEl) stageEl.innerHTML = "";
+      if (stageEl) {
+        // 次のゲームへ版面の印を持ち越さない（colorLegacy の module-color と同じ作法）。
+        stageEl.classList.remove("module-rhythm");
+        stageEl.innerHTML = "";
+      }
       stageEl = null;
       pulseEl = null;
     }

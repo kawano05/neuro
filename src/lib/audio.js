@@ -173,6 +173,23 @@ export function createAudio(getSettings) {
   }
 
   /**
+   * 読み上げ中の発話を打ち切る。
+   *
+   * speak() は次の発話の直前に cancel() するので、読み上げが「次の speak()
+   * まで止まらない」区間ができる。ゲームが始まったあとも案内の音声が続くと、
+   * 課題の合図音（低音・高音）に人の声が重なり、聴覚キューを聴き取る妨げに
+   * なる。このアプリでは合図音がそのまま測定・訓練の対象なので、
+   * 始まった時点で確実に黙らせる必要がある（games/gameHost.js から呼ぶ）。
+   *
+   * speechEnabled の判定は掛けない。設定を切った直後に発話が残っている
+   * 場合も含め、「止める」は常に効くべきなので。
+   */
+  function stopSpeech() {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+  }
+
+  /**
    * 時刻指定版の単発音（detailed-design.md §6.2）。既存 playTone と同型の
    * 包絡（sine、既定 gain 0.05、~0.18秒減衰）を、指定の AudioContext 時刻
    * （秒）で鳴らす。ビート予約（先読み）とゲーム内フィードバック音
@@ -224,6 +241,7 @@ export function createAudio(getSettings) {
 
   return {
     speak,
+    stopSpeech,
     playTone,
     playToneAt,
     unlock,

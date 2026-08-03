@@ -29,7 +29,8 @@ export const gameCreators = {
   "rhythm-l2": createRhythmGame("rhythm-l2"),
   gonogo: createGonogoGame,
   crane: createCraneGame,
-  fishing: createFishingGame,
+  fishing: createFishingGame("fishing"),
+  "fishing-gonogo": createFishingGame("fishing-gonogo"),
   calibration: createCalibrationGame,
 };
 
