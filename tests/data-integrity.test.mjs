@@ -606,8 +606,13 @@ test("game registry, presets and persisted task types stay aligned", () => {
   // games/fishing.js の mount() が計画した実数を config.targetTrials へ
   // 書き戻す（sanitizeReactionSession の完走判定が
   // trials.length === targetTrials を見るため）。
-  assert.equal(fishingPresets.sessionMs, 60_000);
-  assert.equal(fishingPresets.targetTrials, undefined);
+  // さかなつりは2種類（純粋な単純反応時間 / 抑制つき）で、rhythmPresets と
+  // 同じく gameId をキーに持つ。違いは fakeRatio だけであることを固定する。
+  assert.deepEqual(Object.keys(fishingPresets).sort(), ["fishing", "fishing-gonogo"]);
+  assert.equal(fishingPresets.fishing.sessionMs, 60_000);
+  assert.equal(fishingPresets.fishing.targetTrials, undefined);
+  assert.equal(fishingPresets.fishing.fakeRatio, 0);
+  assert.ok(fishingPresets["fishing-gonogo"].fakeRatio > 0);
 
   const migrated = sanitizeState({
     rhythm: {

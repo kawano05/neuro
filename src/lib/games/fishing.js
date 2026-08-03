@@ -179,9 +179,18 @@ function computeSummary(trials) {
   };
 }
 
-export function createFishingGame(ctx) {
+/**
+ * @param {"fishing"|"fishing-gonogo"} gameId
+ *   fishing        … 純粋な単純反応時間（fakeRatio 0。長靴が出ない）
+ *   fishing-gonogo … 抑制つき（低音の長靴が混ざる）
+ *   どちらも同じエンジンで、違いは content.js の fishingPresets だけ
+ *   （games/rhythm.js の createRhythmGame(gameId) と同じ作法）。
+ * @returns {(ctx: import("./gameHost.js").GameCtx) => import("./gameHost.js").GameInstance}
+ */
+export function createFishingGame(gameId) {
+  return function create(ctx) {
   const { audio, announce, logTrial, finish, setProgress } = ctx;
-  const config = { ...fishingPresets };
+  const config = { ...fishingPresets[gameId] };
   let stageEl = null;
   let statusEl = null;
   let sceneEl = null;
@@ -659,7 +668,7 @@ export function createFishingGame(ctx) {
     session = {
       sessionId: generateSessionId(),
       taskType: "rt",
-      gameId: "fishing",
+      gameId,
       participantId: ctx.participantId || "",
       startedAtIso: new Date().toISOString(),
       aborted: false,
@@ -713,5 +722,6 @@ export function createFishingGame(ctx) {
     streakEl = null;
   }
 
-  return { mount, handleInput, destroy };
+    return { mount, handleInput, destroy };
+  };
 }

@@ -502,7 +502,29 @@ rhythmPresets[gameId]。settings 側が null のとき preset を使う。
   クラスで範囲を限定している。
 - highContrast 時は輪郭線を強調。色は stageColors から1色を使用。
 
-### 7.5 さかなつりの画面（games/fishing.js）
+### 7.5 さかなつり（games/fishing.js）
+
+**2種類ある。** どちらも反応時間を測るが、測っているものが違う:
+
+| gameId | タイル | 内容 | fakeRatio |
+|---|---|---|---|
+| `fishing` | アタリで つる | 純粋な単純反応時間。アタリ音は1種類だけ | 0 |
+| `fishing-gonogo` | さかなだけ つる | そこに No-Go（低音の長靴）を混ぜた抑制つき | 0.22 |
+
+以前は1つのゲームに `fakeRatio` を持たせていたため、`taskType` は `"rt"`
+（単純反応時間）なのに実体は Go/No-Go 課題という食い違いがあり、
+「この課題で何を測ったか」を書けなかった。分けたことで
+「単純RT＝fishing、抑制＝fishing-gonogo（および拍に乗る gonogo）」と
+役割が確定する。
+
+- ロビーでは `fishingCornerTile`（さかなつり）にまとめ、二階層目で選ぶ。
+  リズムコーナーと同じ作法で、ロビーの走査項目は5件のまま増えない。
+- エンジンは共通。`createFishingGame(gameId)` が `fishingPresets[gameId]` を
+  読むだけ（`createRhythmGame(gameId)` と同じ形）。
+- どちらも `taskType: "rt"`。rt のサマライザは commission /
+  correctRejection を既に扱えるので、純粋版は fake が0件になるだけで
+  スキーマは共通のまま。`state.js` の `RT_GAME_IDS` に両方を登録する。
+
 
 課題としては従来どおり変動前刺激間隔つき単純反応時間課題（taskType: "rt"）で、
 判定は reaction.js の `judgeReaction`、前刺激間隔は `generateForeperiods`、

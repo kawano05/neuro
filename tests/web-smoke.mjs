@@ -502,7 +502,11 @@ async function checkRhythmL1GameFlow(page) {
 async function checkFishingGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
+  // さかなつりはコーナータイルになったので、二階層目で課題を選ぶ。
+  // fishing（純粋な単純反応時間）と fishing-gonogo（抑制つき）に分けたのは、
+  // taskType "rt" なのに No-Go 刺激が混ざっていた食い違いを解くため。
   await page.getByRole("button", { name: "さかなつり", exact: true }).click();
+  await page.getByRole("button", { name: "アタリで つる", exact: true }).click();
   await waitForClass(page, "#gameView", "is-active");
   // さかなつりも content.js の gameHowTo を持つようになったので、レディ画面を
   // ひと押しで抜けてからでないとセッションが始まらない。

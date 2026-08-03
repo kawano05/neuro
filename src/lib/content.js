@@ -55,8 +55,16 @@ export const gameTiles = [
   { id: "rhythm-l2", taskType: "sms", title: "リズム つづけて", description: "おとに あわせて つづけて おそう", order: 3, enabled: true, iconClass: "fa-solid fa-music" },
   { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true, iconClass: "fa-solid fa-bell" },
   { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
-  { id: "fishing", taskType: "rt", title: "さかなつり", description: "アタリの おとを まって おそう", order: 6, enabled: true, iconClass: "fa-solid fa-fish" },
-  { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 7, enabled: true, iconClass: "fa-solid fa-stopwatch" },
+  // さかなつりは2種類ある。どちらも反応時間を測るが、測っているものが違う:
+  //   fishing        … 純粋な単純反応時間。アタリ音は1種類だけで、迷う要素がない
+  //   fishing-gonogo … そこに No-Go（長靴の低音）を混ぜた抑制つきの反応時間
+  // 以前は1つのゲームに fakeRatio を持たせていたため、taskType は "rt"
+  // （単純反応時間）なのに実体は Go/No-Go 課題という食い違いがあり、
+  // 「この課題で何を測ったか」を書けなかった。ロビーでは「さかなつり」の
+  // コーナー（fishingCornerTile）にまとめ、二階層目でどちらかを選ぶ。
+  { id: "fishing", taskType: "rt", title: "アタリで つる", description: "おとが なったら すぐ おそう", order: 6, enabled: true, iconClass: "fa-solid fa-fish" },
+  { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 7, enabled: true, iconClass: "fa-solid fa-fish-fins" },
+  { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 8, enabled: true, iconClass: "fa-solid fa-stopwatch" },
 ];
 
 /** ロビーで複数のリズム課題をまとめる二階層目への入口。 */
@@ -65,6 +73,14 @@ export const rhythmCornerTile = {
   title: "リズム",
   description: "3つの おとの あそびから えらぼう",
   iconClass: "fa-solid fa-music",
+};
+
+/** さかなつり2種（純粋な反応時間 / 抑制つき）をまとめる二階層目への入口。 */
+export const fishingCornerTile = {
+  id: "fishing-corner",
+  title: "さかなつり",
+  description: "2つの つりかたから えらぶ",
+  iconClass: "fa-solid fa-fish",
 };
 
 /** 学習・コミュニケーション系を1つの走査項目へまとめる入口。 */
@@ -135,16 +151,26 @@ export const cranePresets = {
  * 全セッションが中断扱いになる）。
  */
 export const fishingPresets = {
-  foreperiodMinMs: 1800,
-  foreperiodMaxMs: 4200,
-  limitMs: 2000,
-  sessionMs: 60_000,
-  fakeRatio: 0.22,
-  // 魚が画面右端から糸の位置（中央）へ泳いでくるのにかける時間。
-  // アタリ音が鳴る cueMs のちょうど手前 approachMs から動きはじめる。
-  approachMs: 1800,
-  // アタリを逃したあと、魚が画面左へ抜けていくまでの時間。
-  exitMs: 700,
+  // 純粋な単純反応時間。アタリ音は1種類だけで、押すか押さないかの判断は無い。
+  fishing: {
+    foreperiodMinMs: 1800,
+    foreperiodMaxMs: 4200,
+    limitMs: 2000,
+    sessionMs: 60_000,
+    fakeRatio: 0,
+    approachMs: 1800,
+    exitMs: 700,
+  },
+  // 抑制つき。低音（長靴）では押さずに待つ必要がある。
+  "fishing-gonogo": {
+    foreperiodMinMs: 1800,
+    foreperiodMaxMs: 4200,
+    limitMs: 2000,
+    sessionMs: 60_000,
+    fakeRatio: 0.22,
+    approachMs: 1800,
+    exitMs: 700,
+  },
 };
 
 /**
@@ -200,6 +226,12 @@ export const gameHowTo = {
     "しえんしゃと いっしょに つかう そくていです。",
   ],
   fishing: [
+    "さかなが みぎから およいで きます。",
+    "「アタリ」の おとが なったら すぐ おします。",
+    "はやく おせると ★ボーナスが つきます。",
+    "1ぷんかん、たくさん つりましょう。",
+  ],
+  "fishing-gonogo": [
     "さかなが みぎから およいで きます。",
     "「アタリ」の たかい おとで おすと つれます。",
     "ひくい おとは ながぐつです。おさずに まちます。",
