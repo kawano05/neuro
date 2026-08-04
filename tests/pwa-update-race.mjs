@@ -4,12 +4,17 @@ import { once } from "node:events";
 import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 
 const runFile = promisify(execFile);
-const projectRoot = resolve(import.meta.dirname, "..");
+// import.meta.dirname は Node 20.11 以降にしか無く、それより古い Node では
+// undefined になって resolve() が投げる（テストが起動すらしない）。
+// package.json は Node >=22 を要求しているが、テストが「動かない」ではなく
+// 「落ちない」で失敗するのは分かりにくいので、全バージョンで動く形にする。
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tempRoot = await mkdtemp(join(tmpdir(), "neuro-pwa-update-race-"));
 const v1Root = join(tempRoot, "v1");
 const v2Root = join(tempRoot, "v2");
