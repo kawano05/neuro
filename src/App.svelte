@@ -522,6 +522,24 @@
           <input id="highContrast" type="checkbox" role="switch" data-scan />
         </label>
 
+        <label class="setting-row">
+          <span>
+            <strong>アームの速さ</strong>
+            <small>UFOキャッチャーで、アームが端から端まで動く時間</small>
+          </span>
+          <input id="craneSweepMs" type="range" min="800" max="6000" step="100" data-scan />
+          <output id="craneSweepMsValue" for="craneSweepMs">2000ms</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>つかめる広さ</strong>
+            <small>景品からどれだけずれても掴めるか。大きいほどやさしくなります</small>
+          </span>
+          <input id="craneToleranceR" type="range" min="4" max="40" step="1" data-scan />
+          <output id="craneToleranceRValue" for="craneToleranceR">10</output>
+        </label>
+
         <label class="setting-row toggle-row">
           <span>
             <strong>視覚課題を隠す</strong>
