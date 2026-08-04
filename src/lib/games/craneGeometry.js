@@ -98,7 +98,7 @@ export function floorCssVars(geom = CRANE_GEOM, chute = CRANE_CHUTE) {
  *
  * なぜ要るか: 床の1目盛は sweepMs/100 ミリ秒にあたるので、要求する時間精度は
  * 「grip 圏の半径 × sweepMs/100」。既定（content.js の cranePresets、
- * sweepMs 2200 / toleranceR 11）では各軸 ±121ms になる。狙って押すこと自体が
+ * sweepMs 2200 / toleranceR 15）では各軸 ±165ms になる。狙って押すこと自体が
  * 訓練の対象である利用者にとってこれは厳しく、0/5 が続くと「何をしても
  * 同じ」になって課題として成立しない。
  *

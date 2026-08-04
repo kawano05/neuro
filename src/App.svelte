@@ -537,7 +537,7 @@
             <small>景品からどれだけずれても掴めるか。大きいほどやさしくなります</small>
           </span>
           <input id="craneToleranceR" type="range" min="4" max="40" step="1" data-scan />
-          <output id="craneToleranceRValue" for="craneToleranceR">11</output>
+          <output id="craneToleranceRValue" for="craneToleranceR">15</output>
         </label>
 
         <label class="setting-row toggle-row">
