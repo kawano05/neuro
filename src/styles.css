@@ -1150,94 +1150,403 @@ body.high-contrast .rhythm-pulse::before {
   font-variant-numeric: tabular-nums;
 }
 
-/* UFOキャッチャー。走査線の位置だけを crane.js が rAF で更新する。 */
+/* =====================================================================
+   UFOキャッチャー。
+
+   床は 0..100 × 0..100 の正方形で、それを透視投影した台形として描く
+   （games/crane.js の GEOM と .crane-floor の clip-path が同じ台形を
+   指している。片方だけ変えると床とアームの位置がずれる）。
+
+   .crane-stage に aspect-ratio を固定しているのは、縦横比が変わると
+   透視の見え方が変わり、床の上の距離感（＝狙いの付け方）が画面ごとに
+   変わってしまうため。以前の盤面は幅いっぱいの横長長方形で、判定の
+   許容円が画面上では横に潰れた楕円になっていた。
+
+   位置は crane.js が rAF で更新する。CSS 側の transition は最小限に
+   しておく（prefers-reduced-motion で無効化されても遊べるように）。
+   ===================================================================== */
+.game-stage-content.module-crane {
+  padding: 0;
+  background-color: #16233a;
+  background-image: none;
+}
+
 .crane-cabinet {
-  width: min(760px, 88vw);
-  padding: 18px;
-  border: 6px solid rgba(255, 255, 255, 0.88);
-  border-radius: 30px;
-  background: rgba(13, 54, 91, 0.38);
-  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.24);
-}
-
-.crane-board {
-  position: relative;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
   overflow: hidden;
-  height: min(48vh, 430px);
-  border-radius: 18px;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
-    linear-gradient(155deg, #275f87, #173756);
-  background-size: 10% 10%, 10% 10%, auto;
+  border-radius: inherit;
 }
 
-.crane-prize {
+.crane-stage {
+  position: relative;
+  width: min(96%, 900px);
+  max-height: 96%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 6px solid rgba(255, 255, 255, 0.9);
+  border-radius: 26px;
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.35);
+}
+
+/* 筐体の内側。奥の壁と側面をまとめて1枚で描く。 */
+.crane-back {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 80% at 50% 18%, rgba(122, 196, 236, 0.28), transparent 62%),
+    linear-gradient(#1d3f66, #102743);
+}
+
+/* 景品が乗っている床。台形の頂点は games/craneGeometry.js の
+   floorCssVars() が .crane-stage へ入れるカスタムプロパティから読む。
+   以前はここに数値を直書きしていて、投影のパラメータを片方だけ変えると
+   床とアームの位置が黙ってずれる状態だった。出どころは1つに保つ。
+   clip-path の％は要素自身の箱に対する比なので、床がステージの全幅を
+   占めていること（left/right: 0）が前提。 */
+.crane-floor {
+  position: absolute;
+  top: var(--crane-far-top);
+  right: 0;
+  left: 0;
+  height: var(--crane-floor-height);
+  background: linear-gradient(#3d7fb0, #7fc2e4);
+  clip-path: polygon(
+    var(--crane-far-left) 0,
+    var(--crane-far-right) 0,
+    var(--crane-near-right) 100%,
+    var(--crane-near-left) 100%
+  );
+}
+
+/* 奥に転がしておく飾りの景品。狙う対象ではないので、少し沈めて彩度を落とす。 */
+.crane-decor {
   position: absolute;
   z-index: 2;
-  font-size: clamp(2.5rem, 7vw, 5rem);
-  transform: translate(-50%, -50%);
-  filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.32));
+  width: 9%;
+  opacity: 0.55;
+  filter: saturate(0.6) brightness(0.85);
+  transform: translate(-50%, -100%) scale(var(--prize-scale, 1));
+  transform-origin: 50% 100%;
 }
 
-.crane-scan-line {
+/* 床の上に引く走査線。奥行きが付いたぶん、アームの絵だけを見て狙うと
+   「画面では重なっているのに床の上では離れている」が起きる。線は床の上の
+   実際の位置なので、線が景品を通れば必ず当たる（games/crane.js の
+   updateGuides のコメント参照）。 */
+.crane-guides {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  /* SVG は viewBox 由来の縦横比を持つので、inset だけではステージいっぱいに
+     ならない（正方形のまま置かれて座標が全部ずれる）。明示的に伸ばす。 */
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.crane-guide {
+  stroke: rgba(255, 235, 120, 0.32);
+  stroke-width: 4;
+  stroke-linecap: round;
+  visibility: hidden;
+}
+
+.crane-guide.is-shown {
+  visibility: visible;
+}
+
+.crane-guide.is-active {
+  stroke: rgba(255, 235, 120, 0.95);
+}
+
+/* 掴める範囲。この課題の目標は狙いを定めることなので、どこまで近ければ
+   掴めるのかを隠さない。幅と高さは crane.js が透視に合わせて入れるので、
+   床が台形に見えるのと同じ比率で潰れる＝見えている範囲と判定が一致する。
+
+   内側の実線が「しっかり つかめる」範囲（toleranceR の半分）、外側の破線が
+   「すべる」範囲（toleranceR）。外側はちょうど2倍なので inset: -50% で描ける。 */
+.crane-ring {
+  position: absolute;
+  z-index: 2;
+  display: block;
+  border: 3px solid rgba(255, 226, 122, 0.85);
+  border-radius: 50%;
+  background: rgba(255, 226, 122, 0.16);
+  transform: translate(-50%, -50%);
+}
+
+.crane-ring::after {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  border: 2px dashed rgba(255, 226, 122, 0.45);
+  border-radius: 50%;
+}
+
+/* アームの影。どこに降りるかを床の上で予告する。 */
+.crane-shadow {
   position: absolute;
   z-index: 3;
   display: block;
-  background: rgba(255, 235, 92, 0.92);
-  box-shadow: 0 0 14px rgba(255, 235, 92, 0.78);
-  opacity: 0.35;
+  width: 13%;
+  height: 5%;
+  border-radius: 50%;
+  background: rgba(4, 18, 32, 0.75);
+  transform: translate(-50%, -50%) scale(var(--shadow-scale, 1));
+  filter: blur(3px);
 }
 
-.crane-scan-line.is-active {
-  opacity: 1;
+/* 景品。掴める範囲のリングを覆い隠さない大きさに留める（大きく描くと
+   「見えている景品より狭い範囲でしか掴めない」という不公平に見える）。 */
+.crane-prize {
+  --prize-hang: 6%;
+  position: absolute;
+  z-index: 4;
+  width: 11%;
+  transform: translate(-50%, -100%) scale(var(--prize-scale, 1));
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.3));
 }
 
-.crane-scan-line.vertical {
-  top: 0;
-  bottom: 0;
-  width: 6px;
+/* 吊られているあいだの小さな上下。transform ではなく translate プロパティに
+   当てているのは、位置合わせの translate(-50%, -100%) scale(...) を
+   上書きしないため（crane.js が毎フレーム transform 前提で置いている）。 */
+@keyframes crane-prize-bob {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 3%;
+  }
+}
+
+.crane-prize.is-lifted {
+  animation: crane-prize-bob 720ms ease-in-out infinite;
+}
+
+/* すべったときの揺れ。掴めてはいたことを絵でも返す（文字だけだと
+   miss との違いが読み取れない）。回転の軸は景品の足元。 */
+@keyframes crane-prize-wobble {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  25% {
+    rotate: -9deg;
+  }
+  75% {
+    rotate: 9deg;
+  }
+}
+
+.crane-prize.is-slipped {
+  animation: crane-prize-wobble 360ms ease-in-out 2;
+}
+
+.crane-prize.is-dropped {
+  z-index: 6;
+  opacity: 0;
+  transform: translate(-50%, -60%) scale(0.6);
+  transition:
+    opacity 320ms ease-in,
+    transform 320ms ease-in;
+}
+
+.crane-rail {
+  position: absolute;
+  top: 8%;
+  right: 4%;
+  left: 4%;
+  z-index: 5;
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(#e8eef4, #9aa9b8);
+}
+
+.crane-trolley {
+  position: absolute;
+  top: 6.2%;
+  z-index: 6;
+  width: 9%;
+  height: 4.4%;
+  border-radius: 6px;
+  background: linear-gradient(#f4f8fb, #b3c1cf);
   transform: translateX(-50%);
 }
 
-.crane-scan-line.horizontal {
-  right: 0;
-  left: 0;
-  height: 6px;
-  transform: translateY(-50%);
-}
-
-.crane-arm {
+.crane-cable {
   position: absolute;
-  z-index: 4;
-  color: #ffffff;
-  font-size: clamp(3rem, 8vw, 6.5rem);
-  line-height: 1;
-  text-shadow: 0 4px 9px rgba(0, 0, 0, 0.4);
-  transform: translate(-50%, -50%);
-  transition: top 1.1s ease-in;
-  opacity: 0;
+  z-index: 5;
+  width: 4px;
+  border-radius: 2px;
+  background: rgba(232, 238, 244, 0.9);
+  transform: translateX(-50%);
 }
 
-.crane-arm.is-dropping {
+.crane-claw {
+  position: absolute;
+  z-index: 6;
+  width: 14%;
+  transform: translate(-50%, -100%) scale(var(--claw-scale, 1));
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.35));
+}
+
+/* 景品口。床の手前左に開いた穴として描く（床の上に箱を置くと、
+   景品が床から消える先がどこなのか分からない）。位置は床の台形と同じく
+   games/craneGeometry.js（CRANE_CHUTE）から来るので、落下先とずれない。 */
+.crane-chute {
+  position: absolute;
+  top: var(--crane-chute-top);
+  left: var(--crane-chute-left);
+  z-index: 5;
+  width: 15%;
+  height: 11%;
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  background: rgba(4, 14, 26, 0.85);
+  transform: translate(-50%, -50%);
+}
+
+.crane-chute-mouth {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.crane-chute.is-filled {
+  border-color: #ffe27a;
+  box-shadow: 0 0 0 4px rgba(255, 226, 122, 0.45);
+}
+
+/* リザルトに並べる、取れた景品。 */
+.summary-prizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.summary-prizes img {
+  width: 44px;
+  height: auto;
+}
+
+/* 取れた景品の並び。数字だけだと「何を取ったか」も「増えていること」も
+   見えないので、景品口の下に実物を並べていく。 */
+.crane-collected {
+  position: absolute;
+  bottom: 3%;
+  left: 3%;
+  z-index: 9;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: flex-end;
+  width: 30%;
+}
+
+.crane-collected-item {
+  width: 22%;
+  max-width: 46px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+}
+
+/* 前面ガラスの反射。筐体の中を覗いている感じを出すだけの飾り。 */
+.crane-glass {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.14) 0 18%, transparent 34%);
+}
+
+/* 結果の色。アームの色だけで grip/slip/miss を伝えていたときは、
+   1文字ぶんの色差しか手がかりが無く、成功と失敗が見分けられなかった。 */
+.crane-stage.is-grip .crane-back {
+  box-shadow: inset 0 0 0 9999px rgba(255, 226, 122, 0.16);
+}
+
+.crane-stage.is-slip .crane-back {
+  box-shadow: inset 0 0 0 9999px rgba(255, 170, 90, 0.14);
+}
+
+.crane-stage.is-miss .crane-back {
+  box-shadow: inset 0 0 0 9999px rgba(10, 20, 34, 0.3);
+}
+
+/* いま受け付けられない入力への合図。黙って捨てると「壊れた」と
+   区別がつかないので、押したこと自体には必ず反応を返す。 */
+.crane-stage.is-waiting .crane-status {
+  background: rgba(255, 226, 122, 0.9);
+  color: #23303f;
+}
+
+.crane-status {
+  position: absolute;
+  bottom: 5%;
+  left: 50%;
+  z-index: 9;
+  padding: 8px 22px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+  font-family: var(--font-round);
+  font-size: clamp(1.1rem, 2.6vw, 1.8rem);
+  font-weight: 800;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.crane-score {
+  position: absolute;
+  top: 3%;
+  left: 50%;
+  z-index: 9;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  font-size: clamp(0.95rem, 2.2vw, 1.25rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
+
+.crane-streak {
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  z-index: 9;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #ffe27a;
+  font-family: var(--font-round);
+  font-size: clamp(0.9rem, 2vw, 1.15rem);
+  font-weight: 800;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(-50%);
+}
+
+.crane-streak.is-shown {
   opacity: 1;
 }
 
-.crane-arm.is-grip {
-  color: #ffe56c;
-}
-
-.crane-arm.is-slip {
-  transform: translate(-35%, -20%) rotate(18deg);
-}
-
-.crane-arm.is-miss {
-  opacity: 0.65;
-}
-
-body.high-contrast .crane-board,
+body.high-contrast .crane-stage,
 body.high-contrast .fishing-scene {
   outline: 6px solid #ffffff;
+}
+
+body.high-contrast .crane-ring {
+  border-color: #ffffff;
+  border-width: 4px;
 }
 
 /* ゲーム実行中はタブバー・走査UI・ヘッダを非表示にする（detailed-design.md §10）。 */

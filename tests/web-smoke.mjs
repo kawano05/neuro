@@ -535,16 +535,48 @@ async function checkFishingGameFlow(page) {
   assert(session?.aborted === true, "Expected fishing exit to persist aborted=true");
 }
 
+// 関数宣言にしているのは、このファイルがトップレベル await でテスト本体を
+// 走らせるため。const だと宣言位置より前に実行されて TDZ に落ちる。
+async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  let seen = null;
+  while (Date.now() < deadline) {
+    seen = await page.evaluate(() => document.querySelector(".crane-status")?.textContent ?? null);
+    if (seen === text) return;
+    await delay(80);
+  }
+  throw new Error(`crane status never became "${text}" (last seen: "${seen}")`);
+}
+
 async function checkCraneGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.getByRole("button", { name: "アームを とめる", exact: true }).click();
   await waitForClass(page, "#gameView", "is-active");
-  // 3拍カウントイン完了後、X/Yを止め、GRASP演出が1試行を確定するまで待つ。
-  await page.waitForTimeout(2250);
+  // crane も content.js の gameHowTo を持つようになったので、レディ画面を
+  // ひと押しで抜けてからでないとセッションが始まらない。
+  await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.waitForTimeout(220);
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  // カウントインの長さを固定の待ち時間で当てにいくと、AudioContext の
+  // 立ち上がりが遅い環境（WebKit系）で走査開始前に押してしまう。
+  // 走査が始まったことを状態表示で確かめてから押す。
+  await waitForCraneStatus(page, "よこに うごきます");
+  // 走査が始まった直後の押下は入力ガード（INPUT_GUARD_MS）で弾かれる。
+  // ガードを抜けてから押す。
+  await page.waitForTimeout(400);
   await page.locator("#gameStage").click();
+  await waitForCraneStatus(page, "おくに うごきます");
+
+  // フェーズ切り替え直後の二度押しは試行に使わない（games/crane.js の
+  // INPUT_GUARD_MS）。痙性や振戦で入った2回目がYを走査の先頭で確定させ、
+  // ほぼ確実に miss になっていた回帰を防ぐ。この押下が効いてしまうと
+  // yPhaseMs がガード時間より小さくなるので、最後にそれを確かめる。
+  await page.waitForTimeout(200);
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(300);
+  await page.locator("#gameStage").click();
+
   await page.waitForFunction(
     (key) => {
       const state = JSON.parse(localStorage.getItem(key) || "{}");
@@ -553,7 +585,7 @@ async function checkCraneGameFlow(page) {
       );
     },
     storageKey,
-    { timeout: 4_000 }
+    { timeout: 5_000 }
   );
   await page.locator("#gameExit").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -564,6 +596,12 @@ async function checkCraneGameFlow(page) {
   assert(session?.taskType === "scan", "Expected crane to persist taskType=scan");
   assert(session?.trials?.length === 1, "Expected exactly one recorded crane trial");
   assert(session?.aborted === true, "Expected crane exit to persist aborted=true");
+  // ガード内（200ms時点）の押下が効いていれば yPhaseMs はそこで確定してしまう。
+  // 実際に効いたのは300ms後の押下なので、ガード時間より確実に大きくなる。
+  assert(
+    session?.trials?.[0]?.yPhaseMs > 320,
+    `Expected the input guard to reject the second press (yPhaseMs=${session?.trials?.[0]?.yPhaseMs})`
+  );
 }
 
 async function checkFeatureTabs(page) {

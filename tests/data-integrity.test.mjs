@@ -16,9 +16,14 @@ import {
   buildTaskCsvRows,
   flattenEvaluationResults,
 } from "../src/lib/views/evaluation.js";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { PRIZE_ART } from "../src/lib/games/craneArt.js";
 import {
   cranePresets,
+  cranePrizes,
   fishingPresets,
+  fishingSpecies,
   gameTiles,
   rhythmPresets,
 } from "../src/lib/content.js";
@@ -60,6 +65,143 @@ test("escapeCsv neutralizes spreadsheet formulas without changing numeric negati
 
 test("formatTime tolerates invalid persisted dates", () => {
   assert.equal(formatTime("not-a-date"), "--:--:--");
+});
+
+// UFOキャッチャーは、続けて掴めなかったときだけ許容半径を広げる
+// （games/craneGeometry.js の assistedToleranceR）。効いた値は試行ごとの
+// toleranceR として残る設計なので、セッション内で値が揃っていなくても
+// 落とされないことを固定する。ここが壊れると、アシストが効いた試行だけ
+// 静かに消えて成功率が実際より低く記録される。
+// 支援者が設定画面から変えた難易度は、セッションの config としても保存される
+// （games/crane.js の resolveCraneConfig）。設定側で許す範囲が
+// sanitizeScanSession の許す範囲より広いと、「設定どおりに遊んだのに保存時に
+// 別の値へ丸められる」という食い違いが静かに起きる。両者の関係を固定する。
+test("crane difficulty settings stay inside the range the scan session schema accepts", () => {
+  const sanitized = sanitizeState({
+    settings: { craneSweepMs: 999_999, craneToleranceR: 999 },
+  });
+  const { craneSweepMs, craneToleranceR } = sanitized.settings;
+
+  // 設定側の上限（clamp後の値）がそのまま session.config に入っても丸められない
+  const session = sanitizeState({
+    sessions: [
+      {
+        sessionId: "cfg-1",
+        taskType: "scan",
+        gameId: "crane",
+        participantId: "",
+        startedAtIso: "2026-07-10T00:00:00.000Z",
+        aborted: true,
+        finished: false,
+        config: {
+          sweepMs: craneSweepMs,
+          toleranceR: craneToleranceR,
+          targetTrials: 5,
+          graspAnimMs: 1200,
+        },
+        device: { outputLatencyS: null, baseLatencyS: null, userAgent: "test" },
+        trials: [],
+      },
+    ],
+  }).sessions[0];
+
+  assert.equal(session.config.sweepMs, craneSweepMs);
+  assert.equal(session.config.toleranceR, craneToleranceR);
+
+  // 既定は null（＝content.js の cranePresets を使う）
+  assert.equal(sanitizeState({}).settings.craneSweepMs, null);
+  assert.equal(sanitizeState({}).settings.craneToleranceR, null);
+  assert.equal(sanitizeState({ settings: { craneSweepMs: null } }).settings.craneSweepMs, null);
+  // 下限側も同じく丸められない
+  const low = sanitizeState({ settings: { craneSweepMs: 0, craneToleranceR: 0 } }).settings;
+  assert.ok(low.craneSweepMs >= 400 && low.craneSweepMs <= 10_000);
+  assert.ok(low.craneToleranceR >= 1 && low.craneToleranceR <= 50);
+});
+
+test("sanitizeState keeps scan trials whose tolerance differs from the session default", () => {
+  const base = {
+    sessionId: "assist-1",
+    taskType: "scan",
+    gameId: "crane",
+    participantId: "P001",
+    startedAtIso: "2026-07-10T00:00:00.000Z",
+    aborted: false,
+    finished: true,
+    config: { sweepMs: 2400, toleranceR: 12, targetTrials: 3, graspAnimMs: 1200 },
+    device: { outputLatencyS: null, baseLatencyS: null, userAgent: "test" },
+  };
+  // 狙いのずれは 3 回とも同じ 8。grip 圏は toleranceR の半分なので、
+  // 12 のときは slip（8 > 6）、広がった 16.2 と 20.4 では grip になる
+  // ——同じ押し方が輪の広がりで届くようになる、というアシストそのもの。
+  const trialAt = (index, toleranceR, judgment) => ({
+    index,
+    targetX: 30,
+    targetY: 40,
+    toleranceR,
+    selectedX: 34.8,
+    selectedY: 46.4,
+    dx: 4.8,
+    dy: 6.4,
+    distance: 8,
+    xPhaseMs: 500,
+    yPhaseMs: 600,
+    judgment,
+  });
+
+  const sanitized = sanitizeState({
+    sessions: [
+      {
+        ...base,
+        trials: [
+          trialAt(0, 12, "slip"),
+          trialAt(1, 16.2, "grip"),
+          trialAt(2, 20.4, "grip"),
+        ],
+      },
+    ],
+  });
+
+  const session = sanitized.sessions[0];
+  assert.equal(session.trials.length, 3, "no trial may be dropped for widening tolerance");
+  assert.deepEqual(
+    session.trials.map((trial) => trial.toleranceR),
+    [12, 16.2, 20.4]
+  );
+  assert.deepEqual(
+    session.trials.map((trial) => trial.judgment),
+    ["slip", "grip", "grip"]
+  );
+  // セッションの config は既定値のまま（広げた値は試行側にだけ残る）。
+  assert.equal(session.config.toleranceR, 12);
+  assert.equal(session.summary.grips, 2);
+  assert.equal(session.summary.slips, 1);
+});
+
+// 画像素材の欠落は画面上で「絵が出ない」だけになり、ビルドも通ってしまう。
+// content.js の asset 名と実ファイルの対応をここで固定しておく。
+test("game art referenced by content.js exists on disk", () => {
+  const assetPath = (relative) =>
+    fileURLToPath(new URL(`../src/assets/${relative}`, import.meta.url));
+
+  cranePrizes.forEach((prize) => {
+    const file = assetPath(`crane/${prize.asset}.png`);
+    assert.ok(existsSync(file), `missing crane prize art: ${prize.asset}.png`);
+    // リザルトは PRIZE_ART[prize.asset] を引いて画像を並べる。ここが抜けると
+    // 壊れた画像アイコンが並ぶだけで、ビルドもテストも通ってしまう。
+    assert.ok(PRIZE_ART[prize.asset], `craneArt has no URL for ${prize.asset}`);
+  });
+  assert.deepEqual(
+    Object.keys(PRIZE_ART).sort(),
+    cranePrizes.map((prize) => prize.asset).sort(),
+    "craneArt must map exactly the prizes content.js declares"
+  );
+  ["claw-open", "claw-closed"].forEach((name) => {
+    assert.ok(existsSync(assetPath(`crane/${name}.png`)), `missing crane art: ${name}.png`);
+  });
+  fishingSpecies.forEach((species) => {
+    const file = assetPath(`fishing/fish-${species.asset}.png`);
+    assert.ok(existsSync(file), `missing fishing art: fish-${species.asset}.png`);
+  });
 });
 
 test("sanitizeState rejects invalid shapes, enums and unsafe ranges item by item", () => {

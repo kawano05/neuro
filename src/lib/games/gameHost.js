@@ -37,6 +37,7 @@
 // =====================================================================
 
 import { findGameModule } from "./registry.js";
+import { PRIZE_ART } from "./craneArt.js";
 import { MAX_SESSIONS } from "../state.js";
 import { gameHowTo } from "../content.js";
 
@@ -110,17 +111,41 @@ function renderGonogoResult(summary) {
   `;
 }
 
+/**
+ * 走査課題のリザルト。
+ *
+ * 以前は4枠のうち2枠が「へいきん きょり」「ちゅうおう きょり」という同じ量の
+ * 統計違いで、しかも単位が％——利用者に読める情報がひとつも無かった。
+ * 先頭を「いくつ取れたか」にして、狙いのずれは1枠に絞る。
+ * bestStreak は state.js の scan スキーマ外なので、永続化された session を
+ * 描くときは出ない（games/crane.js の computeSummary のコメント参照）。
+ */
 function renderScanResult(summary) {
   const distance =
     typeof summary.meanDistance === "number" ? summary.meanDistance.toFixed(1) : "--";
-  const median =
-    typeof summary.medianDistance === "number" ? summary.medianDistance.toFixed(1) : "--";
+  const streakTile =
+    typeof summary.bestStreak === "number"
+      ? `<div class="summary-tile"><span class="metric-label">れんぞく さいこう</span><strong>${summary.bestStreak}</strong></div>`
+      : "";
+  // 取れた景品を並べる。数だけより「なにが取れたか」が見えるほうが、
+  // もう一度やる理由になる。永続化された session を描くときは collected が
+  // 無いので出ない（summary の遊び用フィールドは scan スキーマ外）。
+  const prizeRow = Array.isArray(summary.collected) && summary.collected.length
+    ? `<div class="summary-prizes" role="img" aria-label="とれた けいひん ${summary.collected.length}こ">${summary.collected
+        .map((prize) => `<img src="${PRIZE_ART[prize.asset]}" alt="" />`)
+        .join("")}</div>`
+    : "";
   return `
     <div class="summary-grid">
-      <div class="summary-tile"><span class="metric-label">しっかり つかめた</span><strong>${summary.grips}/${summary.trials}</strong></div>
-      <div class="summary-tile"><span class="metric-label">へいきん きょり</span><strong>${distance}%</strong></div>
-      <div class="summary-tile"><span class="metric-label">ちゅうおう きょり</span><strong>${median}%</strong></div>
-      <div class="summary-tile"><span class="metric-label">おしかった</span><strong>${summary.slips}</strong></div>
+      <div class="summary-tile is-headline">
+        <span class="metric-label">とれた</span>
+        <strong>${summary.grips}<small>こ</small></strong>
+        <p>${summary.trials}かい ちゅう</p>
+        ${prizeRow}
+      </div>
+      <div class="summary-tile"><span class="metric-label">おしかった（すべった）</span><strong>${summary.slips}</strong></div>
+      ${streakTile}
+      <div class="summary-tile"><span class="metric-label">ねらいの ずれ</span><strong>${distance}%</strong></div>
     </div>
   `;
 }
