@@ -114,6 +114,7 @@ export function collectElements() {
     soundEnabled: document.querySelector("#soundEnabled"),
     largeText: document.querySelector("#largeText"),
     highContrast: document.querySelector("#highContrast"),
+    supporterLockNotice: document.querySelector("#supporterLockNotice"),
     craneSweepMs: document.querySelector("#craneSweepMs"),
     craneSweepMsValue: document.querySelector("#craneSweepMsValue"),
     craneToleranceR: document.querySelector("#craneToleranceR"),

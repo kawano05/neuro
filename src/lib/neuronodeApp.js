@@ -121,6 +121,18 @@ export function initNeuroNodeApp() {
         control.removeAttribute("aria-disabled");
       }
     });
+
+    // ロック中であることを画面にも出す。理由も解除方法も無いまま操作子だけが
+    // 効かないと、支援者には故障と区別がつかない（実測: 設定画面は走査対象13個
+    // のうち9個が無効で、画面内に「支援者編集」の語がひとつも無かった）。
+    // いま見ている画面に保護された操作子が実際にあるときだけ出す——
+    // operation のように解除はできるが保護対象を持たない画面で
+    // 「変更できません」と言わないため。
+    const activeView = elements.views.find((view) => view.classList.contains("is-active"));
+    const hasProtectedHere = Boolean(
+      activeView && [...protectedControls].some((control) => activeView.contains(control))
+    );
+    elements.supporterLockNotice.hidden = !(locked && hasProtectedHere);
   }
 
   function setSupporterEditing(enabled, announce = true) {

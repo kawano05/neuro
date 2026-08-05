@@ -64,6 +64,21 @@
     <button class="tab" data-view="settings" data-scan>設定</button>
   </nav>
 
+  <!--
+    支援者編集ロックの説明（basic-design.md §9「誤操作防止」）。
+
+    ロック自体は要件だが、解除されるまで画面じゅうの操作子が黙って disabled に
+    なるだけで、理由も解除方法もどこにも出ていなかった（設定画面では走査対象
+    13個のうち9個が無効）。支援者は「壊れている」と受け取る。ロック中で、かつ
+    いま見ている画面に保護された操作子が実際にある場合だけ出す。
+  -->
+  <p class="supporter-lock-notice" id="supporterLockNotice" hidden>
+    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+    <span>
+      いまは変更できません。右上の「支援者編集を開始」を押すと、この画面の設定を変えられます。
+    </span>
+  </p>
+
   <main>
     <!--
       利用者向けフロー（detailed-design.md §10）: start/home/game/result。
