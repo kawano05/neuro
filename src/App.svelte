@@ -79,6 +79,13 @@
     </span>
   </p>
 
+  <!--
+    支援者の操作に対する、目に見える返事（ctx.notifySupporter）。
+    書き出すデータが1件も無いときなど、押しても何も起きない操作の理由を出す。
+    読み上げ側は従来どおり #liveRegion が担当する。
+  -->
+  <p class="supporter-message" id="supporterMessage" role="status" hidden></p>
+
   <main>
     <!--
       利用者向けフロー（detailed-design.md §10）: start/home/game/result。

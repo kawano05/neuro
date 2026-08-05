@@ -6,7 +6,7 @@ import { escapeHtml, escapeCsv, formatTime } from "../utils.js";
 import { MAX_LOG_ENTRIES } from "../state.js";
 
 export function initLog(ctx) {
-  const { state, elements, save, announce } = ctx;
+  const { state, elements, save, announce, notifySupporter } = ctx;
 
   /** 集計値とログ一覧（直近32件）の描画 */
   function render() {
@@ -56,6 +56,7 @@ export function initLog(ctx) {
   function exportCsv() {
     if (!state.logs.length) {
       announce("書き出すログがありません");
+      notifySupporter("書き出すログがありません。利用者が何か操作するとログが増えます。");
       return;
     }
     const rows = [

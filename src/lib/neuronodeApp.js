@@ -89,9 +89,29 @@ export function initNeuroNodeApp() {
 
   // --- 共有コンテキストの構築 ---
   const ctx = { state, elements, views: {} };
+  let supporterMessageTimer = null;
 
   ctx.announce = (message) => {
     elements.liveRegion.textContent = message;
+  };
+
+  /**
+   * 支援者の操作に対する、目に見える返事。
+   *
+   * announce() の出力先 #liveRegion は .sr-only なので、読み上げを使わない
+   * 支援者には何も届かない。データが1件も無い状態で「CSVを書き出す」を押すと
+   * announce だけが出て画面は無反応になり、壊れていると受け取られていた。
+   *
+   * 利用者向けの画面には出さない（支援者の世界の伝達手段。basic-design.md
+   * §3.1）。読み上げ側は announce が従来どおり担当する。
+   */
+  ctx.notifySupporter = (message) => {
+    elements.supporterMessage.textContent = message;
+    elements.supporterMessage.hidden = false;
+    window.clearTimeout(supporterMessageTimer);
+    supporterMessageTimer = window.setTimeout(() => {
+      elements.supporterMessage.hidden = true;
+    }, 6000);
   };
 
   /** 支援者向けビューの編集可否を、動的に再描画された要素にも適用する。 */

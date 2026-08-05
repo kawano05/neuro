@@ -44,6 +44,7 @@ const checks = [
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
   ["keeps the hidden attribute effective against CSS display rules", checkHiddenAttributeIsRespected],
+  ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
 ];
 
 const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
@@ -656,6 +657,43 @@ async function checkFeatureTabs(page) {
  * button) are present and unaffected — this is the "既存タブ(評価・設定)
  * 不退行" no-regression check the task calls out by name.
  */
+/**
+ * 書き出すデータが1件も無いとき、押した支援者に理由が見えること。
+ *
+ * 以前は announce() だけを出していたが、その出力先 #liveRegion は .sr-only
+ * なので、読み上げを使わない支援者には何も届かなかった。研究データの
+ * 書き出し導線が「押しても無反応」に見え、壊れていると受け取られる。
+ */
+async function checkEmptyExportIsExplained(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator("#supporterEditToggle").click();
+  await page.waitForFunction(
+    () => document.querySelector("#supporterEditToggle")?.getAttribute("aria-pressed") === "true"
+  );
+  await page.locator("#researcherMode").click();
+  await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
+
+  await page.locator('.tab[data-view="evaluation"]').click();
+  await waitForClass(page, "#evaluation", "is-active");
+
+  // まだ1回も遊んでいないので走査課題データは0件。
+  const message = page.locator("#supporterMessage");
+  assert(await message.isHidden(), "The supporter message must stay out of the way until needed");
+  await page.locator("#exportScanCsv").click();
+  await message.waitFor({ state: "visible" });
+
+  const text = await message.innerText();
+  assert(text.includes("ありません"), `Expected the message to say what is missing, got "${text}"`);
+  // 理由だけでなく、どうすれば書き出せるようになるかまで伝える。
+  assert(
+    text.includes("1回終える"),
+    `Expected the message to say how to produce data, got "${text}"`
+  );
+}
+
 async function checkResearcherModeTabsNoRegression(page) {
   // The tabbar is hidden on the start screen (body.start-mode, design pass);
   // go through home first.
