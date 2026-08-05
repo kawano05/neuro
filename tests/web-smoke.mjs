@@ -43,6 +43,7 @@ const checks = [
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
+  ["keeps the hidden attribute effective against CSS display rules", checkHiddenAttributeIsRespected],
 ];
 
 const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
@@ -404,6 +405,16 @@ async function checkSupporterEditingLock(page) {
   assert(await page.locator("#scanInterval").isDisabled(), "Settings must be disabled while supporter editing is locked");
   assert(await page.locator("#researcherMode").isDisabled(), "Researcher mode must be disabled while locked");
 
+  // ロックしていること自体より、ロックされていると分かることを守る。
+  // 以前は設定画面の走査対象13個のうち9個が黙って無効になるだけで、
+  // 理由も解除方法もどこにも出ていなかった（支援者には故障と区別がつかない）。
+  const lockNotice = page.locator("#supporterLockNotice");
+  await lockNotice.waitFor({ state: "visible" });
+  assert(
+    (await lockNotice.innerText()).includes("支援者編集を開始"),
+    "The lock notice must name the control that unlocks the screen"
+  );
+
   // The current tab is still a normal keyboard/AT control, but internal scan
   // must skip it because selecting it would only redraw the same view.
   if ((await page.locator("#scanState").textContent())?.trim() === "走査中") {
@@ -423,6 +434,7 @@ async function checkSupporterEditingLock(page) {
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.querySelector("#supporterEditToggle")?.getAttribute("aria-pressed") === "true");
   assert(!(await page.locator("#scanInterval").isDisabled()), "Settings must unlock after supporter activation");
+  await lockNotice.waitFor({ state: "hidden" });
 
   // Turning auto scan off must stop an already-running interval immediately,
   // not merely prevent a future restart.
@@ -839,6 +851,39 @@ async function checkMobileLayout(page) {
   await page.locator("#primarySwitch").waitFor({ state: "visible" });
 }
 
+/**
+ * hidden 属性が CSS の display 指定に打ち消されていないこと。
+ *
+ * .calibration-offer に display:flex が当たっていたため、gameHost.js が
+ * calibrationOffer.hidden = true にしても消えず、キャリブレーション以外の
+ * 全リザルトに点線枠と「この値を保存する」が出たままになっていた。
+ *
+ * 個別の要素ではなく「hidden なのに表示されている要素がひとつも無い」を
+ * 見る。同じ罠は display を当てたどのコンテナでも起こるので、症状ではなく
+ * 種類を塞ぐ。表示中の画面だけでなく、いま隠れているビューの中身も対象。
+ */
+async function checkHiddenAttributeIsRespected(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
+  const { total, leaks } = await page.evaluate(() => {
+    const hidden = [...document.querySelectorAll("[hidden]")];
+    return {
+      total: hidden.length,
+      leaks: hidden
+        .filter((element) => getComputedStyle(element).display !== "none")
+        .map((element) => element.id || element.className || element.tagName),
+    };
+  });
+  // 対象が0件だと、この検査は何も見ずに通ってしまう。
+  // calibrationOffer / supporterLockNotice など常設の hidden 要素がある前提。
+  assert(total >= 3, `Expected several [hidden] elements to inspect, found ${total}`);
+  assert(
+    leaks.length === 0,
+    `These elements have the hidden attribute but are still displayed: ${leaks.join(", ")}`
+  );
+}
+
 async function checkIpadAccessibilityLayout(page, project) {
   if (project.name !== "ipad-portrait") return;
 
@@ -863,6 +908,34 @@ async function checkIpadAccessibilityLayout(page, project) {
       lastBottom: last ? last.bottom : null,
       dockTop: dock ? dock.top : null,
     };
+  });
+
+  // content.js の description は読み上げ・VoiceOver にだけ載せる。
+  // 名前（aria-label）に混ぜると、走査のたびに説明まで読まれて選ぶ手がかりが
+  // 埋もれるので、名前は短い見出しのまま保つ。
+  const tileNaming = await page.evaluate(() =>
+    [...document.querySelectorAll("#gameTileGrid .game-tile")].map((tile) => {
+      const describedBy = tile.getAttribute("aria-describedby");
+      const description = describedBy ? document.getElementById(describedBy) : null;
+      return {
+        name: tile.getAttribute("aria-label") || "",
+        heading: tile.querySelector("strong")?.textContent?.trim() || "",
+        description: description?.textContent?.trim() || "",
+        descriptionRendersInvisible: description
+          ? description.getBoundingClientRect().width <= 2
+          : false,
+      };
+    })
+  );
+  // 0件だと以下の forEach が何も検証しないまま通る。
+  assert(tileNaming.length === 5, `Expected 5 activity tiles, got ${tileNaming.length}`);
+  tileNaming.forEach((tile) => {
+    assert(tile.name === tile.heading, `Tile name must stay the short heading, got "${tile.name}"`);
+    assert(tile.description.length > 0, `Tile "${tile.name}" must expose its description to AT`);
+    assert(
+      tile.descriptionRendersInvisible,
+      `Tile "${tile.name}" description must not add visible text to the row`
+    );
   });
 
   assert(layout.overflow <= 2, `Expected iPad horizontal overflow <= 2px, got ${layout.overflow}px`);
