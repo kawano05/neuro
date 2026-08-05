@@ -120,7 +120,59 @@ function renderGonogoResult(summary) {
  * bestStreak は state.js の scan スキーマ外なので、永続化された session を
  * 描くときは出ない（games/crane.js の computeSummary のコメント参照）。
  */
-function renderScanResult(summary) {
+/**
+ * 同じ難度で完走した過去セッションのうち、いちばん良かった値を返す。
+ *
+ * なぜ「前回」ではなく「これまでの最高」か: 前回と比べると、体調で下がった
+ * 日に「まえより すくない」と突きつけることになる。訓練の課題でそれをやる
+ * 理由がない。最高記録なら常に目標として働き、負の比較が出ない。
+ *
+ * なぜ難度で絞るか: 支援者が つかめる広さ や アームの速さ を変えられる
+ * （settings の craneToleranceR / craneSweepMs）。条件の違う回と数を並べても
+ * 上達を表さないので、同じ条件の回だけを見る。
+ *
+ * 中断した回は試行数が足りず不利なので、完走した回だけを対象にする。
+ */
+export function personalBest(sessions, { gameId, config, pick }) {
+  const sameSetup = (sessions || []).filter(
+    (session) =>
+      session.gameId === gameId &&
+      session.finished === true &&
+      session.aborted === false &&
+      session.config?.toleranceR === config?.toleranceR &&
+      session.config?.sweepMs === config?.sweepMs
+  );
+  const values = sameSetup.map(pick).filter((value) => typeof value === "number");
+  return values.length ? Math.max(...values) : null;
+}
+
+/**
+ * 自己最高の行を出すかどうか、出すなら何と出すか。
+ *
+ * 実際に遊んで分かったこと: 0こしか取れていない段階で「これまでの さいこう
+ * 0こ」と出ると、目標にもならず失敗を復唱するだけになる。記録として意味を
+ * 持つのは1こ以上からなので、0のときは何も出さない。
+ *
+ * ただし 0 → 1 は本人にとって最初の成功なので、そこは祝う。
+ * 下回った回に「まえより すくない」は出さない（personalBest 参照）。
+ *
+ * @param {number} grips いま取れた数
+ * @param {number|null} best 同条件での過去最高（比較対象が無ければ null）
+ * @returns {{text:string, isNew:boolean}|null} null なら何も出さない
+ */
+export function bestRecordLine(grips, best) {
+  if (typeof grips !== "number") return null;
+  if (typeof best !== "number") return null;
+  if (grips > best && grips > 0) return { text: "じぶんの さいこう記録！", isNew: true };
+  if (best > 0) return { text: `これまでの さいこう ${best}こ`, isNew: false };
+  return null;
+}
+
+/**
+ * @param {object} summary  いま終わったセッションの集計
+ * @param {object} [context] { best } 同条件での自己最高。無ければ null
+ */
+function renderScanResult(summary, context = {}) {
   const distance =
     typeof summary.meanDistance === "number" ? summary.meanDistance.toFixed(1) : "--";
   const streakTile =
@@ -135,12 +187,20 @@ function renderScanResult(summary) {
         .map((prize) => `<img src="${PRIZE_ART[prize.asset]}" alt="" />`)
         .join("")}</div>`
     : "";
+  // 続ける理由が画面に無かった。1回ぶんの結果しか出ないので、良くなって
+  // いるのかどうかが利用者に分からない。同条件の自己最高だけを出す
+  // （下がった回に「まえより すくない」とは言わない。personalBest 参照）。
+  const record = bestRecordLine(summary.grips, context.best);
+  const bestLine = record
+    ? `<p class="summary-best${record.isNew ? " is-new" : ""}">${record.text}</p>`
+    : "";
   return `
     <div class="summary-grid">
       <div class="summary-tile is-headline">
         <span class="metric-label">とれた</span>
         <strong>${summary.grips}<small>こ</small></strong>
         <p>${summary.trials}かい ちゅう</p>
+        ${bestLine}
         ${prizeRow}
       </div>
       <div class="summary-tile"><span class="metric-label">おしかった（すべった）</span><strong>${summary.slips}</strong></div>
@@ -240,6 +300,26 @@ export function createGameHost(ctx) {
     }
     state.sessions = sessions.slice(-MAX_SESSIONS);
     save();
+  }
+
+  /**
+   * いま終わった回を除いた、同条件での自己最高（UFOキャッチャーのみ）。
+   *
+   * persistSession は末尾へ push するので、いま遊んだ回は該当 gameId の
+   * 最後の要素。それを基準の条件（config）として使い、かつ比較対象からは
+   * 外す——含めてしまうと、記録を更新した回に「これまでの さいこう」が
+   * 今回と同じ値になり、更新したこと自体が見えなくなる。
+   */
+  function bestBeforeCurrentSession() {
+    if (activeGameId !== "crane") return null;
+    const craneSessions = (state.sessions || []).filter((session) => session.gameId === "crane");
+    const current = craneSessions.at(-1);
+    if (!current) return null;
+    return personalBest(craneSessions.slice(0, -1), {
+      gameId: "crane",
+      config: current.config,
+      pick: (session) => session.summary?.grips,
+    });
   }
 
   /** ゲームに渡す共有コンテキスト（detailed-design.md §3.1、上記コメントの拡張含む）。 */
@@ -459,7 +539,9 @@ export function createGameHost(ctx) {
         ? resultRenderers[activeModule.taskType]
         : null;
       if (lastResultSummary && resultRenderer) {
-        elements.resultStats.innerHTML = resultRenderer(lastResultSummary);
+        elements.resultStats.innerHTML = resultRenderer(lastResultSummary, {
+          best: bestBeforeCurrentSession(),
+        });
       } else if (lastResultSummary) {
         elements.resultStats.innerHTML = '<p class="panel-note">このあそびには せいせき表示がありません。</p>';
       } else {

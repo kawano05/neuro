@@ -1458,6 +1458,21 @@ body.high-contrast .rhythm-pulse::before {
   box-shadow: 0 0 0 4px rgba(255, 226, 122, 0.45);
 }
 
+/* 同条件での自己最高。下がった回には出さないので、常に前向きな表示になる。 */
+.summary-best {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.summary-best.is-new {
+  color: #8a6100;
+}
+
+body.high-contrast .summary-best.is-new {
+  color: #000000;
+}
+
 /* リザルトに並べる、取れた景品。 */
 .summary-prizes {
   display: flex;
