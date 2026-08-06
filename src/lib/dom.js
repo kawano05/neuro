@@ -105,6 +105,7 @@ export function collectElements() {
     accuracyRate: document.querySelector("#accuracyRate"),
     mistakeCount: document.querySelector("#mistakeCount"),
     logList: document.querySelector("#logList"),
+    sessionList: document.querySelector("#sessionList"),
     exportCsv: document.querySelector("#exportCsv"),
     clearLog: document.querySelector("#clearLog"),
     scanInterval: document.querySelector("#scanInterval"),

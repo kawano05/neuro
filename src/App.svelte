@@ -473,6 +473,19 @@
         </div>
       </div>
 
+      <!--
+        記録済みセッションと、その回に効いていた条件。
+        難易度を設定画面から変えられるようにしたので、回ごとに条件が違いうる。
+        値は session.config に残るが、これまで state.sessions は CSV 書き出し
+        からしか読まれておらず、画面には一度も出ていなかった。
+      -->
+      <h3 class="settings-group-title">あそびの きろく</h3>
+      <p class="settings-group-note">
+        1回ごとの条件です。設定を変えた回は、ここの値も変わります。
+      </p>
+      <div class="log-list" id="sessionList" aria-label="記録済みのセッション"></div>
+
+      <h3 class="settings-group-title">そうさログ</h3>
       <div class="log-list" id="logList" aria-label="直近の操作ログ"></div>
     </section>
 

@@ -14,7 +14,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "check": "npm run build",
     "test": "npm run test:unit && npm run test:web",
-    "test:unit": "node tests/judge.test.mjs && node tests/pointing.test.mjs && node tests/crane-geometry.test.mjs && node tests/reaction.test.mjs && node tests/art-quality.test.mjs && node tests/personal-best.test.mjs && node tests/rhythm-params.test.mjs && node tests/data-integrity.test.mjs",
+    "test:unit": "node tests/judge.test.mjs && node tests/pointing.test.mjs && node tests/crane-geometry.test.mjs && node tests/reaction.test.mjs && node tests/art-quality.test.mjs && node tests/personal-best.test.mjs && node tests/rhythm-params.test.mjs && node tests/session-conditions.test.mjs && node tests/data-integrity.test.mjs",
     "test:web": "npm run build && node tests/web-smoke.mjs && node tests/pwa-update-race.mjs",
     "test:web:headed": "npm run build && node tests/web-smoke.mjs --headed && node tests/pwa-update-race.mjs --headed",
     "cap:add:ios": "npx cap add ios --packagemanager cocoapods",

@@ -2571,6 +2571,15 @@ body.game-mode .app-shell {
   font-weight: 800;
 }
 
+/* その回に効いていた条件。時刻・名前・完走状況と同じ行に4つ目を並べると
+   .log-item の3カラムから溢れて時刻の下に回り込むので、独立した行に置く。 */
+.session-conditions {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .empty-state {
   padding: 26px;
   border: 1px dashed var(--line-strong);
