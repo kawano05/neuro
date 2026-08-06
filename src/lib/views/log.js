@@ -4,7 +4,11 @@
 
 import { escapeHtml, escapeCsv, formatTime } from "../utils.js";
 import { MAX_LOG_ENTRIES } from "../state.js";
-import { describeSessionConditions, describeSessionOutcome } from "../sessionConditions.js";
+import {
+  describeSessionConditions,
+  describeSessionOutcome,
+  describeSessionResult,
+} from "../sessionConditions.js";
 import { gameModules } from "../games/registry.js";
 
 /** ゲームIDを支援者に読める名前へ。未知のIDはそのまま出す（黙って消さない）。 */
@@ -37,10 +41,14 @@ export function initLog(ctx) {
       // 条件は独立した行に置く。.log-item は3カラムなので、4つ目を同じ行に
       // 並べると時刻の下に回り込んで揃わない。
       const conditions = describeSessionConditions(session);
+      // 結果は課題ごとの主要指標。条件と並べて初めて「その条件でどうだったか」
+      // になる。解釈するのは支援者なので、詳細はCSVに任せて材料だけ出す。
+      const result = describeSessionResult(session);
       item.innerHTML = `
         <span class="metric-label">${formatTime(session.startedAtIso)}</span>
         <strong>${escapeHtml(gameTitle(session.gameId))}</strong>
         <span>${escapeHtml(describeSessionOutcome(session))}</span>
+        ${result ? `<span class="session-result">${escapeHtml(result)}</span>` : ""}
         ${conditions ? `<span class="session-conditions">${escapeHtml(conditions)}</span>` : ""}
       `;
       elements.sessionList.append(item);

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {
   describeSessionConditions,
   describeSessionOutcome,
+  describeSessionResult,
 } from "../src/lib/sessionConditions.js";
 
 let passed = 0;
@@ -88,6 +89,58 @@ test("an interrupted session shows how far it got", () => {
 test("an interrupted session without a plan still reports its trials", () => {
   const session = { finished: false, aborted: true, trials: [{ index: 0 }], config: {} };
   assert.equal(describeSessionOutcome(session), "中断 1回");
+});
+
+// 条件だけ出しても「その条件でどうだったか」にならない。条件と結果は
+// 並べて初めて支援者の判断材料になる。何を出すかは basic-design.md §1.2 の
+// 主要指標に合わせ、詳細（SD・中央値・個々の試行）はCSV側に残す。
+
+test("a crane session reports how many prizes were taken", () => {
+  const session = { taskType: "scan", summary: { trials: 5, grips: 2 } };
+  assert.equal(describeSessionResult(session), "とれた 2/5");
+});
+
+test("a rhythm session reports hits and the direction of the offset", () => {
+  // ずれは早い/遅いの向きが意味を持つので符号を落とさない。
+  const late = { taskType: "sms", summary: { hits: 8, meanRawOffsetMs: 124.4 } };
+  assert.equal(describeSessionResult(late), "あった 8 / ずれ 平均 +124ms");
+  const early = { taskType: "sms", summary: { hits: 8, meanRawOffsetMs: -37.5 } };
+  assert.ok(describeSessionResult(early).includes("-38ms"), "early offsets must stay negative");
+});
+
+test("rounding treats early and late offsets the same way", () => {
+  // Math.round は半数値を常に +∞ 方向へ丸めるので、素直に使うと +37.5 は +38、
+  // -37.5 は -37 になり、0 を挟んで丸めの向きが変わる。符号のある測定値で
+  // 早い側と遅い側の扱いを変える理由が無い。
+  const at = (value) => describeSessionResult({ taskType: "sms", summary: { hits: 1, meanRawOffsetMs: value } });
+  assert.ok(at(37.5).includes("+38ms"));
+  assert.ok(at(-37.5).includes("-38ms"));
+});
+
+test("a rhythm session with no hits does not invent an offset of zero", () => {
+  // hit が1つも無いと平均は出せない。出せないものを 0ms と書くと、
+  // ぴったり合っていたように読める。
+  const session = { taskType: "sms", summary: { hits: 0, meanRawOffsetMs: null } };
+  assert.equal(describeSessionResult(session), "あった 0");
+});
+
+test("a gonogo session reports the presses that should not have happened", () => {
+  // 抑制課題の主要指標は commissionRate。
+  const session = { taskType: "gonogo", summary: { hits: 9, commissions: 3 } };
+  assert.equal(describeSessionResult(session), "あった 9 / つい おした 3");
+});
+
+test("a fishing session reports speed, catches and only real false starts", () => {
+  const clean = { taskType: "rt", summary: { meanRtMs: 421.6, hits: 12, falseStarts: 0 } };
+  assert.equal(describeSessionResult(clean), "はやさ 平均 422ms / つれた 12");
+  const withFalseStart = { taskType: "rt", summary: { meanRtMs: 400, hits: 5, falseStarts: 2 } };
+  assert.ok(describeSessionResult(withFalseStart).includes("フライング 2"));
+});
+
+test("a session without a summary says nothing rather than guessing", () => {
+  assert.equal(describeSessionResult(undefined), "");
+  assert.equal(describeSessionResult({ taskType: "scan" }), "");
+  assert.equal(describeSessionResult({ taskType: "unknown", summary: {} }), "");
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

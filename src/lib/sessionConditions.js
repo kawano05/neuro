@@ -25,6 +25,62 @@ export function describeSessionOutcome(session) {
 }
 
 /**
+ * 符号つきミリ秒。ずれは向き（早い/遅い）が意味を持つので符号を落とさない。
+ *
+ * Math.round は半数値を常に +∞ 方向へ丸めるので、+37.5 は +38、-37.5 は -37 に
+ * なる。符号のある測定値をそう表示すると、0 を挟んで丸めの向きが変わる。
+ * 幅は1msだが、早い側と遅い側で扱いを変える理由が無いので絶対値で丸める。
+ */
+function signedMs(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const rounded = Math.sign(value) * Math.round(Math.abs(value));
+  return `${rounded >= 0 ? "+" : ""}${rounded}ms`;
+}
+
+/**
+ * その回の結果を、課題ごとの主要指標で1行にする。
+ *
+ * なぜ要るか: 条件だけ出しても、支援者が知りたい「その条件でどうだったか」に
+ * ならない。条件と結果は並べて初めて判断材料になる。
+ *
+ * 何を出すかは basic-design.md §1.2 の主要指標に合わせる。詳細（SD・中央値・
+ * 個々の試行）はCSV側の役割で、ここに並べると読む量が増えるだけになる。
+ * 解釈するのは支援者なので、アプリは材料を曇りなく出すところまでを担う。
+ */
+export function describeSessionResult(session) {
+  const summary = session?.summary;
+  if (!summary) return "";
+
+  if (session.taskType === "scan") {
+    const trials = summary.trials ?? session.trials?.length ?? 0;
+    return `とれた ${summary.grips ?? 0}/${trials}`;
+  }
+
+  if (session.taskType === "sms") {
+    const parts = [`あった ${summary.hits ?? 0}`];
+    const offset = signedMs(summary.meanRawOffsetMs);
+    // ずれは hit が1つも無いと出せない。出せないものを 0ms と書かない。
+    if (offset) parts.push(`ずれ 平均 ${offset}`);
+    return parts.join(" / ");
+  }
+
+  if (session.taskType === "gonogo") {
+    // 抑制課題の主要指標は commissionRate（押してはいけない拍で押した割合）。
+    return `あった ${summary.hits ?? 0} / つい おした ${summary.commissions ?? 0}`;
+  }
+
+  if (session.taskType === "rt") {
+    const parts = [];
+    if (typeof summary.meanRtMs === "number") parts.push(`はやさ 平均 ${Math.round(summary.meanRtMs)}ms`);
+    parts.push(`つれた ${summary.hits ?? 0}`);
+    if ((summary.falseStarts ?? 0) > 0) parts.push(`フライング ${summary.falseStarts}`);
+    return parts.join(" / ");
+  }
+
+  return "";
+}
+
+/**
  * その回に効いていた条件。支援者が設定画面で触れる値だけを出す。
  *
  * 触れない値（前刺激間隔の範囲、判定窓など）まで並べると、読む量が増える

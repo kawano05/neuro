@@ -2573,11 +2573,20 @@ body.game-mode .app-shell {
 
 /* その回に効いていた条件。時刻・名前・完走状況と同じ行に4つ目を並べると
    .log-item の3カラムから溢れて時刻の下に回り込むので、独立した行に置く。 */
+.session-result,
 .session-conditions {
   grid-column: 1 / -1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* その回の結果。支援者がいちばん見る値なので、条件より前に、濃く出す。 */
+.session-result {
+  font-weight: 700;
+}
+
+.session-conditions {
   color: var(--muted);
   font-size: 0.95rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .empty-state {
