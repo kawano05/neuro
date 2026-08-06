@@ -64,6 +64,28 @@
     <button class="tab" data-view="settings" data-scan>設定</button>
   </nav>
 
+  <!--
+    支援者編集ロックの説明（basic-design.md §9「誤操作防止」）。
+
+    ロック自体は要件だが、解除されるまで画面じゅうの操作子が黙って disabled に
+    なるだけで、理由も解除方法もどこにも出ていなかった（設定画面では走査対象
+    13個のうち9個が無効）。支援者は「壊れている」と受け取る。ロック中で、かつ
+    いま見ている画面に保護された操作子が実際にある場合だけ出す。
+  -->
+  <p class="supporter-lock-notice" id="supporterLockNotice" hidden>
+    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+    <span>
+      いまは変更できません。右上の「支援者編集を開始」を押すと、この画面の設定を変えられます。
+    </span>
+  </p>
+
+  <!--
+    支援者の操作に対する、目に見える返事（ctx.notifySupporter）。
+    書き出すデータが1件も無いときなど、押しても何も起きない操作の理由を出す。
+    読み上げ側は従来どおり #liveRegion が担当する。
+  -->
+  <p class="supporter-message" id="supporterMessage" role="status" hidden></p>
+
   <main>
     <!--
       利用者向けフロー（detailed-design.md §10）: start/home/game/result。
@@ -451,6 +473,19 @@
         </div>
       </div>
 
+      <!--
+        記録済みセッションと、その回に効いていた条件。
+        難易度を設定画面から変えられるようにしたので、回ごとに条件が違いうる。
+        値は session.config に残るが、これまで state.sessions は CSV 書き出し
+        からしか読まれておらず、画面には一度も出ていなかった。
+      -->
+      <h3 class="settings-group-title">あそびの きろく</h3>
+      <p class="settings-group-note">
+        1回ごとの条件です。設定を変えた回は、ここの値も変わります。
+      </p>
+      <div class="log-list" id="sessionList" aria-label="記録済みのセッション"></div>
+
+      <h3 class="settings-group-title">そうさログ</h3>
       <div class="log-list" id="logList" aria-label="直近の操作ログ"></div>
     </section>
 
@@ -536,6 +571,94 @@
             <small>操作訓練・効果測定・研究タブを表示します</small>
           </span>
           <input id="researcherMode" type="checkbox" role="switch" data-scan />
+        </label>
+      </div>
+
+      <!--
+        あそびごとの難易度は、全体設定に混ぜると「どのあそびの話なのか」が
+        小さい説明文を読むまで分からない。見出しで囲って所属を先に示す。
+        値はセッションの config に記録されるので、どの条件で測ったかは
+        走査CSVから追える。
+      -->
+      <!--
+        リズム系の難易度。設定は課題ごとではなく1つなので、「あそびごとの
+        既定を使う」という状態が要る。既定は L1=40 / L2=60 / gonogo=50 と
+        ばらばらで、スライダーではどれを初期位置にしても嘘になるため、
+        既定を選択肢のひとつに持てるプルダウンにしている。
+
+        そくてい（calibration）には効かない。基準オフセットの測定手順そのもの
+        で、ここで得た中央値は判定窓の中心補正として全セッションに効く
+        （games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS）。
+      -->
+      <h3 class="settings-group-title">リズムの むずかしさ</h3>
+      <p class="settings-group-note">
+        「リズム れんしゅう」「リズム つづけて」「たかいおとだけ」の3つに ききます。
+        そくていは 手順を そろえるため 変わりません。
+      </p>
+
+      <div class="settings-grid">
+        <label class="setting-row">
+          <span>
+            <strong>テンポ</strong>
+            <small>1分あたりの拍数。ゆっくりなほど、合わせるのがやさしくなります</small>
+          </span>
+          <select id="rhythmBpm" data-scan>
+            <option value="">あそびごとの既定</option>
+            <option value="30">30（とてもゆっくり）</option>
+            <option value="40">40</option>
+            <option value="50">50</option>
+            <option value="60">60</option>
+            <option value="80">80（はやめ）</option>
+          </select>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>1回の はくすう</strong>
+            <small>1セッションで おす回数。長くも短くもできます</small>
+          </span>
+          <select id="rhythmTargetBeats" data-scan>
+            <option value="">あそびごとの既定</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+          </select>
+        </label>
+      </div>
+
+      <h3 class="settings-group-title">UFOキャッチャーの むずかしさ</h3>
+      <p class="settings-group-note">
+        変えた値は、つぎに はじめる ときから ききます。どの ねらいで
+        あそんだかは 記録に のこります。
+      </p>
+
+      <div class="settings-grid">
+        <label class="setting-row">
+          <span>
+            <strong>アームの速さ</strong>
+            <small>アームが端から端まで動く時間。短いほど速く、狙うのが難しくなります</small>
+          </span>
+          <input id="craneSweepMs" type="range" min="800" max="6000" step="100" data-scan />
+          <output id="craneSweepMsValue" for="craneSweepMs">2200ms</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>つかめる広さ</strong>
+            <small>景品からどれだけずれても掴めるか。大きいほどやさしくなります</small>
+          </span>
+          <input id="craneToleranceR" type="range" min="4" max="40" step="1" data-scan />
+          <output id="craneToleranceRValue" for="craneToleranceR">15</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>1回の かいすう</strong>
+            <small>1セッションで アームを おろす 回数。短くも長くもできます</small>
+          </span>
+          <input id="craneTargetTrials" type="range" min="3" max="15" step="1" data-scan />
+          <output id="craneTargetTrialsValue" for="craneTargetTrials">5</output>
         </label>
       </div>
     </section>

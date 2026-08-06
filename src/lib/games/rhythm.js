@@ -75,14 +75,30 @@ function generateSessionId() {
   return `r-${datePart}-${timePart}-${rand}`;
 }
 
+/**
+ * キャリブレーションは測定プロトコルそのものなので、支援者の難易度設定を
+ * 一切受け付けない。
+ *
+ * ここは excludedTrialCount と同じ線引きを、bpm・拍数へも広げたもの。
+ * 以前は excludedTrialCount だけを守っていたが、bpm と拍数は素通りしていた。
+ * 難易度設定を設定画面へ出した時点で、支援者が「リズムを遅くした」つもりで
+ * 基準オフセット測定の手順まで変えてしまえる状態になる。基準値そのものが
+ * 変わると、それを窓中心補正に使う全セッションの判定が影響を受ける
+ * （basic-design.md §7.3）。
+ */
+const PROTOCOL_LOCKED_GAME_IDS = new Set(["calibration"]);
+
 /** 優先順位: settings のリズム系設定（null 以外）＞ rhythmPresets（detailed-design.md §7.1）。 */
-function resolveParams(gameId, settings) {
+export function resolveParams(gameId, settings) {
   const preset = rhythmPresets[gameId];
+  const overridable = !PROTOCOL_LOCKED_GAME_IDS.has(gameId);
+  const override = (settingValue, presetValue) =>
+    overridable ? settingValue ?? presetValue : presetValue;
   return {
     mode: preset.mode,
-    bpm: settings.rhythmBpm ?? preset.bpm,
-    countInBeats: settings.countInBeats ?? preset.countInBeats,
-    targetBeats: settings.targetBeats ?? preset.targetBeats,
+    bpm: override(settings.rhythmBpm, preset.bpm),
+    countInBeats: override(settings.countInBeats, preset.countInBeats),
+    targetBeats: override(settings.targetBeats, preset.targetBeats),
     goRatio: preset.goRatio ?? null,
     // キャリブレーション専用（detailed-design.md §8.2）。settings 側の上書きは
     // 用意しない（利用者が調整する値ではなく、測定プロトコル自体の一部のため）。

@@ -43,6 +43,8 @@ const checks = [
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
+  ["keeps the hidden attribute effective against CSS display rules", checkHiddenAttributeIsRespected],
+  ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
 ];
 
 const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
@@ -404,6 +406,16 @@ async function checkSupporterEditingLock(page) {
   assert(await page.locator("#scanInterval").isDisabled(), "Settings must be disabled while supporter editing is locked");
   assert(await page.locator("#researcherMode").isDisabled(), "Researcher mode must be disabled while locked");
 
+  // ロックしていること自体より、ロックされていると分かることを守る。
+  // 以前は設定画面の走査対象13個のうち9個が黙って無効になるだけで、
+  // 理由も解除方法もどこにも出ていなかった（支援者には故障と区別がつかない）。
+  const lockNotice = page.locator("#supporterLockNotice");
+  await lockNotice.waitFor({ state: "visible" });
+  assert(
+    (await lockNotice.innerText()).includes("支援者編集を開始"),
+    "The lock notice must name the control that unlocks the screen"
+  );
+
   // The current tab is still a normal keyboard/AT control, but internal scan
   // must skip it because selecting it would only redraw the same view.
   if ((await page.locator("#scanState").textContent())?.trim() === "走査中") {
@@ -423,6 +435,7 @@ async function checkSupporterEditingLock(page) {
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.querySelector("#supporterEditToggle")?.getAttribute("aria-pressed") === "true");
   assert(!(await page.locator("#scanInterval").isDisabled()), "Settings must unlock after supporter activation");
+  await lockNotice.waitFor({ state: "hidden" });
 
   // Turning auto scan off must stop an already-running interval immediately,
   // not merely prevent a future restart.
@@ -535,16 +548,48 @@ async function checkFishingGameFlow(page) {
   assert(session?.aborted === true, "Expected fishing exit to persist aborted=true");
 }
 
+// 関数宣言にしているのは、このファイルがトップレベル await でテスト本体を
+// 走らせるため。const だと宣言位置より前に実行されて TDZ に落ちる。
+async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  let seen = null;
+  while (Date.now() < deadline) {
+    seen = await page.evaluate(() => document.querySelector(".crane-status")?.textContent ?? null);
+    if (seen === text) return;
+    await delay(80);
+  }
+  throw new Error(`crane status never became "${text}" (last seen: "${seen}")`);
+}
+
 async function checkCraneGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.getByRole("button", { name: "アームを とめる", exact: true }).click();
   await waitForClass(page, "#gameView", "is-active");
-  // 3拍カウントイン完了後、X/Yを止め、GRASP演出が1試行を確定するまで待つ。
-  await page.waitForTimeout(2250);
+  // crane も content.js の gameHowTo を持つようになったので、レディ画面を
+  // ひと押しで抜けてからでないとセッションが始まらない。
+  await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.waitForTimeout(220);
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  // カウントインの長さを固定の待ち時間で当てにいくと、AudioContext の
+  // 立ち上がりが遅い環境（WebKit系）で走査開始前に押してしまう。
+  // 走査が始まったことを状態表示で確かめてから押す。
+  await waitForCraneStatus(page, "よこに うごきます");
+  // 走査が始まった直後の押下は入力ガード（INPUT_GUARD_MS）で弾かれる。
+  // ガードを抜けてから押す。
+  await page.waitForTimeout(400);
   await page.locator("#gameStage").click();
+  await waitForCraneStatus(page, "おくに うごきます");
+
+  // フェーズ切り替え直後の二度押しは試行に使わない（games/crane.js の
+  // INPUT_GUARD_MS）。痙性や振戦で入った2回目がYを走査の先頭で確定させ、
+  // ほぼ確実に miss になっていた回帰を防ぐ。この押下が効いてしまうと
+  // yPhaseMs がガード時間より小さくなるので、最後にそれを確かめる。
+  await page.waitForTimeout(200);
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(300);
+  await page.locator("#gameStage").click();
+
   await page.waitForFunction(
     (key) => {
       const state = JSON.parse(localStorage.getItem(key) || "{}");
@@ -553,7 +598,7 @@ async function checkCraneGameFlow(page) {
       );
     },
     storageKey,
-    { timeout: 4_000 }
+    { timeout: 5_000 }
   );
   await page.locator("#gameExit").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -564,6 +609,12 @@ async function checkCraneGameFlow(page) {
   assert(session?.taskType === "scan", "Expected crane to persist taskType=scan");
   assert(session?.trials?.length === 1, "Expected exactly one recorded crane trial");
   assert(session?.aborted === true, "Expected crane exit to persist aborted=true");
+  // ガード内（200ms時点）の押下が効いていれば yPhaseMs はそこで確定してしまう。
+  // 実際に効いたのは300ms後の押下なので、ガード時間より確実に大きくなる。
+  assert(
+    session?.trials?.[0]?.yPhaseMs > 320,
+    `Expected the input guard to reject the second press (yPhaseMs=${session?.trials?.[0]?.yPhaseMs})`
+  );
 }
 
 async function checkFeatureTabs(page) {
@@ -606,6 +657,43 @@ async function checkFeatureTabs(page) {
  * button) are present and unaffected — this is the "既存タブ(評価・設定)
  * 不退行" no-regression check the task calls out by name.
  */
+/**
+ * 書き出すデータが1件も無いとき、押した支援者に理由が見えること。
+ *
+ * 以前は announce() だけを出していたが、その出力先 #liveRegion は .sr-only
+ * なので、読み上げを使わない支援者には何も届かなかった。研究データの
+ * 書き出し導線が「押しても無反応」に見え、壊れていると受け取られる。
+ */
+async function checkEmptyExportIsExplained(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator("#supporterEditToggle").click();
+  await page.waitForFunction(
+    () => document.querySelector("#supporterEditToggle")?.getAttribute("aria-pressed") === "true"
+  );
+  await page.locator("#researcherMode").click();
+  await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
+
+  await page.locator('.tab[data-view="evaluation"]').click();
+  await waitForClass(page, "#evaluation", "is-active");
+
+  // まだ1回も遊んでいないので走査課題データは0件。
+  const message = page.locator("#supporterMessage");
+  assert(await message.isHidden(), "The supporter message must stay out of the way until needed");
+  await page.locator("#exportScanCsv").click();
+  await message.waitFor({ state: "visible" });
+
+  const text = await message.innerText();
+  assert(text.includes("ありません"), `Expected the message to say what is missing, got "${text}"`);
+  // 理由だけでなく、どうすれば書き出せるようになるかまで伝える。
+  assert(
+    text.includes("1回終える"),
+    `Expected the message to say how to produce data, got "${text}"`
+  );
+}
+
 async function checkResearcherModeTabsNoRegression(page) {
   // The tabbar is hidden on the start screen (body.start-mode, design pass);
   // go through home first.
@@ -801,6 +889,39 @@ async function checkMobileLayout(page) {
   await page.locator("#primarySwitch").waitFor({ state: "visible" });
 }
 
+/**
+ * hidden 属性が CSS の display 指定に打ち消されていないこと。
+ *
+ * .calibration-offer に display:flex が当たっていたため、gameHost.js が
+ * calibrationOffer.hidden = true にしても消えず、キャリブレーション以外の
+ * 全リザルトに点線枠と「この値を保存する」が出たままになっていた。
+ *
+ * 個別の要素ではなく「hidden なのに表示されている要素がひとつも無い」を
+ * 見る。同じ罠は display を当てたどのコンテナでも起こるので、症状ではなく
+ * 種類を塞ぐ。表示中の画面だけでなく、いま隠れているビューの中身も対象。
+ */
+async function checkHiddenAttributeIsRespected(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
+  const { total, leaks } = await page.evaluate(() => {
+    const hidden = [...document.querySelectorAll("[hidden]")];
+    return {
+      total: hidden.length,
+      leaks: hidden
+        .filter((element) => getComputedStyle(element).display !== "none")
+        .map((element) => element.id || element.className || element.tagName),
+    };
+  });
+  // 対象が0件だと、この検査は何も見ずに通ってしまう。
+  // calibrationOffer / supporterLockNotice など常設の hidden 要素がある前提。
+  assert(total >= 3, `Expected several [hidden] elements to inspect, found ${total}`);
+  assert(
+    leaks.length === 0,
+    `These elements have the hidden attribute but are still displayed: ${leaks.join(", ")}`
+  );
+}
+
 async function checkIpadAccessibilityLayout(page, project) {
   if (project.name !== "ipad-portrait") return;
 
@@ -825,6 +946,34 @@ async function checkIpadAccessibilityLayout(page, project) {
       lastBottom: last ? last.bottom : null,
       dockTop: dock ? dock.top : null,
     };
+  });
+
+  // content.js の description は読み上げ・VoiceOver にだけ載せる。
+  // 名前（aria-label）に混ぜると、走査のたびに説明まで読まれて選ぶ手がかりが
+  // 埋もれるので、名前は短い見出しのまま保つ。
+  const tileNaming = await page.evaluate(() =>
+    [...document.querySelectorAll("#gameTileGrid .game-tile")].map((tile) => {
+      const describedBy = tile.getAttribute("aria-describedby");
+      const description = describedBy ? document.getElementById(describedBy) : null;
+      return {
+        name: tile.getAttribute("aria-label") || "",
+        heading: tile.querySelector("strong")?.textContent?.trim() || "",
+        description: description?.textContent?.trim() || "",
+        descriptionRendersInvisible: description
+          ? description.getBoundingClientRect().width <= 2
+          : false,
+      };
+    })
+  );
+  // 0件だと以下の forEach が何も検証しないまま通る。
+  assert(tileNaming.length === 5, `Expected 5 activity tiles, got ${tileNaming.length}`);
+  tileNaming.forEach((tile) => {
+    assert(tile.name === tile.heading, `Tile name must stay the short heading, got "${tile.name}"`);
+    assert(tile.description.length > 0, `Tile "${tile.name}" must expose its description to AT`);
+    assert(
+      tile.descriptionRendersInvisible,
+      `Tile "${tile.name}" description must not add visible text to the row`
+    );
   });
 
   assert(layout.overflow <= 2, `Expected iPad horizontal overflow <= 2px, got ${layout.overflow}px`);

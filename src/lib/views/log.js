@@ -4,12 +4,60 @@
 
 import { escapeHtml, escapeCsv, formatTime } from "../utils.js";
 import { MAX_LOG_ENTRIES } from "../state.js";
+import {
+  describeSessionConditions,
+  describeSessionOutcome,
+  describeSessionResult,
+} from "../sessionConditions.js";
+import { gameModules } from "../games/registry.js";
+
+/** ゲームIDを支援者に読める名前へ。未知のIDはそのまま出す（黙って消さない）。 */
+function gameTitle(gameId) {
+  return gameModules.find((game) => game.id === gameId)?.title ?? gameId;
+}
 
 export function initLog(ctx) {
-  const { state, elements, save, announce } = ctx;
+  const { state, elements, save, announce, notifySupporter } = ctx;
+
+  /**
+   * 記録済みセッションと、その回に効いていた条件。
+   * 難易度を設定画面から変えられるようにした以上、あとから条件を確認できる
+   * 必要がある（sessionConditions.js のコメント参照）。新しい順に並べる。
+   */
+  function renderSessions() {
+    elements.sessionList.innerHTML = "";
+    const sessions = [...(state.sessions || [])].reverse();
+    if (sessions.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent =
+        "まだ あそびの きろくがありません。リズム・UFOキャッチャー・さかなつりを1回終えると記録されます。";
+      elements.sessionList.append(empty);
+      return;
+    }
+    sessions.slice(0, 20).forEach((session) => {
+      const item = document.createElement("article");
+      item.className = "log-item is-session";
+      // 条件は独立した行に置く。.log-item は3カラムなので、4つ目を同じ行に
+      // 並べると時刻の下に回り込んで揃わない。
+      const conditions = describeSessionConditions(session);
+      // 結果は課題ごとの主要指標。条件と並べて初めて「その条件でどうだったか」
+      // になる。解釈するのは支援者なので、詳細はCSVに任せて材料だけ出す。
+      const result = describeSessionResult(session);
+      item.innerHTML = `
+        <span class="metric-label">${formatTime(session.startedAtIso)}</span>
+        <strong>${escapeHtml(gameTitle(session.gameId))}</strong>
+        <span>${escapeHtml(describeSessionOutcome(session))}</span>
+        ${result ? `<span class="session-result">${escapeHtml(result)}</span>` : ""}
+        ${conditions ? `<span class="session-conditions">${escapeHtml(conditions)}</span>` : ""}
+      `;
+      elements.sessionList.append(item);
+    });
+  }
 
   /** 集計値とログ一覧（直近32件）の描画 */
   function render() {
+    renderSessions();
     const total = state.logs.filter((entry) => entry.type !== "system").length;
     // 正答率の母数は正誤判定がある matching / letter のみ
     const graded = state.logs.filter((entry) => entry.type === "matching" || entry.type === "letter");
@@ -56,6 +104,7 @@ export function initLog(ctx) {
   function exportCsv() {
     if (!state.logs.length) {
       announce("書き出すログがありません");
+      notifySupporter("書き出すログがありません。利用者が何か操作するとログが増えます。");
       return;
     }
     const rows = [

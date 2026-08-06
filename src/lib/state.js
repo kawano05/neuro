@@ -83,6 +83,14 @@ export const defaultState = {
     rhythmBpm: null,
     countInBeats: null,
     targetBeats: null,
+    // UFOキャッチャーの難易度。null のとき content.js の cranePresets を使う
+    // （games/crane.js の resolveCraneConfig が優先順位を解決する）。
+    // craneSweepMs はアームが端から端まで動く時間、craneToleranceR は床
+    // （0..100 の正方形）の上での許容半径。実際に適用した許容半径は試行ごとに
+    // 記録されるので、どの難度で測ったかは走査CSVから追える。
+    craneSweepMs: null,
+    craneToleranceR: null,
+    craneTargetTrials: null,
   },
   logs: [],
   evaluation: {
@@ -982,6 +990,12 @@ export function sanitizeState(candidate) {
       rhythmBpm: nullableNumberInRange(settings.rhythmBpm, null, 20, 240, true),
       countInBeats: nullableNumberInRange(settings.countInBeats, null, 1, 16, true),
       targetBeats: nullableNumberInRange(settings.targetBeats, null, 1, 200, true),
+      // 範囲は sanitizeScanSession が config に許す幅（sweepMs 400〜10000 /
+      // toleranceR 1〜50）の内側に収める。ここを外すと、設定どおりに遊んだ
+      // セッションが保存時に別の値へ丸められて記録と食い違う。
+      craneSweepMs: nullableNumberInRange(settings.craneSweepMs, null, 800, 6000, true),
+      craneToleranceR: nullableNumberInRange(settings.craneToleranceR, null, 4, 40, true),
+      craneTargetTrials: nullableNumberInRange(settings.craneTargetTrials, null, 3, 15, true),
     },
     logs: Array.isArray(candidate.logs)
       ? candidate.logs.map(sanitizeLogEntry).filter(Boolean).slice(0, MAX_LOG_ENTRIES)

@@ -178,7 +178,7 @@ export function buildTaskCsvRows(sessions, taskType) {
 }
 
 export function initEvaluation(ctx) {
-  const { state, elements, save, announce, logEvent, switchView } = ctx;
+  const { state, elements, save, announce, logEvent, switchView, notifySupporter } = ctx;
 
   /** 現在実施中（または次に実施する）タスク */
   function activeTask() {
@@ -472,6 +472,7 @@ export function initEvaluation(ctx) {
     const results = flattenResults();
     if (results.length === 0) {
       announce("書き出す測定結果がありません");
+      notifySupporter("書き出す測定結果がありません。効果測定のタスクを1つ終えると記録されます。");
       return;
     }
     const rows = [
@@ -619,10 +620,10 @@ export function initEvaluation(ctx) {
   function exportTaskCsv(taskType) {
     const sessions = state.sessions.filter((session) => session.taskType === taskType);
     if (!sessions.length) {
-      announce(
-        taskType === "scan"
-          ? "書き出す走査課題データがありません"
-          : "書き出す反応課題データがありません"
+      const label = taskType === "scan" ? "走査課題" : "反応課題";
+      announce(`書き出す${label}データがありません`);
+      notifySupporter(
+        `書き出す${label}データがありません。利用者が該当のあそびを1回終えると記録されます。`
       );
       return;
     }

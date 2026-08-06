@@ -124,12 +124,77 @@ export const rhythmPresets = {
   calibration: { bpm: 50, countInBeats: 4, targetBeats: 12, mode: "cued", excludedTrialCount: 2 },
 };
 
+/**
+ * UFOキャッチャーのパラメータ。
+ *
+ * 床は 0..100 × 0..100 の正方形として定義し、games/crane.js が透視投影して
+ * 台形に描く。x と y が床の上で同じ長さを表すので、toleranceR は
+ * 「床の一辺の何％ぶんの半径か」という等方な量になる（以前は盤面が横長の
+ * 長方形で、x の1%と y の1%が別の長さだったため、許容円が画面上では
+ * 横に潰れた楕円になっていた）。
+ *
+ * graspAnimMs は state.js の scan スキーマが持つ値なので残しているが、
+ * 掴みの演出は降下・把持・上昇・搬送に分かれていて、その内訳は
+ * games/crane.js の定数側にある。
+ */
 export const cranePresets = {
-  sweepMs: 2400,
-  toleranceR: 12,
+  /**
+   * 既定の難度。支援者は設定画面から変えられる（state.settings の
+   * craneSweepMs / craneToleranceR が null 以外ならそちらが優先。
+   * games/crane.js の resolveCraneConfig）。
+   *
+   * 床の1目盛は sweepMs/100 ミリ秒にあたるので、要求する時間精度は
+   * 「grip 圏の半径 × sweepMs/100」。既定では各軸 ±165ms になる。
+   *
+   * 経緯: もとは 2400ms / 12（±144ms）。狙いの手がかり——床に描いた走査線、
+   * 掴める範囲のリング、目標を通過したときの音——を入れたぶん素の難度が
+   * 下がったと見て 2000ms / 10（±100ms）まで詰めたが、実際に遊ぶときつすぎた。
+   * 11 でも 13 でもまだ狭く、この 15 で落ち着いている。手がかりを足したことは
+   * 「狙いを定めやすくなった」であって「押す時刻を合わせやすくなった」では
+   * なかった、というのがずれの中身。
+   *
+   * toleranceR 15 は grip 圏の半径が 7.5 で、画面上のリングが景品より
+   * ひとまわり大きくなる（床の中央あたりで景品81pxに対しリング97px）。
+   * 「景品に乗せられたら取れる」が絵のまま成り立つので、数値としてだけでなく
+   * 手がかりとしても分かりやすい。
+   *
+   * 走査を速くするのと許容を狭くするのは要求精度としては等価だが、速くすると
+   * 視覚追従そのものが辛くなり、訓練したい「狙って押す」以外のところで詰まる。
+   * だから難度は許容側で決める。速度を 2400 から下げているのは難度ではなく、
+   * 片道2.4秒＝往復4.8秒という待ちの長さを縮めるため。
+   */
+  sweepMs: 2200,
+  toleranceR: 15,
   targetTrials: 5,
   graspAnimMs: 1200,
+  /**
+   * 続けて掴めなかったときに許容半径を一時的に広げる段数と、1段あたりの
+   * 増分（games/craneGeometry.js の assistedToleranceR）。掴めたら 0 に戻る。
+   *
+   * 既定では toleranceR が 15 → 20.25 → 25.5 と広がり、要求精度は各軸
+   * ±165ms → ±223ms → ±281ms。狙って押すこと自体が訓練の対象である
+   * 利用者にとって、0/5 が続くと「何をしても同じ」になって課題として
+   * 成立しないので、外した回数ぶんだけ一時的に緩める。
+   *
+   * 実際に適用した値は各試行の toleranceR として記録され、走査CSV にも
+   * 出る（views/evaluation.js）。素の難度で測りたいときは
+   * assistMaxSteps を 0 にする（state.js の scan スキーマは既定の5キーしか
+   * 保持しないので、セッションの config には残らない。効いたかどうかは
+   * 試行ごとの toleranceR を見る）。
+   */
+  assistMaxSteps: 2,
+  assistStepRatio: 0.35,
 };
+
+/**
+ * 取れる景品。asset は src/assets/crane/<asset>.png に対応する。
+ * label は読み上げにもそのまま渡すので、ひらがな主体で記号を入れない。
+ */
+export const cranePrizes = [
+  { id: "bear", asset: "prize-bear", label: "くまさん" },
+  { id: "rabbit", asset: "prize-rabbit", label: "うさぎさん" },
+  { id: "star", asset: "prize-star", label: "おほしさま" },
+];
 
 /**
  * さかなつりのパラメータ。
@@ -197,8 +262,7 @@ export const fishingSpecies = [
  * 視覚をいくら使っても測定に影響しない。
  *
  * ここに id が無いゲームはレディ画面を出さず、従来どおり即開始する
- * （gameHost.js renderReady の呼び分け）。crane は画面を見て操作する課題で
- * 説明の作り方が別なので、まだ載せていない。
+ * （gameHost.js renderReady の呼び分け）。
  *
  * 文言は利用者向けにひらがな主体・1行1動作。読み上げ（audio.speak）にも
  * そのまま渡すので、記号や英字を入れない。
@@ -224,6 +288,12 @@ export const gameHowTo = {
   calibration: [
     "たかい おとに あわせて おします。",
     "しえんしゃと いっしょに つかう そくていです。",
+  ],
+  crane: [
+    "アームが よこに うごきます。けいひんの ところで おします。",
+    "つぎは おくに うごきます。もういちど おします。",
+    "アームが おりて、つかめたら けいひんぐちへ はこびます。",
+    "ゆかの ひかる わの なかで とめると つかめます。",
   ],
   fishing: [
     "さかなが みぎから およいで きます。",

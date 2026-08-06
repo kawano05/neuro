@@ -40,11 +40,24 @@ export function initHome(ctx) {
     const icon = tile.iconClass
       ? `<span class="tile-icon" aria-hidden="true"><i class="${tile.iconClass}"></i></span>`
       : "";
+    // content.js の description（「おすと いろと おとが かわるよ」等）は
+    // 利用者向けの言葉で書かれているのに、これまでどこからも読まれていなかった。
+    //
+    // 名前（aria-label）には混ぜない。名前は識別子なので短く保つべきで、
+    // 走査のたびに説明まで読み上げると、選ぶための手がかりが埋もれる。
+    // 説明は aria-describedby で別に渡す（VoiceOver は名前の後に少し置いてから
+    // 読む）。画面の文字量は変えないので、走査中に読む量も増えない。
+    const descriptionId = tile.description ? `tile-desc-${tile.id || tile.view}` : "";
+    if (descriptionId) button.setAttribute("aria-describedby", descriptionId);
+    const description = descriptionId
+      ? `<span class="sr-only" id="${descriptionId}">${tile.description}</span>`
+      : "";
     button.innerHTML = `
       <span class="scan-order" aria-hidden="true">${index + 1}</span>
       ${icon}
       <strong>${tile.title}</strong>
       <span class="scan-current-label" aria-hidden="true">いま えらんでいます</span>
+      ${description}
     `;
     return button;
   }
