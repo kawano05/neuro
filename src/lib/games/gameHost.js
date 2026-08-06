@@ -127,9 +127,10 @@ function renderGonogoResult(summary) {
  * 日に「まえより すくない」と突きつけることになる。訓練の課題でそれをやる
  * 理由がない。最高記録なら常に目標として働き、負の比較が出ない。
  *
- * なぜ難度で絞るか: 支援者が つかめる広さ や アームの速さ を変えられる
- * （settings の craneToleranceR / craneSweepMs）。条件の違う回と数を並べても
- * 上達を表さないので、同じ条件の回だけを見る。
+ * なぜ条件で絞るか: 支援者が つかめる広さ・アームの速さ・1回のかいすう を
+ * 変えられる（settings の craneToleranceR / craneSweepMs / craneTargetTrials）。
+ * とくに かいすう は取れる数の上限そのものなので、5回の回と9回の回を並べると
+ * 比較にならない。同じ条件の回だけを見る。
  *
  * 中断した回は試行数が足りず不利なので、完走した回だけを対象にする。
  */
@@ -140,7 +141,8 @@ export function personalBest(sessions, { gameId, config, pick }) {
       session.finished === true &&
       session.aborted === false &&
       session.config?.toleranceR === config?.toleranceR &&
-      session.config?.sweepMs === config?.sweepMs
+      session.config?.sweepMs === config?.sweepMs &&
+      session.config?.targetTrials === config?.targetTrials
   );
   const values = sameSetup.map(pick).filter((value) => typeof value === "number");
   return values.length ? Math.max(...values) : null;

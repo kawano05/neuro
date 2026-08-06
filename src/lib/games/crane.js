@@ -201,6 +201,7 @@ function resolveCraneConfig(settings) {
     ...cranePresets,
     sweepMs: settings?.craneSweepMs ?? cranePresets.sweepMs,
     toleranceR: settings?.craneToleranceR ?? cranePresets.toleranceR,
+    targetTrials: settings?.craneTargetTrials ?? cranePresets.targetTrials,
   };
 }
 

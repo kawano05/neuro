@@ -544,24 +544,6 @@
           <input id="highContrast" type="checkbox" role="switch" data-scan />
         </label>
 
-        <label class="setting-row">
-          <span>
-            <strong>アームの速さ</strong>
-            <small>UFOキャッチャーで、アームが端から端まで動く時間</small>
-          </span>
-          <input id="craneSweepMs" type="range" min="800" max="6000" step="100" data-scan />
-          <output id="craneSweepMsValue" for="craneSweepMs">2200ms</output>
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>つかめる広さ</strong>
-            <small>景品からどれだけずれても掴めるか。大きいほどやさしくなります</small>
-          </span>
-          <input id="craneToleranceR" type="range" min="4" max="40" step="1" data-scan />
-          <output id="craneToleranceRValue" for="craneToleranceR">15</output>
-        </label>
-
         <label class="setting-row toggle-row">
           <span>
             <strong>視覚課題を隠す</strong>
@@ -576,6 +558,47 @@
             <small>操作訓練・効果測定・研究タブを表示します</small>
           </span>
           <input id="researcherMode" type="checkbox" role="switch" data-scan />
+        </label>
+      </div>
+
+      <!--
+        あそびごとの難易度は、全体設定に混ぜると「どのあそびの話なのか」が
+        小さい説明文を読むまで分からない。見出しで囲って所属を先に示す。
+        値はセッションの config に記録されるので、どの条件で測ったかは
+        走査CSVから追える。
+      -->
+      <h3 class="settings-group-title">UFOキャッチャーの むずかしさ</h3>
+      <p class="settings-group-note">
+        変えた値は、つぎに はじめる ときから ききます。どの ねらいで
+        あそんだかは 記録に のこります。
+      </p>
+
+      <div class="settings-grid">
+        <label class="setting-row">
+          <span>
+            <strong>アームの速さ</strong>
+            <small>アームが端から端まで動く時間。短いほど速く、狙うのが難しくなります</small>
+          </span>
+          <input id="craneSweepMs" type="range" min="800" max="6000" step="100" data-scan />
+          <output id="craneSweepMsValue" for="craneSweepMs">2200ms</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>つかめる広さ</strong>
+            <small>景品からどれだけずれても掴めるか。大きいほどやさしくなります</small>
+          </span>
+          <input id="craneToleranceR" type="range" min="4" max="40" step="1" data-scan />
+          <output id="craneToleranceRValue" for="craneToleranceR">15</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>1回の かいすう</strong>
+            <small>1セッションで アームを おろす 回数。短くも長くもできます</small>
+          </span>
+          <input id="craneTargetTrials" type="range" min="3" max="15" step="1" data-scan />
+          <output id="craneTargetTrialsValue" for="craneTargetTrials">5</output>
         </label>
       </div>
     </section>

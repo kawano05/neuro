@@ -120,6 +120,8 @@ export function collectElements() {
     craneSweepMsValue: document.querySelector("#craneSweepMsValue"),
     craneToleranceR: document.querySelector("#craneToleranceR"),
     craneToleranceRValue: document.querySelector("#craneToleranceRValue"),
+    craneTargetTrials: document.querySelector("#craneTargetTrials"),
+    craneTargetTrialsValue: document.querySelector("#craneTargetTrialsValue"),
     hideVisualTasks: document.querySelector("#hideVisualTasks"),
     researcherMode: document.querySelector("#researcherMode"),
     startCalibration: document.querySelector("#startCalibration"),

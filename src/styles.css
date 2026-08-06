@@ -258,6 +258,20 @@ h3 {
   opacity: 0.65;
 }
 
+/* あそびごとの難易度のまとまり。全体設定と混ぜると、どのあそびの話なのかが
+   小さい説明文を読むまで分からない。 */
+.settings-group-title {
+  margin: 26px 0 4px;
+  font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+}
+
+.settings-group-note {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: clamp(0.9rem, 1.8vw, 1rem);
+  line-height: 1.6;
+}
+
 /* 支援者の操作に対する、目に見える返事。announce だけだと出力先が .sr-only
    なので、読み上げを使わない支援者には何も届かない。 */
 .supporter-message {

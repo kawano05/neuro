@@ -25,6 +25,13 @@ export function initSettings(ctx) {
       fallback: cranePresets.toleranceR,
       format: (value) => String(value),
     },
+    {
+      key: "craneTargetTrials",
+      input: elements.craneTargetTrials,
+      output: elements.craneTargetTrialsValue,
+      fallback: cranePresets.targetTrials,
+      format: (value) => String(value),
+    },
   ];
 
   /** 設定UIへ現在値を反映する */

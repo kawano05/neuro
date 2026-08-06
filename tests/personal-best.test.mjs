@@ -23,7 +23,7 @@ function test(name, fn) {
   }
 }
 
-const CONFIG = { toleranceR: 15, sweepMs: 2200 };
+const CONFIG = { toleranceR: 15, sweepMs: 2200, targetTrials: 5 };
 const pick = (session) => session.summary?.grips;
 const best = (sessions) => personalBest(sessions, { gameId: "crane", config: CONFIG, pick });
 
@@ -56,8 +56,18 @@ test("ignores sessions that did not run to completion", () => {
 
 test("ignores sessions played at a different difficulty", () => {
   // 支援者が つかめる広さ / アームの速さ を変えた回と数を並べても上達を表さない。
-  assert.equal(best([session("a", 5, { config: { toleranceR: 30, sweepMs: 2200 } })]), null);
-  assert.equal(best([session("a", 5, { config: { toleranceR: 15, sweepMs: 4000 } })]), null);
+  assert.equal(best([session("a", 5, { config: { ...CONFIG, toleranceR: 30 } })]), null);
+  assert.equal(best([session("a", 5, { config: { ...CONFIG, sweepMs: 4000 } })]), null);
+});
+
+test("ignores sessions with a different number of trials", () => {
+  // かいすう は取れる数の上限そのもの。9回で7こ取った回を5回の回の記録として
+  // 出すと、達成できない目標を掲げることになる。
+  assert.equal(best([session("a", 7, { config: { ...CONFIG, targetTrials: 9 } })]), null);
+  assert.equal(
+    best([session("a", 7, { config: { ...CONFIG, targetTrials: 9 } }), session("b", 2)]),
+    2
+  );
 });
 
 test("ignores other games", () => {

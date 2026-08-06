@@ -90,6 +90,7 @@ export const defaultState = {
     // 記録されるので、どの難度で測ったかは走査CSVから追える。
     craneSweepMs: null,
     craneToleranceR: null,
+    craneTargetTrials: null,
   },
   logs: [],
   evaluation: {
@@ -994,6 +995,7 @@ export function sanitizeState(candidate) {
       // セッションが保存時に別の値へ丸められて記録と食い違う。
       craneSweepMs: nullableNumberInRange(settings.craneSweepMs, null, 800, 6000, true),
       craneToleranceR: nullableNumberInRange(settings.craneToleranceR, null, 4, 40, true),
+      craneTargetTrials: nullableNumberInRange(settings.craneTargetTrials, null, 3, 15, true),
     },
     logs: Array.isArray(candidate.logs)
       ? candidate.logs.map(sanitizeLogEntry).filter(Boolean).slice(0, MAX_LOG_ENTRIES)
