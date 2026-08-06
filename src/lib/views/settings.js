@@ -34,9 +34,19 @@ export function initSettings(ctx) {
     },
   ];
 
+  // リズム系の難易度。値を持たない（null）＝「あそびごとの既定を使う」を
+  // 選択肢として表せる必要があるのでプルダウンにしてある。空文字が null。
+  const rhythmChoices = [
+    { key: "rhythmBpm", select: elements.rhythmBpm },
+    { key: "targetBeats", select: elements.rhythmTargetBeats },
+  ];
+
   /** 設定UIへ現在値を反映する */
   function render() {
     const settings = state.settings;
+    rhythmChoices.forEach(({ key, select }) => {
+      select.value = settings[key] === null ? "" : String(settings[key]);
+    });
     elements.scanInterval.value = settings.scanInterval;
     elements.scanIntervalValue.value = `${settings.scanInterval}ms`;
     craneSliders.forEach(({ key, input, output, fallback, format }) => {
@@ -65,6 +75,15 @@ export function initSettings(ctx) {
     elements.scanIntervalValue.value = `${state.settings.scanInterval}ms`;
     save();
     if (scan.isRunning()) scan.start();
+  });
+
+  rhythmChoices.forEach(({ key, select }) => {
+    select.addEventListener("change", () => {
+      // 空文字は「あそびごとの既定」。null で保存すると games/rhythm.js の
+      // resolveParams が rhythmPresets 側を使う。
+      state.settings[key] = select.value === "" ? null : Number(select.value);
+      save();
+    });
   });
 
   craneSliders.forEach(({ key, input, output, format }) => {

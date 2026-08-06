@@ -567,6 +567,53 @@
         値はセッションの config に記録されるので、どの条件で測ったかは
         走査CSVから追える。
       -->
+      <!--
+        リズム系の難易度。設定は課題ごとではなく1つなので、「あそびごとの
+        既定を使う」という状態が要る。既定は L1=40 / L2=60 / gonogo=50 と
+        ばらばらで、スライダーではどれを初期位置にしても嘘になるため、
+        既定を選択肢のひとつに持てるプルダウンにしている。
+
+        そくてい（calibration）には効かない。基準オフセットの測定手順そのもの
+        で、ここで得た中央値は判定窓の中心補正として全セッションに効く
+        （games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS）。
+      -->
+      <h3 class="settings-group-title">リズムの むずかしさ</h3>
+      <p class="settings-group-note">
+        「リズム れんしゅう」「リズム つづけて」「たかいおとだけ」の3つに ききます。
+        そくていは 手順を そろえるため 変わりません。
+      </p>
+
+      <div class="settings-grid">
+        <label class="setting-row">
+          <span>
+            <strong>テンポ</strong>
+            <small>1分あたりの拍数。ゆっくりなほど、合わせるのがやさしくなります</small>
+          </span>
+          <select id="rhythmBpm" data-scan>
+            <option value="">あそびごとの既定</option>
+            <option value="30">30（とてもゆっくり）</option>
+            <option value="40">40</option>
+            <option value="50">50</option>
+            <option value="60">60</option>
+            <option value="80">80（はやめ）</option>
+          </select>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>1回の はくすう</strong>
+            <small>1セッションで おす回数。長くも短くもできます</small>
+          </span>
+          <select id="rhythmTargetBeats" data-scan>
+            <option value="">あそびごとの既定</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+          </select>
+        </label>
+      </div>
+
       <h3 class="settings-group-title">UFOキャッチャーの むずかしさ</h3>
       <p class="settings-group-note">
         変えた値は、つぎに はじめる ときから ききます。どの ねらいで

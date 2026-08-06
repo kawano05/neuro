@@ -116,6 +116,8 @@ export function collectElements() {
     highContrast: document.querySelector("#highContrast"),
     supporterLockNotice: document.querySelector("#supporterLockNotice"),
     supporterMessage: document.querySelector("#supporterMessage"),
+    rhythmBpm: document.querySelector("#rhythmBpm"),
+    rhythmTargetBeats: document.querySelector("#rhythmTargetBeats"),
     craneSweepMs: document.querySelector("#craneSweepMs"),
     craneSweepMsValue: document.querySelector("#craneSweepMsValue"),
     craneToleranceR: document.querySelector("#craneToleranceR"),
