@@ -18,6 +18,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,11 +35,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium webkit
+      # ブラウザ検査（5実寸・実測45分）は ci.yml が回している。ここで同じ
+      # `npm test` を丸ごと繰り返すと、毎push 45分のジョブが2本走るうえ、
+      # 詰まる面が倍になる（実際 Pages 側が Playwright の導入で2時間40分
+      # 張り付いた）。
+      #
+      # とはいえ門を外すと、壊れたビルドがそのまま公開される。単体テストは
+      # 数秒で終わり、CSVの列・辞書の抜け・判定ロジックといった「壊れても
+      # 画面では気づけない」ものを見ているので、公開の門はこちらに任せる。
+      - name: Run unit tests
+        run: npm run test:unit
 
-      - name: Run unit and browser tests
-        run: npm test
+      # dist を作る。これまでは npm test の中の test:web が build していたので、
+      # そこを外したぶんを明示する（外し忘れると空の dist を公開する）。
+      - name: Build web app
+        run: npm run build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -46,6 +57,7 @@ jobs:
           path: dist
 
   deploy:
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

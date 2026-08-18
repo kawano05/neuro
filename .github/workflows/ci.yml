@@ -11,6 +11,10 @@ jobs:
   web:
     name: Web build and browser tests
     runs-on: ubuntu-latest
+    # 上限を置く。既定は6時間で、詰まったステップがそのまま走り続ける
+    # （実際に Pages 側が「Install Playwright browser」で2時間40分張り付いた）。
+    # ブラウザ検査は5実寸ぶんで実測45分なので、その倍を上限にする。
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +57,7 @@ jobs:
   capacitor-ios:
     name: Capacitor iOS build
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -91,6 +96,9 @@ jobs:
       # ジョブを止めない。得たいのは合否ではなく**成果物のスクリーンショット**。
       - name: Render the ruby probe on a real iOS simulator
         continue-on-error: true
+        # 詰まっても待ち続けない。continue-on-error は「失敗しても止めない」で
+        # あって「ハングしても止めない」ではないので、時間の上限は別に要る。
+        timeout-minutes: 12
         run: |
           set -x
           # 起動済みのシミュレータを1台用意する。
@@ -106,22 +114,32 @@ jobs:
           #    取り出したページを開く（scripts/ruby-probe.html）。
           node scripts/serve-dist.mjs scripts 8099 &
           SERVER=$!
-          sleep 2
-          xcrun simctl openurl "$UDID" "http://127.0.0.1:8099/ruby-probe.html"
-          sleep 6
-          xcrun simctl io "$UDID" screenshot ios-shots/ruby-probe.png
-          kill $SERVER || true
+          # **応答するまで待つ**。sleep 2 では足りなかった——サーバが立つ15秒前に
+          # openurl を叩いてしまい、Operation timed out（exit 60）でステップごと
+          # 終わって、スクリーンショットが1枚も残らなかった。
+          for _ in $(seq 1 40); do
+            curl -sf -o /dev/null http://127.0.0.1:8099/ruby-probe.html && break
+            sleep 1
+          done
+          curl -sf -o /dev/null http://127.0.0.1:8099/ruby-probe.html             && echo "server ready" || echo "server did not come up"
+
+          # 以降は1つ失敗しても続ける。欲しいのは合否ではなく**画像**なので、
+          # 撮れるところまで撮る（前回は openurl の失敗で全部落ちた）。
+          xcrun simctl openurl "$UDID" "http://127.0.0.1:8099/ruby-probe.html" || true
+          sleep 10
+          xcrun simctl io "$UDID" screenshot ios-shots/ruby-probe.png || true
+          kill "$SERVER" 2>/dev/null || true
 
           # 2) アプリ本体を起動して撮る（スタート画面まで）。WKWebView が
           #    実際に立ち上がるかの確認を兼ねる。
           APP=$(find build/Build/Products -name 'App.app' -maxdepth 3 | head -1)
           if [ -n "$APP" ]; then
-            xcrun simctl install "$UDID" "$APP"
+            xcrun simctl install "$UDID" "$APP" || true
             xcrun simctl launch "$UDID" jp.ac.nit.kumeno.neuro || true
-            sleep 6
-            xcrun simctl io "$UDID" screenshot ios-shots/app-start.png
+            sleep 8
+            xcrun simctl io "$UDID" screenshot ios-shots/app-start.png || true
           fi
-          ls -la ios-shots
+          ls -la ios-shots || true
 
       - name: Upload iOS screenshots
         if: always()
