@@ -20,7 +20,7 @@
 import { switchModules, stageColors } from "../content.js";
 
 export function createColorLegacyGame(ctx) {
-  const { audio, announce, logEvent } = ctx;
+  const { audio, announce, logEvent, t, tHtml } = ctx;
   const legacyModule = switchModules.find((module) => module.id === "color") || switchModules[0];
 
   let stageEl = null;
@@ -36,7 +36,7 @@ export function createColorLegacyGame(ctx) {
     // タイル名「いろと おと」とも食い違って見えていたので外した。
     stageEl.innerHTML = `
       <span class="activity-visual"><span class="color-chip" style="background:${color}"></span></span>
-      <span class="reaction-detail">${legacyModule.description}</span>
+      <span class="reaction-detail">${tHtml("tile.color-legacy.desc")}</span>
     `;
   }
 
@@ -45,8 +45,8 @@ export function createColorLegacyGame(ctx) {
     const tone = legacyModule.tones[step % legacyModule.tones.length];
     step += 1;
     audio.playTone(tone);
-    audio.speak(legacyModule.name);
-    announce(`${legacyModule.name}に入力しました`);
+    audio.speak(t("tile.color-legacy.title"));
+    announce(t("voice.pressed", { name: t("tile.color-legacy.title") }));
     // 既存の評価/ログ連動（views/evaluation.js の countEntry が entry.type
     // を見て自動集計する仕組み）を維持するため、旧 switcher.js と同じ
     // {type:"switch", label} を記録する。

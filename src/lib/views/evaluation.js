@@ -89,7 +89,129 @@ const COMMON_TASK_HEADERS = [
   "trialIndex",
 ];
 
+/**
+ * どの端末で測ったか（session.device / audio.js の getDeviceInfo）。
+ *
+ * 記録はしていたのに、どのCSVにも出していなかった。保存されているだけの値は
+ * 解析に使えないので、実質「記録していない」のと同じ——visualGuidance を
+ * sanitize から落としていたときと同じ型の穴。
+ *
+ * iPad とスマホの両方で動くようにした以上、端末は測定条件のひとつになる
+ * （画面の大きさ・視距離・刺激の実寸・スピーカー特性・音の出力遅延が
+ * まとめて変わる）。混ぜて集計してよいかを決めるのは解析側なので、
+ * アプリは材料を曇りなく出すところまでを担う。
+ *
+ * 列は必ず**末尾**に足す（detailed-design.md §9.3 の既存列互換）。
+ */
+const DEVICE_HEADERS = [
+  "deviceViewportWidth",
+  "deviceViewportHeight",
+  "devicePixelRatio",
+  "deviceOutputLatencyS",
+  "deviceBaseLatencyS",
+  "deviceUserAgent",
+];
+
+function deviceColumns(session) {
+  const device = session?.device || {};
+  return [
+    device.viewportWidth ?? "",
+    device.viewportHeight ?? "",
+    device.devicePixelRatio ?? "",
+    device.outputLatencyS ?? "",
+    device.baseLatencyS ?? "",
+    device.userAgent ?? "",
+  ];
+}
+
 /** scan / rt の課題別CSV行を作る。列意味が異なるため単一表には統合しない。 */
+/**
+ * リズム計測結果のCSV行（19列、ロング形式。detailed-design.md §9.3）。
+ * 1試行1行。summary は含めない（解析側で再計算できるので二重管理を避ける）。
+ * correctRejection / miss の行は inputMs / rawOffsetMs が空欄になる
+ * （trials 側で null にしてあるため、そのまま escapeCsv に渡せば空欄になる）。
+ *
+ * 純粋関数として切り出してあるのは、これが研究の主要な出力だから。列の順序と
+ * 内容をテストで固定できないと、解析側と静かに食い違ったまま卒論のデータが
+ * 出る（tests/data-integrity.test.mjs）。
+ */
+export function buildRhythmCsvRows(sessions) {
+  const rows = [
+    [
+      "sessionId",
+      "participantId",
+      "gameId",
+      "startedAtIso",
+      "aborted",
+      "mode",
+      "bpm",
+      "countInBeats",
+      "judgmentWindowMs",
+      "effectiveWindowMs",
+      "appliedBaselineMs",
+      "beatIndex",
+      "beatKind",
+      "scheduledMs",
+      "inputMs",
+      "rawOffsetMs",
+      "judgment",
+      "excluded",
+      // 19列目。その回、画面から拍の手がかり（予告の溜め＋ずれの目盛り）を
+      // 出していたか。出していた回の入力は聴覚キューだけへの同期ではない
+      // ので、解析でこの列を分けずに混ぜると、測っているものが違う行が
+      // 同じ分布に入る（settings.visualGuidance / games/rhythm.js）。
+      //
+      // 既存18列の**後ろ**に足すこと自体が要件（detailed-design.md §9.3
+      // 「この18列は既存データ互換のため変更しない」）。途中に挿すと
+      // それ以降の列位置がずれ、位置で読んでいる解析側が黙って壊れる。
+      "visualGuidance",
+      // 20列目。そくてい（研究）かれんしゅう（訓練）か。解析ではまず
+      // measure だけを見ればよい——主要測定の条件を固定するための列。
+      "difficultyMode",
+      ...DEVICE_HEADERS,
+      // 端末列の**さらに後ろ**。成立確認（src/lib/readinessCheck.js）が
+      // 通った状態で測ったか: met / overridden / n/a。
+      //
+      // overridden は「高低を聞き分けられるか等を確かめないまま測った回」。
+      // 成績が低かったときに、抑制の失敗なのか、そもそも課題が成立して
+      // いなかったのかを、この列が無いと後から分けられない。
+      // 除外するかどうかを決めるのは解析側なので、アプリは測定を止めず
+      // 記録する（測定条件は禁止せず記録する、という全体の方針）。
+      "measurementReadiness",
+    ],
+  ];
+  sessions.forEach((session) => {
+    const config = session.config || {};
+    (session.trials || []).forEach((trial) => {
+      rows.push([
+        session.sessionId,
+        session.participantId || "",
+        session.gameId,
+        session.startedAtIso,
+        session.aborted,
+        config.mode ?? "",
+        config.bpm ?? "",
+        config.countInBeats ?? "",
+        config.judgmentWindowMs ?? "",
+        config.effectiveWindowMs ?? "",
+        trial.appliedBaselineMs ?? "",
+        trial.beatIndex ?? "",
+        trial.beatKind ?? "",
+        trial.scheduledMs ?? "",
+        trial.inputMs ?? "",
+        trial.rawOffsetMs ?? "",
+        trial.judgment,
+        trial.excluded,
+        config.visualGuidance === true,
+        config.difficultyMode ?? "practice",
+        ...deviceColumns(session),
+        config.measurementReadiness ?? "n/a",
+      ]);
+    });
+  });
+  return rows;
+}
+
 export function buildTaskCsvRows(sessions, taskType) {
   if (taskType === "scan") {
     const rows = [
@@ -106,6 +228,15 @@ export function buildTaskCsvRows(sessions, taskType) {
         "xPhaseMs",
         "yPhaseMs",
         "judgment",
+        // その回、ねらいの通過音を鳴らしていたか（settings.craneAudioGuidance）。
+        // 鳴らしていた回は画面を見ずに解けるので、視覚課題としての成績を
+        // 混ぜてはいけない。既存列の後ろへ足す（列位置を動かさない）。
+        "audioGuidance",
+        // そくてい（研究）かれんしゅう（訓練）か。
+        "difficultyMode",
+        ...DEVICE_HEADERS,
+        // 成立確認の状態（リズムCSVと同じ意味・同じ位置づけ）。
+        "measurementReadiness",
       ],
     ];
     sessions
@@ -131,6 +262,10 @@ export function buildTaskCsvRows(sessions, taskType) {
             trial.xPhaseMs,
             trial.yPhaseMs,
             trial.judgment,
+            session.config?.audioGuidance === true,
+            session.config?.difficultyMode ?? "practice",
+            ...deviceColumns(session),
+            session.config?.measurementReadiness ?? "n/a",
           ]);
         });
       });
@@ -148,6 +283,7 @@ export function buildTaskCsvRows(sessions, taskType) {
         "reactionTimeMs",
         "judgment",
         "excluded",
+        ...DEVICE_HEADERS,
       ],
     ];
     sessions
@@ -169,6 +305,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             trial.reactionTimeMs ?? "",
             trial.judgment,
             trial.excluded,
+            ...deviceColumns(session),
           ]);
         });
       });
@@ -546,7 +683,7 @@ export function initEvaluation(ctx) {
   }
 
   /**
-   * リズム計測結果をBOM付きCSV（18列、ロング形式）で書き出す
+   * リズム計測結果をBOM付きCSV（19列、ロング形式）で書き出す
    * （detailed-design.md §9.3）。1試行1行。summary は含めない
    * （解析側で再計算可能なため、二重管理を避ける）。
    * correctRejection / miss の行は inputMs / rawOffsetMs が空欄になる
@@ -560,53 +697,7 @@ export function initEvaluation(ctx) {
       announce("書き出すリズム計測データがありません");
       return;
     }
-    const rows = [
-      [
-        "sessionId",
-        "participantId",
-        "gameId",
-        "startedAtIso",
-        "aborted",
-        "mode",
-        "bpm",
-        "countInBeats",
-        "judgmentWindowMs",
-        "effectiveWindowMs",
-        "appliedBaselineMs",
-        "beatIndex",
-        "beatKind",
-        "scheduledMs",
-        "inputMs",
-        "rawOffsetMs",
-        "judgment",
-        "excluded",
-      ],
-    ];
-    sessions.forEach((session) => {
-      const config = session.config || {};
-      (session.trials || []).forEach((trial) => {
-        rows.push([
-          session.sessionId,
-          session.participantId || "",
-          session.gameId,
-          session.startedAtIso,
-          session.aborted,
-          config.mode ?? "",
-          config.bpm ?? "",
-          config.countInBeats ?? "",
-          config.judgmentWindowMs ?? "",
-          config.effectiveWindowMs ?? "",
-          trial.appliedBaselineMs ?? "",
-          trial.beatIndex ?? "",
-          trial.beatKind ?? "",
-          trial.scheduledMs ?? "",
-          trial.inputMs ?? "",
-          trial.rawOffsetMs ?? "",
-          trial.judgment,
-          trial.excluded,
-        ]);
-      });
-    });
+    const rows = buildRhythmCsvRows(sessions);
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);

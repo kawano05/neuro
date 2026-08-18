@@ -117,11 +117,62 @@ export const activityTiles = [
  * resolveParams() がここから読み、gameId 分岐をエンジン側に持ち込まずに
  * 済ませている（データ駆動、P4-3）。他ゲームは undefined（=0扱い）。
  */
+/**
+ * ここは**れんしゅう（訓練）の既定値**。そくていの回は
+ * src/lib/difficultyMode.js の MEASUREMENT_PROTOCOL が優先し、この値は使わない。
+ * 訓練の都合で調整しても、測定の条件は動かない——2つを分けてある理由がこれ。
+ *
+ * 経緯（実測で分かったこと）:
+ *   旧値は l1=40bpm/3/10、l2=60bpm/4/20 で、段階になっていなかった。
+ *     - l1 は 10回押すのに 68秒（入力密度 0.148回/秒）
+ *     - l2 は 20回を 24秒（0.833回/秒）——**隣の段で密度が5.6倍**に跳ぶ
+ *     - gonogo は 0.435回/秒 で、l2 より運動負荷が**低い**（0.52倍）
+ *   これは1本の階段ではなく、負荷軸の違う課題を順番に置いただけだった。
+ *
+ * 直し方:
+ *   テンポを 50 に揃えて、段のあいだで変わるのを**課題の構造だけ**にした。
+ *   テンポが段ごとに違うと、難しくなったのが構造のせいかテンポのせいか
+ *   分からない。そのうえで l1 を短くし（68秒→34秒）、密度の跳ねを
+ *   5.6倍から2.8倍へ縮めた。
+ *
+ * 段の意味（軸が違うことを明示しておく。1本の軸ではない）:
+ *   l1     … 予告のある1回を当てる。運動負荷いちばん低い（0.24回/秒）
+ *   l2     … 連続する拍に合わせつづける。**運動軸**を上げる（0.67回/秒）
+ *   gonogo … 押す/見送るを分ける。**認知軸**を上げる。運動負荷は l2 より
+ *            低い（0.43回/秒）——押さない試行があるので当然で、
+ *            2つの軸を同時に上げないための設計でもある
+ */
 export const rhythmPresets = {
-  "rhythm-l1": { bpm: 40, countInBeats: 3, targetBeats: 10, mode: "cued" },
-  "rhythm-l2": { bpm: 60, countInBeats: 4, targetBeats: 20, mode: "continuous" },
+  "rhythm-l1": { bpm: 50, countInBeats: 2, targetBeats: 8, mode: "cued" },
+  "rhythm-l2": { bpm: 50, countInBeats: 4, targetBeats: 16, mode: "continuous" },
   gonogo: { bpm: 50, countInBeats: 3, targetBeats: 20, mode: "gonogo", goRatio: 0.6 },
-  calibration: { bpm: 50, countInBeats: 4, targetBeats: 12, mode: "cued", excludedTrialCount: 2 },
+  // キャリブレーションは測定手順そのもので、訓練の都合では動かさない
+  // （games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS）。
+  //
+  // mode="continuous" である理由（cued から変更。test-results/probe-calibration-mode.mjs）:
+  //
+  //   cued は毎回カウントインでリセットするので、連続同期の中心である位相修正の
+  //   連鎖が試行ごとに切れる。切れると各試行は独立になり、「拍を予測して押した
+  //   試行」と「高音を聞いてから反応した試行」が同じ分布に混ざる——両者は
+  //   平均で 300ms 以上違うので、混合比が変わるだけで中央値が動く。
+  //
+  //   推定量の偏り（真値 μ=-60ms、運動SD 45ms、有効試行10のモデル）:
+  //     反応押し 10% → +7ms / 20% → +20ms / 30% → +46ms / 50% → +146ms
+  //   10試行では二峰性を検定できないので、**データを見ても気づけない**。
+  //   そしてこの値は baselineOffsetMs として全セッションの判定窓中心に効く。
+  //
+  //   continuous は連鎖が切れないため予測押しの一様な状態に落ち着き、混合が
+  //   起きない（上のモデルで偏り 0.2ms）。代償は位相修正過程の自己相関ぶんの
+  //   分散増（sd 16.7ms → 28.1ms）だが、これは拍数で減らせる（有効24拍で
+  //   23.7ms）。偏りは検出も補正もできず、分散は増やせば減る。
+  //
+  //   ついでに1回が短くなる: cued 12試行 = 93.6秒 → continuous 24拍 = 33.6秒。
+  //   有効試行はむしろ 10 → 20 に増える。
+  //
+  // excludedTrialCount=4 は、位相修正が定常に落ち着くまでの立ち上がりを
+  // 捨てるため（cued の 2 は「最初の数試行は手順に慣れていない」という別の
+  // 理由だった）。カウントイン直後の数拍は初期偏差を引きずる。
+  calibration: { bpm: 50, countInBeats: 4, targetBeats: 24, mode: "continuous", excludedTrialCount: 4 },
 };
 
 /**
@@ -264,49 +315,25 @@ export const fishingSpecies = [
  * ここに id が無いゲームはレディ画面を出さず、従来どおり即開始する
  * （gameHost.js renderReady の呼び分け）。
  *
- * 文言は利用者向けにひらがな主体・1行1動作。読み上げ（audio.speak）にも
- * そのまま渡すので、記号や英字を入れない。
+ * 中身は文言そのものではなく src/lib/i18n.js のキー。表記（漢字／ひらがな／
+ * 英語）は設定で変わるので、文字列をここに置くと表記の切り替えが効かない。
+ * 実際の文言と、その書き方の決まり（ひらがな主体・1行1動作・記号や英字を
+ * 入れない。読み上げにもそのまま渡すため）は i18n.js 側に置いてある。
  */
 export const gameHowTo = {
-  "color-legacy": [
-    "がめんを おすと、いろと おとが かわります。",
-    "すきなだけ おしてみましょう。",
-  ],
-  "rhythm-l1": [
-    "ひくい おとが 3かい なります。",
-    "そのあと、たかい おとが 1かい なります。",
-    "たかい おとに あわせて おします。",
-  ],
-  "rhythm-l2": [
-    "さいしょに ひくい おとが なります。",
-    "そのあとは、おとが なるたびに おします。",
-  ],
-  gonogo: [
-    "たかい おとの ときだけ おします。",
-    "ひくい おとの ときは、おさずに まちます。",
-  ],
-  calibration: [
-    "たかい おとに あわせて おします。",
-    "しえんしゃと いっしょに つかう そくていです。",
-  ],
-  crane: [
-    "アームが よこに うごきます。けいひんの ところで おします。",
-    "つぎは おくに うごきます。もういちど おします。",
-    "アームが おりて、つかめたら けいひんぐちへ はこびます。",
-    "ゆかの ひかる わの なかで とめると つかめます。",
-  ],
-  fishing: [
-    "さかなが みぎから およいで きます。",
-    "「アタリ」の おとが なったら すぐ おします。",
-    "はやく おせると ★ボーナスが つきます。",
-    "1ぷんかん、たくさん つりましょう。",
-  ],
+  "color-legacy": ["howto.color-legacy.1", "howto.color-legacy.2"],
+  "rhythm-l1": ["howto.rhythm-l1.1", "howto.rhythm-l1.2", "howto.rhythm-l1.3"],
+  "rhythm-l2": ["howto.rhythm-l2.1", "howto.rhythm-l2.2"],
+  gonogo: ["howto.gonogo.1", "howto.gonogo.2"],
+  calibration: ["howto.calibration.1", "howto.calibration.2", "howto.calibration.3"],
+  crane: ["howto.crane.1", "howto.crane.2", "howto.crane.3", "howto.crane.4"],
+  fishing: ["howto.fishing.1", "howto.fishing.2", "howto.fishing.3", "howto.fishing.4"],
   "fishing-gonogo": [
-    "さかなが みぎから およいで きます。",
-    "「アタリ」の たかい おとで おすと つれます。",
-    "ひくい おとは ながぐつです。おさずに まちます。",
-    "はやく おせると ★ボーナスが つきます。",
-    "1ぷんかん、たくさん つりましょう。",
+    "howto.fishing-gonogo.1",
+    "howto.fishing-gonogo.2",
+    "howto.fishing-gonogo.3",
+    "howto.fishing-gonogo.4",
+    "howto.fishing-gonogo.5",
   ],
 };
 

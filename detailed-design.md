@@ -131,6 +131,32 @@ settings.js は本リファクタでは原則変更しない。
   タブバーには支援者機能（log / settings ＋研究者モード3タブ）だけを残す。
   各ビューからの復帰は「← ホームへ」（#homeReturn、走査対象）による。
 
+#### 2.3.1 画面が短いときのページ走査（src/lib/scanPaging.js）
+
+- 走査で選ぶ画面では、**選択肢が画面の外にあること自体が欠陥**になる。
+  scan.js は現在位置へ `scrollIntoView` するが、利用者はスクロールを止める
+  ことも戻すこともできないので、選択のたびに画面が動くと「選ぶ」課題が
+  「選ぶ＋動く画面を追う」課題に変わる。走査UIがスクロールではなくページ
+  送りを使うのはこのため。
+- 実測（対策前、iPhone 14 縦）: ホームの4番目・5番目のタイルが入力ドックの
+  裏に**まるごと**（182px）隠れたまま「いま えらんでいます」になっていた。
+- 対策は2段構え。
+  1. `scroll-margin-top / -bottom`（styles.css）で、`scrollIntoView` が
+     固定ドックと粘着タブバーのぶん手前で止まるようにする。値は
+     `--dock-height` から引くので、片方だけ更新して食い違う事故が起きない。
+  2. 画面高さが 740px 以下かつ項目が `SCAN_PAGE_SIZE`(=3) を超えるときは
+     ページに分ける。1ページ＝3項目＋「つぎの ページ」で1周4歩
+     （既定の走査間隔 1600ms で 6.4秒）。最後のページの次は先頭へ循環する
+     ——走査は一方向にしか進めないので、循環しないと目的の項目へ二度と
+     たどり着けない。
+- **削るのは1ページあたりの項目数であって、タップ標的の大きさではない。**
+  ここの利用者は狙って押すこと自体が難しく、収めるために標的を縮めるのは
+  本末転倒になる。飾り（見出しの eyebrow、案内文、走査中の札）を先に削る。
+- ページ番号はコーナーの出入りとロビー復帰で 0 に戻す。持ち越すと、あそびを
+  終えて戻った瞬間に2ページ目が出て「さっき選んだものが無い」ことになる。
+- 高さが変わる場面（回転・ツールバー伸縮・ソフトキーボード）は matchMedia の
+  change でだけ描き直す。毎回描き直すと走査中に現在位置が消える。
+
 ### 2.4 ゲーム実行画面仕様
 
 - **レディ画面（「やりかた」）を先に出す。** content.js の `gameHowTo[gameId]` に
@@ -293,10 +319,10 @@ export const gameTiles = [
 ];
 
 export const rhythmPresets = {
-  "rhythm-l1": { bpm: 40, countInBeats: 3, targetBeats: 10, mode: "cued" },
-  "rhythm-l2": { bpm: 60, countInBeats: 4, targetBeats: 20, mode: "continuous" },
+  "rhythm-l1": { bpm: 50, countInBeats: 2, targetBeats: 8,  mode: "cued" },
+  "rhythm-l2": { bpm: 50, countInBeats: 4, targetBeats: 16, mode: "continuous" },
   "gonogo":    { bpm: 50, countInBeats: 3, targetBeats: 20, mode: "gonogo", goRatio: 0.6 },
-  "calibration": { bpm: 50, countInBeats: 4, targetBeats: 12, mode: "cued" },
+  "calibration": { bpm: 50, countInBeats: 4, targetBeats: 24, mode: "continuous", excludedTrialCount: 4 },
 };
 
 export const cueTones = { low: 440, high: 880, noGo: 330, hit: 660, miss: 220 };
@@ -313,8 +339,9 @@ export const cueTones = { low: 440, high: 880, noGo: 330, hit: 660, miss: 220 };
 
 - 設定判定窓半幅 W₀ = settings.judgmentWindowMs（既定 600、範囲 200〜1500、100 刻み）
 - **実効判定窓半幅 W**: 連続系モード（continuous / gonogo）では隣接ビートとの
-  窓重複を禁止するため次で制限する（MUST）。cued モード（L1 / calibration）は
-  試行間休止があるため W = W₀ のまま。
+  窓重複を禁止するため次で制限する（MUST）。cued モード（L1）は
+  試行間休止があるため W = W₀ のまま。calibration は §8.2 のとおり
+  continuous なので、この制限を受ける側になる（bpm 50 で W = 540）。
 
 ```js
 const beatIntervalMs = 60000 / bpm;
@@ -366,6 +393,31 @@ export function sweepExpired(now, pendingBeats, W, C) { ... }
 - hit: cueTones.hit を即時再生（scheduler 経由の即時予約）。
 - miss / extra: cueTones.miss を短く小音量で。連続失敗時も音量を上げない
   （罰的フィードバックの禁止。導入訓練の動機づけ配慮）。
+
+#### 5.3.1 結果を伝える効果音（クレーン・さかなつり）
+
+- 長らくアプリの音は「約0.18秒のサイン波」1種類しかなかった。合図としては
+  足りるが、押した結果として何が起きたのか——アームが降りたのか、掴んだのか、
+  滑ったのか、魚が掛かったのか——は音では区別できなかった。画面を見つづける
+  のが難しい利用者にとって、これは「結果が届かない」ということそのもの。
+- `audio.playNoise()` / `audio.playSweep()` を追加し、次を鳴らす。
+  - crane: 横の確定（短い帯域ノイズ）、下降（下がる掃引＋低域ノイズ）、
+    把持（金属の当たり＋上がる掃引）、すべり（当たり音のあと下がる掃引）、
+    空振り（当たり音を鳴らさないこと自体が情報）、受け口への落下（低い衝撃音）。
+  - fishing: 釣り上げ（上がる掃引＋高域の水しぶき）、長靴（重く鈍い低域）、
+    逃げられた（沈む低域、いちばん小さく）。
+- **守る条件は「測定の合図音を覆わないこと」**。
+  - 音量は `EFFECT_GAIN_CEILING`(0.04) で丸め、合図音 `DEFAULT_TONE_GAIN`(0.05)
+    より必ず下に置く（`clampEffectGain`）。呼び出し側の実引数も
+    tests/effect-gain.test.mjs で突き合わせる。
+  - 帯域を分ける。合図は 440/880Hz の純音なので、効果音はノイズと低域、
+    掃引は三角波にして同じ高さで competing させない。
+  - 鳴らすのは**入力より後**の出来事だけ。とくに fishing のアタリ音は測定
+    刺激なので、それより前に音を足さない（予告として働きうる）。
+  - `settings.soundEnabled` で全部切れる。一方で合図音は切れない
+    （basic-design.md §6 によりミュート不可）。この対比は
+    web-smoke の「mutes effect sounds but never the measurement cue」で
+    固定してある（生成された AudioNode の種類を数えて見分ける）。
 
 ---
 
@@ -474,8 +526,29 @@ rhythmPresets[gameId]。settings 側が null のとき preset を使う。
 - パルス円: 直径 40vmin の単一 div。ビート位相に合わせて transform を
   CSS transition ではなく rAF で更新（音との同期はあくまで見た目、
   判定には使わない）。
+- **測定条件 `visualGuidance`（settings、既定 OFF）**。ONのとき次の2つが
+  同時に効く。片方だけ切っても測っているものは「聴覚キューへの同期」に
+  戻らないので、1つのつまみにまとめてある。
+
+  1. パルス円が次の拍へ向けて「溜める」（＝拍の予告）
+  2. 押したあと、ずれの目盛りに「はやい/おそい」が出る（＝結果の知識 KR）
+
+  既定 OFF の理由: この課題は聴覚キューへの同期を測る計測器なので、素の状態は
+  「手がかりは音だけ」でなければ `rawOffsetMs` が聴覚同期の指標にならない。
+  ONの回は視覚キューが混ざった別条件として扱う。訓練として使う回は支援者が
+  ONにする（運動学習では毎試行のKRが学習をかえって妨げうる＝guidance
+  hypothesis も知られているため、既定で配る側にはしない）。
+  ふだんの練習向けには、セッション終了後のリザルトがまとめてずれを見せる
+  ——事後のまとめなら、測っている最中の行動を変えない。
+  そくてい（calibration）は設定に関わらず常に OFF（`PROTOCOL_LOCKED_GAME_IDS`
+  と同じ線引き）。効いた値は `session.config.visualGuidance` に残し、
+  sanitize でも保持し、リズムCSV19列目に出す（§9.3）。3経路のどれか1つでも
+  欠けると条件を後から区別できない。
+
 - 拍あたりの倍率カーブ（games/rhythm.js `beatPulseScale`）は
-  「着地 → 沈む → 待つ → 溜める → 着地」の一巡り:
+  「着地 → 沈む → 待つ → 溜める → 着地」の一巡り。ただし最後の**溜めだけ**は
+  `visualGuidance` が ON のときに限る（下表の 0.72→1 の区間）。着地と沈みは
+  拍が**起きたこと**を伝えるだけなので予告にならず、常に出してよい:
 
   | 位相 | 倍率 | 意味 |
   |---|---|---|
@@ -491,6 +564,33 @@ rhythmPresets[gameId]。settings 側が null のとき preset を使う。
   - 拍と拍のあいだに静止区間を置くのが要点で、動きが拍の前後だけの出来事に
     なることで一拍ずつの合図として読める。溜めは最大まで上げきらない
     （上げきると着地の瞬間に差が出ず、拍が見えなくなる）。
+  - 当初この溜めは無条件だった。だが「つぎ来るぞ」を伝えることが目的である
+    以上、それは拍が来る前に拍の位置を教える視覚キューであり、同じ設計書の
+    「拍に同期して動く視覚を増やさないこと自体が要件」と両立しない。放置すると
+    `rawOffsetMs` は「聴覚キューへの入力」ではなく「聴覚＋視覚キューへの入力」
+    を測ってしまう（基本設計書 §6 の聴覚優先が崩れる）。条件へ落として解いた。
+  - `prefers-reduced-motion: reduce` のときは円を動かさない（固定倍率）。
+    このカーブは rAF が毎フレーム transform を書くので、CSS の `@media` では
+    止まらない。JS 側で見る必要がある（games/rhythm.js `updatePulseVisual`）。
+
+- **ずれの目盛り**（`visualGuidance` ON のときのみ）: 判定窓 ±`effectiveWindowMs`
+  を幅いっぱいに写した横帯。押して hit になるたび、その位置に印を1つ落とす。
+  印は出たあと動かない。直近 `MAX_OFFSET_MARKS` 件まで残し、3試行以上たまったら
+  平均位置に別の印を出す。
+  - 「拍に同期して動く視覚」に当たらないのは、ここに現れるものが全部
+    **押したあと**の出来事だから: 印が出るのは利用者が押した瞬間（拍の瞬間では
+    ない）、印は出たあと動かない、次の拍がいつ来るかはどこにも書かれていない。
+  - 表示する値は `rawOffsetMs - appliedBaselineMs`（`displayOffsetMs`）。生値を
+    そのまま出すと、基準オフセットが効いている利用者では「判定は当たりなのに
+    画面はいつも おそい と言う」状態になる。当たり外れを決めているのと同じ量を
+    出す。**記録される `rawOffsetMs` は常に生値**（§8.3 の最重要規則）。
+
+- **音が鳴らせない端末**（`audio.scheduler.start()` が null を返す＝AudioContext
+  が無い）では、セッションを開かずに理由を表示する（`renderUnavailable`）。
+  この場合 `now()` も常に 0 を返すため、拍が鳴らず・円も動かず・判定窓を過ぎた
+  拍が期限切れにならないので、放置すると「のこり N」のまま二度と終わらない。
+  合図が音である課題なので、続行しても測定にならない。
+
 - hit で 340ms の波紋（styles.css `rhythm-hit-ripple`。クラス除去で
   animation が止まるため、保持時間を波紋の長さに合わせている）、
   miss では変化なし（罰的演出をしない）。
@@ -608,8 +708,8 @@ real/fake の並びは `generateGoNoGoSequence`——いずれも変更してい
 
 ### 8.2 手順
 
-1. mode="cued"、bpm=50、countIn=4、targetBeats=12 で L1 と同一の課題を実施。
-2. 最初の 2 試行は練習として集計から除外（記録はする。excluded:true フラグ）。
+1. mode="continuous"、bpm=50、countIn=4、targetBeats=24 で L2 と同一の課題を実施。
+2. 最初の 4 拍は立ち上がりとして集計から除外（記録はする。excluded:true フラグ）。
 3. 有効試行の hit の生オフセットの**中央値**を基準オフセット候補とする
    （外れ値耐性のため平均でなく中央値、MUST）。
 4. リザルトに「候補値 XXXms を設定に保存しますか」を表示。保存操作は
@@ -720,18 +820,32 @@ rhythm: {
 
 - 出力場所: 評価ビューに「リズムCSV」ボタンを追加（既存 exportCsv と並置、
   BOM 付き UTF-8、escapeCsv 使用、ファイル名 `neuronode-rhythm-YYYY-MM-DD.csv`）。
-- 形式: 1試行1行のロング形式。列（18列、この順で固定）:
+- 形式: 1試行1行のロング形式。列（19列、この順で固定）:
 
 ```
 sessionId, participantId, gameId, startedAtIso, aborted,
 mode, bpm, countInBeats, judgmentWindowMs, effectiveWindowMs, appliedBaselineMs,
-beatIndex, beatKind, scheduledMs, inputMs, rawOffsetMs, judgment, excluded
+beatIndex, beatKind, scheduledMs, inputMs, rawOffsetMs, judgment, excluded,
+visualGuidance
 ```
 
 - judgment 列は5値（hit / miss / extra / commission / correctRejection）。
   correctRejection と miss の行は inputMs / rawOffsetMs が空欄。
 - summary は CSV に含めない（解析側で再計算可能なため。二重管理を避ける）。
-- この18列は既存データ互換のため変更しない。taskType 列も追加しない。
+- 先頭18列は既存データ互換のため変更しない。taskType 列も追加しない。
+- 19列目 `visualGuidance` は §7.4 の測定条件（画面から拍の手がかりを出したか）。
+  **末尾に足すこと自体が要件**で、途中に挿してはならない——挿すとそれ以降の
+  列位置がずれ、列位置で読んでいる解析側が黙って壊れる。この列が true の行は
+  聴覚キューだけへの同期ではないので、分けずに混ぜて集計しない。
+- 走査CSVも同じ理由で末尾に `audioGuidance` を持つ（UFOキャッチャーで
+  「ねらいの通過音」を鳴らしていたか。`settings.craneAudioGuidance` /
+  `games/crane.js` の `maybePassTone`、既定 OFF）。この音は目標の座標そのものを
+  聴覚キューへ翻訳するので、ONの回は画面を見ずに解けてしまい、`crane` が
+  `visualRequired`（視覚必須課題、§2.3 の `hideVisualTasks`）である前提が
+  崩れる。視覚追従が難しい利用者への配慮としては正当なので消さず、条件として
+  記録する。true の行を視覚課題の成績として混ぜない。
+- 列の順序と内容は `buildRhythmCsvRows` / `buildTaskCsvRows` を純粋関数として
+  切り出し、`tests/data-integrity.test.mjs` で固定している。
 
 走査と反応は別ファイルへ出力する。いずれも先頭7列を
 `sessionId, taskType, participantId, gameId, startedAtIso, aborted, trialIndex`
@@ -740,6 +854,26 @@ beatIndex, beatKind, scheduledMs, inputMs, rawOffsetMs, judgment, excluded
 - `neuronode-scan-YYYY-MM-DD.csv`: 18列
 - `neuronode-rt-YYYY-MM-DD.csv`: 14列
 - BOM付きUTF-8、`escapeCsv` 使用。単一ファイルには統合しない。
+
+### 9.3.1 セッションの推移（src/lib/sessionTrend.js）
+
+- 評価ログに「かいごとの うつりかわり」を出す。README の目的にある
+  「訓練前後の比較（導入訓練の効果測定）」は、1回ごとの記録だけでは読めない。
+- **束ねる単位は「課題 × 条件」**。テンポ・拍数・つかめる広さ・画面の手がかり
+  ——どれが違っても同じ指標を並べた意味が変わるので、別の線にする。束ねる
+  キーには `describeSessionConditions()` の文字列をそのまま使う。別々に持つと、
+  画面に出ている条件表示と束ね方が食い違う（表示は同じなのに別の線、または逆）。
+- 中断した回は入れない（試行数が足りず指標が偏る。crane の自己最高と同じ線引き）。
+- 課題ごとの主要指標と「どちらが良いか」を持つ（`higherIsBetter`）。
+  sms=ずれのSD（小さいほうが良い）、gonogo=commissions、scan=grips（大きい
+  ほうが良い）、rt=平均反応時間。
+- **図は生の値をそのまま描く**（大きい値ほど上）。「上がれば良い」に正規化する
+  描き方も試したが、下が良い指標で線が上がりながらすぐ下の数字は下がる、という
+  図になった。ここは卒論の図の元になる画面なので、線と数字が逆を向いてはいけない。
+  良し悪しは線の形ではなく、札（よくなっています／さがっています）と
+  「小さいほうが よい」の注記で言う。
+- 差が無いときは "same" を返す。1msの差を「良くなった」と書くと、支援者が
+  それを実在の変化として読む。解釈するのは支援者、という全体の方針に合わせる。
 
 ### 9.4 evaluation 連動（失敗系のみ）
 

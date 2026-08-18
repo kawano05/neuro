@@ -189,10 +189,18 @@ function computeSummary(trials) {
  */
 export function createFishingGame(gameId) {
   return function create(ctx) {
-  const { audio, announce, logTrial, finish, setProgress } = ctx;
+  const { audio, announce, logTrial, finish, setProgress, t, tHtml } = ctx;
+
   const config = { ...fishingPresets[gameId] };
   let stageEl = null;
   let statusEl = null;
+  // いま状態表示に出している文言のキー。
+  //
+  // 以前は statusEl.textContent を文字列リテラルと比べて「もう出ているか」を
+  // 判定していた。表記は設定で変わる（src/lib/i18n.js）ので、文言を差し替えた
+  // 瞬間にその比較は成り立たなくなり、毎フレーム書き込みが走る——表示している
+  // 文字列を状態として読むと、翻訳した時点で静かに壊れる。キーで持つ。
+  let shownStatusKey = null;
   let sceneEl = null;
   let lineEl = null;
   let swimmerEl = null;
@@ -227,6 +235,19 @@ export function createFishingGame(gameId) {
   let resolvedIndex = -1;
   let resolvedJudgment = null;
 
+  /**
+   * 状態表示を1箇所から書き換える。
+   *
+   * キーを覚えておくのは、毎フレーム走る updateSwimmer() が「もう出ているか」
+   * を知る必要があるから（表示文字列で比べると、表記を切り替えた瞬間に
+   * 成り立たなくなる。上の shownStatusKey のコメント参照）。
+   */
+  function setStatus(key, values) {
+    if (!statusEl) return;
+    shownStatusKey = key;
+    statusEl.innerHTML = tHtml(key, values);
+  }
+
   function toAudioAbsMs(perfMs) {
     return perfMs - anchorPerfMs + sessionStartAudioMs;
   }
@@ -242,22 +263,86 @@ export function createFishingGame(gameId) {
    * なっていた（ゲーム本体は画面の3割ほど）。説明文はレディ画面と重複して
    * いたので外した。
    */
+  /**
+   * 音が出せない端末で、課題を始められない理由を画面に出す。
+   * 読む相手は支援者なので、原因と次の手を書く（games/rhythm.js と同型）。
+   */
+  function renderUnavailable(audioState) {
+    if (!stageEl) return;
+    const stopped = audioState === "suspended" || audioState === "interrupted";
+    const why = stopped
+      ? "音が止まっているため、さかなつりは始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。"
+      : "この端末では音を鳴らす機能が使えないため、さかなつりは始められません。";
+    stageEl.innerHTML = `
+      <div class="game-unavailable">
+        <strong>おとが ならせません</strong>
+        <p>${why} アタリの合図が音なので、続けても はやさの記録になりません。</p>
+        <p class="game-unavailable-hint">
+          右上の「おわる」で もどれます。${
+            stopped ? "直したあと、もう一度えらんでください。" : "音の出る端末で もう一度おためしください。"
+          }
+        </p>
+      </div>
+    `;
+    announce("音が鳴らせないため、さかなつりを始められません");
+  }
+
   function renderMarkup() {
     stageEl.innerHTML = `
       <div class="fishing-scene" aria-hidden="true">
         <div class="fishing-sky"></div>
         <div class="fishing-water"></div>
+        <!--
+          水中の環境。以前は糸の下がまるごと空の青で、画面の4割近くが
+          「まだ描かれていない場所」に見えていた。60秒のあいだ、待っている
+          時間の大半をそこで過ごすので、体感としても空虚だった。
+
+          埋めるうえでの制約は1つだけ: ここで動くものは、アタリの予告に
+          なってはいけない。前刺激間隔は 1.8〜4.2 秒の乱数（content.js）で、
+          その乱数を推測できる手がかりが画面にあると、測っているものが
+          反応時間でなくなる。
+
+          なのでここの動きはすべて
+            - 課題の乱数と無関係な固定周期（9s / 13s / 17s / 23s。
+              前刺激間隔の範囲からも、その整数倍からも外してある）
+            - 糸のまわり（アタリの起きる場所）ではなく、深いところに置く
+            - 影のシルエットにして、狙う対象（.fishing-swimmer は色つきの絵）
+              と見た目の種類を変える
+          にしてある。見分けがつかないと、遠くの魚影を追ってしまう。
+        -->
+        <div class="fishing-deep">
+          <span class="fishing-shaft fishing-shaft-a"></span>
+          <span class="fishing-shaft fishing-shaft-b"></span>
+          <span class="fishing-far fishing-far-a"></span>
+          <span class="fishing-far fishing-far-b"></span>
+          <span class="fishing-far fishing-far-c"></span>
+          <span class="fishing-far fishing-far-d"></span>
+          <span class="fishing-far fishing-far-e"></span>
+          <span class="fishing-bubble fishing-bubble-a"></span>
+          <span class="fishing-bubble fishing-bubble-b"></span>
+          <span class="fishing-bubble fishing-bubble-c"></span>
+          <span class="fishing-bubble fishing-bubble-d"></span>
+          <span class="fishing-bubble fishing-bubble-e"></span>
+          <div class="fishing-bed">
+            <span class="fishing-weed fishing-weed-a"></span>
+            <span class="fishing-weed fishing-weed-b"></span>
+            <span class="fishing-weed fishing-weed-c"></span>
+            <span class="fishing-weed fishing-weed-d"></span>
+          </div>
+        </div>
         <div class="fishing-line"></div>
         <img class="fishing-boat" src="${boatUrl}" alt="" />
         <div class="fishing-swimmer"><img class="fishing-swimmer-art" src="" alt="" /></div>
         <div class="fishing-catch"></div>
         <div class="fishing-score">0 cm</div>
         <div class="fishing-streak"></div>
-        <div class="fishing-status">しずかに まとう</div>
+        <div class="fishing-status">${tHtml("fishing.wait")}</div>
       </div>
     `;
     sceneEl = stageEl.querySelector(".fishing-scene");
     statusEl = stageEl.querySelector(".fishing-status");
+    // 版面の初期値（マークアップ側で出している文言）と合わせておく。
+    shownStatusKey = "fishing.wait";
     lineEl = stageEl.querySelector(".fishing-line");
     swimmerEl = stageEl.querySelector(".fishing-swimmer");
     swimmerArtEl = stageEl.querySelector(".fishing-swimmer-art");
@@ -267,7 +352,7 @@ export function createFishingGame(gameId) {
   }
 
   function updateProgress(nowRelativeMs) {
-    setProgress(`のこり ${formatRemaining(sessionEndMs - nowRelativeMs)}`);
+    setProgress(t("progress.remainingTime", { time: formatRemaining(sessionEndMs - nowRelativeMs) }));
   }
 
   function updateScore() {
@@ -284,7 +369,7 @@ export function createFishingGame(gameId) {
     if (!streakEl || !session) return;
     const streak = session.summary.currentStreak ?? 0;
     if (streak >= 3) {
-      streakEl.textContent = `${streak} れんぞく`;
+      streakEl.innerHTML = tHtml("progress.streak", { n: streak });
       streakEl.classList.add("is-shown");
     } else {
       streakEl.classList.remove("is-shown");
@@ -372,34 +457,59 @@ export function createFishingGame(gameId) {
     session.summary = computeSummary(session.trials);
     logTrial(session);
 
+    // ここから先はすべて**入力より後**の音。
+    //
+    // この課題の測定刺激はアタリの合図音なので、それより前に音を足すことは
+    // しない（前に鳴る音は、アタリの予告として働きうる＝反応時間の測定が
+    // 成立しなくなる）。結果が確定したあとなら、その回の反応時間はもう
+    // 確定しているので何を鳴らしても測定に関与しない。
     const now = audio.scheduler.now();
     if (judgment === "hit") {
       audio.playToneAt(cueTones.hit, now, FEEDBACK_GAIN);
-      statusEl.textContent = row.speedBonus
-        ? `すばやい！ ${planned.lengthCm}cm`
-        : `${planned.lengthCm}cm つれた！`;
+      // 水を切って上がってくる音。リールの巻き上げ（上がる掃引）と
+      // 水しぶき（高い帯のノイズ）を重ねる。
+      audio.playSweep({ fromHz: 240, toHz: 880, durationS: 0.34, gain: 0.03 });
+      audio.playNoise({
+        durationS: 0.3,
+        gain: 0.026,
+        filter: "highpass",
+        frequency: 1400,
+        sweepTo: 3200,
+      });
+      setStatus(row.speedBonus ? "fishing.fast" : "fishing.caught", { n: planned.lengthCm });
       reelIn(planned, row.speedBonus);
       updateScore();
       announce(
-        row.speedBonus
-          ? `すばやい。${planned.lengthCm}センチの さかなが つれました`
-          : `${planned.lengthCm}センチの さかなが つれました`
+        t(row.speedBonus ? "fishing.voice.caughtFast" : "fishing.voice.caught", {
+          n: planned.lengthCm,
+        })
       );
     } else if (judgment === "correctRejection") {
-      statusEl.textContent = "よく まてたね";
-      announce("にせアタリを みわけました");
+      setStatus("fishing.goodWait");
+      announce(t("fishing.voice.goodWait"));
     } else if (judgment === "falseStart") {
       audio.playToneAt(cueTones.miss, now, MISS_GAIN);
-      statusEl.textContent = "まだ まとう";
-      announce("まだ アタリではありません");
+      setStatus("fishing.tooEarly");
+      announce(t("fishing.voice.tooEarly"));
     } else if (judgment === "commission") {
       audio.playToneAt(cueTones.miss, now, MISS_GAIN);
-      statusEl.textContent = "ながぐつ だった";
-      announce("ながぐつが かかりました");
+      // 長靴。魚が上がる音と同じ「掛かった」でも、重くて鈍い音にして
+      // 中身が違うことを耳で分ける。
+      audio.playNoise({
+        durationS: 0.26,
+        gain: 0.024,
+        filter: "lowpass",
+        frequency: 520,
+        sweepTo: 200,
+      });
+      setStatus("fishing.boot");
+      announce(t("fishing.voice.boot"));
     } else {
       audio.playToneAt(cueTones.miss, now, MISS_GAIN);
-      statusEl.textContent = "にげられた";
-      announce("さかなに にげられました");
+      // 逃げられた。水に落ちて沈む音だけを残す（罰にならないよう小さく）。
+      audio.playNoise({ durationS: 0.2, gain: 0.014, filter: "lowpass", frequency: 900, sweepTo: 300 });
+      setStatus("fishing.lost");
+      announce(t("fishing.voice.lost"));
     }
 
     updateStreak();
@@ -434,8 +544,8 @@ export function createFishingGame(gameId) {
     audio.scheduler.stop();
     const total = session.summary.totalLengthCm ?? 0;
     const catches = session.summary.catches ?? 0;
-    audio.speak(`おわりました。${catches}ひき、あわせて ${total}センチでした`);
-    announce(`さかなつりが おわりました。${catches}ひき、あわせて ${total}センチ`);
+    audio.speak(t("fishing.voice.finish", { n: catches, cm: total }));
+    announce(t("fishing.voice.finishAnnounce", { n: catches, cm: total }));
     finish(session.summary);
   }
 
@@ -458,12 +568,12 @@ export function createFishingGame(gameId) {
     const leaveMs = holdEndMs + config.exitMs;
     if (nowRelativeMs < appearMs || nowRelativeMs > leaveMs) return null;
     if (nowRelativeMs <= planned.cueMs) {
-      const t = (nowRelativeMs - appearMs) / config.approachMs;
-      return SPAWN_X_PERCENT + (LINE_X_PERCENT - SPAWN_X_PERCENT) * t;
+      const progress = (nowRelativeMs - appearMs) / config.approachMs;
+      return SPAWN_X_PERCENT + (LINE_X_PERCENT - SPAWN_X_PERCENT) * progress;
     }
     if (nowRelativeMs <= holdEndMs) return LINE_X_PERCENT;
-    const t = (nowRelativeMs - holdEndMs) / config.exitMs;
-    return LINE_X_PERCENT + (EXIT_X_PERCENT - LINE_X_PERCENT) * t;
+    const progress = (nowRelativeMs - holdEndMs) / config.exitMs;
+    return LINE_X_PERCENT + (EXIT_X_PERCENT - LINE_X_PERCENT) * progress;
   }
 
   function updateVisual(nowRelativeMs) {
@@ -514,11 +624,11 @@ export function createFishingGame(gameId) {
     const beforeCue = nowRelativeMs < planned.cueMs;
     const withinWindow = nowRelativeMs <= planned.cueMs + config.limitMs;
     if (beforeCue) {
-      if (statusEl.textContent !== "しずかに まとう" && x !== null && x > 70) {
-        statusEl.textContent = "しずかに まとう";
+      if (shownStatusKey !== "fishing.wait" && x !== null && x > 70) {
+        setStatus("fishing.wait");
       }
     } else if (withinWindow) {
-      statusEl.textContent = "アタリ！";
+      setStatus("fishing.bite");
     }
     swimmerEl.classList.toggle("is-biting", !beforeCue && withinWindow);
   }
@@ -539,10 +649,10 @@ export function createFishingGame(gameId) {
     rafId = window.requestAnimationFrame(loop);
   }
 
-  function handleInput(t) {
+  function handleInput(perfMs) {
     if (destroyed || finished || !session) return;
     pullLine();
-    const inputMs = toSessionRelativeMs(toAudioAbsMs(t));
+    const inputMs = toSessionRelativeMs(toAudioAbsMs(perfMs));
     let planned = trialsPlan[currentIndex];
 
     // rAFの境界直前に入力が来ても、期限切れの枠を正常に確定してから
@@ -648,6 +758,33 @@ export function createFishingGame(gameId) {
     }));
 
     const startAt = audio.scheduler.start({ beats });
+
+    // AudioContext が使えない環境では start() が null を返す（audio.js）。
+    //
+    // このとき now() も常に 0 を返す。この課題は魚の動きも判定も
+    // toSessionRelativeMs(audio.scheduler.now() * 1000) で回しているので、
+    // 時計が止まったまま——アタリの合図は一度も鳴らず、魚も現れない。
+    // それでも押下は受け付けられ、「合図の前に押した」＝フライングとして
+    // **試行が記録されてしまう**（実測: 音の無い端末で2件記録された）。
+    // 刺激を一度も出していない回のデータが、正常な反応時間の記録に混ざる。
+    //
+    // 黙って壊れるより、始められない理由を出して支援者に判断を返す。
+    // リズムと同じ扱い（games/rhythm.js の renderUnavailable）。
+    //
+    // UFOキャッチャーは同じ検査を要らない: あちらはカウントインに壁時計の
+    // 予備経路があり、位相の進行も performance.now() で回る。測るのも
+    // 時刻ではなく床の上の位置なので、音が無くても測定は成立する。
+    // 合図が鳴らせない状態は2つある。AudioContext が無い場合と、あるのに
+    // 鳴らない場合（iOS の suspended / interrupted。他アプリの割り込み、
+    // 着信、自動再生制限の解除しそこね）。どちらも「刺激を出していない回の
+    // データ」を作るので、まとめて止める。後者はヘッドレスでは再現せず、
+    // CI には出てこない種類の失敗。
+    if (startAt === null || !audio.scheduler.canSound()) {
+      audio.scheduler.stop();
+      renderUnavailable(audio.scheduler.state());
+      return;
+    }
+
     anchorPerfMs = performance.now();
     sessionStartAudioMs = audio.scheduler.now() * 1000;
     const startOffsetMs = startAt * 1000 - sessionStartAudioMs;

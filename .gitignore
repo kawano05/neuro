@@ -7,6 +7,9 @@ dist/
 *.log
 playwright-report/
 test-results/
+# CI が撮る画面（scripts/capture-screens.mjs）。成果物として上げるだけで、
+# リポジトリには入れない。
+artifacts/
 
 # Claude Code local dev config
 .claude/

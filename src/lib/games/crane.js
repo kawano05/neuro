@@ -35,6 +35,7 @@
 // =====================================================================
 
 import { cranePresets, cranePrizes, cueTones } from "../content.js";
+import { resolveCraneDifficulty, resolveDifficultyMode } from "../difficultyMode.js";
 import { evaluatePick, graspOutcome, scanPercentAt } from "./pointing.js";
 import {
   CRANE_CHUTE as CHUTE,
@@ -196,18 +197,41 @@ function computeSummary(trials, collected = []) {
  * 無かった）。値そのものはセッションの config と各試行に記録されるので、
  * どの条件で測ったかは後から追える。
  */
-function resolveCraneConfig(settings) {
+function resolveCraneConfig(settings, readiness) {
+  // そくていの回は protocol 固定・アシスト無し・通過音無し、
+  // れんしゅうの回は支援者の設定 → 既定の順（src/lib/difficultyMode.js）。
+  // どちらの回だったかも config に残して、CSVと評価ログに出す。
   return {
-    ...cranePresets,
-    sweepMs: settings?.craneSweepMs ?? cranePresets.sweepMs,
-    toleranceR: settings?.craneToleranceR ?? cranePresets.toleranceR,
-    targetTrials: settings?.craneTargetTrials ?? cranePresets.targetTrials,
+    ...resolveCraneDifficulty(settings, cranePresets),
+    difficultyMode: resolveDifficultyMode(settings),
+    // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
+    // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
+    measurementReadiness: readiness || "n/a",
   };
 }
 
 export function createCraneGame(ctx) {
-  const { audio, announce, logTrial, finish, setProgress } = ctx;
-  const config = resolveCraneConfig(ctx.settings);
+  const { audio, announce, logTrial, finish, setProgress, t, tHtml } = ctx;
+
+  /**
+   * 景品の名前。
+   *
+   * content.js の label は日本語のままなので、そこを直に差し込むと英語表記でも
+   * 「Got the くまさん!」になる——外側だけ訳しても、埋め込むデータが日本語なら
+   * 直らない。辞書に無い景品を足したときは label へ落ちる（名前が消えるより
+   * 日本語で出るほうがまし）。
+   */
+  function prizeName(prize) {
+    const key = `prize.${prize.id}`;
+    const name = t(key);
+    return name === key ? prize.label : name;
+  }
+  // 注意: この名前は画面（tHtml の差し込み値）にも読み上げにも使う。
+  // 差し込み値はエスケープされるただの文字なので、**名前に漢字があっても
+  // ルビは乗らない**。いまの景品名はすべてかな・カタカナなので問題ないが、
+  // 漢字の名前を足すと静かにルビだけ落ちる。その線は
+  // tests/i18n.test.mjs の「景品名に漢字を使わない」で縛ってある。
+  const config = resolveCraneConfig(ctx.settings, ctx.readiness);
   let stageEl = null;
   let sceneEl = null;
   let statusEl = null;
@@ -269,14 +293,26 @@ export function createCraneGame(ctx) {
   }
 
   function renderMarkup() {
+    // 筐体を「ガラスの箱」だけで描くと、iPad縦では上下に画面の半分ぶんの
+    // 空きが残る。.crane-stage の 4:3 は動かせない——縦横比を変えると透視の
+    // 見え方が変わり、床の上の距離感（＝狙いの付け方）が画面ごとに変わる
+    // （このファイル下部の GEOM と styles.css のコメント参照）。
+    //
+    // なので箱を引き伸ばすのではなく、空きのほうを筐体の一部にする。上に
+    // marquee（台の看板）、下に本体と景品の取り出し口を置くと、画面全体が
+    // 「1台の筐体が立っている」構図になり、空きが消える。中身の幾何は
+    // 一切さわっていない。
     stageEl.innerHTML = `
       <div class="crane-cabinet" aria-hidden="true">
+        <div class="crane-marquee">
+          <span class="crane-marquee-title">UFO CATCHER</span>
+          <div class="crane-score">${tHtml("crane.score", { n: 0 })}</div>
+        </div>
         <div class="crane-stage">
           <div class="crane-back"></div>
           <div class="crane-floor"></div>
           ${decorMarkup()}
           <div class="crane-chute"><span class="crane-chute-mouth"></span></div>
-          <div class="crane-collected"></div>
           <div class="crane-rail"></div>
           <div class="crane-trolley"></div>
           <div class="crane-cable"></div>
@@ -289,9 +325,20 @@ export function createCraneGame(ctx) {
           <img class="crane-prize" src="" alt="" />
           <img class="crane-claw" src="${clawOpenUrl}" alt="" />
           <div class="crane-glass"></div>
-          <div class="crane-score">つかんだ 0</div>
           <div class="crane-streak"></div>
-          <div class="crane-status">じゅんび</div>
+        </div>
+        <div class="crane-console">
+          <div class="crane-status">${tHtml("crane.ready")}</div>
+          <!--
+            取れた景品が溜まる取り出し口。以前はガラス箱の中に浮いた行として
+            出していたが、筐体の絵の中では「どこに溜まっているのか」が
+            分からなかった。実物と同じ場所へ置くと、増えていることが
+            数字を読まなくても伝わる。
+          -->
+          <div class="crane-tray">
+            <span class="crane-tray-label">${tHtml("crane.tray")}</span>
+            <div class="crane-collected"></div>
+          </div>
         </div>
       </div>
     `;
@@ -403,12 +450,12 @@ export function createCraneGame(ctx) {
   }
 
   function updateProgress() {
-    setProgress(`のこり ${Math.max(0, config.targetTrials - currentIndex)}`);
+    setProgress(t("progress.remainingCount", { n: Math.max(0, config.targetTrials - currentIndex) }));
   }
 
   function updateScore() {
     if (!scoreEl || !session) return;
-    scoreEl.textContent = `つかんだ ${session.summary.grips ?? 0}`;
+    scoreEl.innerHTML = tHtml("crane.score", { n: session.summary.grips ?? 0 });
   }
 
   /** 連続記録は3から出す（1・2で出すと常時点灯して意味を失う）。 */
@@ -416,7 +463,7 @@ export function createCraneGame(ctx) {
     if (!streakEl || !session) return;
     const streak = session.summary.currentStreak ?? 0;
     if (streak >= 3) {
-      streakEl.textContent = `${streak} れんぞく`;
+      streakEl.innerHTML = tHtml("progress.streak", { n: streak });
       streakEl.classList.add("is-shown");
     } else {
       streakEl.classList.remove("is-shown");
@@ -455,7 +502,7 @@ export function createCraneGame(ctx) {
       config.assistMaxSteps,
       config.assistStepRatio
     );
-    statusEl.textContent = "よこに うごきます";
+    statusEl.innerHTML = tHtml("crane.movingX");
     sceneEl.classList.remove("is-grip", "is-slip", "is-miss");
     clawEl.src = clawOpenUrl;
     clawEl.classList.remove("is-holding");
@@ -466,12 +513,25 @@ export function createCraneGame(ctx) {
 
   function startYPhase(perfMs) {
     setPhase("y", perfMs);
-    statusEl.textContent = "おくに うごきます";
+    statusEl.innerHTML = tHtml("crane.movingY");
+    // 横が決まった、という返事。押した結果が画面の変化だけだと、画面を
+    // 見つづけるのが難しい利用者には何も届かない。位置の情報は載せない
+    // （どこで止まったかを音で言うと、通過音と同じ問題になる）。
+    audio.playNoise({ durationS: 0.09, gain: 0.03, filter: "bandpass", frequency: 900, q: 6 });
   }
 
   function startDrop(perfMs) {
     setPhase("drop", perfMs);
-    statusEl.textContent = "アームが おりるよ";
+    statusEl.innerHTML = tHtml("crane.dropping");
+    // アームが降りる。下がる動きに合わせて音も下がる。
+    audio.playSweep({ fromHz: 520, toHz: 180, durationS: 0.42, gain: 0.03 });
+    audio.playNoise({
+      durationS: 0.42,
+      gain: 0.014,
+      filter: "lowpass",
+      frequency: 700,
+      sweepTo: 260,
+    });
   }
 
   /**
@@ -510,25 +570,39 @@ export function createCraneGame(ctx) {
     const now = audio.scheduler.now();
     clawEl.src = clawClosedUrl;
     sceneEl.classList.add(`is-${judgment}`);
+    // 音でも3つの結果を describe する。以前は高さの違うサイン波が1つ鳴るだけで、
+    // 掴んだ・すべった・届かなかったの区別が音からはつきにくかった。
+    // どれもアームが閉じたあと（結果が確定したあと）に鳴るので、測定には
+    // 関与しない。
     if (judgment === "grip") {
       audio.playToneAt(cueTones.hit, now, FEEDBACK_GAIN);
-      statusEl.textContent = `${prize.label}を つかんだ！`;
+      // 爪が閉じて景品を噛む金属音＋持ち上がる音。
+      audio.playNoise({ durationS: 0.07, gain: 0.035, filter: "bandpass", frequency: 2600, q: 3 });
+      audio.playSweep({ fromHz: 260, toHz: 700, durationS: 0.36, gain: 0.028 });
+      statusEl.innerHTML = tHtml("crane.gotPrize", { name: prizeName(prize) });
       clawEl.classList.add("is-holding");
       prizeEl.classList.add("is-lifted");
-      audio.speak(`${prize.label}を つかみました`);
-      announce(`${prize.label}を しっかり つかみました`);
+      audio.speak(t("crane.voice.grip", { name: prizeName(prize) }));
+      announce(t("crane.voice.gripAnnounce", { name: prizeName(prize) }));
     } else if (judgment === "slip") {
       audio.playToneAt(cueTones.noGo, now, FEEDBACK_GAIN);
-      statusEl.textContent = "おしい！ すべった";
+      // 一度は噛んだ音を出してから、ずり落ちる音で下がる。「掴めてはいた」を
+      // 音の順序でも表す。
+      audio.playNoise({ durationS: 0.06, gain: 0.03, filter: "bandpass", frequency: 2400, q: 3 });
+      audio.playSweep({ fromHz: 520, toHz: 200, durationS: 0.3, gain: 0.026 });
+      statusEl.innerHTML = tHtml("crane.slip");
       // 掴めてはいたので、景品が一度動いて戻ることで「惜しい」を絵でも返す。
       prizeEl.classList.add("is-slipped");
-      audio.speak("おしい。つかんだけど すべりました");
-      announce("つかみましたが すべりました");
+      audio.speak(t("crane.voice.slip"));
+      announce(t("crane.voice.slipAnnounce"));
     } else {
       audio.playToneAt(cueTones.miss, now, MISS_GAIN);
-      statusEl.textContent = "とどかなかった";
-      audio.speak("つぎは だいじょうぶ");
-      announce("アームが けいひんから はずれました");
+      // 何にも当たらず空を閉じた音。噛む音を鳴らさないことが「届かなかった」
+      // の情報になる。罰にならないよう、いちばん小さく短くする。
+      audio.playNoise({ durationS: 0.05, gain: 0.012, filter: "highpass", frequency: 1800 });
+      statusEl.innerHTML = tHtml("crane.miss");
+      audio.speak(t("crane.voice.miss"));
+      announce(t("crane.voice.missAnnounce"));
     }
     updateScore();
     updateStreak();
@@ -543,8 +617,8 @@ export function createCraneGame(ctx) {
     stopLoop();
     audio.scheduler.stop();
     const grips = session.summary.grips ?? 0;
-    audio.speak(`おわりました。${grips}こ とれました`);
-    announce(`UFOキャッチャーが おわりました。${grips}こ とれました`);
+    audio.speak(t("crane.voice.finish", { n: grips }));
+    announce(t("crane.voice.finishAnnounce", { n: grips }));
     finish(session.summary);
   }
 
@@ -561,9 +635,27 @@ export function createCraneGame(ctx) {
   /**
    * 走査カーソルが目標の座標を通過したら、ごく小さい音を1回鳴らす。
    * 画面を目で追い続けるのが難しい利用者に、押す瞬間を音でも渡すため。
-   * 判定は距離だけで決まるので、この音は測定の前提を変えない。
+   *
+   * 既定 OFF にしてある（config.audioGuidance）。
+   *
+   * 経緯: もとは常時ONで、コメントには「判定は距離だけで決まるので、この音は
+   * 測定の前提を変えない」と書いてあった。判定規則は確かに変わらない。だが
+   * 変わるのは**その課題が何を測っているか**のほうだった——この音は目標の
+   * 座標そのものを聴覚キューへ翻訳するので、利用者は画面をまったく見ずに
+   * 「音が鳴ったら押す」を2回やれば成立してしまう。それは反応時間課題
+   * （さかなつり）と同じ運動要求で、UFOキャッチャーが担うはずだった
+   * 「周期運動を目で追って2軸を順に決める」ではない。
+   *
+   * この課題は registry で visualRequired として登録され、
+   * settings.hideVisualTasks が隠す対象にもなっている——「画面を見る必要が
+   * ある唯一の課題」という位置づけそのものが、この音と両立しない。
+   *
+   * 消さずに条件へ落としたのは、元の意図（視覚追従が難しい利用者への配慮）が
+   * 正当だから。支援者が必要な回だけONにし、その回は記録に残る。リズムの
+   * visualGuidance と同じ扱い（games/rhythm.js の resolveVisualGuidance）。
    */
   function maybePassTone(percent, targetPercent, tone) {
+    if (!config.audioGuidance) return;
     if (lastPercent === null) {
       lastPercent = percent;
       return;
@@ -596,9 +688,9 @@ export function createCraneGame(ctx) {
       updateGuides(selectedX, percent);
       maybePassTone(percent, target.y, cueTones.high);
     } else if (phase === "drop") {
-      const t = Math.min(1, elapsed / DROP_MS);
-      placeClaw(selectedX, selectedY, easeInOut(t));
-      if (t >= 1) {
+      const progress = Math.min(1, elapsed / DROP_MS);
+      placeClaw(selectedX, selectedY, easeInOut(progress));
+      if (progress >= 1) {
         setPhase("close", nowPerfMs);
         resolveTrial();
       }
@@ -606,24 +698,24 @@ export function createCraneGame(ctx) {
       placeClaw(selectedX, selectedY, 1);
       if (elapsed >= CLOSE_MS) {
         setPhase("lift", nowPerfMs);
-        statusEl.textContent = judgment === "grip" ? "もちあげた" : statusEl.textContent;
+        statusEl.innerHTML = judgment === "grip" ? tHtml("crane.lifted") : statusEl.innerHTML;
       }
     } else if (phase === "lift") {
-      const t = Math.min(1, elapsed / LIFT_MS);
-      placeClaw(selectedX, selectedY, 1 - easeInOut(t));
+      const progress = Math.min(1, elapsed / LIFT_MS);
+      placeClaw(selectedX, selectedY, 1 - easeInOut(progress));
       if (judgment === "grip") followPrizeToClaw();
-      if (t >= 1) {
+      if (progress >= 1) {
         if (judgment === "grip") {
           setPhase("carry", nowPerfMs);
-          statusEl.textContent = "けいひんぐちへ";
+          statusEl.innerHTML = tHtml("crane.carrying");
         } else {
           setPhase("result", nowPerfMs);
         }
       }
     } else if (phase === "carry") {
-      const t = Math.min(1, elapsed / CARRY_MS);
-      carryToChute(easeInOut(t));
-      if (t >= 1) {
+      const progress = Math.min(1, elapsed / CARRY_MS);
+      carryToChute(easeInOut(progress));
+      if (progress >= 1) {
         dropIntoChute();
         setPhase("result", nowPerfMs);
       }
@@ -644,12 +736,12 @@ export function createCraneGame(ctx) {
   }
 
   /** アームごと景品口へ水平移動する。 */
-  function carryToChute(t) {
+  function carryToChute(progress) {
     const at = project(selectedX, selectedY);
     const fromLeft = at.left;
     const fromTop = at.top - GEOM.altitude * at.scale;
-    const left = fromLeft + (CHUTE.left - fromLeft) * t;
-    const top = fromTop + (CHUTE.top - GEOM.altitude - fromTop) * t;
+    const left = fromLeft + (CHUTE.left - fromLeft) * progress;
+    const top = fromTop + (CHUTE.top - GEOM.altitude - fromTop) * progress;
     clawEl.style.left = `${left}%`;
     clawEl.style.top = `${top}%`;
     trolleyEl.style.left = `${left}%`;
@@ -679,10 +771,20 @@ export function createCraneGame(ctx) {
     badge.alt = "";
     collectedEl.appendChild(badge);
     audio.playToneAt(cueTones.high, audio.scheduler.now(), FEEDBACK_GAIN);
-    statusEl.textContent = "とれた！";
+    // 受け口に落ちる音。低くて短い「ぼとっ」で、掴んだ瞬間の金属音とは
+    // 別の出来事だと分かるようにする。ここが1回の試行の終点なので、
+    // 音の上でも区切りになる。
+    audio.playNoise({
+      durationS: 0.16,
+      gain: 0.034,
+      filter: "lowpass",
+      frequency: 420,
+      sweepTo: 140,
+    });
+    statusEl.innerHTML = tHtml("crane.got");
   }
 
-  function handleInput(t) {
+  function handleInput(perfMs) {
     if (destroyed || finished || !session) return;
 
     // 走査中でなければ、この入力は試行に使えない。捨てずに合図だけ返す。
@@ -692,21 +794,21 @@ export function createCraneGame(ctx) {
     }
     // フェーズが変わった直後の二度押しを試行に反映しない（ファイル冒頭の
     // コメント参照）。ここでも黙らせず、待つべきことを合図で返す。
-    if (t - phaseStartedPerfMs < INPUT_GUARD_MS) {
+    if (perfMs - phaseStartedPerfMs < INPUT_GUARD_MS) {
       nudgeWait();
       return;
     }
 
     if (phase === "x") {
-      xPhaseMs = Math.max(0, t - phaseStartedPerfMs);
+      xPhaseMs = Math.max(0, perfMs - phaseStartedPerfMs);
       selectedX = scanPercentAt(xPhaseMs, config.sweepMs);
       placeClaw(selectedX, 50, 0);
-      startYPhase(t);
+      startYPhase(perfMs);
     } else {
-      yPhaseMs = Math.max(0, t - phaseStartedPerfMs);
+      yPhaseMs = Math.max(0, perfMs - phaseStartedPerfMs);
       selectedY = scanPercentAt(yPhaseMs, config.sweepMs);
       placeClaw(selectedX, selectedY, 0);
-      startDrop(t);
+      startDrop(perfMs);
     }
   }
 

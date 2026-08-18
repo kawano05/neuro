@@ -30,6 +30,26 @@ jobs:
       - name: Run unit and browser tests
         run: npm test
 
+      # 実機（iPad + NeuroNode）が手元に無い期間は、見た目の確認が CI しか
+      # できない。ビルドとテストが緑でも「画面がどう見えるか」は分からず、
+      # 余白の破綻・文字の折り返し・暗すぎる対象物はどれもテストを通り抜ける。
+      # push のたびに3つの実寸（iPad縦・スマホ縦・スマホ横）を残しておく。
+      #
+      # 判定は tests/ の仕事なので、撮影に失敗しても CI は落とさない。
+      - name: Capture screenshots
+        if: always()
+        continue-on-error: true
+        run: node scripts/capture-screens.mjs artifacts/screens
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: artifacts/screens
+          if-no-files-found: warn
+          retention-days: 14
+
   capacitor-ios:
     name: Capacitor iOS build
     runs-on: macos-latest
@@ -59,4 +79,55 @@ jobs:
         run: ls -la ios/App
 
       - name: Build iOS simulator target
-        run: xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+        run: xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+
+      # ここまでは .app を作るだけで、WKWebView は一度も動いていない。
+      # 実機は無いが、シミュレータなら**本物の iOS WebKit**を動かせる。
+      # ルビ（ふりがな）の組み方は engine 差が出る場所で、手元の Playwright の
+      # WebKit と Chromium でも行の高さが 61px と 53px に割れた——iOS で
+      # どうなるかは、iOS で描かせないと分からない。
+      #
+      # 手元（Windows）で検証できないので continue-on-error。落ちても他の
+      # ジョブを止めない。得たいのは合否ではなく**成果物のスクリーンショット**。
+      - name: Render the ruby probe on a real iOS simulator
+        continue-on-error: true
+        run: |
+          set -x
+          # 起動済みのシミュレータを1台用意する。
+          UDID=$(xcrun simctl list devices available -j             | python3 -c "import json,sys; d=json.load(sys.stdin)['devices'];                 ds=[x for v in d.values() for x in v if x.get('isAvailable')];                 ipad=[x for x in ds if 'iPad' in x['name']];                 print((ipad or ds)[0]['udid'])")
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          mkdir -p ios-shots
+
+          # 1) ルビ単体のページを Safari で開いて撮る。
+          #    アプリ本体はスタート画面のひと押しを経ないとホームへ進まず、
+          #    simctl はタップを送れないので、ルビの乗った画面まで到達できない。
+          #    見たいのは「iOS の WebKit がルビをどう組むか」なので、そこだけ
+          #    取り出したページを開く（scripts/ruby-probe.html）。
+          node scripts/serve-dist.mjs scripts 8099 &
+          SERVER=$!
+          sleep 2
+          xcrun simctl openurl "$UDID" "http://127.0.0.1:8099/ruby-probe.html"
+          sleep 6
+          xcrun simctl io "$UDID" screenshot ios-shots/ruby-probe.png
+          kill $SERVER || true
+
+          # 2) アプリ本体を起動して撮る（スタート画面まで）。WKWebView が
+          #    実際に立ち上がるかの確認を兼ねる。
+          APP=$(find build/Build/Products -name 'App.app' -maxdepth 3 | head -1)
+          if [ -n "$APP" ]; then
+            xcrun simctl install "$UDID" "$APP"
+            xcrun simctl launch "$UDID" jp.ac.nit.kumeno.neuro || true
+            sleep 6
+            xcrun simctl io "$UDID" screenshot ios-shots/app-start.png
+          fi
+          ls -la ios-shots
+
+      - name: Upload iOS screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-shots
+          path: ios-shots/
+          if-no-files-found: warn
+          retention-days: 14

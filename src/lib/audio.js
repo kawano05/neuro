@@ -19,8 +19,10 @@
 // 時刻に使うのは MUST NOT）。
 // =====================================================================
 
+import { resolveTextMode, speechLangFor } from "./i18n.js";
+
 /** ビート予約の既定包絡（sine, gain 0.05, 約0.18秒で減衰）。detailed-design.md §6.2。 */
-const DEFAULT_TONE_GAIN = 0.05;
+export const DEFAULT_TONE_GAIN = 0.05;
 const TONE_DECAY_S = 0.18;
 const TONE_STOP_MARGIN_S = 0.02;
 
@@ -139,6 +141,43 @@ export function createBeatScheduler(audioContext) {
   return { start, stop, now };
 }
 
+// ---------------------------------------------------------------------
+// 効果音（クレーン・さかなつり）の合成に使う定数
+//
+// このアプリの音は長らく「約0.18秒のサイン波」1種類しかなかった。合図として
+// はそれで足りるが、押した結果として何が起きたのかは何も伝わらない——
+// アームが降りたのか、掴んだのか、滑ったのか、魚が掛かったのかが、音では
+// 区別できなかった。画面を見つづけるのが難しい利用者にとって、これは
+// 「結果が届かない」ということそのものになる。
+//
+// 守る条件は1つ。**測定の合図音を覆わないこと**。
+//   - 音量は合図音（DEFAULT_TONE_GAIN = 0.05）より下に置く。
+//   - 帯域を分ける。合図は 440Hz / 880Hz の純音なので、効果音は
+//     ノイズ（広帯域）と低い帯に寄せて、同じ高さで competing させない。
+//   - 鳴らすのは「入力より後」の出来事だけにする。さかなつりのアタリ音
+//     （測定刺激）より前に鳴る音は足さない。
+//   - soundEnabled が OFF ならすべて鳴らない（合図音は別扱いで、
+//     basic-design.md §6 によりミュート不可）。
+// ---------------------------------------------------------------------
+
+/** 効果音の音量上限。合図音（DEFAULT_TONE_GAIN = 0.05）より下に置く。 */
+export const EFFECT_GAIN_CEILING = 0.04;
+
+/**
+ * 効果音の音量を、合図音を覆わない範囲へ丸める。
+ *
+ * ここがこの機能の安全弁。効果音は「押した結果」を伝えるためのもので、
+ * 測定の合図（440Hz/880Hz の純音）より目立ってはいけない——合図が聴き取り
+ * にくくなると、聴覚キューへの同期/反応という測定そのものが変わる。
+ * 呼び出し側が大きな値を渡しても、ここで必ず頭を押さえる。
+ */
+export function clampEffectGain(gain) {
+  if (typeof gain !== "number" || !Number.isFinite(gain)) return 0;
+  return Math.min(Math.max(gain, 0), EFFECT_GAIN_CEILING);
+}
+/** ノイズ音源の長さ（秒）。使い回すので、いちばん長い効果音より長くする。 */
+const NOISE_BUFFER_S = 2;
+
 /**
  * @param {() => {speechEnabled: boolean, soundEnabled: boolean}} getSettings
  *   設定の現在値を返す関数（state.settings への遅延参照）
@@ -146,6 +185,7 @@ export function createBeatScheduler(audioContext) {
 export function createAudio(getSettings) {
   let audioContext;
   let scheduler;
+  let noiseBuffer = null;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
   /** AudioContext を（未生成なら）生成し、対応する BeatScheduler も用意する。 */
@@ -167,7 +207,9 @@ export function createAudio(getSettings) {
     if (!getSettings().speechEnabled || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "ja-JP";
+    // 表記に合わせて読み上げの言語も変える。英語表記のまま日本語音声で
+    // 読ませると、意味の通らない発音になる（src/lib/i18n.js）。
+    utterance.lang = speechLangFor(resolveTextMode(getSettings()));
     utterance.rate = 0.92;
     window.speechSynthesis.speak(utterance);
   }
@@ -205,6 +247,102 @@ export function createAudio(getSettings) {
     return scheduleOscillatorTone(ctx, frequency, atTimeS, gain);
   }
 
+  /**
+   * ホワイトノイズの音源を1本だけ作って使い回す。
+   * 呼ばれるたびに作ると、掴みの瞬間など連続で鳴らす場面で無駄が大きい。
+   */
+  function ensureNoiseBuffer(ctx) {
+    if (noiseBuffer) return noiseBuffer;
+    const length = Math.floor(ctx.sampleRate * NOISE_BUFFER_S);
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
+    noiseBuffer = buffer;
+    return noiseBuffer;
+  }
+
+  /**
+   * 濾したノイズをひと吹き鳴らす。水音・モーター・金属の当たりの素になる。
+   *
+   * @param {object} options
+   * @param {number} options.durationS 長さ（秒）
+   * @param {number} [options.gain] 0〜EFFECT_GAIN_CEILING に丸める
+   * @param {"lowpass"|"highpass"|"bandpass"} [options.filter]
+   * @param {number} [options.frequency] フィルタの中心/カットオフ
+   * @param {number} [options.q] バンドパスの鋭さ
+   * @param {number} [options.sweepTo] 指定すると frequency からここへ滑らす
+   */
+  function playNoise({
+    durationS = 0.2,
+    gain = 0.02,
+    filter = "lowpass",
+    frequency = 1200,
+    q = 1,
+    sweepTo = null,
+  } = {}) {
+    if (!getSettings().soundEnabled) return null;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const source = ctx.createBufferSource();
+      source.buffer = ensureNoiseBuffer(ctx);
+      const band = ctx.createBiquadFilter();
+      band.type = filter;
+      band.frequency.value = frequency;
+      band.Q.value = q;
+      const envelope = ctx.createGain();
+      const at = ctx.currentTime;
+      const peak = clampEffectGain(gain);
+      // 立ち上がりを 0 から作る。いきなり値を入れるとプチッと鳴る。
+      envelope.gain.setValueAtTime(0.0001, at);
+      envelope.gain.exponentialRampToValueAtTime(peak, at + Math.min(0.02, durationS / 3));
+      envelope.gain.exponentialRampToValueAtTime(0.0001, at + durationS);
+      if (typeof sweepTo === "number") {
+        band.frequency.exponentialRampToValueAtTime(Math.max(40, sweepTo), at + durationS);
+      }
+      source.connect(band);
+      band.connect(envelope);
+      envelope.connect(ctx.destination);
+      source.start(at);
+      source.stop(at + durationS + 0.02);
+      return { source, envelope };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 高さの変わる音をひと吹き鳴らす。アームの上下、リールの巻き上げなど、
+   * 「動いている」ことを伝える用。
+   *
+   * 合図音と同じ純音（sine）は使わない。合図と紛れると、聴覚キューへの
+   * 反応という測定の前提が濁る——三角波にして倍音の出かたを変えてある。
+   */
+  function playSweep({ fromHz = 220, toHz = 660, durationS = 0.25, gain = 0.03 } = {}) {
+    if (!getSettings().soundEnabled) return null;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const oscillator = ctx.createOscillator();
+      const envelope = ctx.createGain();
+      const at = ctx.currentTime;
+      const peak = clampEffectGain(gain);
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(Math.max(40, fromHz), at);
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, toHz), at + durationS);
+      envelope.gain.setValueAtTime(0.0001, at);
+      envelope.gain.exponentialRampToValueAtTime(peak, at + Math.min(0.03, durationS / 3));
+      envelope.gain.exponentialRampToValueAtTime(0.0001, at + durationS);
+      oscillator.connect(envelope);
+      envelope.connect(ctx.destination);
+      oscillator.start(at);
+      oscillator.stop(at + durationS + 0.02);
+      return { oscillator, envelope };
+    } catch {
+      return null;
+    }
+  }
+
   /** 短い確認音を即時に鳴らす（soundEnabled が ON のときのみ、既存呼び出し互換）。 */
   function playTone(frequency) {
     if (!getSettings().soundEnabled) return null;
@@ -236,6 +374,21 @@ export function createAudio(getSettings) {
       outputLatencyS: ctx && typeof ctx.outputLatency === "number" ? ctx.outputLatency : null,
       baseLatencyS: ctx && typeof ctx.baseLatency === "number" ? ctx.baseLatency : null,
       userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      // 画面の大きさ。スマホでも動くようにした以上、同じ課題を iPad と
+      // スマホの両方で回せる——そのとき変わるのは画面だけではない。
+      // 視距離・視角・刺激の実寸（crane の景品、rhythm の円は vmin 基準）、
+      // スピーカーの特性と音の出方までまとめて変わる。iPad の回とスマホの
+      // 回を混ぜて集計すると、差が利用者のものか端末のものか言えなくなる。
+      //
+      // 端末を禁じるのではなく、条件として残して解析側で分けられるように
+      // する（visualGuidance / audioGuidance と同じ扱い）。userAgent だけ
+      // では画面の大きさも向きも分からないので、実寸を持つ。
+      viewportWidth: typeof window !== "undefined" ? Math.round(window.innerWidth) : null,
+      viewportHeight: typeof window !== "undefined" ? Math.round(window.innerHeight) : null,
+      devicePixelRatio:
+        typeof window !== "undefined" && typeof window.devicePixelRatio === "number"
+          ? window.devicePixelRatio
+          : null,
     };
   }
 
@@ -244,6 +397,8 @@ export function createAudio(getSettings) {
     stopSpeech,
     playTone,
     playToneAt,
+    playNoise,
+    playSweep,
     unlock,
     getDeviceInfo,
     /**
@@ -252,6 +407,27 @@ export function createAudio(getSettings) {
      * （スタート画面の unlock() で通常は既に生成済み）。
      */
     scheduler: {
+      /**
+       * 合図が鳴らせる状態か。
+       *
+       * AudioContext が「ある」ことと「鳴る」ことは別。iOS では、他アプリの
+       * 割り込みや着信で state が "interrupted" になり、自動再生の制限を
+       * 解除しそこねると "suspended" のまま残る。どちらも context 自体は
+       * 存在するので、有無だけを見るガードは素通りする——合図が一度も
+       * 鳴らないまま、押した分だけがデータになる。
+       *
+       * この状態はヘッドレスでは再現しないので CI では絶対に出ない。
+       * 実機でだけ起きる silent failure なので、コード側で明示的に見る。
+       */
+      canSound() {
+        const ctx = ensureContext();
+        return Boolean(ctx) && ctx.state === "running";
+      },
+      /** いまの AudioContext の状態（表示・記録用。無ければ null）。 */
+      state() {
+        const ctx = ensureContext();
+        return ctx ? ctx.state : null;
+      },
       start(beatPlan) {
         const ctx = ensureContext();
         return ctx ? scheduler.start(beatPlan) : null;

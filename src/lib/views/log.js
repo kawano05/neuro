@@ -10,10 +10,94 @@ import {
   describeSessionResult,
 } from "../sessionConditions.js";
 import { gameModules } from "../games/registry.js";
+import { summariseSessionTrends, trendDirection } from "../sessionTrend.js";
 
 /** ゲームIDを支援者に読める名前へ。未知のIDはそのまま出す（黙って消さない）。 */
 function gameTitle(gameId) {
   return gameModules.find((game) => game.id === gameId)?.title ?? gameId;
+}
+
+function roundValue(value) {
+  return Math.abs(value) >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
+}
+
+/**
+ * 1つの束（同じ課題・同じ条件）を、折れ線1本として描く。
+ *
+ * 縦軸はその束の中の最小〜最大に合わせる。0を基準にすると、値の動く幅が
+ * 小さい指標（ばらつきのmsなど）で線がほぼ平らになり、変化が読めない。
+ * ただし「どこを基準にした縦軸か」は数字で出す——出さないと、拡大された
+ * わずかな差を大きな変化と読み違える。
+ */
+function renderTrend(group) {
+  const values = group.points.map((point) => point.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const width = 100;
+  const height = 40;
+  const step = group.points.length > 1 ? width / (group.points.length - 1) : 0;
+  const coords = values.map((value, index) => {
+    const x = index * step;
+    // 値そのものを描く（大きい値ほど上）。
+    //
+    // 「上がれば良い」に揃える描き方も試したが、下が良い指標（ずれの
+    // ばらつき）で線が上がりながら数字は下がる、という図になった。
+    // 線と、そのすぐ下に並ぶ数字が逆を向くのは、読み違いを招くだけで
+    // 得るものがない——とくにこれは卒論の図の元になる画面なので、
+    // 図が数字と食い違ってはいけない。
+    //
+    // 良し悪しの向きは線の形ではなく、上の札（よくなっています／
+    // さがっています）と「小さいほうが よい」の注記で言う。
+    const y = height - ((value - min) / span) * height;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+
+  const direction = trendDirection(group);
+  const directionLabel =
+    direction === "better" ? "よくなっています" : direction === "worse" ? "さがっています" : "かわっていません";
+
+  const dots = coords
+    .map((pair) => {
+      const [x, y] = pair.split(",");
+      return `<circle cx="${x}" cy="${y}" r="2.4" />`;
+    })
+    .join("");
+
+  const unit = group.unit;
+  return `
+    <article class="trend-card">
+      <header class="trend-head">
+        <div>
+          <strong>${escapeHtml(gameTitle(group.gameId))}</strong>
+          <small>${escapeHtml(group.conditions || "既定の条件")}</small>
+        </div>
+        <span class="trend-direction is-${direction}">${directionLabel}</span>
+      </header>
+      <p class="trend-metric">
+        ${escapeHtml(group.label)}
+        <span class="trend-hint">（${group.higherIsBetter ? "大きい" : "小さい"}ほうが よい）</span>
+      </p>
+      <svg
+        class="trend-plot"
+        viewBox="0 0 ${width} ${height}"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="${escapeHtml(group.label)}の推移。${group.points.length}回ぶん。
+          はじめ ${roundValue(group.first)}${unit}、いま ${roundValue(group.last)}${unit}、
+          いちばん よかった回 ${roundValue(group.best)}${unit}。${directionLabel}"
+      >
+        <polyline points="${coords.join(" ")}" vector-effect="non-scaling-stroke" />
+        ${dots}
+      </svg>
+      <dl class="trend-values">
+        <div><dt>はじめ</dt><dd>${roundValue(group.first)}${unit}</dd></div>
+        <div><dt>いま</dt><dd>${roundValue(group.last)}${unit}</dd></div>
+        <div><dt>さいこう</dt><dd>${roundValue(group.best)}${unit}</dd></div>
+        <div><dt>かいすう</dt><dd>${group.points.length}回</dd></div>
+      </dl>
+    </article>
+  `;
 }
 
 export function initLog(ctx) {
@@ -24,6 +108,23 @@ export function initLog(ctx) {
    * 難易度を設定画面から変えられるようにした以上、あとから条件を確認できる
    * 必要がある（sessionConditions.js のコメント参照）。新しい順に並べる。
    */
+  /** 課題×条件ごとの推移。2回以上そろった束だけ出る。 */
+  function renderTrends() {
+    if (!elements.sessionTrends) return;
+    const groups = summariseSessionTrends(state.sessions);
+    if (groups.length === 0) {
+      elements.sessionTrends.innerHTML = `
+        <div class="empty-state">
+          同じ あそびを 同じ条件で 2回以上 完走すると、ここに うつりかわりが出ます。
+        </div>
+      `;
+      return;
+    }
+    elements.sessionTrends.innerHTML = `
+      <div class="trend-grid">${groups.map(renderTrend).join("")}</div>
+    `;
+  }
+
   function renderSessions() {
     elements.sessionList.innerHTML = "";
     const sessions = [...(state.sessions || [])].reverse();
@@ -57,6 +158,7 @@ export function initLog(ctx) {
 
   /** 集計値とログ一覧（直近32件）の描画 */
   function render() {
+    renderTrends();
     renderSessions();
     const total = state.logs.filter((entry) => entry.type !== "system").length;
     // 正答率の母数は正誤判定がある matching / letter のみ

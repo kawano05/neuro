@@ -96,6 +96,11 @@ export function describeSessionConditions(session) {
     if (typeof config.sweepMs === "number") parts.push(`はやさ ${config.sweepMs}ms`);
     if (typeof config.toleranceR === "number") parts.push(`ひろさ ${config.toleranceR}`);
     if (typeof config.targetTrials === "number") parts.push(`${config.targetTrials}かい`);
+    // 通過音を鳴らしていた回は、画面を見なくても解ける——視覚課題としての
+    // 成績ではなくなるので、条件として並べないと回どうしを比べられない。
+    if (config.audioGuidance === true) parts.push("通過音あり");
+    if (config.difficultyMode === "measure") parts.unshift("そくてい");
+    if (config.measurementReadiness === "overridden") parts.push("成立確認なし");
     return parts.join(" / ");
   }
 
@@ -103,6 +108,22 @@ export function describeSessionConditions(session) {
     const parts = [];
     if (typeof config.bpm === "number") parts.push(`テンポ ${config.bpm}`);
     if (typeof config.targetBeats === "number") parts.push(`${config.targetBeats}はく`);
+    // 画面から拍の手がかり（予告の溜め＋ずれの目盛り）を出していた回は、
+    // 聴覚だけへの同期ではないので測定として別条件になる。ここに出さないと、
+    // 支援者は2つの回を並べたときに違いに気づけない。
+    //
+    // 出すのは ON のときだけ。既定が OFF なので、OFF を毎行書くと全行に
+    // 同じ札が並んで、条件の違いを探すのがかえって難しくなる。
+    if (config.visualGuidance === true) parts.push("手がかりあり");
+    // そくていの回は先頭に出す。条件の束の名前なので、個別の値より先に
+    // 目に入るほうが「この回は何なのか」が速く分かる。
+    if (config.difficultyMode === "measure") parts.unshift("そくてい");
+    // 成立確認（高低の聞き分け・随意操作・規則の実行）を確かめないまま
+    // 測った回。成績が低かったときに、抑制の失敗なのか課題がそもそも
+    // 成立していなかったのかを分けられない回なので、条件として出す。
+    // 出すのは overridden のときだけ——met を毎行書くと札が並ぶだけで、
+    // 見分けたいほうが埋もれる（そくていの札と同じ扱い）。
+    if (config.measurementReadiness === "overridden") parts.push("成立確認なし");
     return parts.join(" / ");
   }
 

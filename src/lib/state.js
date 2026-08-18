@@ -24,6 +24,9 @@ import {
 } from "./content.js";
 import { graspOutcome } from "./games/pointing.js";
 import { judgeReaction } from "./games/reaction.js";
+import { DIFFICULTY_MODES } from "./difficultyMode.js";
+import { READINESS_STATES } from "./readinessCheck.js";
+import { SELECTABLE_TEXT_MODES, TEXT_MODES } from "./i18n.js";
 
 /**
  * 旧保存キー（P0-0 移行元、detailed-design.md §9.5）。
@@ -91,6 +94,61 @@ export const defaultState = {
     craneSweepMs: null,
     craneToleranceR: null,
     craneTargetTrials: null,
+    // UFOキャッチャーで、走査カーソルが目標を通過したとき音を鳴らすか
+    // （games/crane.js の maybePassTone）。
+    //
+    // 既定 OFF。この音は目標の座標そのものを聴覚キューへ翻訳するので、ONだと
+    // 画面を見ずに「音が鳴ったら押す」だけで成立してしまい、この課題が
+    // visualRequired（視覚必須）である前提が崩れる。視覚追従が難しい利用者に
+    // 配る手がかりとしては正当なので、支援者が必要な回だけONにする。
+    // 実際に効いた値は session.config.audioGuidance に残り、走査CSVにも出る。
+    craneAudioGuidance: false,
+    // リズム系で、拍について画面から手がかりを出すか
+    // （games/rhythm.js、detailed-design.md §7.4）。ONで2つが同時に効く:
+    //   1. パルス円が次の拍へ向けて「溜める」（＝拍の予告になる）
+    //   2. 押したあと、ずれの目盛りに「はやい/おそい」が出る（＝結果の知識KR）
+    //
+    // 既定 OFF。この課題は聴覚キューへの同期を測る計測器なので、素の状態は
+    // 「手がかりは音だけ」でなければならない。上の2つはどちらも視覚から拍の
+    // 情報を足すので、入れたまま測ると rawOffsetMs は「聴覚キューへの入力」
+    // ではなく「聴覚＋視覚キューへの入力」になり、研究上の構成概念が変わる。
+    //
+    // 訓練として使いたい回は支援者が ON にする。自分のずれが見えることは
+    // 上達の手がかりとして強い。ただし運動学習では毎試行のKRが学習を
+    // かえって妨げうる（guidance hypothesis）ことも知られているので、
+    // 既定で配る側にはしない。ふだんの練習では、セッションが終わったあとの
+    // リザルト画面がまとめてずれを見せる（games/gameHost.js）——事後の
+    // まとめなら、測っている最中の行動を変えない。
+    //
+    // そくてい（calibration）は手順そのものなので、この設定に関わらず常に
+    // OFF（games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS と同じ線引き）。
+    //
+    // 実際に効いていた値は session.config.visualGuidance に毎回残し、
+    // sanitizeRhythmSession でも保持し、リズムCSVにも列として出す。
+    // どれか1つでも欠けると、条件の違う回をあとから区別できなくなる。
+    visualGuidance: false,
+    // 「そくてい（研究）」か「れんしゅう（訓練）」か（src/lib/difficultyMode.js）。
+    //
+    // 既定は practice。ふだん使うのは訓練で、測定は支援者が意図して選ぶもの。
+    //
+    // そくていを選ぶと、テンポ・拍数・つかめる広さ・画面の手がかり・通過音・
+    // アシストがすべて protocol 固定になり、支援者は変更できなくなる。
+    // 条件を1つずつ記録する方式には限界がある——条件が増えるほど層別すべき
+    // セルが増え、少ない参加者では空のセルばかりになる。「記録した」ことは
+    // 「交絡が無い」ことを意味しない。なので束に名前を付けて2つに畳む。
+    //
+    // どちらだったかは session.config.difficultyMode に残り、CSVにも出る。
+    difficultyMode: "practice",
+    // 利用者向け文言の表記（src/lib/i18n.js）。"kanji" / "kana" / "en"。
+    //
+    // 既定はひらがな（これまでの表示を変えない）。この集団は読字能力の幅が
+    // 大きく、ひらがなだけが常にやさしいわけではない——日本語は漢字が語の
+    // 境界を作るので、漢字を読める人には漢字表記のほうが速く読める。
+    // どちらかに決め打ちすると、どちらかの利用者を締め出すことになる。
+    //
+    // 手順の説明が読めるかどうかは成績に効きうるので、測定条件として
+    // session.config.textMode に残す。
+    textMode: "ruby",
   },
   logs: [],
   evaluation: {
@@ -479,7 +537,6 @@ function hasCompleteRhythmPlan(trials, config) {
 function sanitizeRhythmSession(session, taskType) {
   if (!isRecord(session)) return null;
   const config = isRecord(session.config) ? session.config : {};
-  const device = isRecord(session.device) ? session.device : {};
   const sanitizedConfig = {
     mode: enumOr(config.mode, RHYTHM_MODES, "cued"),
     bpm: numberInRange(config.bpm, 40, 20, 240, true),
@@ -494,6 +551,26 @@ function sanitizeRhythmSession(session, taskType) {
       MAX_BASELINE_OFFSET_MS
     ),
     goRatio: nullableNumberInRange(config.goRatio, null, 0, 1),
+    // その回に画面から拍の手がかりを出していたか（settings.visualGuidance）。
+    //
+    // ここで落とすと、再読み込みしたとたん条件が消える——記録として残す
+    // 意味がなくなる。既定は false にしてある: この列を持たない古い記録は
+    // 手がかりを出す仕組み自体が無かった頃のもので、実際に出していない。
+    visualGuidance: config.visualGuidance === true,
+    // そくてい／れんしゅうのどちらの回か（src/lib/difficultyMode.js）。
+    // 落とすと再読み込みで消え、測定の回と練習の回を後から分けられない。
+    // 既定は practice: この列を持たない古い記録は、モードという概念自体が
+    // 無かった頃のもので、支援者が自由に調整できる状態で取られている。
+    difficultyMode: enumOr(config.difficultyMode, DIFFICULTY_MODES, "practice"),
+    // どの表記で回したか。手順の説明が読めるかは成績に効きうる。
+    // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
+    // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
+    textMode: enumOr(config.textMode, TEXT_MODES, "kana"),
+    // 成立確認が通った状態で測ったか（src/lib/readinessCheck.js）。
+    // 既定 "n/a": この列を持たない古い記録は成立確認の仕組み自体が無かった
+    // 頃のもので、「確認できていた」と復元してしまうと、確認を経た回と
+    // 区別できなくなる。分からないものは分からないと残す。
+    measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
     seedSequence: Array.isArray(config.seedSequence)
       ? config.seedSequence
           .filter((kind) => RHYTHM_BEAT_KINDS.has(kind))
@@ -540,11 +617,9 @@ function sanitizeRhythmSession(session, taskType) {
     aborted: !completedNormally,
     finished: completedNormally,
     config: sanitizedConfig,
-    device: {
-      outputLatencyS: nullableNumberInRange(device.outputLatencyS, null, 0, 60),
-      baseLatencyS: nullableNumberInRange(device.baseLatencyS, null, 0, 60),
-      userAgent: stringOr(device.userAgent),
-    },
+    // 走査/反応課題と同じ sanitizeDevice を使う。以前はここだけ同じ3項目を
+    // 直書きしていたので、端末情報を足すと片方だけ落ちる状態だった。
+    device: sanitizeDevice(session.device),
     trials,
     // 保存済みsummaryは派生値。破損・改変されていても採用せずtrialを正本にする。
     summary: summarizeRhythmTrials(trials),
@@ -557,6 +632,13 @@ function sanitizeDevice(device) {
     outputLatencyS: nullableNumberInRange(value.outputLatencyS, null, 0, 60),
     baseLatencyS: nullableNumberInRange(value.baseLatencyS, null, 0, 60),
     userAgent: stringOr(value.userAgent),
+    // 画面の実寸（audio.js の getDeviceInfo）。同じ課題を iPad とスマホの
+    // 両方で回せるようにした以上、回ごとの端末は測定条件のひとつになる
+    // ——視距離・視角・刺激の実寸・音の出方がまとめて変わるため。
+    // 落とすと再読み込みで消え、iPad の回とスマホの回を後から分けられない。
+    viewportWidth: nullableNumberInRange(value.viewportWidth, null, 0, 20_000, true),
+    viewportHeight: nullableNumberInRange(value.viewportHeight, null, 0, 20_000, true),
+    devicePixelRatio: nullableNumberInRange(value.devicePixelRatio, null, 0, 16),
   };
 }
 
@@ -642,6 +724,20 @@ function sanitizeScanSession(session) {
     toleranceR: numberInRange(config.toleranceR, 12, 1, 50),
     targetTrials: numberInRange(config.targetTrials, 5, 1, 100, true),
     graspAnimMs: numberInRange(config.graspAnimMs, 1200, 100, 10_000, true),
+    // その回、目標の通過音を鳴らしていたか（settings.craneAudioGuidance）。
+    // 落とすと再読み込みで条件が消える。既定 false: この列を持たない古い
+    // 記録は音が常時鳴っていた頃のものだが、そこを true と復元してしまうと
+    // 「支援者が意図してONにした回」と区別できなくなる。区別できないなら、
+    // 意図の記録としては空（false）のほうが誤読を生まない。
+    audioGuidance: config.audioGuidance === true,
+    // そくてい／れんしゅうのどちらの回か（src/lib/difficultyMode.js）。
+    difficultyMode: enumOr(config.difficultyMode, DIFFICULTY_MODES, "practice"),
+    // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
+    // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
+    textMode: enumOr(config.textMode, TEXT_MODES, "kana"),
+    // 成立確認が通った状態で測ったか（src/lib/readinessCheck.js）。リズム側と
+    // 同じ既定・同じ理由。
+    measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
     targetSequence: Array.isArray(config.targetSequence)
       ? config.targetSequence
           .filter(
@@ -996,6 +1092,21 @@ export function sanitizeState(candidate) {
       craneSweepMs: nullableNumberInRange(settings.craneSweepMs, null, 800, 6000, true),
       craneToleranceR: nullableNumberInRange(settings.craneToleranceR, null, 4, 40, true),
       craneTargetTrials: nullableNumberInRange(settings.craneTargetTrials, null, 3, 15, true),
+      visualGuidance: booleanOr(settings.visualGuidance, fallback.settings.visualGuidance),
+      difficultyMode: enumOr(
+        settings.difficultyMode,
+        DIFFICULTY_MODES,
+        fallback.settings.difficultyMode
+      ),
+      // 設定は「いまどう表示するか」なので、選べる表記へ倒す。以前の
+      // kanji / kana が保存された端末はここでルビ付き漢字になる。
+      // セッション記録側（下の sanitize）は当時の値をそのまま残す——
+      // あちらは「そのときどう表示していたか」という測定条件だから。
+      textMode: enumOr(settings.textMode, SELECTABLE_TEXT_MODES, fallback.settings.textMode),
+      craneAudioGuidance: booleanOr(
+        settings.craneAudioGuidance,
+        fallback.settings.craneAudioGuidance
+      ),
     },
     logs: Array.isArray(candidate.logs)
       ? candidate.logs.map(sanitizeLogEntry).filter(Boolean).slice(0, MAX_LOG_ENTRIES)

@@ -27,6 +27,56 @@
   --radius-sm: 10px;
   --radius-lg: 18px;
   --dock-height: 126px;
+
+  /* -------------------------------------------------------------------
+     アートディレクション「やわらかい紙と光」
+
+     以前は画面ごとに世界が違った。シェルと教材はクリーム地のフラット、
+     UFOキャッチャーは濃紺のスキュモーフィズム、さかなつりはカートゥーン。
+     同じアプリに見えず、ランチャーから別々のアプリを起動しているように
+     読めていた。ここを1系統に畳む。
+
+     規則は2つだけ。
+       1. 支援者の世界（クリーム地）と利用者の遊びの世界（深いティール地）
+          を、明度の反転で分ける。色相は動かさない。
+       2. 差し色は琥珀ひとつ。「いま注目すべき1点」にだけ使い、
+          装飾には使わない（走査の現在位置＝--focus と同じ役割の色）。
+     ------------------------------------------------------------------- */
+
+  /* 差し色。--focus（走査の現在位置）より彩度を落とし、両者が同時に画面へ
+     出ても competing しないようにしてある。 */
+  --amber: #e8a33d;
+  --amber-deep: #b9761c;
+  --amber-soft: #fbeed6;
+
+  /* 遊びの世界の地。--accent をそのまま敷くと明るすぎて、上に置く白い
+     対象物とのコントラストが足りなかった（リズムの白円が地に溶けていた）。
+     一段沈めた面を基準にして、対象物だけが光る構図にする。 */
+  --stage-deep: #0c4b4a;
+  --stage-deeper: #072f30;
+  --stage-ink: #ffffff;
+  /* 対象物の発光。色を持たせず白のアルファだけで作る（--stage-color を
+     差し替える colorLegacy でも、そのまま成立させるため）。 */
+  --glow-soft: 0 0 32px rgba(255, 255, 255, 0.18);
+  --glow-strong:
+    0 0 0 1px rgba(255, 255, 255, 0.55),
+    0 0 44px rgba(255, 255, 255, 0.3),
+    0 18px 44px rgba(0, 0, 0, 0.28);
+
+  /* 判定の色。利用者向けの「はやい／おそい」と支援者向けのグラフで同じ色を
+     使い、2つの世界で同じ意味を持たせる。 */
+  --early: #4aa3c7;
+  --early-soft: #dceef5;
+  --late: #d98548;
+  --late-soft: #faead9;
+
+  /* 動き。iPad で見て破綻しない範囲に統一する。拍に同期する演出には
+     使わない（basic-design.md §6）。 */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --dur-fast: 140ms;
+  --dur: 240ms;
+  --dur-slow: 420ms;
   font-family:
     Inter, "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, system-ui,
     sans-serif;
@@ -46,6 +96,14 @@
 html {
   min-height: 100%;
   background: var(--bg);
+  /* iOS の自動文字拡大を切る。
+     Safari の既定は auto で、レイアウトによっては本文だけを勝手に太らせる。
+     ここは「大きい文字」の設定（html.large-text）で拡大を管理しているので、
+     OS側の自動調整と二重に掛かると、支援者が入れた倍率と画面が食い違う。
+     viewport に width=device-width があるので実際には効きにくいが、
+     暗黙の既定に頼らず明示する。 */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -53,12 +111,23 @@ body {
   margin: 0;
   color: var(--ink);
   background: var(--bg);
-  font-size: 16px;
+  /* px で固定しない。固定するとルート（html）の拡大がここで止まり、
+     em や％で決まる文字が一切大きくならない——「大きい文字」の設定が
+     rem 指定の文字にしか効かない状態になっていた。1rem にしておけば
+     ルートの拡大がそのまま下りてくる。 */
+  font-size: 1rem;
   line-height: 1.5;
   text-rendering: geometricPrecision;
 }
 
-body.large-text {
+/* 大きい文字。
+   拡大は**ルート（html）に当てる**。body に当てていたころは rem 指定の文字が
+   一切大きくならなかった——rem はルートの文字サイズ基準なので、body を
+   112% にしても rem は 16px のままになる。実測: タイルの説明は
+   `clamp(0.95rem, 2.1vw, 1.2rem)` で、拡大表示にしても大きさが変わらず、
+   そこへ乗るふりがな（本文比）は 8.1px のままだった。
+   ルートに当てれば rem も、継承で決まる em/％ の文字も一緒に大きくなる。 */
+html.large-text {
   font-size: 112%;
 }
 
@@ -73,6 +142,17 @@ body.high-contrast {
   --accent-soft: #d8f0ee;
   --focus: #ffd400;
   --muted: #2f403c;
+  /* 高コントラストでは「光」で情報を伝えられない（発光は輝度差が小さい）。
+     地をさらに沈めて輪郭線で語らせ、差し色と判定色は彩度ではなく明度で
+     分かれる値に置き換える。 */
+  --amber: #a35c00;
+  --amber-deep: #7a4400;
+  --stage-deep: #003a3b;
+  --stage-deeper: #00201f;
+  --glow-soft: none;
+  --glow-strong: 0 0 0 4px #ffffff;
+  --early: #00506e;
+  --late: #8a3b00;
 }
 
 button,
@@ -80,6 +160,14 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/* 指で押す最小の大きさ。Apple HIG / WCAG 2.5.5 の目安が 44px で、
+   ここの利用者は狙って押すこと自体が難しいので下回らせない。
+   実測で select だけが 35px のまま取り残されていた（設定画面の
+   テンポ・はくすう）。 */
+select {
+  min-height: 44px;
 }
 
 button {
@@ -130,11 +218,50 @@ textarea {
   color: var(--ink);
 }
 
+/* index.html は viewport-fit=cover を宣言しているので、描画領域はノッチや
+   ホームインジケータの下まで広がる。ゲーム中のオーバーレイ（#gameProgress /
+   #gameExit）だけは env(safe-area-inset-*) を見ていたが、通常のシェルは
+   見ていなかった——ブランドと走査バッジが Dynamic Island の下へ、横向きでは
+   左右のノッチ帯へ入る。安全領域は端末の向きやブラウザUIの伸縮で変わるので、
+   固定値ではなく env() をそのまま足す。 */
 .app-shell {
   width: min(1240px, 100%);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 22px 28px calc(var(--dock-height) + 20px);
+  padding:
+    calc(22px + env(safe-area-inset-top))
+    calc(28px + env(safe-area-inset-right))
+    calc(var(--dock-height) + 20px)
+    calc(28px + env(safe-area-inset-left));
+}
+
+/* 走査の対象が、固定・粘着している要素の裏へ回らないようにする。
+ *
+ * scan.js は現在位置へ scrollIntoView({block:"nearest"}) する。これは
+ * 「ビューポートの端」を境界にするので、下端に居座る入力ドック
+ * （position:fixed）と、上端に粘着するタブバー（position:sticky）の
+ * ぶんを知らない。結果、いちばん下の選択肢はドックの裏へ回る。
+ *
+ * 実測（スマホ、修正前）: ホームの4番目・5番目のタイルが 182px——タイル
+ * まるごと——ドックに隠れた状態で「いま えらんでいます」になっていた。
+ * 走査で選ぶ利用者にとっては、いまどれを選んでいるか見えないまま押す
+ * ことになり、この操作方式そのものが成立しない。
+ *
+ * scroll-margin はまさにこのための仕組みで、scrollIntoView がその余白ぶん
+ * 手前で止まる。ドックの高さは --dock-height（メディアクエリで変わる）を
+ * そのまま使うので、片方だけ更新して食い違う事故が起きない。 */
+[data-scan],
+.game-tile {
+  scroll-margin-top: 96px;
+  scroll-margin-bottom: calc(var(--dock-height) + 20px);
+}
+
+/* ゲーム中はドックもタブバーも消えるので、余白を取らない
+   （取ると画面全体が単一のスイッチという版面で無駄な余白が出る）。 */
+body.game-mode [data-scan],
+body.game-mode .game-tile {
+  scroll-margin-top: 0;
+  scroll-margin-bottom: 0;
 }
 
 .topbar,
@@ -146,6 +273,18 @@ textarea {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* 操作ボタンの並びは必ず折り返す。
+
+   折り返さないと、幅が足りないときに最後のボタンが潰れて縦書きになり、
+   画面の外へはみ出す（実測: iPhone 14 で横スクロール7px、SE で22px。
+   効果測定タブの「測定リセット」が右端で1文字ずつ縦に並んでいた）。
+   横スクロールが出ると、走査で選んでいる利用者は画面外の操作子に
+   たどり着けない。個別に .wrap を付ける運用では、付け忘れた1か所が
+   そのまま壊れる——既定を折り返す側にする。 */
+.action-row {
+  flex-wrap: wrap;
 }
 
 .topbar {
@@ -174,9 +313,14 @@ textarea {
 }
 
 .brand-lockup h1 {
+  /* 折り返さない語なので、幅が足りないときは折るのではなく削る。
+     以前は隣の走査バッジの下へ潜り込んで「NEURONO」で切れていた
+     （実測: iPhone 14 の効果測定タブ）。 */
+  overflow: hidden;
   overflow-wrap: normal;
   font-size: clamp(1.15rem, 3vw, 1.55rem);
   letter-spacing: 0.08em;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -296,42 +440,146 @@ body.high-contrast .supporter-message {
   color: #000000;
 }
 
-/* 支援者編集ロックの説明。操作子が効かない理由と解除方法をその場で示す。 */
-.supporter-lock-notice {
+/* そくていの回で、むずかしさの設定が効かない理由。
+   支援者編集ロックと同じ考えかた——効かない操作子を黙って置かない。 */
+.measure-mode-notice {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
   margin: 0 0 14px;
-  padding: 12px 18px;
-  border: 2px solid rgba(184, 134, 11, 0.45);
-  border-radius: 14px;
-  background: #fdf6e3;
-  color: #5c4409;
-  font-size: clamp(0.95rem, 1.9vw, 1.1rem);
+  padding: 12px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.92rem;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
-.supporter-lock-notice[hidden] {
+/* display を当てると hidden 属性の既定 display:none を打ち消してしまう。
+   このアプリで何度も出ている型の欠陥なので、display を持つ要素には
+   必ず [hidden] を添える（tests/web-smoke.mjs がこれを見張っている）。 */
+.measure-mode-notice[hidden] {
   display: none;
 }
 
-body.high-contrast .supporter-lock-notice {
-  border-color: #000000;
-  background: #ffffff;
-  color: #000000;
+/* 設定のタブ。目的の項目をスクロールで探さずに済むよう、面を分ける。 */
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
 }
 
-.supporter-edit-toggle {
+.settings-tab {
+  /* 44px 未満のタップ標的を作らない（このアプリの全体規則）。 */
   min-height: 44px;
-  padding: 7px 14px;
-  border-color: var(--line);
-  border-radius: 999px;
+  padding: 10px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--surface);
-  color: var(--accent-strong);
-  font-size: 0.82rem;
-  font-weight: 800;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
+
+.settings-tab:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.settings-tab.is-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* いま測定の回であることは、別の面を見ていても分かる必要がある。
+   色だけで運ばない——読み上げ名にも状態を入れてある（settings.js）。 */
+.settings-tab.is-measuring::after {
+  content: "●";
+  margin-left: 8px;
+  color: var(--accent-warm);
+  font-size: 0.7em;
+}
+
+.settings-tab.is-measuring.is-active::after {
+  color: var(--accent-ink);
+}
+
+/* display を当てた要素には必ず [hidden] を添える（このファイルの他の
+   注記と同じ理由。忘れると、隠したはずの面が全部出たままになる）。 */
+.settings-panel {
+  display: block;
+}
+
+.settings-panel[hidden] {
+  display: none;
+}
+
+/* そくていに入る前の成立確認（src/lib/readinessCheck.js）。
+   3つの前提が、れんしゅうの記録から確認できているかを支援者に出す。 */
+.readiness-check {
+  display: block;
+  margin: 0 0 14px;
+}
+
+/* display を当てた要素には必ず [hidden] を添える（上の注記と同じ理由）。 */
+.readiness-check[hidden] {
+  display: none;
+}
+
+.readiness-lead {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+/* 通っていないときだけ色で立てる。通っているときまで色を付けると、
+   見分けたいほう（未確認）が埋もれる。 */
+.readiness-lead.is-unmet {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.readiness-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.readiness-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* 色だけで意味を運ばない。アイコンの形（塗りつぶしのチェック／空の丸）と
+   括弧つきの理由文でも同じことが読めるようにしてある。 */
+.readiness-item.is-met {
+  color: var(--muted);
+}
+
+.readiness-item.is-unmet {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+
+
 
 .home-supporter-menu {
   display: inline-flex;
@@ -356,10 +604,12 @@ body.high-contrast .supporter-lock-notice {
   font-size: 1.05rem;
 }
 
-.supporter-edit-toggle[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 2px rgba(15, 139, 141, 0.12);
+
+/* タブの表示名は長短2つ持つ（App.svelte）。既定は長いほうだけを出す。
+   狭い画面では入れ替える（下のメディアクエリ）。アクセシブル名は
+   aria-label に固定してあるので、見た目が変わっても読み上げは変わらない。 */
+.tab-short {
+  display: none;
 }
 
 .tabbar {
@@ -436,11 +686,16 @@ main {
   margin-top: 18px;
 }
 
-body.home-mode .tabbar {
+/* 利用者の世界（start/home/game/result）では支援者のタブバーを出さない。
+   result が漏れていたので、あそびを終えた直後の画面にだけ
+   「評価ログ / 設定」が現れていた。 */
+body.home-mode .tabbar,
+body.result-mode .tabbar {
   display: none;
 }
 
-body.home-mode main {
+body.home-mode main,
+body.result-mode main {
   margin-top: 8px;
 }
 
@@ -681,22 +936,27 @@ body.game-mode .game-exit {
    敷き、上方に光、下方に沈みを置いて奥行きを作る。
 
    ここで置くのは**動かない**地紋であることが重要。拍に同期して動く視覚を
-   足すと、脈打つ円が1個だけという版面が崩れる（basic-design.md §6）。 */
+   足すと、脈打つ円が1個だけという版面が崩れる（basic-design.md §6）。
+
+   地は --accent（明るいティール）ではなく --stage-deep（一段沈めた面）。
+   以前は地と白い対象物の輝度が近く、リズムの円が地に溶けていた。地を沈めて
+   おくと、対象物は色を足さなくても「光っている」ものとして読める——これが
+   アートディレクション「やわらかい紙と光」の、遊びの世界側の作り方。 */
 .game-stage-content {
   position: absolute;
   inset: 0;
   display: grid;
   border-radius: inherit;
-  background-color: var(--stage-color, var(--accent));
+  background-color: var(--stage-color, var(--stage-deep));
   background-image:
     repeating-radial-gradient(
       circle at 50% 50%,
-      rgba(255, 255, 255, 0.055) 0 1px,
-      rgba(255, 255, 255, 0) 1px 56px
+      rgba(255, 255, 255, 0.05) 0 1px,
+      rgba(255, 255, 255, 0) 1px 64px
     ),
-    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 58%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.22) 100%);
-  color: #ffffff;
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 62%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 46%, rgba(0, 0, 0, 0.3) 100%);
+  color: var(--stage-ink);
   place-items: center;
   text-align: center;
   gap: 12px;
@@ -905,9 +1165,10 @@ body.high-contrast .game-ready-go {
   /* 平らな白面ではなく、上から光が当たった球の面。拍に合わせた
      transform（rhythm.js が rAF で更新）はそのままこの面に効く。 */
   background: radial-gradient(circle at 50% 36%, #ffffff 0%, #f5f8f7 52%, #dde7e5 100%);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.5),
-    0 12px 32px rgba(0, 0, 0, 0.2);
+  /* 地を沈めた（--stage-deep）ぶん、円は「置かれた白い面」ではなく
+     「光っているもの」として読める。アートディレクション「やわらかい紙と
+     光」の、遊びの世界側の作り方（styles.css 冒頭のトークン参照）。 */
+  box-shadow: var(--glow-strong);
 }
 
 /* 円のまわりの静かなリング。脈打つ円と一緒に拡大縮小するので、円の動きが
@@ -964,6 +1225,176 @@ body.high-contrast .rhythm-pulse::before {
   border-color: rgba(255, 255, 255, 0.85);
 }
 
+/* 音が鳴らせない端末で、リズム課題を始められない理由を出す面
+   （games/rhythm.js renderUnavailable）。読む相手は支援者なので、
+   ゲーム中の巨大な文字ではなく、読める大きさの本文にする。 */
+.game-unavailable {
+  display: grid;
+  gap: 14px;
+  width: min(560px, 100%);
+  padding: 28px;
+  border-radius: var(--radius-lg);
+  background: rgba(0, 0, 0, 0.3);
+  text-align: left;
+}
+
+.game-unavailable strong {
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+}
+
+.game-unavailable p {
+  margin: 0;
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  line-height: 1.7;
+}
+
+.game-unavailable-hint {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* ---------------------------------------------------------------------
+   ずれの目盛り（games/rhythm.js renderOffsetScale / detailed-design.md §7.4）
+
+   この課題が計測であることを、画面の側からも言うための版面。以前は白い円が
+   ひとつあるだけで、押した結果がどこにも残らなかった——研究の中核である
+   「入力時刻のずれ」を、当の画面が一度も表示していなかった。
+
+   「拍に同期して動く視覚を増やさない」（basic-design.md §6）を破らずに
+   済むのは、ここに現れるものが全部**押したあと**の出来事だから。印は
+   利用者が押した瞬間に出て、出たあとは動かない。次の拍がいつ来るかは
+   どこにも書かれていない。合図はあくまで音のまま。
+
+   目盛りの幅は判定窓そのもの（rhythm.js が ±effectiveWindowMs を 0..100% へ
+   写す）。枠の中に入っていれば当たり、という対応が位置で読める。
+   --------------------------------------------------------------------- */
+.game-stage-content.module-rhythm > .rhythm-offset {
+  /* module-rhythm の「1番目以外は下端」の規則を、この要素だけ上書きする
+     （説明文と重ならないよう、キャプションの上へ積む）。 */
+  right: clamp(24px, 8vw, 96px);
+  bottom: clamp(84px, 16vh, 176px);
+  left: clamp(24px, 8vw, 96px);
+  display: grid;
+  gap: 10px;
+}
+
+.rhythm-offset-track {
+  position: relative;
+  height: 64px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  /* 枠の中がいちばん明るい＝当たりの範囲、と読ませる。 */
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.04)
+  );
+}
+
+/* まん中＝ぴったり。この目盛りで唯一の基準なので、印に埋もれない太さで
+   引き、上下へ少しはみ出させて「線」ではなく「基準」に見せる。 */
+.rhythm-offset-center {
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  left: 50%;
+  width: 4px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: var(--glow-soft);
+}
+
+/* 1回ぶんの入力。出たあとは動かない。 */
+.rhythm-offset-mark {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.rhythm-offset-mark.is-early {
+  background: var(--early);
+}
+
+.rhythm-offset-mark.is-late {
+  background: var(--late);
+}
+
+.rhythm-offset-mark.is-exact {
+  background: #ffffff;
+}
+
+/* いま押した1点だけを大きく出す。どれが今のかが分からないと、履歴は
+   ただの散らばった点になる。 */
+.rhythm-offset-mark.is-latest {
+  width: 26px;
+  height: 26px;
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.85),
+    var(--glow-soft);
+  animation: rhythm-mark-land var(--dur-slow) var(--ease-spring);
+}
+
+@keyframes rhythm-mark-land {
+  from {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0.4;
+  }
+
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* これまでの平均のずれ。支援者が「早めに出る癖がある」をその場で読むための
+   印で、利用者向けの表示ではない（支援者が常に同席する前提）。 */
+.rhythm-offset-mean {
+  position: absolute;
+  top: -10px;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-right: 9px solid transparent;
+  border-bottom: 11px solid var(--amber);
+  border-left: 9px solid transparent;
+}
+
+.rhythm-offset-legend {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: clamp(0.9rem, 1.8vw, 1.15rem);
+  font-weight: 700;
+}
+
+/* 高コントラストでは、色相の差ではなく輪郭と塗りつぶしの差で読ませる。 */
+body.high-contrast .rhythm-offset-track {
+  border: 3px solid #ffffff;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+body.high-contrast .rhythm-offset-mark {
+  border: 3px solid #ffffff;
+}
+
+body.high-contrast .rhythm-offset-center {
+  width: 4px;
+  background: #ffffff;
+}
+
+/* 動きを減らす設定では、着地のはずみを消す。位置と大きさの情報は残る。 */
+@media (prefers-reduced-motion: reduce) {
+  .rhythm-offset-mark.is-latest {
+    animation: none;
+  }
+}
+
 /* =====================================================================
    さかなつり
 
@@ -1005,6 +1436,284 @@ body.high-contrast .rhythm-pulse::before {
   background:
     linear-gradient(rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 14%),
     linear-gradient(#2f9fc4, #06405f);
+}
+
+/* ---------------------------------------------------------------------
+   水中の環境（games/fishing.js の .fishing-deep）
+
+   糸の下がまるごと空の青だったのを埋める。ここで動くものは1つ残らず
+   アタリの予告になってはいけない（前刺激間隔 1.8〜4.2 秒の乱数を推測
+   できる手がかりが画面にあると、測っているものが反応時間でなくなる）。
+
+   守っている規則:
+     - 周期は 9s / 13s / 17s / 23s。前刺激間隔の範囲の外で、かつその
+       整数倍にも当たらない値にしてある。どのタイミングで見ても、次の
+       アタリまでの時間について何も言っていない。
+     - 置く場所は糸のまわり（アタリの起きる場所）を避けて深いところ。
+     - 遠くの魚は影のシルエット。狙う対象（.fishing-swimmer は色つきの絵）
+       と見た目の種類を変えて、追う対象を取り違えないようにする。
+   --------------------------------------------------------------------- */
+.fishing-deep {
+  position: absolute;
+  inset: 30% 0 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 水面から差し込む光の筋。ゆっくり傾きが変わるだけ。 */
+.fishing-shaft {
+  position: absolute;
+  top: -6%;
+  width: 26%;
+  height: 78%;
+  background: linear-gradient(rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0));
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+  opacity: 0.5;
+}
+
+.fishing-shaft-a {
+  left: 12%;
+  animation: fishing-shaft-sway 17s ease-in-out infinite;
+}
+
+.fishing-shaft-b {
+  left: 66%;
+  animation: fishing-shaft-sway 23s ease-in-out infinite reverse;
+}
+
+@keyframes fishing-shaft-sway {
+  0%,
+  100% {
+    transform: skewX(-5deg);
+  }
+
+  50% {
+    transform: skewX(6deg);
+  }
+}
+
+/* 遠くを流れる魚影。輪郭だけの黒い影にして、狙う魚と種類を分ける。
+   小さすぎると水面のゴミに見えるので、狙う魚と同程度の大きさにして、
+   「遠い魚だ」と分かる濃さと ぼけ で区別する。 */
+.fishing-far {
+  position: absolute;
+  width: 84px;
+  height: 30px;
+  border-radius: 62% 26% 26% 62%;
+  background: rgba(2, 32, 50, 0.5);
+  filter: blur(1.5px);
+}
+
+.fishing-far::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -16px;
+  border-top: 13px solid transparent;
+  border-bottom: 13px solid transparent;
+  border-left: 20px solid rgba(2, 32, 50, 0.5);
+  transform: translateY(-50%);
+}
+
+.fishing-far-a {
+  top: 58%;
+  animation: fishing-drift 23s linear infinite;
+}
+
+.fishing-far-b {
+  top: 72%;
+  scale: 0.68;
+  animation: fishing-drift 17s linear infinite;
+  animation-delay: -6s;
+}
+
+.fishing-far-c {
+  top: 44%;
+  scale: 0.46;
+  opacity: 0.72;
+  animation: fishing-drift 13s linear infinite;
+  animation-delay: -9s;
+}
+
+/* 反対向きに流れる群れ。全部が同じ向きだと流れ作業に見える。 */
+.fishing-far-d {
+  top: 66%;
+  scale: 0.58;
+  opacity: 0.8;
+  animation: fishing-drift-back 23s linear infinite;
+  animation-delay: -14s;
+}
+
+.fishing-far-e {
+  top: 50%;
+  scale: 0.38;
+  opacity: 0.6;
+  animation: fishing-drift-back 17s linear infinite;
+  animation-delay: -4s;
+}
+
+@keyframes fishing-drift-back {
+  from {
+    transform: translateX(-20vw) scaleX(-1);
+  }
+
+  to {
+    transform: translateX(112vw) scaleX(-1);
+  }
+}
+
+@keyframes fishing-drift {
+  from {
+    transform: translateX(112vw);
+  }
+
+  to {
+    transform: translateX(-20vw);
+  }
+}
+
+/* 立ちのぼる泡。 */
+.fishing-bubble {
+  position: absolute;
+  bottom: -6%;
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.fishing-bubble-a {
+  left: 18%;
+  animation: fishing-rise 13s linear infinite;
+}
+
+.fishing-bubble-b {
+  left: 79%;
+  scale: 0.7;
+  animation: fishing-rise 17s linear infinite;
+  animation-delay: -7s;
+}
+
+.fishing-bubble-c {
+  left: 63%;
+  scale: 1.3;
+  animation: fishing-rise 23s linear infinite;
+  animation-delay: -13s;
+}
+
+.fishing-bubble-d {
+  left: 34%;
+  scale: 0.9;
+  animation: fishing-rise 17s linear infinite;
+  animation-delay: -2s;
+}
+
+.fishing-bubble-e {
+  left: 91%;
+  scale: 0.55;
+  animation: fishing-rise 13s linear infinite;
+  animation-delay: -10s;
+}
+
+@keyframes fishing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0);
+  }
+
+  12% {
+    opacity: 0.85;
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-72vh);
+  }
+}
+
+/* 水底。空間に「底」があると、水中が場所として読める。 */
+.fishing-bed {
+  position: absolute;
+  right: -6%;
+  bottom: 0;
+  left: -6%;
+  height: 15%;
+  /* 頂点をなだらかにする。丸みが強いと、端に立てた水草の根元の下に地面が
+     無くなって、草が水に浮いて見える。 */
+  border-radius: 50% 50% 0 0 / 26% 26% 0 0;
+  background: linear-gradient(rgba(2, 34, 52, 0.72), rgba(1, 16, 27, 0.96));
+}
+
+/* 水草。根元を水底の面に埋めて、上へ細くなる形にする（一定幅のままだと
+   海藻ではなく刺さった棒に見える）。幅を持たせないと、先細りの角度が
+   出ないまま針のようになる。 */
+.fishing-weed {
+  position: absolute;
+  bottom: 46%;
+  width: 30px;
+  height: 92px;
+  background: linear-gradient(rgba(26, 126, 120, 0.1), rgba(12, 78, 80, 0.8));
+  clip-path: polygon(42% 0, 58% 0, 100% 100%, 0 100%);
+  transform-origin: 50% 100%;
+  animation: fishing-weed-sway 9s ease-in-out infinite;
+}
+
+.fishing-weed-a {
+  left: 11%;
+}
+
+.fishing-weed-b {
+  left: 27%;
+  height: 62px;
+  animation-duration: 13s;
+  animation-delay: -3s;
+}
+
+.fishing-weed-c {
+  left: 74%;
+  height: 116px;
+  animation-duration: 17s;
+  animation-delay: -8s;
+}
+
+.fishing-weed-d {
+  left: 90%;
+  height: 56px;
+  animation-duration: 13s;
+  animation-delay: -11s;
+}
+
+@keyframes fishing-weed-sway {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+
+  50% {
+    transform: rotate(7deg);
+  }
+}
+
+/* 動きを減らす設定では環境の動きを止める。課題に必要な情報は
+   ひとつも入っていないので、止めても遊べる（それがこの層の設計条件）。 */
+@media (prefers-reduced-motion: reduce) {
+  .fishing-shaft,
+  .fishing-far,
+  .fishing-bubble,
+  .fishing-weed {
+    animation: none;
+  }
+
+  .fishing-bubble {
+    opacity: 0.5;
+  }
+}
+
+body.high-contrast .fishing-deep {
+  /* 高コントラストでは、環境の絵が課題の対象と competing しないよう消す。 */
+  display: none;
 }
 
 /* 舟と釣り人。水面（38%）にちょうど乗るように置く。
@@ -1239,27 +1948,126 @@ body.high-contrast .rhythm-pulse::before {
    ===================================================================== */
 .game-stage-content.module-crane {
   padding: 0;
-  background-color: #16233a;
-  background-image: none;
+  /* 濃紺の別世界だったのをアプリ共通の地（--stage-deeper）へ寄せる。
+     筐体そのものは明るいので、地が沈んでいるほうが箱として浮き上がる。 */
+  background-color: var(--stage-deeper);
+  background-image:
+    radial-gradient(120% 70% at 50% 100%, rgba(232, 163, 61, 0.16), transparent 62%),
+    radial-gradient(90% 55% at 50% 8%, rgba(255, 255, 255, 0.08), transparent 70%);
 }
 
+/* 筐体まわりの版面。
+
+   経緯: 以前は .crane-stage（ガラスの箱）を中央に置くだけで、iPad縦では
+   上下に画面の半分ぶんの空きが残っていた。箱を広げれば済む話ではない——
+   .crane-stage の 4:3 は動かせないため（縦横比を変えると透視の見え方が
+   変わり、床の上の距離感が画面ごとに変わる）、縦長の画面で 4:3 の箱が
+   画面を埋めることは原理的にない。
+
+   なので空きを埋めるのではなく、空きを筐体の一部にした。上に marquee
+   （看板）、下に本体と景品の取り出し口を置くと、画面全体が「1台の筐体が
+   立っている」構図になる。中身の幾何には一切さわっていない。 */
 .crane-cabinet {
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
+  /* 3行とも auto。最後を 1fr にすると本体だけが画面の下まで伸びて、
+     せっかく埋めた空きが本体の中に戻ってくる。 */
+  grid-template-rows: auto auto auto;
+  justify-items: center;
+  align-content: center;
+  gap: 0;
   overflow: hidden;
+  /* 上は #gameProgress（のこりN）と #gameExit（おわる）のオーバーレイが
+     居るので、看板がその下から始まるように空ける。 */
+  padding: clamp(64px, 9vh, 104px) 2% clamp(16px, 3vh, 40px);
   border-radius: inherit;
+}
+
+/* 台の看板。ゲーム名と、いま何個取れているか。 */
+.crane-marquee {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  width: min(96%, 900px);
+  padding: clamp(8px, 1.4vh, 16px) clamp(16px, 3vw, 28px);
+  border: 3px solid rgba(255, 255, 255, 0.82);
+  border-radius: 18px 18px 6px 6px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.24));
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+}
+
+.crane-marquee-title {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: clamp(0.95rem, 2.4vw, 1.5rem);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+/* 筐体の本体（ガラス箱の下）。操作の状態と、取れた景品の受け口を持つ。 */
+.crane-console {
+  display: grid;
+  gap: clamp(8px, 1.4vh, 16px);
+  justify-items: center;
+  align-content: start;
+  width: min(96%, 900px);
+  padding: clamp(12px, 2vh, 22px) clamp(16px, 3vw, 28px);
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  border-top: 0;
+  border-radius: 0 0 20px 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.3));
+}
+
+/* 景品の取り出し口。実物と同じ場所に置くことで、取れた景品が
+   「どこへ行ったのか」が分かる。 */
+.crane-tray {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  /* ガラス箱は 4:3 で固定なので、縦長の画面で残る高さは本体側が引き受ける
+     （箱を伸ばすと透視が変わる。.crane-stage のコメント参照）。 */
+  width: min(460px, 100%);
+  min-height: clamp(88px, 15vh, 190px);
+  padding: 12px 16px;
+  border-radius: 14px;
+  /* 奥へ落ち込んだ受け皿。上辺だけ暗くして、手前に開いた口に見せる。 */
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.14) 42%),
+    rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+
+.crane-tray-label {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: clamp(0.75rem, 1.6vw, 0.95rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+body.high-contrast .crane-marquee,
+body.high-contrast .crane-console,
+body.high-contrast .crane-tray {
+  border-color: #ffffff;
+  background: #000000;
 }
 
 .crane-stage {
   position: relative;
+  /* 看板と本体を上下に置いたぶん、箱に使える高さが減る。幅で決めた 4:3 が
+     その高さを超えると、grid 行がはみ出して箱の下が切れる。高さ側にも
+     上限を置いて、狭いほうに合わせる。 */
   width: min(96%, 900px);
-  max-height: 96%;
+  max-width: 100%;
+  max-height: 62vh;
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  border: 6px solid rgba(255, 255, 255, 0.9);
-  border-radius: 26px;
+  /* 看板・ガラス箱・本体を隙間なく積んで1台に見せる。角を落としすぎると
+     3つが別々の板に見えるので、上下の角は殺す。 */
+  border: 6px solid rgba(255, 255, 255, 0.82);
+  border-top-width: 3px;
+  border-bottom-width: 3px;
+  border-radius: 6px;
   box-shadow: 0 22px 46px rgba(0, 0, 0, 0.35);
 }
 
@@ -1478,22 +2286,372 @@ body.high-contrast .rhythm-pulse::before {
   z-index: 5;
   width: 15%;
   height: 11%;
-  border: 3px solid rgba(255, 255, 255, 0.7);
+  /* 以前は真っ黒な楕円で、床に空いた穴ではなく貼られたシールに見えていた。
+     縁に厚みを持たせ、内側を上から下へ暗くして、奥へ落ちている口にする。 */
+  border: 3px solid rgba(255, 255, 255, 0.62);
   border-radius: 50%;
-  background: rgba(4, 14, 26, 0.85);
+  background: linear-gradient(180deg, #16324b, #0a1a2a);
+  box-shadow:
+    inset 0 6px 10px rgba(0, 0, 0, 0.7),
+    0 2px 0 rgba(255, 255, 255, 0.24);
   transform: translate(-50%, -50%);
 }
 
+/* 口の底。まわりより暗くして、深さを1段だけ足す。 */
 .crane-chute-mouth {
   position: absolute;
-  inset: 18%;
+  inset: 16%;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
+  background: radial-gradient(circle at 50% 30%, rgba(0, 0, 0, 0.5), #04101c 78%);
 }
 
 .crane-chute.is-filled {
   border-color: #ffe27a;
   box-shadow: 0 0 0 4px rgba(255, 226, 122, 0.45);
+}
+
+/* ---------------------------------------------------------------------
+   リザルトの「おした タイミング」（games/gameHost.js renderOffsetSpread）
+
+   その回のずれを1枚の帯にまとめる。課題中に出すかどうかは測定条件だが、
+   ここは条件に関係なく常に出す——セッションはもう終わっているので、
+   何を見せてもその回の入力は変わらない。これが無いと、素の測定条件で
+   遊んだ回は達成率しか残らず、研究の中核であるずれをアプリが一度も
+   見せないことになる。
+
+   課題中の目盛り（.rhythm-offset）と同じ読み方にしてあるが、地が
+   クリーム色なので線と印は暗い側の色を使う。
+   --------------------------------------------------------------------- */
+.offset-spread {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.spread-track {
+  position: relative;
+  height: 52px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--bg-panel), var(--surface-soft) 50%, var(--bg-panel));
+}
+
+.spread-centre {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+.spread-mark {
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  /* 何度も同じ場所に落ちたことが濃さで分かるよう、半透明で重ねる。 */
+  opacity: 0.72;
+}
+
+.spread-mark.is-early {
+  background: var(--early);
+}
+
+.spread-mark.is-late {
+  background: var(--late);
+}
+
+.spread-mark.is-exact {
+  background: var(--good);
+}
+
+/* その回の平均。 */
+.spread-mean {
+  position: absolute;
+  top: -9px;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-right: 8px solid transparent;
+  border-bottom: 10px solid var(--amber-deep);
+  border-left: 8px solid transparent;
+}
+
+.spread-legend {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+body.high-contrast .spread-track {
+  border-width: 3px;
+  border-color: var(--ink);
+}
+
+body.high-contrast .spread-mark {
+  border: 2px solid var(--ink);
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------
+   セッションの推移（views/log.js renderTrend / src/lib/sessionTrend.js）
+
+   「訓練前後の比較」はこのアプリの目的のひとつなのに、画面には1回ごとの
+   記録しか出ていなかった。同じ課題・同じ条件の回を古い順に並べて、
+   良くなっているかどうかを線で読めるようにする。
+   --------------------------------------------------------------------- */
+.trend-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-bottom: 20px;
+}
+
+.trend-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.trend-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.trend-head strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.trend-head small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* 良くなった／さがった／変わらない。色だけで語らせず言葉も出す
+   （色の区別が難しい支援者にも同じ情報が届く必要がある）。 */
+.trend-direction {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.trend-direction.is-better {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.trend-direction.is-worse {
+  background: var(--warn-soft);
+  color: var(--amber-deep);
+}
+
+.trend-direction.is-same {
+  background: var(--bg-panel);
+  color: var(--muted);
+}
+
+.trend-metric {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.trend-hint {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.trend-plot {
+  width: 100%;
+  height: 72px;
+  overflow: visible;
+}
+
+.trend-plot polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.trend-plot circle {
+  fill: var(--accent-strong);
+}
+
+.trend-values {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.trend-values dt {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.trend-values dd {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+body.high-contrast .trend-plot polyline {
+  stroke: var(--ink);
+  stroke-width: 3.5;
+}
+
+body.high-contrast .trend-direction {
+  border: 2px solid currentColor;
+}
+
+/* ---------------------------------------------------------------------
+   入力オフセットの分布（views/research.js renderDistribution）
+
+   このアプリの研究上の位置づけそのものを、はじめて画面に出す図。
+   条件（画面から拍の手がかりを出したか）で色を分けて重ねる。
+   --------------------------------------------------------------------- */
+.histogram {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+/* どの母集団の図か。課題・テンポ・参加者が違えば別の図になる。
+   見出しが無いと、並んだ図のどれが何なのか読めない。 */
+.histogram-scope {
+  margin: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.histogram-plot {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 190px;
+  padding: 0 2px;
+  border-bottom: 2px solid var(--line-strong);
+}
+
+/* ぴったり（0ms）の位置。分布がどちら側へ寄っているかは、この線からの
+   ずれで読む。 */
+.histogram-zero {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  z-index: 2; /* 棒より前。基準線が隠れると、どちら側へ寄っているかが読めない */
+  width: 0;
+  transform: translateX(-50%);
+  /* 破線にして、棒（データ）と基準線（目盛り）を種類として分ける。 */
+  border-left: 2px dashed rgba(16, 43, 42, 0.55);
+}
+
+.histogram-column {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  gap: 1px;
+  align-items: flex-end;
+  height: 100%;
+  min-width: 0;
+}
+
+.histogram-bar {
+  flex: 1 1 0;
+  min-height: 0;
+  border-radius: 2px 2px 0 0;
+}
+
+/* 測定条件（手がかりなし）。既定の条件なので、地の色に近い落ち着いた側。 */
+.histogram-bar.is-plain {
+  background: var(--accent);
+}
+
+/* 練習条件（手がかりあり）。混ぜてはいけない系列なので、色相を変える。 */
+.histogram-bar.is-guided {
+  background: var(--amber);
+}
+
+.histogram-axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.histogram-legend {
+  display: grid;
+  gap: 10px;
+}
+
+.histogram-legend-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.histogram-legend-item small {
+  display: block;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.histogram-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.histogram-swatch.is-plain {
+  background: var(--accent);
+}
+
+.histogram-swatch.is-guided {
+  background: var(--amber);
+}
+
+/* 高コントラストでは色相の差に頼らない。片方を塗り、片方を縞にする。 */
+body.high-contrast .histogram-bar.is-guided,
+body.high-contrast .histogram-swatch.is-guided {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--ink) 0 3px,
+    #ffffff 3px 6px
+  );
 }
 
 /* 同条件での自己最高。下がった回には出さないので、常に前向きな表示になる。 */
@@ -1526,22 +2684,42 @@ body.high-contrast .summary-best.is-new {
 
 /* 取れた景品の並び。数字だけだと「何を取ったか」も「増えていること」も
    見えないので、景品口の下に実物を並べていく。 */
+/* 取れた景品。筐体の取り出し口（.crane-tray）の中に並ぶ。
+   以前はガラス箱の中に浮いた行だったので、どこに溜まっているのか
+   絵として読めなかった。 */
 .crane-collected {
-  position: absolute;
-  bottom: 3%;
-  left: 3%;
-  z-index: 9;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   align-items: flex-end;
-  width: 30%;
+  justify-content: center;
+  width: 100%;
+  min-height: 34px;
 }
 
 .crane-collected-item {
-  width: 22%;
-  max-width: 46px;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+  width: clamp(28px, 6vw, 46px);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  /* 落ちてきて溜まる。取れた瞬間が受け口にも見えるようにする。 */
+  animation: crane-tray-drop var(--dur-slow) var(--ease-spring);
+}
+
+@keyframes crane-tray-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crane-collected-item {
+    animation: none;
+  }
 }
 
 /* 前面ガラスの反射。筐体の中を覗いている感じを出すだけの飾り。 */
@@ -1574,11 +2752,9 @@ body.high-contrast .summary-best.is-new {
   color: #23303f;
 }
 
+/* いまアームが何をしているか。筐体の本体側（ガラス箱の下）に置く。
+   以前はガラス箱の中に重ねていたので、景品や床と重なって読みにくかった。 */
 .crane-status {
-  position: absolute;
-  bottom: 5%;
-  left: 50%;
-  z-index: 9;
   padding: 8px 22px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.5);
@@ -1587,22 +2763,19 @@ body.high-contrast .summary-best.is-new {
   font-size: clamp(1.1rem, 2.6vw, 1.8rem);
   font-weight: 800;
   white-space: nowrap;
-  transform: translateX(-50%);
 }
 
+/* 取れた数。看板（marquee）の右側。 */
 .crane-score {
-  position: absolute;
-  top: 3%;
-  left: 50%;
-  z-index: 9;
-  padding: 5px 14px;
+  padding: 5px 16px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.42);
   color: #ffffff;
-  font-size: clamp(0.95rem, 2.2vw, 1.25rem);
+  font-family: var(--font-round);
+  font-size: clamp(1rem, 2.4vw, 1.4rem);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .crane-streak {
@@ -1641,6 +2814,18 @@ body.game-mode .topbar,
 body.game-mode .tabbar,
 body.game-mode .switch-dock {
   display: none;
+}
+
+/* 支援者が文字を入力しているあいだはドックを外す
+   （neuronodeApp.js の syncTextEntryMode）。スマホではソフトキーボードの
+   上へ持ち上がって、いま打っている欄を隠してしまうため。
+   下の余白も一緒に外さないと、ドックが消えたぶんの空白が残る。 */
+body.text-entry .switch-dock {
+  display: none;
+}
+
+body.text-entry .app-shell {
+  padding-bottom: 24px;
 }
 
 body.game-mode .app-shell {
@@ -1739,13 +2924,36 @@ body.game-mode .app-shell {
   place-items: center;
   font-size: 2.35rem;
   line-height: 1;
+  /* 走査で当たっているタイルのアイコンだけ、地の色を反転させる。
+     枠線だけだと、離れて見ている支援者に「いまどこか」が伝わりにくい。 */
+  transition:
+    background var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
 }
 
+.game-tile.scan-focus .tile-icon {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* 走査順の番号。選ぶための手がかりであって主役ではないので、
+   名前より小さく、色も一段落とす。 */
 .scan-order {
-  color: var(--accent);
-  font-size: 2rem;
+  color: var(--muted);
+  font-size: 1.5rem;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
   text-align: center;
+}
+
+.game-tile.scan-focus .scan-order {
+  color: var(--accent-strong);
+}
+
+.tile-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .game-tile strong {
@@ -1753,6 +2961,33 @@ body.game-mode .app-shell {
   font-size: clamp(1.8rem, 4.5vw, 2.55rem);
   font-weight: 800;
   line-height: 1.18;
+}
+
+/* ページ送り（views/home.js の renderScanList）。
+   選択肢ではなく移動の操作なので、同じ大きさの行のまま彩度だけ落として
+   「あそびではない」ことを示す。走査の輪の最後に来る。 */
+.game-tile.scan-pager {
+  background: var(--bg-panel);
+}
+
+.game-tile.scan-pager .tile-icon {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.game-tile.scan-pager strong {
+  color: var(--muted);
+}
+
+/* content.js の description。利用者向けの言葉で書かれている
+   （「おすと いろと おとが かわるよ」等）。名前より小さく、行を分けて置く
+   ——名前と同じ大きさにすると、どちらが選ぶ手がかりなのか分からなくなる。 */
+.tile-description {
+  color: var(--muted);
+  font-size: clamp(0.95rem, 2.1vw, 1.2rem);
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .game-tile:hover {
@@ -2846,7 +4081,11 @@ input[type="checkbox"]:checked::before {
   }
 
   .app-shell {
-    padding: 14px 12px calc(var(--dock-height) + 18px);
+    padding:
+      calc(14px + env(safe-area-inset-top))
+      calc(12px + env(safe-area-inset-right))
+      calc(var(--dock-height) + 18px)
+      calc(12px + env(safe-area-inset-left));
   }
 
   .brand-mark {
@@ -2927,13 +4166,20 @@ input[type="checkbox"]:checked::before {
     font-size: clamp(1.25rem, 6vw, 1.75rem);
   }
 
-  .scan-current-label {
-    position: absolute;
-    right: 10px;
-    bottom: 8px;
-    padding: 5px 8px;
-    font-size: 0.7rem;
-    margin-bottom: 0;
+  /* 「いま えらんでいます」の札は、幅の狭い画面では出さない。
+   *
+   * この幅ではタイルの文字欄が 250px ほどしかなく、札を置くと説明文の上に
+   * 重なる。避けようと右を96px空けると、こんどは説明が2行になってタイルが
+   * 伸び、5枚ぶんで画面のスクロール量がむしろ増えた（実測 186px → 221px）。
+   * 走査で選ぶ画面では、選択肢が画面に入っていることのほうが札より重い。
+   *
+   * 現在位置は札が無くても三重に出ている——黄色い外枠、濃い縁、そして
+   * アイコンの塗りが反転する。消しても「いまどこか」は失われない。
+   * 読み上げ側は #liveRegion が従来どおり伝える。 */
+  /* 基底には .game-tile.scan-focus .scan-current-label { display:inline-flex }
+     があるので、詳細度を合わせないと消えない。 */
+  .game-tile.scan-focus .scan-current-label {
+    display: none;
   }
 
   .activity-stage,
@@ -2997,6 +4243,20 @@ input[type="checkbox"]:checked::before {
   }
 }
 
+/* ---------------------------------------------------------------------
+   横向き（スマホを寝かせた状態）
+
+   高さが 390px 前後しかない一方、幅は 844px 余る。縦向きと同じ「1列に
+   積む」版面のままだと、ページに分けても1ページぶん（選択肢3枚＋送り）が
+   入らない（実測: 305px はみ出し、うち2つが入力ドックの裏）。
+
+   縦に足りないぶんを横で受ける。選択肢を2列にすると 3枚＋送りが
+   ちょうど2行に収まり、スクロールが消える。走査の順序は DOM 順のままなので
+   （左上→右上→左下→右下）、読み上げと画面の並びは食い違わない。
+
+   閾値に orientation ではなく高さを使うのは、ソフトキーボードやブラウザUIの
+   伸縮でも同じことが起きるから——原因は「向き」ではなく「縦が足りない」。
+   --------------------------------------------------------------------- */
 @media (max-width: 620px) {
   .home-supporter-menu {
     width: 44px;
@@ -3007,7 +4267,264 @@ input[type="checkbox"]:checked::before {
   .home-supporter-menu span {
     display: none;
   }
+
+  /* ---------------------------------------------------------------------
+     支援者タブを1行に収める。
+
+     2列3行に折り返していたときは、ヘッダ＋タブ＋ロック説明で 356px——
+     画面の54%がナビゲーションになり、最初の設定項目は y=772 と折り返しの
+     下にあった。支援者は毎回そこまでスクロールしてから設定を触ることになる。
+
+     横スクロールにはしない。タブは走査対象なので、画面の外へ出すと
+     「走査対象は必ず画面内」という約束が崩れる（scanPaging.js）。
+     代わりに表示名だけ短くする。読み上げは aria-label で正式名称のまま。
+     --------------------------------------------------------------------- */
+  .tabbar {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .tab,
+  .home-return {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 48px;
+    padding: 6px 4px;
+    font-size: 0.86rem;
+    white-space: nowrap;
+  }
+
+  .tab-full {
+    display: none;
+  }
+
+  .tab-short {
+    display: inline;
+  }
+
+  /* ブランド名は幅が足りず "NEUR…" で切れていた。切れた語は読めないだけで
+     場所を取るので、狭い画面では記号だけにする（支援者メニューを同じ
+     考えでアイコンだけにしているのと揃える）。 */
+  .brand-lockup h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
+
+/* ---------------------------------------------------------------------
+   画面が短いとき（スマホ縦、横向き、ソフトキーボード表示中）
+
+   走査で選ぶUIでは、選択肢が画面外にあること自体が問題になる。scan.js は
+   現在位置へスクロールするが、利用者はスクロールを止めることも戻すことも
+   できないので、選択のたびに画面が動くと「選ぶ」課題が「選ぶ＋画面を追う」
+   課題に変わる。
+
+   だから短い画面では、まず**シェルの飾りを削って**選択肢のための高さを作る。
+   削らないのはタップ標的の大きさ——ここの利用者は狙って押すこと自体が
+   難しいので、収めるために小さくするのは本末転倒になる。
+
+   注記: 既定で「大きい文字」がONなので、5枚のタイルを iPhone SE 級の高さへ
+   完全に収めきることはできない。ここで縮めるのは飾りだけで、収まりきらない
+   ぶんは scroll-margin（.app-shell の下）で「少なくとも現在位置は必ず
+   見えている」ことを保証している。
+   --------------------------------------------------------------------- */
+@media (max-height: 740px) {
+  :root {
+    /* ドックを横並びに戻すぶん、確保する高さも実際に合わせて下げる。 */
+    --dock-height: 104px;
+  }
+
+  /* ページ送りは選択肢ではなく移動の操作なので、選択肢と同じ高さを取らせない。
+     ここを詰めることで、1ページぶん（選択肢3枚＋送り）がスクロールなしで
+     収まる——ページに分けた目的がスクロールをなくすことなので、送りの行が
+     はみ出していては意味がない。 */
+  .game-tile.scan-pager {
+    min-height: 60px;
+    padding: 6px 14px;
+  }
+
+  .game-tile.scan-pager .tile-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.1rem;
+  }
+
+  .game-tile.scan-pager strong {
+    font-size: clamp(1rem, 4.4vw, 1.25rem);
+  }
+
+  .game-tile.scan-pager .tile-description {
+    font-size: 0.8rem;
+  }
+
+  /* 見出しの飾り。選ぶための情報はタイル側にあるので、短い画面では落とす。 */
+  .home-intro .eyebrow,
+  .home-guide {
+    display: none;
+  }
+
+  .home-intro {
+    margin: 0 4px 8px;
+  }
+
+  .home-intro h2 {
+    font-size: clamp(1.4rem, 6vw, 1.9rem);
+  }
+
+  /* 選択肢の行。タップ標的としては 96px でも余裕があり（最小は 44px）、
+     アイコンは 56px のままなので読みやすさは落ちない。ここを詰めることで
+     1ページぶんがスクロールなしに収まる。 */
+  .game-tile {
+    min-height: 96px;
+  }
+
+  .activity-list {
+    gap: 8px;
+  }
+
+  /* 縦に積むと 182px を占める。横並びなら半分以下で、標的の幅は
+     1台あたり画面の約半分あるので押しやすさは落ちない。 */
+  .switch-dock {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  /* 横並びに戻すと幅が足りず「走査停止」が2行に折れていた。折らせない。 */
+  .scan-control {
+    flex: 0 1 auto;
+    white-space: nowrap;
+  }
+
+  .primary-switch {
+    /* min-width:0 が無いと、内容の最小幅でつっぱってドックが画面から
+       はみ出す（実測: iPhone SE で横はみ出し）。縮める余地を与えたうえで
+       文字を一段落とし、2行に折れないようにする。 */
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 64px;
+    font-size: clamp(1rem, 4.2vw, 1.35rem);
+    white-space: nowrap;
+  }
+}
+
+@media (max-height: 500px) and (min-width: 620px) {
+  :root {
+    /* 横並びのドックの実寸に合わせる（入力ボタン 64px ＋ 余白と枠）。 */
+    --dock-height: 92px;
+  }
+
+  /* 縦がとにかく足りないので、シェルの余白を最小まで詰める。
+     削っているのは余白と飾りだけで、選択肢とタップ標的には触れていない。 */
+  .app-shell {
+    padding-top: calc(6px + env(safe-area-inset-top));
+  }
+
+  .topbar {
+    min-height: 0;
+    margin-bottom: 6px;
+    padding: 4px 12px;
+  }
+
+  main {
+    margin-top: 4px;
+  }
+
+  .home-intro {
+    margin: 0 4px 6px;
+  }
+
+  /* 「はじめる」は縦向きだと 56vh を取るが、横向きではそれが画面の
+     半分以上になってはみ出す。幅は余っているので、低くて広い面にする
+     ——押せる面積は減らない。 */
+  .start-screen {
+    min-height: 0;
+    gap: 8px;
+  }
+
+  .start-stage {
+    min-height: min(44vh, 200px);
+    padding: 16px;
+  }
+
+  .activity-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* 2列にすると1枚あたりの幅が半分になる。説明文まで入れると2〜3行に
+     折り返して背が伸びるので、ここでは名前だけにする。 */
+  .tile-description {
+    display: none;
+  }
+
+  /* タイルの内側も詰める。
+   *
+   * ここを書かないと desktop の版面のままになる——モバイル向けの圧縮は
+   * すべて `max-width: 820px` に紐づいていて、横向きのスマホ（844px幅）は
+   * その条件に**入らない**。実測では 52px+88px の列と 38px の文字が残り、
+   * 名前が1文字ずつ縦に折り返していた（文字欄の実幅 13px）。
+   * 狭いのは幅ではなく高さなので、幅の条件だけでは拾えない。 */
+  .game-tile {
+    min-height: 84px;
+    padding: 8px 14px;
+    grid-template-columns: 28px 48px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .game-tile strong {
+    font-size: clamp(1.05rem, 2.3vw, 1.45rem);
+  }
+
+  /* 4列目（auto）に居座って文字欄を潰していた。横向きでも、現在位置は
+     枠・縁・アイコンの反転で足りる。 */
+  .game-tile.scan-focus .scan-current-label {
+    display: none;
+  }
+
+
+  .game-tile .tile-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.35rem;
+  }
+
+  /* ページ送りは選択肢と同じ枠に収まるので、縦向きのように詰めなくてよい。 */
+  .game-tile.scan-pager {
+    min-height: 84px;
+  }
+
+  .home-intro h2 {
+    font-size: clamp(1.2rem, 3.4vw, 1.6rem);
+  }
+
+  /* ゲーム中は筐体の飾り（看板と本体）より、課題の面そのものを大きく取る。
+     横向きでは 4:3 の面が高さに縛られて小さくなり、景品も判定リングも
+     読みにくくなる——飾りを削って面へ回す。 */
+  .crane-marquee,
+  .crane-tray {
+    display: none;
+  }
+
+  .crane-cabinet {
+    padding: clamp(48px, 12vh, 64px) 2% 8px;
+  }
+
+  .crane-console {
+    border: 0;
+    background: none;
+    padding: 6px 0 0;
+  }
+
+  .crane-stage {
+    max-height: 74vh;
+  }
+}
+
 
 /* 高コントラスト設定は、これまでゲーム実行中のチップ類に効いていなかった。
    魚や舟は画像なので設定に追従できないぶん、こちらで制御できる要素
@@ -3031,4 +4548,56 @@ body.high-contrast .fishing-line {
 
 body.high-contrast .fishing-water {
   background: linear-gradient(#1d6f92, #032a41);
+}
+
+/* =====================================================================
+   ルビ（ふりがな）— 利用者向けの文言はすべて総ルビで出す（src/lib/i18n.js）
+   漢字が読める人は漢字で速く読め、読めない人はふりがなで読める。
+
+   このファイルの**末尾**に置いてある。ルビが乗るのは .tile-description の
+   ような既存の版面の中なので、前方に置くと後段の line-height に上書きされる
+   （実際に上書きされて、説明文のふりがなが見出しと詰まった）。
+   ===================================================================== */
+
+ruby {
+  ruby-position: over;
+  /* 古い WebKit は接頭辞つきしか見ない。iOS 実機の版が読めない以上、
+     両方書いておく（外れるとふりがなが本文の下に回る）。 */
+  -webkit-ruby-position: before;
+}
+
+rt {
+  /* 本文比だけで決めない。説明文は clamp(0.95rem, …) なので、比率だけだと
+     実測 8.1px まで落ちて読めなかった。読めないふりがなは無いのと同じで、
+     行を高くしただけになる。絶対値の下限を置く。 */
+  font-size: max(0.6em, 11px);
+  letter-spacing: 0.02em;
+  /* 補助なので本文より少し落とすが、読めなくなるほどは落とさない。 */
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* 高コントラストではふりがなも本文と同じ濃さにする——薄い字が最初に
+   読めなくなる。 */
+body.high-contrast rt {
+  color: inherit;
+}
+
+/* ルビの乗る行は行間を広げる。狭いままだと、ふりがなが上の行と重なる。
+   ルビ表記のときだけ効かせる（英語表記には ruby が無いので不要）。
+   `:has(ruby)` で「実際に乗っている行だけ」にしていたが、:has() を持たない
+   環境では効かず、そこだけ重なる。表記はクラスで分かるので、そちらで引く。 */
+html.text-ruby :is(
+  .tile-text,
+  .tile-description,
+  .home-guide,
+  .reaction-label,
+  .game-ready-steps li,
+  .game-ready-go,
+  .crane-status,
+  .fishing-status,
+  .summary-tile,
+  .spread-legend
+) {
+  line-height: 2;
 }

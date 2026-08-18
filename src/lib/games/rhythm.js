@@ -41,6 +41,11 @@
 
 import { rhythmPresets, cueTones } from "../content.js";
 import {
+  allowsVisualGuidance,
+  resolveDifficultyMode,
+  resolveRhythmDifficulty,
+} from "../difficultyMode.js";
+import {
   judgeInput,
   sweepExpired,
   computeEffectiveWindowMs,
@@ -56,13 +61,83 @@ const FEEDBACK_GAIN_MISS = 0.018;
 // 試行間の休止は beatInterval の1.5倍（detailed-design.md §6.4）。
 const TRIAL_GAP_BEATS = 1.5;
 
+// ずれの目盛り（detailed-design.md §7.4）の表示だけに使う定数。判定には
+// 一切関与しない。
+//
+// EXACT_TOLERANCE_MS は「ぴったり」と見なして色を分けない幅。判定窓
+// （既定±600ms）よりずっと狭くしてあるのは、当たり判定の話ではなく
+// 「早い/遅いと言うほどではない」の線だから。感覚運動同期の研究で報告される
+// 同期の標準偏差はおおむね数十ms なので、その内側に置いている。
+const EXACT_TOLERANCE_MS = 30;
+// 目盛りに残す印の上限。拍数は支援者が最大200まで伸ばせる（state.js）ので、
+// 全部残すと目盛りが潰れて読めなくなる。
+const MAX_OFFSET_MARKS = 24;
+// 平均の印を出しはじめる試行数。1〜2回の平均は「癖」ではなく、ただの
+// 直近の値なので、出すと読み違いのもとになる。
+const MIN_TRIALS_FOR_MEAN = 3;
+
+/**
+ * 拍位相（0=拍の瞬間、1=次の拍の直前）から円の倍率を返す。
+ *
+ * 以前は scale = 0.85 + 0.15 * phase の単純な鋸歯だった。これだと
+ *   - 円がいちばん大きくなるのは拍の「直前」
+ *   - 拍の瞬間は 1.0 から 0.85 へ一気に縮む
+ * となり、拍が「縮む」ことで表現されるうえ、あいだは等速で伸び続ける
+ * だけなので、拍ではなく単なる繰り返しの往復に見えていた。
+ *
+ * 訓練用の合図として読めるよう、拍のたびに「着地 → 沈む → 待つ →
+ * 溜める → 着地」という一巡りにする。倍率が最大になるのは拍の瞬間で、
+ * 直前の溜めが「つぎ来るぞ」を伝える。判定には一切使わない見た目だけの
+ * 計算で、音のスケジュール（AudioContext 基準）とは独立している。
+ *
+ * ただし最後の「溜め」だけは、測定条件によって切る（allowAnticipation）。
+ *
+ * 経緯: この曲線は「つぎ来るぞ」を伝えることを目的に設計されている
+ * （detailed-design.md §7.4 の表）。一方で同じ設計書は「拍に同期して
+ * 動く視覚を増やさないこと自体が要件」とも書いている——溜めは拍が来る
+ * 前に拍の位置を教えるので、この2つは両立しない。放置すると
+ * rawOffsetMs は「聴覚キューへの入力」ではなく「聴覚＋視覚キューへの
+ * 入力」を測ってしまい、研究上の位置づけ（basic-design.md §6 の聴覚優先）
+ * が崩れる。
+ *
+ * 分けかたは「拍より前か、後か」で引ける。着地と沈みは拍が**起きたこと**
+ * を伝えるだけなので予告にならず、常に出してよい。溜めだけが唯一
+ * 予告として働くので、視覚の手がかりを出す回（visualGuidance）に限る。
+ */
+export function beatPulseScale(phase, allowAnticipation) {
+  const base = 0.86;
+  const peak = 1;
+  const decayUntil = 0.34; // 着地後、ここまでの区間で基準へ沈む
+  const anticipateFor = 0.28; // 次の拍のこの手前から溜めはじめる
+
+  if (phase < decayUntil) {
+    // 着地の直後。ease-out で勢いよく沈み、だんだんゆっくりになる。
+    const t = phase / decayUntil;
+    const eased = 1 - (1 - t) ** 3;
+    return peak + (base - peak) * eased;
+  }
+
+  // 予告を出さない回は、着地の後はずっと静止したまま次の着地を待つ。
+  if (!allowAnticipation) return base;
+
+  const anticipateFrom = 1 - anticipateFor;
+  // 拍と拍のあいだは動かさない。この「静止」があることで、
+  // 動きが拍の前後だけの出来事になり、往復運動に見えなくなる。
+  if (phase < anticipateFrom) return base;
+
+  // 次の拍へ向けた溜め。ease-in で、最大までは上げきらない
+  // （上げきると着地の瞬間に差が出ず、拍が見えなくなる）。
+  const t = (phase - anticipateFrom) / anticipateFor;
+  return base + (peak - base) * 0.55 * t ** 2;
+}
+
 /** ステージの案内文言（gameId ごと、detailed-design.md §7.4）。 */
-const STAGE_LABELS = {
-  "rhythm-l1": "おとに あわせて おそう",
-  "rhythm-l2": "おとに あわせて つづけて おそう",
-  gonogo: "たかい おとの ときだけ おそう",
-  calibration: "おとに あわせて おそう",
-  default: "おとに あわせて おそう",
+const STAGE_LABEL_KEYS = {
+  "rhythm-l1": "stage.rhythm-l1",
+  "rhythm-l2": "stage.rhythm-l2",
+  gonogo: "stage.gonogo",
+  calibration: "stage.calibration",
+  default: "stage.rhythm-l1",
 };
 
 /** "r-YYYYMMDD-HHMMSS-xx" 形式のセッションID（detailed-design.md §9.2）。 */
@@ -88,17 +163,66 @@ function generateSessionId() {
  */
 const PROTOCOL_LOCKED_GAME_IDS = new Set(["calibration"]);
 
+/**
+ * その回、画面から拍の手がかりを出すか。ONで2つが同時に効く:
+ *   1. パルス円が次の拍へ向けて「溜める」（＝拍の予告になる）
+ *   2. 押したあと、ずれの目盛りに「はやい/おそい」が出る（＝結果の知識KR）
+ *
+ * 2つを1つのつまみにまとめてあるのは、どちらも「視覚から拍の情報を足す」
+ * という同じことをしているから。片方だけ切っても、測っているものは
+ * 「聴覚キューへの同期」に戻らない。
+ *
+ * 既定 OFF（state.js）。素の状態は「手がかりは音だけ」でなければ、
+ * rawOffsetMs が聴覚同期の指標にならない。訓練として使いたい回だけ
+ * 支援者が ON にする。
+ *
+ * そくていは設定に関わらず常に OFF——PROTOCOL_LOCKED_GAME_IDS と同じ理由で、
+ * 基準オフセットの測定手順そのものだから。ここで得た中央値は判定窓の中心
+ * 補正として全セッションに効く（basic-design.md §7.3）。
+ *
+ * 実際に効いた値は session.config.visualGuidance に残す。
+ */
+export function resolveVisualGuidance(gameId, settings) {
+  if (PROTOCOL_LOCKED_GAME_IDS.has(gameId)) return false;
+  // そくていの回は、支援者が設定していても手がかりを出さない
+  // （src/lib/difficultyMode.js）。測る回に視覚から拍の情報を足すと、
+  // それは聴覚キューへの同期を測った回ではなくなる。
+  return allowsVisualGuidance(settings);
+}
+
+/**
+ * 画面に出すずれ（ms）。記録する rawOffsetMs とは別物なので関数を分けてある。
+ *
+ * なぜ生値をそのまま出さないか: 判定窓の中心は baselineOffsetMs のぶん
+ * ずらしてある（basic-design.md §7.3）。基準が +80ms の利用者に生値を見せると、
+ * 判定は当たっているのに画面はいつも「おそい」と言う——判定と表示が食い違う。
+ * 当たり外れを決めているのと同じ量、つまり補正後の中心からのずれを出す。
+ *
+ * この変換は表示だけのもので、trial.rawOffsetMs は常に生値のまま記録する
+ * （研究設計上の最重要規則。このファイル冒頭のコメント参照）。
+ */
+export function displayOffsetMs(rawOffsetMs, appliedBaselineMs) {
+  if (typeof rawOffsetMs !== "number" || !Number.isFinite(rawOffsetMs)) return null;
+  const baseline = typeof appliedBaselineMs === "number" ? appliedBaselineMs : 0;
+  return rawOffsetMs - baseline;
+}
+
 /** 優先順位: settings のリズム系設定（null 以外）＞ rhythmPresets（detailed-design.md §7.1）。 */
 export function resolveParams(gameId, settings) {
   const preset = rhythmPresets[gameId];
   const overridable = !PROTOCOL_LOCKED_GAME_IDS.has(gameId);
   const override = (settingValue, presetValue) =>
     overridable ? settingValue ?? presetValue : presetValue;
+  // そくていの回は protocol 固定、れんしゅうの回は支援者の設定 → 既定の順。
+  // calibration は overridable=false なので、どちらの回でも preset のまま。
+  const difficulty = overridable
+    ? resolveRhythmDifficulty(gameId, settings, preset)
+    : { bpm: preset.bpm, countInBeats: preset.countInBeats, targetBeats: preset.targetBeats };
   return {
     mode: preset.mode,
-    bpm: override(settings.rhythmBpm, preset.bpm),
-    countInBeats: override(settings.countInBeats, preset.countInBeats),
-    targetBeats: override(settings.targetBeats, preset.targetBeats),
+    bpm: override(difficulty.bpm, preset.bpm),
+    countInBeats: override(difficulty.countInBeats, preset.countInBeats),
+    targetBeats: override(difficulty.targetBeats, preset.targetBeats),
     goRatio: preset.goRatio ?? null,
     // キャリブレーション専用（detailed-design.md §8.2）。settings 側の上書きは
     // 用意しない（利用者が調整する値ではなく、測定プロトコル自体の一部のため）。
@@ -140,7 +264,16 @@ function buildCuedPlan({ bpm, countInBeats, targetBeats }) {
     judgedBeats.push({ index: trial, kind: "go", timeS: highTimeS });
   }
 
-  return { audioBeats, judgedBeats, beatIntervalS, trialPeriodS };
+  // 除外境界の「持ち分」（isExcludedTrial / excludedBoundaryRelMs）。
+  // cued では1試行が「自分のカウントイン → 高音 → 休止」で、休止は前の試行の
+  // 後始末なので、ある試行に属する区間は高音の countInBeats 拍前から始まる。
+  return {
+    audioBeats,
+    judgedBeats,
+    beatIntervalS,
+    trialPeriodS,
+    excludedLeadS: countInBeats * beatIntervalS,
+  };
 }
 
 /**
@@ -173,7 +306,9 @@ function buildContinuousPlan({ bpm, countInBeats, targetBeats }) {
     judgedBeats.push({ index: i, kind: "go", timeS });
   }
 
-  return { audioBeats, judgedBeats, beatIntervalS };
+  // 拍が切れ目なく続くので、ある拍に属する区間はその拍の半拍前から
+  // （隣り合う拍のちょうど中間で分ける）。
+  return { audioBeats, judgedBeats, beatIntervalS, excludedLeadS: beatIntervalS / 2 };
 }
 
 /**
@@ -212,14 +347,51 @@ function buildGonogoPlan({ bpm, countInBeats, targetBeats, goRatio }) {
     judgedBeats.push({ index: i, kind, timeS });
   });
 
-  return { audioBeats, judgedBeats, beatIntervalS, seedSequence: sequence };
+  return {
+    audioBeats,
+    judgedBeats,
+    beatIntervalS,
+    seedSequence: sequence,
+    excludedLeadS: beatIntervalS / 2,
+  };
 }
 
 /** mode に応じてビート計画のビルダーを振り分ける（detailed-design.md §7.1、P4）。 */
-function buildPlan(params) {
+export function buildPlan(params) {
   if (params.mode === "continuous") return buildContinuousPlan(params);
   if (params.mode === "gonogo") return buildGonogoPlan(params);
   return buildCuedPlan(params);
+}
+
+/**
+ * 除外区間の終わり（セッション相対ms）。beatIndex を持たない extra を
+ * 除外するかどうかの判定にだけ使う（isExcludedTrial）。
+ *
+ * 実際に鳴る拍の時刻から引く。以前は「除外試行数 × 試行の長さ」を直に
+ * 掛けていたが、それだと (1) trialPeriodS を返す cued でしか値が出ず、
+ * continuous では -Infinity ＝ extra が一度も除外されない、(2) 予約開始
+ * （plan.startAt）と計時の基準（sessionStartAudioMs）のずれも落ちる。
+ * 最初の非除外拍が「自分の区間」を持ちはじめる時刻が求める境界そのもの
+ * なので、そこから持ち分（excludedLeadS）を引く。
+ *
+ * @param {number} excludedTrialCount 集計から外す先頭の拍数
+ * @param {number|undefined} firstIncludedScheduledMs 最初の非除外拍の予定時刻
+ *   （セッション相対ms）。除外数が拍数以上なら undefined になる
+ * @param {number} excludedLeadMs その拍に属する区間が何ms手前から始まるか
+ * @returns {number} これ未満のセッション相対時刻に来た extra を除外する
+ */
+export function computeExcludedBoundaryRelMs(
+  excludedTrialCount,
+  firstIncludedScheduledMs,
+  excludedLeadMs
+) {
+  if (!(excludedTrialCount > 0)) return -Infinity; // 除外なし
+  if (typeof firstIncludedScheduledMs !== "number" || !Number.isFinite(firstIncludedScheduledMs)) {
+    // 除外数が拍数以上（設定ミス）。非除外の拍が1つも無いので「境界より前＝
+    // 除外」の側へ倒す。黙って全部を有効試行にしない。
+    return Infinity;
+  }
+  return firstIncludedScheduledMs - excludedLeadMs;
 }
 
 function average(values) {
@@ -282,13 +454,22 @@ function computeSummary(trials) {
  */
 export function createRhythmGame(gameId) {
   return function create(ctx) {
-    const { settings, audio, announce, logTrial, finish, setProgress } = ctx;
+    const { settings, audio, announce, logTrial, finish, setProgress, t, tHtml } = ctx;
 
     let stageEl = null;
     let pulseEl = null;
+    let offsetTrackEl = null;
+    let offsetMeanEl = null;
     let rafId = null;
     let destroyed = false;
     let hitFlashTimer = null;
+    // 画面から拍の手がかりを出すか（resolveVisualGuidance）。mount() で
+    // 1回だけ確定させ、セッションの途中では変えない——途中で切り替わると、
+    // その回の記録がどちらの条件だったのか言えなくなる。
+    let visualGuidance = false;
+    // 動きを減らす設定。パルス円は rAF が毎フレーム transform を書くので、
+    // CSS の @media prefers-reduced-motion では止まらない。
+    let reduceMotion = false;
 
     // セッション文脈（mount() で1回だけ確定する。detailed-design.md §6.3）。
     let plan = null;
@@ -323,6 +504,68 @@ export function createRhythmGame(gameId) {
       return typeof relativeMs === "number" && relativeMs < excludedBoundaryRelMs;
     }
 
+    /**
+     * ずれの目盛り（detailed-design.md §7.4）。
+     *
+     * 「拍に同期して動く視覚を増やさない」という要件（basic-design.md §6）を
+     * 破らずに、この課題が計測であることを画面に出すための版面。破らずに済む
+     * のは、目盛りに現れるものが全部**押したあと**の出来事だからで、
+     *   - 印が出るのは利用者が押した瞬間（拍の瞬間ではない）
+     *   - 印は出たあと動かない
+     *   - 次の拍がいつ来るかは、目盛りのどこにも書かれていない
+     * ——予告として使える情報がひとつも無い。合図はあくまで音のまま。
+     *
+     * 目盛りの幅は判定窓（±effectiveWindowMs）そのものにしてある。枠の中に
+     * 入っていれば当たり、外れれば枠の端。当たり外れの理由が位置で読める。
+     */
+    function renderOffsetScale() {
+      if (!visualGuidance) return "";
+      return `
+        <div class="rhythm-offset" aria-hidden="true">
+          <div class="rhythm-offset-track">
+            <span class="rhythm-offset-center"></span>
+            <span class="rhythm-offset-mean" hidden></span>
+          </div>
+          <div class="rhythm-offset-legend">
+            <span>${tHtml("scale.early")}</span>
+            <span>${tHtml("scale.onTime")}</span>
+            <span>${tHtml("scale.late")}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    /**
+     * 音が出せない端末で、課題を始められない理由を画面に出す。
+     *
+     * 出す相手は支援者。利用者向けのひらがなだけで書くと「おとが でないよ」
+     * にしかならず、どうすればいいかが伝わらない。この画面に来る時点で
+     * 支援者が同席している前提なので、原因と次の手を書く。
+     */
+    function renderUnavailable(audioState) {
+      if (!stageEl) return;
+      stageEl.classList.remove("module-rhythm");
+      // 原因で次の手が変わるので書き分ける。音が「使えない端末」なら端末を
+      // 変えるしかないが、「止まっている」だけなら消音スイッチや音量、
+      // 割り込みを直せばその場で続けられる。
+      const stopped = audioState === "suspended" || audioState === "interrupted";
+      const why = stopped
+        ? "音が止まっているため、リズムの課題は始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。"
+        : "この端末では音を鳴らす機能が使えないため、リズムの課題は始められません。";
+      stageEl.innerHTML = `
+        <div class="game-unavailable">
+          <strong>おとが ならせません</strong>
+          <p>${why} 合図が音なので、続けても測定になりません。</p>
+          <p class="game-unavailable-hint">
+            右上の「おわる」で もどれます。${
+              stopped ? "直したあと、もう一度えらんでください。" : "音の出る端末で もう一度おためしください。"
+            }
+          </p>
+        </div>
+      `;
+      announce("音が鳴らせないため、リズムの課題を始められません");
+    }
+
     function renderStageMarkup() {
       // module-rhythm は「円ひとつ＋下の説明文」というこの課題の版面を
       // styles.css に伝えるための印。crane / fishing のように子要素の構成が
@@ -330,9 +573,63 @@ export function createRhythmGame(gameId) {
       stageEl.classList.add("module-rhythm");
       stageEl.innerHTML = `
         <div class="rhythm-pulse" aria-hidden="true"></div>
-        <span class="reaction-label">${STAGE_LABELS[gameId] || STAGE_LABELS.default}</span>
+        ${renderOffsetScale()}
+        <span class="reaction-label">${tHtml(STAGE_LABEL_KEYS[gameId] || STAGE_LABEL_KEYS.default)}</span>
       `;
       pulseEl = stageEl.querySelector(".rhythm-pulse");
+      offsetTrackEl = stageEl.querySelector(".rhythm-offset-track");
+      offsetMeanEl = stageEl.querySelector(".rhythm-offset-mean");
+    }
+
+    /** 目盛りの上の位置（0=左端＝いちばん早い, 1=右端＝いちばん遅い）。 */
+    function offsetToTrackRatio(offsetMs) {
+      if (!effectiveWindowMs) return 0.5;
+      const clamped = Math.max(-1, Math.min(1, offsetMs / effectiveWindowMs));
+      return (clamped + 1) / 2;
+    }
+
+    /** 1回ぶんの入力を目盛りへ落とす。出したあとは動かさない。 */
+    function addOffsetMark(offsetMs) {
+      if (!visualGuidance || !offsetTrackEl) return;
+      const mark = document.createElement("span");
+      mark.className = "rhythm-offset-mark";
+      // ずれの向きで色を分ける。--early / --late は支援者側のグラフでも同じ
+      // 色を使い、2つの世界で同じ意味を持たせている（styles.css のトークン）。
+      if (offsetMs < -EXACT_TOLERANCE_MS) mark.classList.add("is-early");
+      else if (offsetMs > EXACT_TOLERANCE_MS) mark.classList.add("is-late");
+      else mark.classList.add("is-exact");
+      mark.style.left = `${(offsetToTrackRatio(offsetMs) * 100).toFixed(2)}%`;
+
+      // 直前の印から「いちばん新しい」印を外す。新しいものだけが目立って
+      // いれば、いま押したのがどれかが分かる。
+      offsetTrackEl.querySelector(".rhythm-offset-mark.is-latest")?.classList.remove("is-latest");
+      mark.classList.add("is-latest");
+      offsetTrackEl.append(mark);
+
+      // 拍数は支援者が設定で伸ばせる（最大200）。全部残すと目盛りが黒く
+      // 潰れて読めなくなるので、古いものから落とす。
+      const marks = offsetTrackEl.querySelectorAll(".rhythm-offset-mark");
+      if (marks.length > MAX_OFFSET_MARKS) marks[0].remove();
+      updateOffsetMean();
+    }
+
+    /**
+     * これまでの平均のずれ。支援者が「この子は早めに出る癖がある」を
+     * その場で読めるようにするための印で、利用者向けの表示ではない
+     * （支援者が常に同席する前提。basic-design.md）。
+     */
+    function updateOffsetMean() {
+      if (!visualGuidance || !offsetMeanEl || !session) return;
+      const offsets = session.trials
+        .filter((trial) => !trial.excluded && trial.judgment === "hit")
+        .map((trial) => displayOffsetMs(trial.rawOffsetMs, trial.appliedBaselineMs))
+        .filter((value) => typeof value === "number");
+      if (offsets.length < MIN_TRIALS_FOR_MEAN) {
+        offsetMeanEl.hidden = true;
+        return;
+      }
+      offsetMeanEl.hidden = false;
+      offsetMeanEl.style.left = `${(offsetToTrackRatio(average(offsets)) * 100).toFixed(2)}%`;
     }
 
     function flashHit() {
@@ -348,55 +645,31 @@ export function createRhythmGame(gameId) {
       }, 340);
     }
 
-    /**
-     * 拍位相（0=拍の瞬間、1=次の拍の直前）から円の倍率を返す。
-     *
-     * 以前は scale = 0.85 + 0.15 * phase の単純な鋸歯だった。これだと
-     *   - 円がいちばん大きくなるのは拍の「直前」
-     *   - 拍の瞬間は 1.0 から 0.85 へ一気に縮む
-     * となり、拍が「縮む」ことで表現されるうえ、あいだは等速で伸び続ける
-     * だけなので、拍ではなく単なる繰り返しの往復に見えていた。
-     *
-     * 訓練用の合図として読めるよう、拍のたびに「着地 → 沈む → 待つ →
-     * 溜める → 着地」という一巡りにする。倍率が最大になるのは拍の瞬間で、
-     * 直前の溜めが「つぎ来るぞ」を伝える。判定には一切使わない見た目だけの
-     * 計算で、音のスケジュール（AudioContext 基準）とは独立している。
-     */
-    function beatPulseScale(phase) {
-      const base = 0.86;
-      const peak = 1;
-      const decayUntil = 0.34; // 着地後、ここまでの区間で基準へ沈む
-      const anticipateFor = 0.28; // 次の拍のこの手前から溜めはじめる
-
-      if (phase < decayUntil) {
-        // 着地の直後。ease-out で勢いよく沈み、だんだんゆっくりになる。
-        const t = phase / decayUntil;
-        const eased = 1 - (1 - t) ** 3;
-        return peak + (base - peak) * eased;
-      }
-
-      const anticipateFrom = 1 - anticipateFor;
-      // 拍と拍のあいだは動かさない。この「静止」があることで、
-      // 動きが拍の前後だけの出来事になり、往復運動に見えなくなる。
-      if (phase < anticipateFrom) return base;
-
-      // 次の拍へ向けた溜め。ease-in で、最大までは上げきらない
-      // （上げきると着地の瞬間に差が出ず、拍が見えなくなる）。
-      const t = (phase - anticipateFrom) / anticipateFor;
-      return base + (peak - base) * 0.55 * t ** 2;
-    }
-
     function updatePulseVisual(nowAudioAbsMs) {
       if (!pulseEl || !plan) return;
+      // 動きを減らす設定では円を動かさない。CSS の @media では止められない
+      // ——ここは rAF が毎フレーム transform を書いているので、JS 側で見る
+      // 必要がある。合図は音なので、円を止めても課題は成立する
+      // （円はあくまで補助。basic-design.md §6）。
+      if (reduceMotion) {
+        pulseEl.style.transform = "scale(0.93)";
+        return;
+      }
       const elapsedS = nowAudioAbsMs / 1000 - plan.startAt;
       const interval = plan.beatIntervalS;
       const phase = (((elapsedS % interval) + interval) % interval) / interval;
-      pulseEl.style.transform = `scale(${beatPulseScale(phase).toFixed(3)})`;
+      pulseEl.style.transform = `scale(${beatPulseScale(phase, visualGuidance).toFixed(3)})`;
     }
 
     function updateProgressText() {
       if (!session) return;
-      setProgress(`のこり ${remainingBeats.length}`);
+      // 単位を付ける。数字だけだと、残りの拍数なのか秒数なのか点数なのかが
+      // 読み取れない（L1 は1回押すまでに4.2秒かかるので、秒と取り違えると
+      // 「進んでいない」と見える）。
+      //
+      // 更新の起きる時刻は今までと同じ（拍が消化／期限切れになった瞬間）。
+      // ここを拍の手前で動かすと予告になるので、表示の形だけを変える。
+      setProgress(t("progress.remainingCount", { n: remainingBeats.length }));
     }
 
     /** 1件の trial 行をセッションへ追加し、gameHost へ永続化を依頼する。 */
@@ -425,7 +698,7 @@ export function createRhythmGame(gameId) {
       stopLoop();
       audio.scheduler.stop();
       const percent = Math.round((session.summary.goHitRate || 0) * 100);
-      announce(`おわりました。たっせいりつ ${percent}パーセント`);
+      announce(t("rhythm.voice.finish", { n: percent }));
       finish(session.summary);
       return true;
     }
@@ -467,10 +740,12 @@ export function createRhythmGame(gameId) {
       rafId = window.requestAnimationFrame(loop);
     }
 
-    function handleInput(t /* performance.now() ms */, _source) {
+    // 引数名を t にしない: このスコープには文言を引く ctx.t がいる
+    // （crane で実際に踏んだ。tests/i18n.test.mjs の shadow 検査を参照）。
+    function handleInput(perfMs, _source) {
       if (destroyed || !session || session.finished) return;
       // §6.3: 入力時刻(performance.now()) → audio絶対時刻(ms) への変換をここに集約。
-      const inputAbsMs = t - anchorPerfMs + sessionStartAudioMs;
+      const inputAbsMs = perfMs - anchorPerfMs + sessionStartAudioMs;
       const baselineNow = settings.baselineOffsetMs;
       const result = judgeInput(inputAbsMs, remainingBeats, effectiveWindowMs, baselineNow);
 
@@ -489,6 +764,17 @@ export function createRhythmGame(gameId) {
         excluded: isExcludedTrial(result.beatIndex, toSessionRelativeMs(inputAbsMs)),
       });
 
+      // 当たった入力だけ目盛りへ落とす。
+      //
+      // extra（拍と結び付かない余分な入力）と commission（No-Go で押した）は
+      // 除く。どちらも「どの拍からどれだけずれたか」が定義できないので、
+      // 目盛りの上に置くと位置が意味を持たない印になる。数としては summary に
+      // 出ているし、音でもその場で返している（playFeedback）。
+      if (result.judgment === "hit") {
+        const shown = displayOffsetMs(result.raw, baselineNow);
+        if (shown !== null) addOffsetMark(shown);
+      }
+
       playFeedback(result.judgment);
       updateProgressText();
       finalizeIfComplete();
@@ -496,24 +782,45 @@ export function createRhythmGame(gameId) {
 
     function mount(el) {
       stageEl = el;
+      // 版面（ずれの目盛りを出すかどうか）が visualGuidance で変わるので、
+      // 描くより先に確定させる。
+      visualGuidance = resolveVisualGuidance(gameId, settings);
+      reduceMotion =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       renderStageMarkup();
 
       params = resolveParams(gameId, settings);
       effectiveWindowMs = computeEffectiveWindowMs(params.mode, params.bpm, settings.judgmentWindowMs);
       plan = buildPlan(params);
       excludedTrialCount = params.excludedTrialCount || 0;
-      // trialPeriodS は cued（buildCuedPlan）のみが返す。continuous/gonogo は
-      // excludedTrialCount が常に0（content.js の rhythmPresets 参照）なので
-      // この境界値は使われない。
-      excludedBoundaryRelMs =
-        excludedTrialCount > 0 && typeof plan.trialPeriodS === "number"
-          ? excludedTrialCount * plan.trialPeriodS * 1000
-          : -Infinity;
 
       // §6.3: 対応ペアの取得は「セッション開始時に1回」。perfMs/audioS を
       // 隣接する行で取得し、以降のずれ（クロックドリフト）は許容誤差内とする。
       anchorPerfMs = performance.now();
       const startAt = audio.scheduler.start({ beats: plan.audioBeats });
+
+      // AudioContext が使えない環境では start() が null を返す（audio.js）。
+      //
+      // このとき now() も常に 0 を返すので、拍は一度も鳴らず、円も脈打たず、
+      // 判定窓を過ぎた拍が期限切れにならない——remainingBeats が減らないので
+      // finalizeIfComplete() が永久に成立せず、「のこり 10」のまま二度と
+      // 終わらない画面になる。合図が音である課題なので、音が出ない時点で
+      // 続行しても測定にならない。黙って壊れるのではなく、理由を出して
+      // 支援者に判断を返す（画面が状態を伝える、という全体の方針）。
+      // 合図が鳴らせない状態は2つある。どちらも「押した分だけがデータになる」
+      // という同じ結果になるので、まとめてここで止める。
+      //   1. AudioContext が無い（start() が null）
+      //   2. AudioContext はあるが鳴らない（suspended / interrupted）
+      // 2 は iOS でだけ起きる——他アプリの割り込みや着信、自動再生制限の
+      // 解除しそこね。context は存在するので、有無だけを見るガードは
+      // 素通りする。ヘッドレスでは再現しないので CI にも出てこない。
+      if (startAt === null || !audio.scheduler.canSound()) {
+        audio.scheduler.stop();
+        renderUnavailable(audio.scheduler.state());
+        return;
+      }
+
       sessionStartAudioMs = audio.scheduler.now() * 1000;
       plan.startAt = startAt;
 
@@ -521,6 +828,12 @@ export function createRhythmGame(gameId) {
         beatKindByIndex.set(beat.index, beat.kind);
         scheduledMsByIndex.set(beat.index, (plan.startAt + beat.timeS) * 1000 - sessionStartAudioMs);
       });
+      excludedBoundaryRelMs = computeExcludedBoundaryRelMs(
+        excludedTrialCount,
+        scheduledMsByIndex.get(excludedTrialCount),
+        plan.excludedLeadS * 1000
+      );
+
       remainingBeats = plan.judgedBeats.map((beat) => ({
         index: beat.index,
         kind: beat.kind,
@@ -548,6 +861,19 @@ export function createRhythmGame(gameId) {
           baselineOffsetMs: settings.baselineOffsetMs,
           mode: params.mode,
           goRatio: params.goRatio,
+          // その回、画面から拍の手がかりを出していたか（予告の溜め＋ずれの
+          // 目盛り）。出していた回は聴覚だけへの同期ではないので、測定として
+          // 別条件になる。記録に残さないと、あとから2つの回を区別できない。
+          visualGuidance,
+          // そくてい／れんしゅうのどちらの回か（src/lib/difficultyMode.js）。
+          // 解析ではまず measure だけを見ればよい——これが「主要測定の条件を
+          // 固定する」ということ。
+          difficultyMode: resolveDifficultyMode(settings),
+          // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
+          // 通っていない状態でも測定は止めない代わりに、どちらだったかを必ず
+          // 残す。成績が低かった回について「規則を理解していなかったのでは」を
+          // 後から検討できるのは、この列があるときだけ。
+          measurementReadiness: ctx.readiness || "n/a",
           // gonogo のみ generateGoNoGoSequence() の結果を持つ（再現性、MUST）。
           seedSequence: plan.seedSequence || [],
         },
@@ -555,7 +881,7 @@ export function createRhythmGame(gameId) {
         trials: [],
       };
 
-      announce("リズムのれんしゅうを はじめます");
+      announce(t("rhythm.voice.start"));
       updateProgressText();
       rafId = window.requestAnimationFrame(loop);
     }
@@ -583,6 +909,8 @@ export function createRhythmGame(gameId) {
       }
       stageEl = null;
       pulseEl = null;
+      offsetTrackEl = null;
+      offsetMeanEl = null;
     }
 
     return { mount, handleInput, destroy };
