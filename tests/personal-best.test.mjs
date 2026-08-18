@@ -7,6 +7,12 @@
 
 import assert from "node:assert/strict";
 import { bestRecordLine, personalBest } from "../src/lib/games/gameHost.js";
+import { resolveTextMode, translate } from "../src/lib/i18n.js";
+
+// 文言は表記モードで変わるので、テスト側も辞書を通して引く。
+// ここを固定文字列に戻すと、辞書を直したときにテストだけが古い文言を
+// 主張して落ちる（あるいは辞書の抜けを見逃す）。
+const t = (key, values) => translate(key, resolveTextMode({}), values);
 
 let passed = 0;
 let failed = 0;
@@ -83,27 +89,27 @@ test("tolerates sessions with a missing summary or config", () => {
 });
 
 test("says nothing when there is no comparable history", () => {
-  assert.equal(bestRecordLine(3, null), null);
-  assert.equal(bestRecordLine(0, null), null);
+  assert.equal(bestRecordLine(3, null, t), null);
+  assert.equal(bestRecordLine(0, null, t), null);
 });
 
 test("says nothing while the best is still zero", () => {
   // 実際に遊んで分かった。「これまでの さいこう 0こ」は目標にならず、
   // 失敗を復唱するだけになる。
-  assert.equal(bestRecordLine(0, 0), null);
+  assert.equal(bestRecordLine(0, 0, t), null);
 });
 
 test("celebrates the first success even though the best was zero", () => {
-  assert.deepEqual(bestRecordLine(1, 0), { text: "じぶんの さいこう記録！", isNew: true });
+  assert.deepEqual(bestRecordLine(1, 0, t), { text: t("best.new"), isNew: true });
 });
 
 test("celebrates only when the record is actually beaten", () => {
-  assert.deepEqual(bestRecordLine(4, 3), { text: "じぶんの さいこう記録！", isNew: true });
-  assert.deepEqual(bestRecordLine(3, 3), { text: "これまでの さいこう 3こ", isNew: false });
+  assert.deepEqual(bestRecordLine(4, 3, t), { text: t("best.new"), isNew: true });
+  assert.deepEqual(bestRecordLine(3, 3, t), { text: t("best.previous", { n: 3 }), isNew: false });
 });
 
 test("never turns a worse session into a negative comparison", () => {
-  const line = bestRecordLine(1, 4);
+  const line = bestRecordLine(1, 4, t);
   assert.equal(line.isNew, false);
   assert.equal(line.text, "これまでの さいこう 4こ");
   assert.ok(!/すくない|へった|さがった/.test(line.text), "must not tell the user they did worse");

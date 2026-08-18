@@ -23,6 +23,7 @@
 // =====================================================================
 
 import { visibleViews } from "./content.js";
+import { resolveTextMode, translate, translateHtml } from "./i18n.js";
 import { loadState, createStateSaver, MAX_LOG_ENTRIES } from "./state.js";
 import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
@@ -69,18 +70,29 @@ const TAB_WORLD_VIEWS = new Set([
   "settings",
 ]);
 
-// 設定・記録・研究データを変更できる支援者専用ビュー。利用者向けの
-// matching / voca / letters と、利用者が課題を実行する operation は含めない。
-// ロックは認証ではなく、自前走査からの誤操作を防ぐためのセッション内ガード。
-const SUPPORTER_EDIT_VIEWS = new Set(["evaluation", "research", "log", "settings"]);
-const SUPPORTER_UNLOCK_VIEWS = new Set([...SUPPORTER_EDIT_VIEWS, "operation"]);
+// 支援者編集ロックは廃止した（2026-08-17）。
+//
+// 何を守っていたか: 設定画面の操作子は走査対象なので、支援者が設定を開いて
+// いるあいだに利用者がスイッチを押すと、ハイライト中の項目が切り替わる。
+// それを防ぐため、既定で全操作子を disabled にし、支援者が明示的に
+// 解除する仕組みだった。
+//
+// なぜやめたか:
+//   1. 利用者は自力で支援者の世界へ入れない（#homeSupporterMenu は走査対象外の
+//      タップ専用）。入口が閉じているので、中で守る必要が薄い。
+//   2. iOS の Switch Control にはポイントスキャン（画面上の任意の座標を指す
+//      操作）がある。アプリ側の [data-scan] の輪は、その世界では到達範囲の
+//      境界になっていない——解除ボタン自体も押せてしまう。守りとして
+//      成立していない仕組みを、支援者の毎回の一手間と引き換えに置いていた。
+//
+// 代わりに残っているもの: 支援者の世界への入口がタップ専用であること、
+// 破壊的な操作（記録の消去・候補値の保存）が走査対象外であること。
 const USER_ACTIVITY_VIEWS = new Set(["matching", "voca", "letters"]);
 
 export function initNeuroNodeApp() {
   // --- 状態と要素 ---
   const elements = collectElements();
   const state = loadState();
-  let supporterEditing = false;
   // MUST（detailed-design.md §2.1）: 再訪時でも必ず start から始める。
   // AudioContext のアンロックと入力導通確認を毎回保証するため、保存されていた
   // 画面に関わらず無条件で上書きする（旧「visibleViews にない場合 switcher へ」
@@ -90,6 +102,19 @@ export function initNeuroNodeApp() {
   // --- 共有コンテキストの構築 ---
   const ctx = { state, elements, views: {} };
   let supporterMessageTimer = null;
+
+  /**
+   * 利用者向け文言の表記解決（src/lib/i18n.js）。
+   *
+   * ctx に置いて全モジュールから使えるようにしてある。表記は設定で変わるので
+   * 文言を定数として持てない——描画のたびに引き直す必要がある。
+   */
+  // 文言は2経路ある。取り違えたときの壊れ方が穏やかなほうを既定（t）にする。
+  //   t     … プレーン文。textContent・読み上げ・aria-label・announce 用
+  //   tHtml … ルビを <ruby> に展開した HTML。画面へ出す用
+  ctx.t = (key, values) => translate(key, resolveTextMode(state.settings), values);
+  ctx.tHtml = (key, values) => translateHtml(key, resolveTextMode(state.settings), values);
+  ctx.textMode = () => resolveTextMode(state.settings);
 
   ctx.announce = (message) => {
     elements.liveRegion.textContent = message;
@@ -113,56 +138,6 @@ export function initNeuroNodeApp() {
       elements.supporterMessage.hidden = true;
     }, 6000);
   };
-
-  /** 支援者向けビューの編集可否を、動的に再描画された要素にも適用する。 */
-  function applySupporterEditState() {
-    const hasCalibrationOffer = state.currentView === "result" && !elements.calibrationOffer.hidden;
-    const canEditHere = SUPPORTER_UNLOCK_VIEWS.has(state.currentView) || hasCalibrationOffer;
-    if (!canEditHere) supporterEditing = false;
-    const locked = !supporterEditing;
-    elements.supporterEditToggle.hidden = !canEditHere;
-    elements.supporterEditToggle.textContent = supporterEditing ? "支援者編集をロック" : "支援者編集を開始";
-    elements.supporterEditToggle.setAttribute("aria-pressed", String(supporterEditing));
-    document.body.classList.toggle("supporter-editing", supporterEditing);
-
-    const protectedControls = new Set(document.querySelectorAll("[data-supporter-edit]"));
-    elements.views
-      .filter((view) => SUPPORTER_EDIT_VIEWS.has(view.id))
-      .forEach((view) => {
-        view.querySelectorAll("button, input, select, textarea").forEach((control) => {
-          protectedControls.add(control);
-        });
-      });
-    protectedControls.forEach((control) => {
-      control.disabled = locked;
-      if (locked) {
-        control.setAttribute("aria-disabled", "true");
-      } else {
-        control.removeAttribute("aria-disabled");
-      }
-    });
-
-    // ロック中であることを画面にも出す。理由も解除方法も無いまま操作子だけが
-    // 効かないと、支援者には故障と区別がつかない（実測: 設定画面は走査対象13個
-    // のうち9個が無効で、画面内に「支援者編集」の語がひとつも無かった）。
-    // いま見ている画面に保護された操作子が実際にあるときだけ出す——
-    // operation のように解除はできるが保護対象を持たない画面で
-    // 「変更できません」と言わないため。
-    const activeView = elements.views.find((view) => view.classList.contains("is-active"));
-    const hasProtectedHere = Boolean(
-      activeView && [...protectedControls].some((control) => activeView.contains(control))
-    );
-    elements.supporterLockNotice.hidden = !(locked && hasProtectedHere);
-  }
-
-  function setSupporterEditing(enabled, announce = true) {
-    supporterEditing = Boolean(enabled);
-    applySupporterEditState();
-    ctx.scan?.refresh();
-    if (announce) {
-      ctx.announce(supporterEditing ? "支援者編集を開始しました" : "支援者編集をロックしました");
-    }
-  }
 
   ctx.save = createStateSaver(state, () =>
     ctx.announce("データの保存に失敗しました。端末の空き容量を確認してください。")
@@ -195,7 +170,6 @@ export function initNeuroNodeApp() {
   /** 画面の切り替え。visibleViews にない画面は start へフォールバックする。 */
   ctx.switchView = function switchView(viewName) {
     const nextView = visibleViews.has(viewName) ? viewName : "start";
-    if (!SUPPORTER_UNLOCK_VIEWS.has(nextView)) supporterEditing = false;
     state.currentView = nextView;
     ctx.save();
     ctx.renderAll();
@@ -224,7 +198,33 @@ export function initNeuroNodeApp() {
    * body.game-mode の同期（detailed-design.md §10）もここで行う。
    * switchView() と gameHost / home の画面遷移の双方から呼ばれる共通経路。
    */
+  /**
+   * 利用者の世界の固定文言を、いまの表記で描き直す。
+   *
+   * App.svelte に直に書いてあったぶん（「はじめる」「おわる」「けっか」など）。
+   * マークアップに埋めたままだと表記の切り替えが効かず、英語表記を選んでも
+   * そこだけ日本語で残る——実際、英語で通しで歩いて見つけた。
+   *
+   * 読み上げ名（sr-only の見出し）はプレーン文、目で読む文字はルビ付き。
+   */
+  function renderUserWorldText() {
+    const set = (el, key, html = true) => {
+      if (!el) return;
+      if (html) el.innerHTML = ctx.tHtml(key);
+      else el.textContent = ctx.t(key);
+    };
+    set(elements.startTitle, "start.srTitle", false);
+    set(elements.startStageLabel, "start.begin");
+    set(elements.startSettingsLink, "start.settings");
+    set(elements.gameTitle, "game.srTitle", false);
+    set(elements.gameExit, "game.exit");
+    set(elements.resultTitle, "result.title");
+    set(elements.resultRetry, "result.retry");
+    set(elements.resultHome, "result.home");
+  }
+
   ctx.renderAll = function renderAll() {
+    renderUserWorldText();
     const nextView = state.currentView;
     const nextViewElementId = VIEW_ELEMENT_IDS[nextView] || nextView;
     elements.tabs.forEach((tab) => {
@@ -238,6 +238,10 @@ export function initNeuroNodeApp() {
     });
     document.body.classList.toggle("game-mode", nextView === "game");
     document.body.classList.toggle("home-mode", nextView === "home");
+    // リザルトも利用者の世界（start/home/game/result）。支援者のタブバーを
+    // 出さない。これまで隠す規則が home にしか無かったので、あそびを終えた
+    // 直後の画面にだけ「評価ログ / 設定」が現れていた。
+    document.body.classList.toggle("result-mode", nextView === "result");
     document.body.classList.toggle("user-activity-mode", USER_ACTIVITY_VIEWS.has(nextView));
     // スタート画面では支援者向けシェル（ヘッダ・タブバー）を CSS で隠し、
     // 「はじめる」への集中を保つ（styles.css の body.start-mode ルール参照）。
@@ -258,7 +262,6 @@ export function initNeuroNodeApp() {
     ctx.views.log.render();
     ctx.gameHost.render();
     ctx.views.settings.applyClasses();
-    applySupporterEditState();
   };
 
   // --- 入力ファネル（シェル側一元計時、detailed-design.md §3.3） ---
@@ -303,12 +306,6 @@ export function initNeuroNodeApp() {
     event.stopPropagation();
     ctx.switchView("settings");
     ctx.announce("支援者メニューです");
-  });
-
-  // 自前走査の対象には含めないが、通常のキーボード・VoiceOverでは操作可能な
-  // 支援者用トグル。利用者向け画面へ戻ると自動的に再ロックされる。
-  elements.supporterEditToggle.addEventListener("click", () => {
-    setSupporterEditing(!supporterEditing);
   });
 
   // 入力ファネルの対象要素: 通常の入力ボタン、スタート画面のステージ、
@@ -410,13 +407,39 @@ export function initNeuroNodeApp() {
   // ゲーム中にタブが非アクティブ化したらセッションを中断して home へ直帰する
   // （detailed-design.md §2.4 終了条件3。計時汚染防止のため再開はしない）。
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && supporterEditing) setSupporterEditing(false, false);
     if (document.hidden && state.currentView === "game") {
       ctx.gameHost.abort();
     }
   });
 
   window.addEventListener("resize", () => ctx.scan.refresh());
+
+  /**
+   * 支援者が文字を入力しているあいだは、入力ドックを画面から外す。
+   *
+   * ドックは画面下に position:fixed で居座る。スマホでソフトキーボードが
+   * 出ると、キーボードの上へ持ち上がって残りの可視領域をさらに削る——
+   * 参加者IDや観察メモを打っている支援者にとっては、いま打っている欄が
+   * 見えなくなる（iPhone SE ではフォームの可視領域がほぼ消える）。
+   *
+   * ドックは利用者がスイッチで操作するためのものなので、支援者が
+   * キーボードを使っている最中に要る場面がない。外して困る導線は無い。
+   *
+   * 判定にキーボードの表示状態ではなく「文字入力欄に焦点があるか」を使うのは、
+   * 外付けキーボードや音声入力など、ソフトキーボードが出ない入力手段でも
+   * 同じことが言えるため。走査エンジンには触れない（見た目だけの退避）。
+   */
+  const TEXT_ENTRY_SELECTOR = 'input[type="text"], input:not([type]), textarea';
+  const syncTextEntryMode = () => {
+    const active = document.activeElement;
+    const typing = Boolean(active && active.matches?.(TEXT_ENTRY_SELECTOR));
+    document.body.classList.toggle("text-entry", typing);
+  };
+  document.addEventListener("focusin", syncTextEntryMode);
+  document.addEventListener("focusout", () => {
+    // focusout は次の要素へ焦点が移る前に飛ぶので、確定してから見る。
+    window.setTimeout(syncTextEntryMode, 0);
+  });
 
   // タスク計測中の経過時間表示（1秒）とポイントスキャンのカーソル（200ms）
   window.setInterval(() => {

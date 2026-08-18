@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ルビの実機確認</title>
+<!--
+  実機（iOS Simulator）でルビがどう出るかだけを見るための、単体のページ。
+
+  なぜアプリ本体ではなくこれなのか: アプリはスタート画面のひと押しを経ないと
+  ホームへ進まない。simctl はタップを送れないので、アプリを起動しただけでは
+  ルビの乗った画面まで到達できない。ここでは同じCSSと同じ文言を並べて、
+  「iOS の WebKit がルビをどう組むか」だけを取り出して見る。
+
+  数値も画面に出す。スクリーンショットしか持ち帰れないので、目視できない値
+  （ふりがなの実寸、行の高さ）は文字として焼き込む必要がある。
+-->
+<style>
+  :root { font-size: 100%; }
+  html.large-text { font-size: 112%; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #102b2a;
+    background: #fbfaf7;
+  }
+  h1 { font-size: 1.1rem; margin: 0 0 12px; }
+  .card {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    border: 1px solid #d5dfdc;
+    border-radius: 10px;
+    background: #fff;
+  }
+  .title { font-size: clamp(1.15rem, 3vw, 1.6rem); font-weight: 700; margin: 0; }
+  .desc { font-size: clamp(0.95rem, 2.1vw, 1.2rem); font-weight: 600; color: #526966; margin: 4px 0 0; }
+
+  /* ここが検証対象。src/styles.css のルビ規則と同じ値にしてある。 */
+  ruby { ruby-position: over; -webkit-ruby-position: before; }
+  rt {
+    font-size: max(0.68em, 0.7rem);
+    letter-spacing: 0.02em;
+    color: #526966;
+    font-weight: 400;
+  }
+  html.text-ruby :is(.title, .desc) { line-height: 2; }
+
+  #report { font-size: 0.85rem; line-height: 1.7; white-space: pre-wrap; }
+  .bad { color: #b84a4a; font-weight: 700; }
+  .good { color: #247a4d; font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>ルビの実機確認（iOS WebKit）</h1>
+
+<div class="card">
+  <p class="title"><ruby>色<rt aria-hidden="true">いろ</rt></ruby>と<ruby>音<rt aria-hidden="true">おと</rt></ruby></p>
+  <p class="desc"><ruby>押<rt aria-hidden="true">お</rt></ruby>すと<ruby>色<rt aria-hidden="true">いろ</rt></ruby>と<ruby>音<rt aria-hidden="true">おと</rt></ruby>が<ruby>変<rt aria-hidden="true">か</rt></ruby>わるよ</p>
+</div>
+
+<div class="card">
+  <p class="title"><ruby>低<rt aria-hidden="true">ひく</rt></ruby>い<ruby>音<rt aria-hidden="true">おと</rt></ruby>のあと、<ruby>高<rt aria-hidden="true">たか</rt></ruby>い<ruby>音<rt aria-hidden="true">おと</rt></ruby>で<ruby>押<rt aria-hidden="true">お</rt></ruby>そう</p>
+  <p class="desc"><ruby>画面<rt aria-hidden="true">がめん</rt></ruby>を<ruby>見<rt aria-hidden="true">み</rt></ruby>てアームを<ruby>止<rt aria-hidden="true">と</rt></ruby>めよう</p>
+</div>
+
+<div class="card" id="report">計測中…</div>
+
+<script>
+  document.documentElement.classList.add("text-ruby");
+  // 大きい文字（アプリの既定はON）も同時に見る。
+  document.documentElement.classList.add("large-text");
+
+  window.addEventListener("load", () => {
+    const rubies = [...document.querySelectorAll("ruby")];
+    const rt = document.querySelector("rt");
+    const title = document.querySelector(".title");
+    const desc = document.querySelector(".desc");
+    const px = (el) => Math.round(parseFloat(getComputedStyle(el).fontSize) * 10) / 10;
+
+    // ふりがなが本文の上に乗っているか（下に回ると ruby-position が効いていない）
+    const below = rubies.filter((r) => {
+      const t = r.querySelector("rt");
+      const rb = r.getBoundingClientRect();
+      return t.getBoundingClientRect().top > rb.top + rb.height / 2;
+    }).length;
+
+    // ふりがなが直前のカードと重なっていないか
+    const cards = [...document.querySelectorAll(".card")];
+    let overlap = 0;
+    cards.forEach((card, i) => {
+      if (i === 0) return;
+      const prev = cards[i - 1].getBoundingClientRect();
+      card.querySelectorAll("rt").forEach((t) => {
+        if (t.getBoundingClientRect().top < prev.bottom) overlap += 1;
+      });
+    });
+
+    const ok = (label, good) =>
+      `${good ? "✅" : "❌"} ${label}`;
+
+    document.getElementById("report").innerHTML = [
+      `UA: ${navigator.userAgent}`,
+      `画面: ${window.innerWidth}x${window.innerHeight} / DPR ${window.devicePixelRatio}`,
+      `ルート文字: ${px(document.documentElement)}px  本文: ${px(document.body)}px`,
+      `見出し: ${px(title)}px  説明: ${px(desc)}px  ふりがな: ${px(rt)}px`,
+      `見出しの行の高さ: ${Math.round(title.getBoundingClientRect().height)}px`,
+      `ruby-position: ${getComputedStyle(rubies[0]).rubyPosition || "(未対応)"}`,
+      `-webkit-ruby-position: ${getComputedStyle(rubies[0]).webkitRubyPosition || "(未対応)"}`,
+      ``,
+      ok(`ふりがなが本文の上にある（下に回った数: ${below}）`, below === 0),
+      ok(`上のカードと重なっていない（重なり: ${overlap}）`, overlap === 0),
+      ok(`ふりがなが 11px 以上（${px(rt)}px）`, px(rt) >= 11),
+      ok(`:has() が使える（${CSS.supports("selector(:has(*))")}）— 使っていないので参考値`, true),
+    ].join("\n");
+  });
+</script>
+</body>
+</html>

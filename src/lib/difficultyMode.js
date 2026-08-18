@@ -1,0 +1,124 @@
+// =====================================================================
+// difficultyMode.js — 「そくてい（研究）」と「れんしゅう（訓練）」の切り分け
+//
+// なぜ要るか: 支援者が触れるつまみ（テンポ・拍数・つかめる広さ・画面の
+// 手がかり・通過音）は、どれも測っているものを変えうる。これまではすべてが
+// 同じ設定面に並んでいて、研究として測る回とふだんの訓練の回が、同じ場所から
+// 無数の組合せで作られていた。
+//
+// 条件を1つずつ記録する方式には限界がある。条件が増えるほど層別すべき
+// セルが増え、少ない参加者では空のセルばかりになる。「記録した」ことは
+// 「交絡が無い」ことを意味しない。
+//
+// なので、条件の束に名前を付けて2つに畳む。
+//
+//   そくてい（measure）… 測るための回。パラメータは protocol 固定で支援者は
+//     変更できない。画面の手がかりも通過音もアシストも無し。回どうしを
+//     そのまま比較でき、参加者間でも同じ条件になる。
+//   れんしゅう（practice）… ふだん遊ぶ回。支援者が利用者に合わせて自由に
+//     調整でき、手がかりもアシストも使える。上達のための回。
+//
+// どちらだったかは session.config.difficultyMode に残し、CSVにも出す。
+// 解析では、まず difficultyMode === "measure" だけを見ればよい——これが
+// 「主要測定の条件を固定する」ということ。
+//
+// DOM に触れない純粋関数として置いてある。ここの線引きは画面を見ても
+// 分からず、壊れても両方の回が普通に遊べてしまう。
+// =====================================================================
+
+/** 既定は「れんしゅう」。ふだん使うのは訓練で、測定は支援者が意図して選ぶ。 */
+export const DEFAULT_DIFFICULTY_MODE = "practice";
+
+export const DIFFICULTY_MODES = new Set(["measure", "practice"]);
+
+/**
+ * そくていの protocol 値。
+ *
+ * ここが「主要測定の条件」そのもの。支援者の設定より優先し、変更できない。
+ * 値は content.js の rhythmPresets / cranePresets と同じものを出発点にして
+ * いるが、**わざと別に持っている**——プリセット側を訓練の都合で調整したとき
+ * に、測定の条件まで一緒に動いてしまわないようにするため。
+ *
+ * 変えるときは、それまでに取ったデータと比較できなくなることを承知で変える。
+ */
+export const MEASUREMENT_PROTOCOL = {
+  rhythm: {
+    "rhythm-l1": { bpm: 40, countInBeats: 3, targetBeats: 10 },
+    "rhythm-l2": { bpm: 60, countInBeats: 4, targetBeats: 20 },
+    gonogo: { bpm: 50, countInBeats: 3, targetBeats: 20 },
+    // calibration は元から protocol 固定（PROTOCOL_LOCKED_GAME_IDS）なので
+    // ここには置かない。二重に持つと食い違う。
+  },
+  crane: { sweepMs: 2200, toleranceR: 15, targetTrials: 5 },
+};
+
+/** 設定値から、いまどちらの回かを決める。 */
+export function resolveDifficultyMode(settings) {
+  const mode = settings?.difficultyMode;
+  return DIFFICULTY_MODES.has(mode) ? mode : DEFAULT_DIFFICULTY_MODE;
+}
+
+/** そくていの回か。支援者のつまみを効かせてよいかの判断はすべてこれで引く。 */
+export function isMeasurementMode(settings) {
+  return resolveDifficultyMode(settings) === "measure";
+}
+
+/**
+ * リズム系の実効パラメータ。
+ *
+ * そくていでは protocol 固定。れんしゅうでは支援者の設定 → あそびごとの
+ * 既定、の順で解決する（従来の優先順位をそのまま残す）。
+ *
+ * @param {string} gameId
+ * @param {object} settings state.settings
+ * @param {object} preset content.js の rhythmPresets[gameId]
+ * @returns {{bpm:number, countInBeats:number, targetBeats:number}}
+ */
+export function resolveRhythmDifficulty(gameId, settings, preset) {
+  const protocolValues = MEASUREMENT_PROTOCOL.rhythm[gameId];
+  if (isMeasurementMode(settings) && protocolValues) {
+    return { ...protocolValues };
+  }
+  return {
+    bpm: settings?.rhythmBpm ?? preset.bpm,
+    countInBeats: settings?.countInBeats ?? preset.countInBeats,
+    targetBeats: settings?.targetBeats ?? preset.targetBeats,
+  };
+}
+
+/**
+ * UFOキャッチャーの実効パラメータ。
+ *
+ * そくていでは protocol 固定に加えてアシストも切る。連続失敗で許容半径が
+ * 広がる仕組みは訓練としては正しいが、測定では「同じ課題を解いた回」で
+ * なくなる——同じセッションの中でも試行ごとに難度が変わってしまう。
+ */
+export function resolveCraneDifficulty(settings, preset) {
+  if (isMeasurementMode(settings)) {
+    return {
+      ...preset,
+      ...MEASUREMENT_PROTOCOL.crane,
+      // アシスト無し。assistMaxSteps を 0 にすると assistedToleranceR は
+      // 常に素の toleranceR を返す（games/craneGeometry.js）。
+      assistMaxSteps: 0,
+      audioGuidance: false,
+    };
+  }
+  return {
+    ...preset,
+    sweepMs: settings?.craneSweepMs ?? preset.sweepMs,
+    toleranceR: settings?.craneToleranceR ?? preset.toleranceR,
+    targetTrials: settings?.craneTargetTrials ?? preset.targetTrials,
+    audioGuidance: settings?.craneAudioGuidance === true,
+  };
+}
+
+/**
+ * その回、画面から拍の手がかりを出してよいか。
+ *
+ * そくていでは支援者の設定に関わらず常に切る。手がかりを出した回は
+ * 「聴覚キューへの同期」を測った回ではないので、測定の回に混ぜられない。
+ */
+export function allowsVisualGuidance(settings) {
+  return !isMeasurementMode(settings) && settings?.visualGuidance === true;
+}

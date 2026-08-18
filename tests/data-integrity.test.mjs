@@ -13,6 +13,7 @@ import {
 } from "../src/lib/state.js";
 import { escapeCsv, formatTime } from "../src/lib/utils.js";
 import {
+  buildRhythmCsvRows,
   buildTaskCsvRows,
   flattenEvaluationResults,
 } from "../src/lib/views/evaluation.js";
@@ -808,8 +809,36 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
     ],
     "scan"
   );
-  assert.equal(scanRows[0].length, 18);
-  assert.equal(scanRows[1].length, 18);
+  // 既存18列のうしろに audioGuidance（ねらいの通過音を鳴らしていた回か。
+  // games/crane.js の maybePassTone）と、端末6列を足した。
+  //
+  // 列数だけでなく「末尾に足した」ことを固定する: 途中に挿すと既存列の位置が
+  // ずれ、列位置で読んでいる解析側が黙って壊れる（detailed-design.md §9.3）。
+  const DEVICE_COLUMNS = 6;
+  // 既存18列 ＋ audioGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness。
+  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 1);
+  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 1);
+  assert.equal(scanRows[0][17], "judgment");
+  assert.equal(scanRows[1][17], "grip");
+  assert.equal(scanRows[0][18], "audioGuidance");
+  // config.audioGuidance を持たない回は false（true にはしない）。
+  assert.equal(scanRows[1][18], false);
+  // そくてい／れんしゅうのどちらの回か。列を持たない古い記録は practice。
+  assert.equal(scanRows[0][19], "difficultyMode");
+  assert.equal(scanRows[1][19], "practice");
+  // 端末は「記録したのに書き出さない」状態が実際にあった。列として出ることを
+  // 固定する——保存されているだけの値は解析に使えない。
+  assert.deepEqual(scanRows[0].slice(20, 26), [
+    "deviceViewportWidth",
+    "deviceViewportHeight",
+    "devicePixelRatio",
+    "deviceOutputLatencyS",
+    "deviceBaseLatencyS",
+    "deviceUserAgent",
+  ]);
+  // 末尾に成立確認の状態（リズムCSVと同じ）。列を持たない古い記録は n/a。
+  assert.equal(scanRows[0].at(-1), "measurementReadiness");
+  assert.equal(scanRows[1].at(-1), "n/a");
 
   const rtRows = buildTaskCsvRows(
     [
@@ -834,8 +863,10 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
     ],
     "rt"
   );
-  assert.equal(rtRows[0].length, 14);
-  assert.equal(rtRows[1].length, 14);
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS);
+  assert.equal(rtRows[0][13], "excluded");
+  assert.equal(rtRows[0].at(-1), "deviceUserAgent");
 });
 
 test("sanitizeState restores valid scan/rt sessions and rejects unknown task types", () => {
@@ -918,6 +949,205 @@ test("sanitizeState restores valid scan/rt sessions and rejects unknown task typ
   assert.equal(rt.finished, true);
   assert.equal(rt.trials[0].reactionTimeMs, 300);
   assert.equal(rt.summary.meanRtMs, 300);
+});
+
+// ---------------------------------------------------------------------
+// 測定条件が「記録され、生き延び、書き出される」こと
+//
+// 支援者は画面から拍の手がかり（リズム）と ねらいの通過音（UFOキャッチャー）を
+// 入れられる。どちらもONにすると、その回に測っているものが変わる——リズムは
+// 聴覚だけへの同期でなくなり、UFOキャッチャーは画面を見ずに解ける。
+//
+// 記録の経路は3つあって、どれか1つでも欠けると条件が追えなくなる:
+//   1. セッションへ書き込む（games/rhythm.js・games/crane.js）
+//   2. 保存と復元を生き延びる（state.js の sanitize）
+//   3. CSVの列として出る（views/evaluation.js）
+// 2 と 3 は落としても画面上は何も壊れないので、ここで固定する。
+// ---------------------------------------------------------------------
+
+// 条件の有無だけを見たいので、それ以外は既定どおりの1セッション分。
+const RHYTHM_CONFIG = {
+  mode: "cued",
+  bpm: 40,
+  countInBeats: 3,
+  targetBeats: 10,
+  judgmentWindowMs: 600,
+  effectiveWindowMs: 600,
+  baselineOffsetMs: 0,
+  goRatio: null,
+  seedSequence: [],
+};
+
+test("a rhythm session keeps its visual-guidance condition across a reload", () => {
+  const base = {
+    sessionId: "r-1",
+    taskType: "sms",
+    gameId: "rhythm-l1",
+    participantId: "P001",
+    startedAtIso: "2026-08-16T00:00:00.000Z",
+    aborted: false,
+    finished: false,
+    device: {},
+    trials: [],
+  };
+  const guided = sanitizeState({
+    version: 3,
+    sessions: [{ ...base, config: { ...RHYTHM_CONFIG, visualGuidance: true } }],
+  });
+  assert.equal(guided.sessions[0].config.visualGuidance, true);
+
+  const plain = sanitizeState({
+    version: 3,
+    sessions: [{ ...base, sessionId: "r-2", config: { ...RHYTHM_CONFIG } }],
+  });
+  // 条件を持たない記録を true と復元しない（手がかりの仕組みが無かった頃の
+  // 記録を「支援者が意図してONにした回」と取り違えない）。
+  assert.equal(plain.sessions[0].config.visualGuidance, false);
+});
+
+// 記録は3経路（session.config → sanitize → CSV）すべてを通らないと意味が
+// ない。過去に2回、sanitize で落として「再読み込みしたら条件が消える」状態を
+// 作っている。成立確認の状態についても同じ穴を開けないよう固定する。
+test("a session keeps its readiness state across a reload", () => {
+  const base = {
+    taskType: "sms",
+    gameId: "calibration",
+    participantId: "P001",
+    startedAtIso: "2026-08-17T00:00:00.000Z",
+    aborted: false,
+    finished: true,
+    device: {},
+    trials: [],
+  };
+  const restored = sanitizeState({
+    version: 3,
+    sessions: [
+      {
+        ...base,
+        sessionId: "r-a",
+        config: { ...RHYTHM_CONFIG, difficultyMode: "measure", measurementReadiness: "overridden" },
+      },
+      {
+        ...base,
+        sessionId: "r-b",
+        config: { ...RHYTHM_CONFIG, difficultyMode: "measure", measurementReadiness: "met" },
+      },
+      // 成立確認の仕組みが無かった頃の記録。
+      { ...base, sessionId: "r-c", config: { ...RHYTHM_CONFIG } },
+      // 値が壊れている記録。知らない値を通すと、あとで意味を決められない。
+      { ...base, sessionId: "r-d", config: { ...RHYTHM_CONFIG, measurementReadiness: "yes" } },
+    ],
+  });
+  assert.equal(restored.sessions[0].config.measurementReadiness, "overridden");
+  assert.equal(restored.sessions[1].config.measurementReadiness, "met");
+  // 分からないものは分からないと残す。met と復元すると、確認を経た回と
+  // 区別できなくなる。
+  assert.equal(restored.sessions[2].config.measurementReadiness, "n/a");
+  assert.equal(restored.sessions[3].config.measurementReadiness, "n/a");
+});
+
+test("a crane session keeps its pass-tone condition across a reload", () => {
+  const craneSession = (sessionId, audioGuidance) => ({
+    sessionId,
+    taskType: "scan",
+    gameId: "crane",
+    participantId: "",
+    startedAtIso: "2026-08-16T00:00:00.000Z",
+    aborted: false,
+    finished: false,
+    device: {},
+    trials: [],
+    config: {
+      sweepMs: 2200,
+      toleranceR: 15,
+      targetTrials: 5,
+      graspAnimMs: 1200,
+      targetSequence: [],
+      ...(audioGuidance === undefined ? {} : { audioGuidance }),
+    },
+  });
+  const withTone = sanitizeState({ version: 3, sessions: [craneSession("t-1", true)] });
+  assert.equal(withTone.sessions[0].config.audioGuidance, true);
+  const withoutTone = sanitizeState({ version: 3, sessions: [craneSession("t-2", undefined)] });
+  assert.equal(withoutTone.sessions[0].config.audioGuidance, false);
+});
+
+test("the rhythm CSV appends visualGuidance without moving the existing 18 columns", () => {
+  const rows = buildRhythmCsvRows([
+    {
+      sessionId: "r-1",
+      taskType: "sms",
+      gameId: "rhythm-l1",
+      participantId: "P001",
+      startedAtIso: "2026-08-16T00:00:00.000Z",
+      aborted: false,
+      config: { ...RHYTHM_CONFIG, visualGuidance: true },
+      trials: [
+        {
+          index: 0,
+          beatIndex: 0,
+          beatKind: "go",
+          scheduledMs: 4500,
+          inputMs: 4550,
+          rawOffsetMs: 50,
+          appliedBaselineMs: 0,
+          judgment: "hit",
+          excluded: false,
+        },
+      ],
+    },
+  ]);
+  // detailed-design.md §9.3「この18列は既存データ互換のため変更しない」。
+  // 途中に挿すと、列位置で読んでいる解析側が黙って壊れる。
+  // 既存18列 ＋ visualGuidance ＋ 端末6列。順序を固定する。
+  // 既存18列 ＋ visualGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness。
+  assert.equal(rows[0].length, 20 + 6 + 1);
+  assert.equal(rows[0][16], "judgment");
+  assert.equal(rows[0][17], "excluded");
+  assert.equal(rows[0][18], "visualGuidance");
+  assert.equal(rows[0][19], "difficultyMode");
+  // 端末6列は位置ごと動かない。新しい列を足すときに端末列の前へ挿すと、
+  // 位置で読んでいる解析側が黙って壊れる。
+  assert.equal(rows[0][25], "deviceUserAgent");
+  assert.equal(rows[1][15], 50, "rawOffsetMs は生値のまま");
+  assert.equal(rows[1][18], true);
+
+  // 末尾に成立確認の状態（src/lib/readinessCheck.js）。この列が無いと、
+  // 成績の低い回について「そもそも課題が成立していたのか」を後から分けられない。
+  assert.equal(rows[0].at(-1), "measurementReadiness");
+  // 列を持たない古い記録は n/a。met と復元してしまうと、確認を経た回と
+  // 区別できなくなる。
+  assert.equal(rows[1].at(-1), "n/a");
+});
+
+test("the rhythm CSV carries the readiness state of a measurement run", () => {
+  const rows = buildRhythmCsvRows([
+    {
+      sessionId: "r-2",
+      taskType: "sms",
+      gameId: "calibration",
+      participantId: "P001",
+      startedAtIso: "2026-08-17T00:00:00.000Z",
+      aborted: false,
+      config: { ...RHYTHM_CONFIG, difficultyMode: "measure", measurementReadiness: "overridden" },
+      trials: [
+        {
+          index: 0,
+          beatIndex: 0,
+          beatKind: "go",
+          scheduledMs: 4800,
+          inputMs: 4750,
+          rawOffsetMs: -50,
+          appliedBaselineMs: 0,
+          judgment: "hit",
+          excluded: false,
+        },
+      ],
+    },
+  ]);
+  // 成立確認を通さずに測った回。測定は止めない代わりに、必ずそう書き出す
+  // ——保存されているだけで書き出されない値は、実質「記録していない」のと同じ。
+  assert.equal(rows[1].at(-1), "overridden");
 });
 
 for (const { name, fn } of tests) {

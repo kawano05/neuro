@@ -24,15 +24,6 @@
         <i class="fa-solid fa-user" aria-hidden="true"></i>
         <span>支援者メニュー</span>
       </button>
-      <button
-        class="supporter-edit-toggle"
-        id="supporterEditToggle"
-        type="button"
-        aria-pressed="false"
-        hidden
-      >
-        支援者編集を開始
-      </button>
     </div>
   </header>
 
@@ -43,6 +34,19 @@
       basic-design.md §3.2）。走査順の先頭に置き、home/start/result（利用者の
       世界）では neuronodeApp.js の renderAll() が hidden を立てて隠す。
     -->
+    <!--
+      各タブは長い名前と短い名前の両方を持つ。狭い画面では短いほうだけを
+      出して1行に収める——2列3行に折り返すと、支援者の画面は上半分が
+      ナビゲーションで埋まる（実測: iPhone 14 でヘッダ＋タブ＋ロック説明が
+      356px、画面の54%。最初の設定項目は y=772 で折り返しの下だった）。
+
+      横スクロールにはしない。タブは走査対象なので、画面の外に置くと
+      「走査対象は必ず画面内」という約束（scanPaging.js）が崩れる。
+
+      aria-label に長いほうを固定するのは、display:none の文字が
+      アクセシブル名の計算から外れるため。短縮するのは見た目だけで、
+      読み上げは常に正式名称のまま。
+    -->
     <button
       class="home-return"
       id="homeReturn"
@@ -50,34 +54,29 @@
       data-scan
       aria-label="ホームへもどる"
     >
-      ← ホームへ
+      <span class="tab-full">← ホームへ</span><span class="tab-short">ホーム</span>
     </button>
     <!--
       マッチング・VOCA・文字学習は利用者向けアクティビティなので、タブでは
       なくホームの「まなぶ・つたえる」二階層から入る。
       タブバーに残るのは支援者機能（評価ログ・設定＋研究者モードの3タブ）のみ。
     -->
-    <button class="tab researcher-tab" data-view="operation" data-scan>操作訓練</button>
-    <button class="tab researcher-tab" data-view="evaluation" data-scan>効果測定</button>
-    <button class="tab researcher-tab" data-view="research" data-scan>研究</button>
-    <button class="tab" data-view="log" data-scan>評価ログ</button>
-    <button class="tab" data-view="settings" data-scan>設定</button>
+    <button class="tab researcher-tab" data-view="operation" data-scan aria-label="操作訓練">
+      <span class="tab-full">操作訓練</span><span class="tab-short">訓練</span>
+    </button>
+    <button class="tab researcher-tab" data-view="evaluation" data-scan aria-label="効果測定">
+      <span class="tab-full">効果測定</span><span class="tab-short">測定</span>
+    </button>
+    <button class="tab researcher-tab" data-view="research" data-scan aria-label="研究">
+      <span class="tab-full">研究</span><span class="tab-short">研究</span>
+    </button>
+    <button class="tab" data-view="log" data-scan aria-label="評価ログ">
+      <span class="tab-full">評価ログ</span><span class="tab-short">ログ</span>
+    </button>
+    <button class="tab" data-view="settings" data-scan aria-label="設定">
+      <span class="tab-full">設定</span><span class="tab-short">設定</span>
+    </button>
   </nav>
-
-  <!--
-    支援者編集ロックの説明（basic-design.md §9「誤操作防止」）。
-
-    ロック自体は要件だが、解除されるまで画面じゅうの操作子が黙って disabled に
-    なるだけで、理由も解除方法もどこにも出ていなかった（設定画面では走査対象
-    13個のうち9個が無効）。支援者は「壊れている」と受け取る。ロック中で、かつ
-    いま見ている画面に保護された操作子が実際にある場合だけ出す。
-  -->
-  <p class="supporter-lock-notice" id="supporterLockNotice" hidden>
-    <i class="fa-solid fa-lock" aria-hidden="true"></i>
-    <span>
-      いまは変更できません。右上の「支援者編集を開始」を押すと、この画面の設定を変えられます。
-    </span>
-  </p>
 
   <!--
     支援者の操作に対する、目に見える返事（ctx.notifySupporter）。
@@ -140,7 +139,6 @@
           class="secondary calibration-save"
           id="calibrationSaveOffset"
           type="button"
-          data-supporter-edit
         >
           この値を保存する
         </button>
@@ -207,7 +205,7 @@
           <p class="eyebrow">iOS Switch Control training</p>
           <h2 id="operation-title">iOS操作訓練</h2>
         </div>
-        <button class="secondary" id="resetOperation" data-supporter-edit>訓練記録をリセット</button>
+        <button class="secondary" id="resetOperation">訓練記録をリセット</button>
       </div>
 
       <div class="module-grid" id="operationModeGrid" aria-label="操作訓練の種類"></div>
@@ -391,6 +389,25 @@
         </div>
       </div>
 
+      <!--
+        入力オフセットの分布。このアプリの研究上の位置づけそのもの
+        （全試行のずれを記録する計測器）なのに、集めた値を通しで見る場所が
+        どこにも無く、CSVを書き出して別のツールへ持っていくしかなかった。
+        平均とSDは1回ぶんならリザルトに出るが、分布の形は数値2つでは分からない。
+
+        「がめんに 手がかりを出す」を入れていた回は別の山として描く
+        （聴覚キューだけへの同期ではないので、混ぜると母集団が違う値が
+        1つの山になる。src/lib/offsetDistribution.js）。
+      -->
+      <section class="eval-panel">
+        <h3>入力オフセットの分布</h3>
+        <p class="panel-note">
+          記録済みのリズム課題から、当たった試行の生オフセット（rawOffsetMs）を
+          50msごとに数えたものです。そくていの回と、慣らしの除外試行は含みません。
+        </p>
+        <div id="offsetDistribution"></div>
+      </section>
+
       <div class="evaluation-grid">
         <section class="eval-panel">
           <h3>研究条件プロファイル</h3>
@@ -479,13 +496,29 @@
         値は session.config に残るが、これまで state.sessions は CSV 書き出し
         からしか読まれておらず、画面には一度も出ていなかった。
       -->
-      <h3 class="settings-group-title">あそびの きろく</h3>
+      <!--
+        回を並べた推移。このアプリの目的のひとつが「訓練前後の比較」
+        （README）なのに、画面に出ていたのは1回ごとの記録だけで、良く
+        なっているかどうかは支援者が数字を目で追って比べるしかなかった。
+
+        条件（テンポ・拍数・つかめる広さ・画面の手がかり）が違う回は別の線に
+        する。同じ指標でも測っているものが変わるので、1本にまとめると
+        比較にならない（src/lib/sessionTrend.js）。
+      -->
+      <h3 class="settings-group-title">回ごとの推移</h3>
+      <p class="settings-group-note">
+        同じ あそび・同じ条件で完走した回だけを、古い順に並べています。
+        条件を変えた回は別の線になります。中断した回は含みません。
+      </p>
+      <div id="sessionTrends" aria-label="セッションの推移"></div>
+
+      <h3 class="settings-group-title">遊びの記録</h3>
       <p class="settings-group-note">
         1回ごとの条件です。設定を変えた回は、ここの値も変わります。
       </p>
       <div class="log-list" id="sessionList" aria-label="記録済みのセッション"></div>
 
-      <h3 class="settings-group-title">そうさログ</h3>
+      <h3 class="settings-group-title">操作ログ</h3>
       <div class="log-list" id="logList" aria-label="直近の操作ログ"></div>
     </section>
 
@@ -497,15 +530,52 @@
         </div>
       </div>
 
-      <div class="supporter-actions">
-        <div>
-          <strong>入力タイミングの測定</strong>
-          <span>利用者ホームには表示せず、支援者と一緒に実施します。</span>
-        </div>
-        <button class="secondary" id="startCalibration" type="button" data-supporter-edit>
-          そくていを始める
+      <!--
+        設定をタブに分ける。
+        全部を1ページに並べると 3.4画面ぶん（実測2438px / 720px）になり、
+        目的の項目を毎回スクロールして探すことになる。畳む方式も試したが、
+        「開いてから探す」が残るので、はじめから面を分ける。
+
+        分けかたは支援者の目的順:
+          そうさ … 利用者が何をどう選ぶか（走査の速さ・出す遊び）
+          見え方・音 … 感覚まわり
+          むずかしさ … あそびごとの難易度
+          そくてい … 研究者向けの設定と測定条件
+
+        1面が1画面に収まることを基準に配分した（iPad 実測）。収まっていれば
+        探す動作が要らない——タブに分けても面が長ければ、結局スクロールで
+        探すことになる。
+
+        タブ自体は何も変更しないので、走査の輪には入れる（利用者が誤って
+        押しても設定は変わらず、面が切り替わるだけ）。
+      -->
+      <div class="settings-tabs" role="tablist" aria-label="設定の分類">
+        <button class="settings-tab" role="tab" data-settings-tab="basic" aria-selected="true" data-scan>
+          そうさ
+        </button>
+        <button class="settings-tab" role="tab" data-settings-tab="senses" aria-selected="false" data-scan>
+          見え方・音
+        </button>
+        <button class="settings-tab" role="tab" data-settings-tab="play" aria-selected="false" data-scan>
+          むずかしさ
+        </button>
+        <button class="settings-tab" role="tab" data-settings-tab="measure" aria-selected="false" data-scan>
+          そくてい
         </button>
       </div>
+
+      <div class="settings-panel" data-settings-panel="basic">
+      <!--
+        設定は長らく「トグル8個が1つのグリッドに並ぶ」形だった。走査の速さも
+        画面の見え方もあそびの出し分けも同じ面に並ぶので、支援者は目的の項目を
+        毎回さがすことになる（スマホでは縦3000px超）。あそびごとの難易度は
+        既に見出しで囲ってあるので、全体設定側も同じ規則へ揃える。
+        並べ替えているだけで、項目そのものは足しても引いてもいない。
+      -->
+      <h3 class="settings-group-title">走査（スイッチで選ぶ）</h3>
+      <p class="settings-group-note">
+        利用者がどう選ぶか。速さは利用者ごとに大きく違うので、いちばん上に置きます。
+      </p>
 
       <div class="settings-grid">
         <label class="setting-row">
@@ -524,7 +594,30 @@
           </span>
           <input id="autoScan" type="checkbox" role="switch" data-scan />
         </label>
+      </div>
 
+      <h3 class="settings-group-title">出す遊び</h3>
+
+      <div class="settings-grid">
+        <label class="setting-row toggle-row">
+          <span>
+            <strong>視覚課題を隠す</strong>
+            <small>画面注視が必要なUFOキャッチャーをロビーから外します</small>
+          </span>
+          <input id="hideVisualTasks" type="checkbox" role="switch" data-scan />
+        </label>
+      </div>
+
+      </div>
+
+      <div class="settings-panel" data-settings-panel="senses" hidden>
+      <h3 class="settings-group-title">音と言葉</h3>
+      <p class="settings-group-note">
+        効果音を切っても、リズムやアタリの合図音は鳴ります。合図は課題そのものなので、
+        ここでは止められません。
+      </p>
+
+      <div class="settings-grid">
         <label class="setting-row toggle-row">
           <span>
             <strong>音声読み上げ</strong>
@@ -536,9 +629,34 @@
         <label class="setting-row toggle-row">
           <span>
             <strong>効果音</strong>
-            <small>入力時に短い確認音を鳴らします</small>
+            <small>
+              押した結果の音（アームの上下や把持、水音やリール）を鳴らします
+            </small>
           </span>
           <input id="soundEnabled" type="checkbox" role="switch" data-scan />
+        </label>
+      </div>
+
+      <h3 class="settings-group-title">見え方</h3>
+      <p class="settings-group-note">
+        文字づかいは利用者に合わせて選びます。ひらがなだけが常にやさしいとは
+        限りません——日本語は漢字が語の切れ目を作るので、漢字が読める人には
+        漢字のほうが速く読めます。
+      </p>
+
+      <div class="settings-grid">
+        <label class="setting-row">
+          <span>
+            <strong>文字づかい</strong>
+            <small>
+              あそびの画面に出る文字。支援者向けの画面（設定・記録・研究）は
+              日本語のままです
+            </small>
+          </span>
+          <select id="textMode" data-scan>
+            <option value="ruby">漢字＋ふりがな</option>
+            <option value="en">English</option>
+          </select>
         </label>
 
         <label class="setting-row toggle-row">
@@ -556,41 +674,30 @@
           </span>
           <input id="highContrast" type="checkbox" role="switch" data-scan />
         </label>
-
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>視覚課題を隠す</strong>
-            <small>画面注視が必要なUFOキャッチャーをロビーから外します</small>
-          </span>
-          <input id="hideVisualTasks" type="checkbox" role="switch" data-scan />
-        </label>
-
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>研究者モード</strong>
-            <small>操作訓練・効果測定・研究タブを表示します</small>
-          </span>
-          <input id="researcherMode" type="checkbox" role="switch" data-scan />
-        </label>
       </div>
 
-      <!--
-        あそびごとの難易度は、全体設定に混ぜると「どのあそびの話なのか」が
-        小さい説明文を読むまで分からない。見出しで囲って所属を先に示す。
-        値はセッションの config に記録されるので、どの条件で測ったかは
-        走査CSVから追える。
-      -->
-      <!--
-        リズム系の難易度。設定は課題ごとではなく1つなので、「あそびごとの
-        既定を使う」という状態が要る。既定は L1=40 / L2=60 / gonogo=50 と
-        ばらばらで、スライダーではどれを初期位置にしても嘘になるため、
-        既定を選択肢のひとつに持てるプルダウンにしている。
+      </div>
 
-        そくてい（calibration）には効かない。基準オフセットの測定手順そのもの
-        で、ここで得た中央値は判定窓の中心補正として全セッションに効く
-        （games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS）。
+      <div class="settings-panel" data-settings-panel="play" hidden>
+      <!--
+        そくていの回に、下のむずかしさが効かない理由をその場で出す。出さないと
+        「操作子が黙って無効になっている」という、このアプリが何度も直して
+        きたのと同じ欠陥になる。
+
+        つまみと**同じ面**に置くこと。切り替えは「そくてい」タブだが、
+        効かない操作子を見ているのはこの面なので、理由がここに無いと
+        支援者は別の面を探しにいくことになる。
       -->
-      <h3 class="settings-group-title">リズムの むずかしさ</h3>
+      <p class="measure-mode-notice" id="measureModeNotice" hidden>
+        <i class="fa-solid fa-lock" aria-hidden="true"></i>
+        <span>
+          いまは「そくてい」の回です。下のむずかしさは決まった値に固定されていて
+          変えられません。調整したいときは「そくてい」タブで「練習」に
+          切り替えてください。
+        </span>
+      </p>
+
+      <h3 class="settings-group-title">リズムの難易度</h3>
       <p class="settings-group-note">
         「リズム れんしゅう」「リズム つづけて」「たかいおとだけ」の3つに ききます。
         そくていは 手順を そろえるため 変わりません。
@@ -614,8 +721,8 @@
 
         <label class="setting-row">
           <span>
-            <strong>1回の はくすう</strong>
-            <small>1セッションで おす回数。長くも短くもできます</small>
+            <strong>1回の拍数</strong>
+            <small>1セッションで押す回数。長くも短くもできます</small>
           </span>
           <select id="rhythmTargetBeats" data-scan>
             <option value="">あそびごとの既定</option>
@@ -625,9 +732,31 @@
             <option value="30">30</option>
           </select>
         </label>
+
+        <!--
+          画面から拍の手がかりを出すか。ONで2つが同時に効く:
+            1. 円が次の拍へ向けて「溜める」（＝拍の予告）
+            2. 押したあと、ずれの目盛りが「はやい/おそい」を出す（＝KR）
+
+          既定OFF。この課題は聴覚キューへの同期を測る計測器なので、素の状態は
+          「手がかりは音だけ」でなければ rawOffsetMs が聴覚同期の指標にならない。
+          訓練として使う回だけ支援者がONにする。実際に効いた値はセッションごとに
+          記録され、評価ログとリズムCSVにも出る。
+        -->
+        <label class="setting-row toggle-row">
+          <span>
+            <strong>がめんに 手がかりを出す</strong>
+            <small>
+              つぎの拍がくる合図を円で予告し、おしたあと はやい/おそいを見せます。
+              練習むけ。切ると、手がかりは音だけになります（測定はこちら。
+              そくていは、はじめから出しません）
+            </small>
+          </span>
+          <input id="visualGuidance" type="checkbox" role="switch" data-scan />
+        </label>
       </div>
 
-      <h3 class="settings-group-title">UFOキャッチャーの むずかしさ</h3>
+      <h3 class="settings-group-title">UFOキャッチャーの難易度</h3>
       <p class="settings-group-note">
         変えた値は、つぎに はじめる ときから ききます。どの ねらいで
         あそんだかは 記録に のこります。
@@ -654,12 +783,124 @@
 
         <label class="setting-row">
           <span>
-            <strong>1回の かいすう</strong>
-            <small>1セッションで アームを おろす 回数。短くも長くもできます</small>
+            <strong>1回の回数</strong>
+            <small>1セッションでアームを下ろす回数。短くも長くもできます</small>
           </span>
           <input id="craneTargetTrials" type="range" min="3" max="15" step="1" data-scan />
           <output id="craneTargetTrialsValue" for="craneTargetTrials">5</output>
         </label>
+
+        <!--
+          目標を通過したときの音。既定OFF。
+
+          ONだと、目標の座標そのものが音になるので、画面を見ずに「音が鳴ったら
+          押す」だけで成立する——このあそびが「画面を見る必要がある唯一の課題」
+          である前提が崩れる。視覚追従が難しい利用者への配慮としては正当なので
+          残してあるが、支援者が必要な回だけ入れる。効いた値は記録に残る。
+        -->
+        <label class="setting-row toggle-row">
+          <span>
+            <strong>狙いの通過音</strong>
+            <small>
+              アームが ねらいの上を通ったとき、小さい音で知らせます。画面を
+              見つづけるのが むずかしいときに。入れると、耳だけでも あそべる
+              ぶん、目で追う練習にはなりません
+            </small>
+          </span>
+          <input id="craneAudioGuidance" type="checkbox" role="switch" data-scan />
+        </label>
+      </div>
+      </div>
+
+      <div class="settings-panel" data-settings-panel="measure" hidden>
+      <div class="supporter-actions">
+        <div>
+          <strong>入力タイミングの測定</strong>
+          <span>利用者ホームには表示せず、支援者と一緒に実施します。</span>
+        </div>
+        <button class="secondary" id="startCalibration" type="button">
+          そくていを始める
+        </button>
+      </div>
+
+      <h3 class="settings-group-title">研究者向け</h3>
+
+      <div class="settings-grid">
+        <label class="setting-row toggle-row">
+          <span>
+            <strong>研究者モード</strong>
+            <small>操作訓練・効果測定・研究タブを表示します</small>
+          </span>
+          <input id="researcherMode" type="checkbox" role="switch" data-scan />
+        </label>
+      </div>
+
+      <!--
+        あそびごとの難易度は、全体設定に混ぜると「どのあそびの話なのか」が
+        小さい説明文を読むまで分からない。見出しで囲って所属を先に示す。
+        値はセッションの config に記録されるので、どの条件で測ったかは
+        走査CSVから追える。
+      -->
+      <!--
+        リズム系の難易度。設定は課題ごとではなく1つなので、「あそびごとの
+        既定を使う」という状態が要る。既定は L1=40 / L2=60 / gonogo=50 と
+        ばらばらで、スライダーではどれを初期位置にしても嘘になるため、
+        既定を選択肢のひとつに持てるプルダウンにしている。
+
+        そくてい（calibration）には効かない。基準オフセットの測定手順そのもの
+        で、ここで得た中央値は判定窓の中心補正として全セッションに効く
+        （games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS）。
+      -->
+      <!--
+        難易度を「そくてい（研究）」と「れんしゅう（訓練）」の2つに畳む。
+
+        条件を1つずつ記録する方式には限界がある——条件が増えるほど層別すべき
+        セルが増え、少ない参加者では空のセルばかりになる。「記録した」ことは
+        「交絡が無い」ことを意味しない。名前つきの束にして、解析ではまず
+        そくていの回だけを見ればよい状態にする（src/lib/difficultyMode.js）。
+      -->
+      <h3 class="settings-group-title">この回の使い方</h3>
+      <p class="settings-group-note">
+        測るための回か、ふだんの練習の回かを選びます。どちらだったかは
+        1回ごとに記録され、評価ログとCSVに出ます。
+      </p>
+
+      <div class="settings-grid">
+        <label class="setting-row">
+          <span>
+            <strong>難易度の決め方</strong>
+            <small>
+              そくていを選ぶと、テンポ・拍数・つかめる広さ・画面の手がかり・
+              通過音・アシストが決まった値に固定され、下の設定は変えられなく
+              なります。回どうし・利用者どうしを同じ条件で比べるためです
+            </small>
+          </span>
+          <select id="difficultyMode">
+            <option value="practice">練習（訓練・調整できる）</option>
+            <option value="measure">測定（研究・固定）</option>
+          </select>
+        </label>
+      </div>
+
+      <!--
+        そくていに入る前の成立確認（src/lib/readinessCheck.js）。
+
+        測定を止めるためではなく、止めないなら何が確かめられていないのかを
+        言えるようにするために出す。3つのうち通っていないものがあっても
+        そくていは選べるが、その回の記録には readiness="overridden" が残り、
+        評価ログとCSVに出る。
+
+        判定はれんしゅうの回の記録から自動で読む（自己申告のチェックボックス
+        にしない——「できます」という記録は成績と独立でないし、何を根拠に
+        そう答えたかが残らない）。そくていを選んでいるときだけ出す:
+        れんしゅうの回には関係がなく、常設すると設定画面が長くなるだけ。
+      -->
+      <div class="readiness-check" id="readinessCheck" hidden>
+        <h3 class="settings-group-title">測定の前に（成立確認）</h3>
+        <p class="readiness-lead" id="readinessLead"></p>
+        <ul class="readiness-list" id="readinessList"></ul>
+      </div>
+
       </div>
     </section>
   </main>

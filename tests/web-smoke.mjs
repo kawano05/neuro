@@ -3,7 +3,13 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer as createNetServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
-import { storageKey } from "../src/lib/content.js";
+import { rhythmPresets, storageKey } from "../src/lib/content.js";
+import { resolveTextMode, translate } from "../src/lib/i18n.js";
+
+// 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
+// 持つと、辞書を直したときにテストだけが古い文言を主張して落ちる——あるいは
+// 辞書の抜けを見逃す。既定の表記で辞書から引く。
+const t = (key, values) => translate(key, resolveTextMode({}), values);
 
 const port = await findAvailablePort();
 const basePath = "/neuro-smoke/";
@@ -26,6 +32,33 @@ const projects = [
     browserType: webkit,
     contextOptions: { viewport: { width: 834, height: 1194 } },
   },
+  {
+    // 縦長のスマホ（390x812）。iPhone 14 の viewport は 664px なので、
+    // ここは **740px のページ分割しきい値と、それより高い画面のあいだ**に
+    // あたる帯になる。長らくどの実寸もこの帯を通らず、ホームの下2枚が
+    // 入力ドックの裏に隠れたまま検出されていなかった（走査で選べない項目が
+    // 輪に残る＝このアプリの中核の約束が破れている状態）。
+    name: "phone-tall",
+    browserType: webkit,
+    contextOptions: {
+      viewport: { width: 390, height: 812 },
+      isMobile: true,
+      hasTouch: true,
+    },
+  },
+  {
+    // スマホを横にした状態。ここは長らく検査の外にあり、モバイル用の圧縮が
+    // すべて `max-width: 820px` に紐づいていたせいで 844px 幅の横向きには
+    // 何も効いていなかった（タイル名が1文字ずつ折り返していた）。
+    // 幅ではなく高さが足りない、という別種の狭さなので専用に見る。
+    name: "phone-landscape",
+    browserType: webkit,
+    contextOptions: {
+      viewport: { width: 844, height: 390 },
+      isMobile: true,
+      hasTouch: true,
+    },
+  },
 ];
 
 const checks = [
@@ -35,13 +68,20 @@ const checks = [
   ["picks rhythm-l1, hides the shell chrome, and records an aborted session on Esc", checkRhythmL1GameFlow],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
   ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
+  ["keeps the result screen free of supporter chrome", checkResultScreenStaysInTheUserWorld],
+  ["keeps every scan target visible above the input dock", checkScanFocusStaysVisible],
+  ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
+  ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
+  ["records real offsets across a full rhythm session", checkRhythmRecordsRealOffsets],
+  ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
+  ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
   ["moves between visible feature tabs", checkFeatureTabs],
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
-  ["locks supporter editing without hiding it from keyboard access", checkSupporterEditingLock],
   ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
+  ["keeps every screen free of overflow and undersized targets", checkLayoutInvariants],
   ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
   ["keeps the hidden attribute effective against CSS display rules", checkHiddenAttributeIsRespected],
   ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
@@ -57,6 +97,17 @@ server.stdout.on("data", (data) => process.stdout.write(data));
 server.stderr.on("data", (data) => process.stderr.write(data));
 
 const failures = [];
+let executed = 0;
+let skipped = 0;
+
+/**
+ * その実寸・ブラウザでは見るものが無い、を表す返り値。
+ *
+ * 早期 return する検査（iPad専用の版面、AudioContext が要る音の契約など）を
+ * ok と数えると、通った件数が実際の被覆より多く見える。実機が無く CI の
+ * 出力が唯一の信号なので、件数は実態どおりでなければならない。
+ */
+const SKIPPED = Symbol("skipped");
 
 try {
   await waitForServer();
@@ -68,10 +119,43 @@ try {
         const context = await browser.newContext(project.contextOptions);
         await context.addInitScript(() => localStorage.clear());
         const page = await context.newPage();
+        // 実行中に投げられた例外とエラーログを拾う。
+        //
+        // ここまでの検査はどれも「期待する状態になったか」しか見ていないので、
+        // 画面が正しく見えていれば裏で例外が出ていても通ってしまう。音の合成
+        // （audio.js の playNoise / playSweep）のように、結果が画面に出ない
+        // 処理はとくにそう——鳴らないまま静かに壊れる。
+        const pageProblems = [];
+        // オフライン時の挙動を見るため、存在しないURLをわざと叩く検査。
+        // ここだけ読み込み失敗のログを許す（応答そのものは検査側が assert する）。
+        const allowsMissingResources = check === checkPwaDelivery;
+        page.on("pageerror", (error) => pageProblems.push(`pageerror: ${error.message}`));
+        page.on("console", (message) => {
+          if (message.type() !== "error") return;
+          // 読み込み失敗を無条件に無視すると、画像やCSSが本当に欠けていても
+          // 気づけない（素材の欠落は画面が寂しくなるだけで、テストは通る）。
+          // わざと存在しないURLを叩くのは PWA の検査だけなので、そこに限る。
+          if (allowsMissingResources && /Failed to load resource/i.test(message.text())) return;
+          pageProblems.push(`console.error: ${message.text()}`);
+        });
         try {
           await page.goto(baseUrl);
-          await check(page, project);
-          console.log(`ok ${project.name}: ${name}`);
+          const outcome = await check(page, project);
+          assert(
+            pageProblems.length === 0,
+            `Page reported errors during the run:\n  ${pageProblems.join("\n  ")}`
+          );
+          // 検査によっては、その実寸やブラウザでは見るものが無い（iPad専用の
+          // 版面、AudioContext が要る音の契約など）。何も見ずに return した
+          // ものまで ok と数えると、通った件数が実際の被覆より多く見える。
+          // CI の出力が唯一の信号である以上、そこが盛られていてはいけない。
+          if (outcome === SKIPPED) {
+            skipped += 1;
+            console.log(`skip ${project.name}: ${name}`);
+          } else {
+            executed += 1;
+            console.log(`ok ${project.name}: ${name}`);
+          }
         } catch (error) {
           failures.push({ project: project.name, name, error });
           console.error(`failed ${project.name}: ${name}`);
@@ -92,7 +176,13 @@ if (failures.length) {
   console.error(`\n${failures.length} smoke test(s) failed.`);
   process.exitCode = 1;
 } else {
-  console.log(`\n${projects.length * checks.length} smoke tests passed.`);
+  // 実際に見た件数と、その実寸では見るものが無くて飛ばした件数を分けて出す。
+  // 掛け算（実寸 × 検査）をそのまま「通った件数」と書くと、被覆が実態より
+  // 多く見える。
+  console.log(
+    `\n${executed} smoke checks passed, ${skipped} skipped ` +
+      `(${projects.length} viewports x ${checks.length} checks).`
+  );
 }
 
 async function findAvailablePort() {
@@ -171,7 +261,7 @@ async function checkStartInputGuard(page) {
   await page.mouse.down();
   await page.mouse.up();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForCount(page, "#gameTileGrid .game-tile", 5);
+  await waitForActivityChoices(page, 5);
   await page.waitForTimeout(600);
   assert(
     await page.locator("#homeView").evaluate((view) => view.classList.contains("is-active")),
@@ -196,7 +286,7 @@ async function checkStartToHomeToGameFlow(page) {
   // logs a "switch" event, and advances to home (detailed-design.md §2.2).
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForCount(page, "#gameTileGrid .game-tile", 5);
+  await waitForActivityChoices(page, 5);
 
   // The color-legacy tile is enabled and first by order (content.js gameTiles).
   const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
@@ -254,7 +344,7 @@ async function checkStartToHomeToGameFlow(page) {
   // absolutely positioned in the corners and would intercept a corner click.
   await page.waitForTimeout(200);
   await page.locator("#gameStage").click();
-  await waitForText(page, "#liveRegion", "色変化に入力しました");
+  await waitForText(page, "#liveRegion", t("voice.pressed", { name: t("tile.color-legacy.title") }));
 
   // A long physical press produces pointerdown immediately and click only on
   // release. It is still one physical input even when the gap exceeds the
@@ -297,7 +387,7 @@ async function checkStartToHomeToGameFlow(page) {
   });
   assert((await readLogCount(page)) === logsBeforeRepeatedKey, "Expected repeated keydown to be ignored");
   await page.keyboard.press("Space");
-  await waitForText(page, "#liveRegion", "色変化に入力しました");
+  await waitForText(page, "#liveRegion", t("voice.pressed", { name: t("tile.color-legacy.title") }));
 
   // Esc aborts the game and returns to home directly (no result screen for
   // color-legacy; see games/colorLegacy.js for the design rationale).
@@ -356,7 +446,7 @@ async function checkHomeReturnFromTabs(page) {
 async function checkKeyboardAndSwitchInput(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await page.getByRole("button", { name: "まなぶ・つたえる", exact: true }).click();
+  await openActivity(page, "学ぶ・伝える");
   await page.locator('#gameTileGrid [data-view="voca"]').click();
   await waitForClass(page, "#voca", "is-active");
 
@@ -393,63 +483,61 @@ async function checkKeyboardAndSwitchInput(page) {
   await waitForClass(page, "#homeView", "is-active");
 }
 
-async function checkSupporterEditingLock(page) {
+/**
+ * 設定はタブに分かれている（src/App.svelte の .settings-tab）。
+ *
+ * 守りたいのは2つ:
+ *   1. 開いていない面の操作子が走査の輪に残らないこと。効かない（届かない）
+ *      操作子を輪に置くと、利用者がそこで止まって押しても何も起きない。
+ *   2. 支援者編集ロックを廃止したあと、操作子がそのまま押せること。
+ *      「無効化されているが輪には居る」状態を作り直さない。
+ */
+async function checkSettingsTabs(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
 
-  const editToggle = page.locator("#supporterEditToggle");
-  await editToggle.waitFor({ state: "visible" });
-  assert(!(await editToggle.getAttribute("data-scan")), "Supporter edit toggle must stay outside the app scan order");
-  assert((await editToggle.getAttribute("aria-pressed")) === "false", "Supporter editing must start locked");
-  assert(await page.locator("#scanInterval").isDisabled(), "Settings must be disabled while supporter editing is locked");
-  assert(await page.locator("#researcherMode").isDisabled(), "Researcher mode must be disabled while locked");
-
-  // ロックしていること自体より、ロックされていると分かることを守る。
-  // 以前は設定画面の走査対象13個のうち9個が黙って無効になるだけで、
-  // 理由も解除方法もどこにも出ていなかった（支援者には故障と区別がつかない）。
-  const lockNotice = page.locator("#supporterLockNotice");
-  await lockNotice.waitFor({ state: "visible" });
+  const tabs = page.locator(".settings-tab");
+  assert((await tabs.count()) === 4, `Expected four settings tabs, got ${await tabs.count()}`);
   assert(
-    (await lockNotice.innerText()).includes("支援者編集を開始"),
-    "The lock notice must name the control that unlocks the screen"
+    (await tabs.first().getAttribute("aria-selected")) === "true",
+    "The first settings tab must start selected"
+  );
+  // 最初の面の項目は見えていて、他の面の項目は見えていない。
+  await page.locator("#scanInterval").waitFor({ state: "visible" });
+  await page.locator("#researcherMode").waitFor({ state: "hidden" });
+
+  const hiddenScannable = async () =>
+    page.evaluate(
+      () =>
+        [...document.querySelectorAll(".settings-panel[hidden] [data-scan]")].filter(
+          (el) => el.getBoundingClientRect().width > 0
+        ).length
+    );
+  assert(
+    (await hiddenScannable()) === 0,
+    "Hidden settings panels must leave the scan ring"
   );
 
-  // The current tab is still a normal keyboard/AT control, but internal scan
-  // must skip it because selecting it would only redraw the same view.
-  if ((await page.locator("#scanState").textContent())?.trim() === "走査中") {
-    await page.locator("#toggleScan").click();
-  }
-  for (let step = 0; step < 10; step += 1) {
-    await page.keyboard.press("ArrowRight");
-    const focusedView = await page.locator(".scan-focus").getAttribute("data-view");
-    assert(focusedView !== "settings", "Internal scan must skip the already-active settings tab");
-  }
-  await page.locator("#toggleScan").click();
-  await waitForText(page, "#scanState", "走査中");
+  // 面を切り替えると入れ替わる。
+  await openSettingsTab(page, "measure");
+  await page.locator("#researcherMode").waitFor({ state: "visible" });
+  await page.locator("#scanInterval").waitFor({ state: "hidden" });
+  assert(
+    (await hiddenScannable()) === 0,
+    "Hidden settings panels must leave the scan ring after switching"
+  );
 
-  // The control is excluded only from the app's scan order; keyboard and
-  // assistive-technology users must still be able to reach and activate it.
-  await editToggle.focus();
-  await page.keyboard.press("Enter");
-  await page.waitForFunction(() => document.querySelector("#supporterEditToggle")?.getAttribute("aria-pressed") === "true");
-  assert(!(await page.locator("#scanInterval").isDisabled()), "Settings must unlock after supporter activation");
-  await lockNotice.waitFor({ state: "hidden" });
-
-  // Turning auto scan off must stop an already-running interval immediately,
-  // not merely prevent a future restart.
-  await page.locator("#autoScan").click();
-  await waitForText(page, "#scanState", "走査停止中");
-  await page.locator("#autoScan").click();
-  await waitForText(page, "#scanState", "走査中");
-
-  await page.locator("#homeReturn").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-  assert((await editToggle.getAttribute("aria-pressed")) === "false", "Leaving supporter views must relock editing");
-  assert(await page.locator("#scanInterval").isDisabled(), "Relocked settings must be disabled again");
+  // 支援者編集ロックは廃止した（2026-08-17）。開いた面の操作子はそのまま押せる。
+  assert(
+    !(await page.locator("#researcherMode").isDisabled()),
+    "Settings controls must be usable without an editing lock"
+  );
+  assert(
+    (await page.locator("#supporterEditToggle").count()) === 0,
+    "The supporter editing lock must be gone, not merely hidden"
+  );
 }
 
 /**
@@ -464,11 +552,11 @@ async function checkRhythmL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForCount(page, "#gameTileGrid .game-tile", 5);
+  await waitForActivityChoices(page, 5);
 
-  await page.getByRole("button", { name: "リズム", exact: true }).click();
-  await waitForCount(page, "#gameTileGrid .game-tile", 4);
-  await page.getByRole("button", { name: "リズム れんしゅう", exact: true }).click();
+  await openActivity(page, "リズム");
+  await waitForActivityChoices(page, 4);
+  await openActivity(page, "リズム 練習");
 
   await waitForClass(page, "#gameView", "is-active");
   await page.waitForFunction(() => document.body.classList.contains("game-mode"));
@@ -488,6 +576,40 @@ async function checkRhythmL1GameFlow(page) {
 
   // Let the countdown/first beat render a moment before aborting.
   await page.waitForTimeout(500);
+
+  // Branch on whether this browser can actually run the task.
+  //
+  // The rhythm engine drives every beat off AudioContext.currentTime
+  // (games/rhythm.js, detailed-design.md §6.3). Headless WebKit ships no
+  // AudioContext at all, so audio.scheduler.start() returns null: no beat
+  // ever sounds, the pulse never moves, and judged beats never expire — the
+  // session would sit on "のこり 10" forever. The engine now refuses to
+  // start in that case and says why (renderUnavailable) instead of silently
+  // hanging, which also means it never opens a session to abort.
+  //
+  // Both branches are real behaviour, so assert whichever this browser is
+  // in rather than hardcoding browser names: if WebKit ever ships
+  // AudioContext in headless, this check follows it instead of going stale.
+  const audioAvailable = await page.evaluate(
+    () => Boolean(window.AudioContext || window.webkitAudioContext)
+  );
+
+  if (!audioAvailable) {
+    // No audio: the task must explain itself rather than hang. The cue is
+    // the sound, so continuing would not be a measurement.
+    await page.locator(".game-unavailable").waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    await waitForClass(page, "#homeView", "is-active");
+    const sessions = await page.evaluate((key) => {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw).sessions || []).length : 0;
+    }, storageKey);
+    assert(
+      sessions === 0,
+      `Expected no session to be opened when the task cannot run, found ${sessions}`
+    );
+    return;
+  }
 
   // Esc aborts the game and returns to home *directly* (no result screen;
   // detailed-design.md §2.4 terminates the flow via gameHost.abort()).
@@ -518,8 +640,8 @@ async function checkFishingGameFlow(page) {
   // さかなつりはコーナータイルになったので、二階層目で課題を選ぶ。
   // fishing（純粋な単純反応時間）と fishing-gonogo（抑制つき）に分けたのは、
   // taskType "rt" なのに No-Go 刺激が混ざっていた食い違いを解くため。
-  await page.getByRole("button", { name: "さかなつり", exact: true }).click();
-  await page.getByRole("button", { name: "アタリで つる", exact: true }).click();
+  await openActivity(page, "さかなつり");
+  await openActivity(page, "アタリで釣る");
   await waitForClass(page, "#gameView", "is-active");
   // さかなつりも content.js の gameHowTo を持つようになったので、レディ画面を
   // ひと押しで抜けてからでないとセッションが始まらない。
@@ -527,6 +649,37 @@ async function checkFishingGameFlow(page) {
   await page.locator("#gameStage").click();
   await page.locator(".game-ready").waitFor({ state: "detached" });
   await page.waitForTimeout(220);
+
+  // 音が鳴らせない端末では、そもそもセッションを開かない。
+  //
+  // この課題は魚の動きも判定も AudioContext の時計で回している。時計が
+  // 止まったままだとアタリの合図が一度も鳴らず、魚も現れない——それでも
+  // 押下は「合図の前に押した」＝フライングとして**試行が記録されてしまう**
+  // （実測: 音の無い端末で2件記録された）。刺激を一度も出していない回の
+  // データが、正常な反応時間の記録に混ざる。
+  //
+  // リズムと同じ扱いで、始められない理由を出して止める。両方の分岐が
+  // 実際の振る舞いなので、ブラウザ名ではなく AudioContext の有無で分ける。
+  const audioAvailable = await page.evaluate(
+    () => Boolean(window.AudioContext || window.webkitAudioContext)
+  );
+  if (!audioAvailable) {
+    await page.locator(".game-unavailable").waitFor({ state: "visible" });
+    await page.locator("#gameStage").click();
+    await page.waitForTimeout(300);
+    const sessions = await page.evaluate((key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      return (state.sessions || []).length;
+    }, storageKey);
+    assert(
+      sessions === 0,
+      `A task that never presented a cue must not record trials, found ${sessions} session(s)`
+    );
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+    return;
+  }
+
   // 前刺激区間の入力も falseStart / commission として1試行に確定する。
   await page.locator("#gameStage").click();
   await page.waitForFunction(
@@ -549,12 +702,36 @@ async function checkFishingGameFlow(page) {
 }
 
 // 関数宣言にしているのは、このファイルがトップレベル await でテスト本体を
+/**
+ * 設定の指定タブを開く。
+ *
+ * 設定は4つの面に分かれている（src/App.svelte の .settings-tab）。全部を
+ * 1ページに並べると 3.4画面ぶんになり、目的の項目を毎回スクロールで探す
+ * ことになるため。研究者モードなどは「そくてい」の面にある。
+ *
+ * 見えていない面の操作子は走査の輪からも外れる（scan.js は rect.width > 0 で
+ * 絞る）ので、テストも支援者と同じくまず面を開く。
+ */
+async function openSettingsTab(page, name) {
+  const tab = page.locator(`.settings-tab[data-settings-tab="${name}"]`);
+  await tab.click();
+  await page.locator(`.settings-panel[data-settings-panel="${name}"]`).waitFor({ state: "visible" });
+}
+
 // 走らせるため。const だと宣言位置より前に実行されて TDZ に落ちる。
 async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
   let seen = null;
   while (Date.now() < deadline) {
-    seen = await page.evaluate(() => document.querySelector(".crane-status")?.textContent ?? null);
+    // textContent はルビの読みも連結してしまう（`横よこに動うごきます`）。
+    // 画面に「本文として」出ている文字だけを読む。
+    seen = await page.evaluate(() => {
+      const el = document.querySelector(".crane-status");
+      if (!el) return null;
+      const copy = el.cloneNode(true);
+      copy.querySelectorAll("rt").forEach((rt) => rt.remove());
+      return copy.textContent;
+    });
     if (seen === text) return;
     await delay(80);
   }
@@ -564,7 +741,7 @@ async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
 async function checkCraneGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await page.getByRole("button", { name: "アームを とめる", exact: true }).click();
+  await openActivity(page, "アームを止める");
   await waitForClass(page, "#gameView", "is-active");
   // crane も content.js の gameHowTo を持つようになったので、レディ画面を
   // ひと押しで抜けてからでないとセッションが始まらない。
@@ -574,12 +751,12 @@ async function checkCraneGameFlow(page) {
   // カウントインの長さを固定の待ち時間で当てにいくと、AudioContext の
   // 立ち上がりが遅い環境（WebKit系）で走査開始前に押してしまう。
   // 走査が始まったことを状態表示で確かめてから押す。
-  await waitForCraneStatus(page, "よこに うごきます");
+  await waitForCraneStatus(page, "横に動きます");
   // 走査が始まった直後の押下は入力ガード（INPUT_GUARD_MS）で弾かれる。
   // ガードを抜けてから押す。
   await page.waitForTimeout(400);
   await page.locator("#gameStage").click();
-  await waitForCraneStatus(page, "おくに うごきます");
+  await waitForCraneStatus(page, "奥に動きます");
 
   // フェーズ切り替え直後の二度押しは試行に使わない（games/crane.js の
   // INPUT_GUARD_MS）。痙性や振戦で入った2回目がYを走査の先頭で確定させ、
@@ -617,6 +794,498 @@ async function checkCraneGameFlow(page) {
   );
 }
 
+/**
+ * あそびを終えたあとのリザルトは利用者の世界（start/home/game/result）で、
+ * 支援者向けのものを一切出さない。
+ *
+ * 2件の回帰を同時に見ている。どちらも「動くが、出てはいけないものが出る」型で、
+ * ビルドもテストも通り、目視でも見落としやすい。
+ *
+ *  1. タブバー。隠す規則が body.home-mode にしか無く、result に無かったので、
+ *     あそびを終えた直後の画面にだけ「評価ログ / 設定」が現れていた。
+ *  2. 支援者編集ロックの注意書き。DOM にあるだけの保護操作子を数えていたため、
+ *     #calibrationSaveOffset（そくてい専用・ふだんは hidden）がリザルトに
+ *     居るせいで、押せる操作子が1つも無い画面に「いまは変更できません」
+ *     だけが毎回出ていた。
+ */
+async function checkResultScreenStaysInTheUserWorld(page) {
+  // 3回で終わる・アームは速い、に寄せて所要時間を詰める（どちらも支援者が
+  // 設定画面から実際に選べる範囲。state.js の nullableNumberInRange の下限）。
+  //
+  // context 側に addInitScript で足すこと自体が要る。この context には
+  // 「毎回 localStorage を消す」初期化スクリプトが先に入っているので、
+  // evaluate で書いてから reload すると、その消去に巻き込まれて設定が
+  // 消える。初期化スクリプトは登録順に走るため、あとから足せば消去の後に
+  // 書き込める。
+  await page.context().addInitScript(
+    ({ key, value }) => localStorage.setItem(key, value),
+    {
+      key: storageKey,
+      value: JSON.stringify({
+        version: 3,
+        settings: { craneTargetTrials: 3, craneSweepMs: 800 },
+      }),
+    }
+  );
+  await page.reload();
+
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, "アームを止める");
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+
+  // 1試行 = 横で1回・奥で1回。あとは掴みの演出が終わると次の試行へ進む。
+  for (let trial = 0; trial < 3; trial += 1) {
+    await waitForCraneStatus(page, "横に動きます");
+    await page.waitForTimeout(400); // 入力ガード（INPUT_GUARD_MS）を抜ける
+    await page.locator("#gameStage").click();
+    await waitForCraneStatus(page, "奥に動きます");
+    await page.waitForTimeout(400);
+    await page.locator("#gameStage").click();
+  }
+
+  await waitForClass(page, "#resultView", "is-active");
+
+  // 支援者のタブバーは出ない。
+  await page.locator(".tabbar").waitFor({ state: "hidden" });
+
+  // 利用者が次にできることは画面に出ている。
+  await page.locator("#resultRetry").waitFor({ state: "visible" });
+  await page.locator("#resultHome").waitFor({ state: "visible" });
+}
+
+/**
+ * 走査の現在位置は、いつでも画面に見えていなければならない。
+ *
+ * scan.js は現在位置へ scrollIntoView({block:"nearest"}) するが、これは
+ * 「ビューポートの端」を境界にするので、下端に居座る入力ドック
+ * （position:fixed）と上端に粘着するタブバー（position:sticky）のぶんを
+ * 知らない。スマホのように画面が短いと、いちばん下の選択肢がドックの裏へ
+ * 回ったまま「いま えらんでいます」になる。
+ *
+ * 実測（修正前、iPhone 14 / SE）: ホームの4番目・5番目のタイルが 182px——
+ * タイルまるごと——隠れていた。走査で選ぶ利用者にとっては、どれを選んで
+ * いるか見えないまま押すことになり、この操作方式そのものが成立しない。
+ * CSS の scroll-margin で解いてあるが、値が失われても画面は普通に動く
+ * （タイルは並んでいるし、走査も回る）ので、ここで固定する。
+ */
+async function checkScanFocusStaysVisible(page, project) {
+  // 画面が短いほど起きやすい。iPad では起きないので、モバイル系だけ見る。
+  if (project.name === "chromium-desktop") return SKIPPED;
+
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 5);
+
+  const tiles = await page.locator("#gameTileGrid .game-tile").count();
+  for (let index = 0; index < tiles; index += 1) {
+    // 走査を待つのではなく、対象を直接スクロールさせて同じ経路
+    // （scrollIntoView + scroll-margin）を通す。走査間隔に依存しないので
+    // 遅い環境でも揺れない。
+    const seen = await page.evaluate((position) => {
+      const tile = document.querySelectorAll("#gameTileGrid .game-tile")[position];
+      if (!tile) return null;
+      tile.scrollIntoView({ block: "nearest", inline: "nearest" });
+      const dock = document.querySelector(".switch-dock");
+      const rect = tile.getBoundingClientRect();
+      const dockRect =
+        dock && getComputedStyle(dock).display !== "none" ? dock.getBoundingClientRect() : null;
+      return {
+        label: (tile.textContent || "").replace(/\s+/g, " ").trim().slice(0, 12),
+        hiddenByDock: dockRect ? Math.round(rect.bottom - dockRect.top) : 0,
+        offScreenAbove: Math.round(-rect.top),
+        offScreenBelow: Math.round(rect.bottom - document.documentElement.clientHeight),
+      };
+    }, index);
+    assert(seen, `Expected activity tile #${index + 1} to exist`);
+    assert(
+      seen.hiddenByDock <= 0,
+      `Tile "${seen.label}" sits ${seen.hiddenByDock}px behind the input dock while it is the scan target`
+    );
+    assert(
+      seen.offScreenAbove <= 0 && seen.offScreenBelow <= 0,
+      `Tile "${seen.label}" is off screen (above=${seen.offScreenAbove}px below=${seen.offScreenBelow}px)`
+    );
+  }
+}
+
+/**
+ * 効果音は設定に従い、測定の合図音は設定に関わらず鳴る。
+ *
+ * クレーンとさかなつりに「押した結果」の音を足した（アームの下降・把持・
+ * 落下、水音とリール）。これらは soundEnabled で切れなければならない一方、
+ * リズムやアタリの合図音は切れてはいけない——合図はこのアプリの測定刺激
+ * そのもので、basic-design.md §6 でミュート不可としている。
+ *
+ * 音は自動では聴けないので、合成のために作られた AudioNode の種類を数えて
+ * 見分ける。効果音はノイズ音源＋フィルタ（createBufferSource /
+ * createBiquadFilter）、合図音はオシレータ（createOscillator）を使うので、
+ * 「効果音だけ 0 になり、合図音は残る」ことが数で確かめられる。
+ *
+ * ヘッドレス WebKit には AudioContext が無いので Chromium でだけ走らせる。
+ */
+async function checkEffectSoundsFollowTheSetting(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  // AudioContext が無ければ、鳴る/鳴らないを数えようがない。ブラウザ名で
+  // 決め打ちせず実際の有無で見る（CI のランナーは手元と同じとは限らない）。
+  const audioAvailable = await page.evaluate(
+    () => Boolean(window.AudioContext || window.webkitAudioContext)
+  );
+  if (!audioAvailable) return SKIPPED;
+
+  await page.context().addInitScript(() => {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    window.__soundCounts = { noise: 0, filter: 0, tone: 0 };
+    const count = (name, key) => {
+      const original = Ctx.prototype[name];
+      Ctx.prototype[name] = function patched(...args) {
+        window.__soundCounts[key] += 1;
+        return original.apply(this, args);
+      };
+    };
+    count("createBufferSource", "noise");
+    count("createBiquadFilter", "filter");
+    count("createOscillator", "tone");
+  });
+
+  /** クレーンを1試行だけ進めて、そのあいだに作られたノードを数える。 */
+  async function playOneTrial(soundEnabled) {
+    await page.context().addInitScript(
+      ({ key, value }) => localStorage.setItem(key, value),
+      {
+        key: storageKey,
+        value: JSON.stringify({
+          version: 3,
+          settings: { soundEnabled, craneTargetTrials: 3, craneSweepMs: 800 },
+        }),
+      }
+    );
+    await page.reload();
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+    await openActivity(page, "アームを止める");
+    await page.locator(".game-ready").waitFor({ state: "visible" });
+    // タイルを押した直後のこの押下は、入力ファネルの多重発火除去
+    // （SWITCH_INPUT_DEDUPE_MS = 150ms）に飲まれることがある。飲まれると
+    // レディ画面が残ったままになり、以降の待ちが全部空振りする。
+    // 開始できたことを確かめ、まだなら間隔を空けて押し直す。
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await page.waitForTimeout(250);
+      await page.locator("#gameStage").click();
+      try {
+        await page.locator(".game-ready").waitFor({ state: "detached", timeout: 1_000 });
+        break;
+      } catch {
+        // まだレディ画面のまま。もう一度押す。
+      }
+    }
+    await page.locator(".game-ready").waitFor({ state: "detached" });
+    const before = await page.evaluate(() => ({ ...window.__soundCounts }));
+    await waitForCraneStatus(page, "横に動きます");
+    await page.waitForTimeout(400);
+    await page.locator("#gameStage").click();
+    await waitForCraneStatus(page, "奥に動きます");
+    await page.waitForTimeout(400);
+    await page.locator("#gameStage").click();
+    // 固定時間で待たない。掴みの演出（降下→把持→搬送）にかかる時間は端末と
+    // ランナーの速さで変わるので、待つのは「結果が確定したこと」そのもの。
+    // ここを sleep にすると、遅い CI で音が鳴る前に数えて落ちる。
+    await page.waitForFunction(
+      () => {
+        const status = document.querySelector(".crane-status")?.textContent?.trim() ?? "";
+        return /つかんだ|すべった|とどかなかった|とれた/.test(status);
+      },
+      undefined,
+      { timeout: 15_000 }
+    );
+    await page.waitForTimeout(200); // 落下音は結果表示の少しあとに鳴る
+    const after = await page.evaluate(() => ({ ...window.__soundCounts }));
+    await page.keyboard.press("Escape");
+    await waitForClass(page, "#homeView", "is-active");
+    return {
+      noise: after.noise - before.noise,
+      filter: after.filter - before.filter,
+      tone: after.tone - before.tone,
+    };
+  }
+
+  const withSound = await playOneTrial(true);
+  assert(
+    withSound.noise > 0 && withSound.filter > 0,
+    `Expected effect sounds while sound is on, got ${JSON.stringify(withSound)}`
+  );
+
+  const withoutSound = await playOneTrial(false);
+  assert(
+    withoutSound.noise === 0 && withoutSound.filter === 0,
+    `Effect sounds must be silent when the sound setting is off, got ${JSON.stringify(withoutSound)}`
+  );
+  assert(
+    withoutSound.tone > 0,
+    "The measurement cue must keep sounding even with effects off (basic-design.md §6)"
+  );
+}
+
+/**
+ * 支援者が文字を入力しているあいだ、入力ドックが可視領域を食わない。
+ *
+ * ドックは画面下に position:fixed で居座る。スマホでソフトキーボードが出ると
+ * その上へ持ち上がり、いま打っている欄が見えなくなる（実測: iPhone SE では
+ * フォームの可視領域がほぼ消える）。ドックは利用者がスイッチで操作する
+ * ためのものなので、支援者がキーボードを使っている最中に要る場面がない。
+ *
+ * 焦点が外れたら必ず戻ることまで見る。戻らないと、走査で操作する手段が
+ * 画面から消えたままになる——利用者にとっては操作不能と同じ。
+ */
+async function checkDockStepsAsideForTextEntry(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator(".switch-dock").waitFor({ state: "visible" });
+
+  // 参加者IDの入力欄は効果測定タブ側にある。研究者モードを開けて移動する。
+  await openSettingsTab(page, "measure");
+  await page.locator("#researcherMode").click();
+  await page.locator('.tab[data-view="evaluation"]').click();
+  await waitForClass(page, "#evaluation", "is-active");
+
+  await page.locator("#participantId").focus();
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  await page.locator("#observerNotes").focus();
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // 文字入力から離れたらドックは戻る。
+  await page.locator("#observerNotes").evaluate((el) => el.blur());
+  await page.locator(".switch-dock").waitFor({ state: "visible" });
+}
+
+/**
+ * 音が「鳴らせない」状態でセッションを開かない——AudioContext が無い場合だけ
+ * でなく、**あるのに鳴らない**場合も。
+ *
+ * これは実機でだけ起きる silent failure で、ヘッドレスでは自然発生しない。
+ * iOS では他アプリの割り込みや着信で state が "interrupted" になり、自動
+ * 再生制限の解除にしくじると "suspended" のまま残る。どちらも
+ * AudioContext 自体は存在するので、有無だけを見るガードは素通りする
+ * ——合図が一度も鳴らないまま、押した分だけがデータになる。
+ *
+ * CI では再現しないぶん、AudioContext を止めた状態を作って確かめる。
+ * 実機の割り込みそのものは作れないが、「止まっている context で始めない」
+ * という契約は同じ経路で確かめられる。
+ */
+async function checkSilentAudioDoesNotProduceData(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  const audioAvailable = await page.evaluate(
+    () => Boolean(window.AudioContext || window.webkitAudioContext)
+  );
+  if (!audioAvailable) return SKIPPED;
+
+  // 生成された AudioContext を、resume() を無効化したうえで suspended に保つ。
+  // アプリ側は unlock() で resume を試みるので、無効化しないと running へ
+  // 戻ってしまい、止まった状態を再現できない。
+  await page.context().addInitScript(() => {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    Ctx.prototype.resume = function stubbedResume() {
+      return Promise.resolve();
+    };
+    const suspend = Ctx.prototype.suspend;
+    const original = Ctx.prototype.constructor;
+    window.__forceSuspended = true;
+    // state は読み取り専用なので、getter を差し替えて "suspended" を返す。
+    Object.defineProperty(Ctx.prototype, "state", {
+      configurable: true,
+      get() {
+        return window.__forceSuspended ? "suspended" : "running";
+      },
+    });
+    void suspend;
+    void original;
+  });
+  await page.reload();
+
+  for (const [corner, task] of [
+    [null, "リズム"],
+    ["さかなつり", "アタリで釣る"],
+  ]) {
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+    if (corner) {
+      await openActivity(page, corner);
+      await openActivity(page, task);
+    } else {
+      await openActivity(page, task);
+      await openActivity(page, "リズム 練習");
+    }
+    await waitForClass(page, "#gameView", "is-active");
+
+    // レディ画面をひと押しで抜けると、そこで始められないと分かる。
+    if ((await page.locator(".game-ready").count()) > 0) {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await page.waitForTimeout(250);
+        await page.locator("#gameStage").click();
+        if ((await page.locator(".game-ready").count()) === 0) break;
+      }
+    }
+    await page.locator(".game-unavailable").waitFor({ state: "visible" });
+    // 「止まっている」ときは、端末を変えろではなく直せる案内を出す。
+    const text = await page.locator(".game-unavailable").innerText();
+    assert(
+      text.includes("音が止まっている"),
+      `Expected the stopped-audio wording, got: ${text.replace(/\s+/g, " ")}`
+    );
+
+    await page.locator("#gameStage").click();
+    await page.waitForTimeout(300);
+    const sessions = await page.evaluate((key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      return (state.sessions || []).length;
+    }, storageKey);
+    assert(
+      sessions === 0,
+      `A task whose cue never sounds must not record trials, found ${sessions} session(s)`
+    );
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+    await page.reload();
+  }
+}
+
+/**
+ * リズムを最後まで通し、記録された測定値そのものを確かめる。
+ *
+ * これまでの rhythm の検査は、500ms で中断して「空の aborted セッションが
+ * 残る」ことしか見ていなかった——判定・計時・記録という、このアプリの
+ * 中核が1件も検証されていなかった。判定窓の計算や時刻変換が壊れても、
+ * 中断だけを見ている検査は通る。
+ *
+ * ここで保証できるのは「押した時刻と拍の差が、押したとおりの符号と桁で
+ * 記録されること」まで。実機の rawOffsetMs には、これに加えて音声出力遅延・
+ * NeuroNode の処理とデバウンス・Switch Control の配信遅延が乗る。CI が
+ * 見ているのはスケジューラと判定の計算であって、可聴の開始時刻ではない。
+ */
+async function checkRhythmRecordsRealOffsets(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  const audioAvailable = await page.evaluate(
+    () => Boolean(window.AudioContext || window.webkitAudioContext)
+  );
+  if (!audioAvailable) return SKIPPED;
+
+  // 支援者が設定できる範囲で短くする（bpm 80 / 5拍）。押しどころの時刻は
+  // プリセットから導く——カウントイン拍数を決め打ちすると、練習の既定値を
+  // 調整したときに黙ってずれる（実際 countInBeats を 3→2 にして落ちた）。
+  await page.context().addInitScript(
+    ({ key, value }) => localStorage.setItem(key, value),
+    {
+      key: storageKey,
+      // 基準オフセットを 0 以外にしておく。0 だと「生値を記録する」規則を
+      // 壊しても値が変わらず、検査が素通りする（実際そうなった）。
+      value: JSON.stringify({
+        version: 3,
+        settings: { rhythmBpm: 80, targetBeats: 5, baselineOffsetMs: 60 },
+      }),
+    }
+  );
+  await page.reload();
+
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, "リズム");
+  await openActivity(page, "リズム 練習");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  const startedAt = Date.now();
+
+  // わざと早い側・遅い側へずらして押す。どちらの符号も出ることを見たいので、
+  // 全部を「ぴったり」に寄せない。
+  const beatMs = 60000 / 80;
+  const countIn = rhythmPresets["rhythm-l1"].countInBeats;
+  const trialPeriodMs = (countIn + 1.5) * beatMs; // TRIAL_GAP_BEATS = 1.5
+  const cueOffsetMs = countIn * beatMs;
+  const intended = [-180, 120, -60, 200, 40];
+  for (let index = 0; index < intended.length; index += 1) {
+    const wait = index * trialPeriodMs + cueOffsetMs + intended[index] - (Date.now() - startedAt);
+    if (wait > 0) await page.waitForTimeout(wait);
+    await page.locator("#gameStage").click({ position: { x: 400, y: 300 } });
+  }
+
+  await waitForClass(page, "#resultView", "is-active");
+  const session = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return (state.sessions || []).findLast((item) => item.gameId === "rhythm-l1") || null;
+  }, storageKey);
+
+  assert(session, "Expected a recorded rhythm-l1 session");
+  assert(session.finished === true && session.aborted === false, "Expected a completed session");
+
+  const hits = (session.trials || []).filter((trial) => trial.judgment === "hit");
+  assert(hits.length >= 3, `Expected most presses to be judged as hits, got ${hits.length}`);
+
+  hits.forEach((trial) => {
+    assert(
+      typeof trial.rawOffsetMs === "number" && Number.isFinite(trial.rawOffsetMs),
+      `A hit must carry a numeric rawOffsetMs, got ${trial.rawOffsetMs}`
+    );
+    // 判定窓の外の値が hit として記録されていたら、判定か時刻変換が壊れている。
+    assert(
+      Math.abs(trial.rawOffsetMs) <= session.config.effectiveWindowMs,
+      `hit offset ${trial.rawOffsetMs}ms lies outside the judgment window ` +
+        `(±${session.config.effectiveWindowMs}ms)`
+    );
+    // 記録は生値のまま。基準を差し引いていれば、この等式が基準のぶん崩れる。
+    assert(
+      Math.abs(trial.rawOffsetMs - (trial.inputMs - trial.scheduledMs)) <= 1,
+      `rawOffsetMs must stay the raw difference of inputMs and scheduledMs ` +
+        `(${trial.rawOffsetMs} vs ${trial.inputMs - trial.scheduledMs})`
+    );
+    // 基準は判定窓の中心をずらすだけで、記録からは差し引かない
+    // （研究設計上の最重要規則。games/rhythm.js 冒頭）。
+    assert(
+      trial.appliedBaselineMs === 60,
+      `Expected the configured baseline on every trial, got ${trial.appliedBaselineMs}`
+    );
+  });
+
+  // 押したタイミングの**差**が、記録の差として現れること。
+  //
+  // 符号そのもの（早い/遅い）は見ない。テスト側から拍の絶対時刻を正確に
+  // 狙うと、スケジューラの先読み（START_DELAY_S）やマウントまでの間が
+  // そのまま系統誤差として乗り、CI の速さで揺れる。実際これを見誤って
+  // 「全部はやい側」という結果になり、アプリではなくテストの時計モデルが
+  // 間違っていた。
+  //
+  // ここで確かめたいのは「記録が入力時刻に追随すること」——定数でも乱数でも
+  // ないこと。押しどころを 300ms 遅らせたら記録も 300ms 遅い側へ動く、が
+  // 成り立てば、判定と時刻変換は生きている。
+  const intendedDiffs = intended.slice(1).map((value, index) => value - intended[index]);
+  const recorded = hits.map((trial) => trial.rawOffsetMs);
+  assert(
+    recorded.length === intended.length,
+    `Expected one hit per press, got ${recorded.length} of ${intended.length}`
+  );
+  const recordedDiffs = recorded.slice(1).map((value, index) => value - recorded[index]);
+  recordedDiffs.forEach((diff, index) => {
+    const expected = intendedDiffs[index];
+    assert(
+      Math.abs(diff - expected) <= 120,
+      `Press ${index + 1}→${index + 2} moved by ${Math.round(expected)}ms but the record moved ` +
+        `by ${Math.round(diff)}ms (recorded: ${recorded.map(Math.round).join(", ")})`
+    );
+  });
+  // 定数が記録されていないこと（すべて同じ値なら、入力時刻を見ていない）。
+  assert(
+    Math.max(...recorded) - Math.min(...recorded) > 100,
+    `Recorded offsets barely vary (${recorded.map(Math.round).join(", ")}) — the measurement may be constant`
+  );
+}
+
 async function checkFeatureTabs(page) {
   // The start screen hides the whole shell (topbar/tabbar, body.start-mode)
   // since the design pass, so enter the home screen first to make the tabs
@@ -628,10 +1297,17 @@ async function checkFeatureTabs(page) {
   // home screen under the "まなぶ・つたえる" second level, not as tabs.
   // Each visit returns home via #homeReturn, the same path a switch user
   // would scan to.
-  const activityTargets = ["matching", "voca", "letters"];
-  for (const target of activityTargets) {
-    await page.getByRole("button", { name: "まなぶ・つたえる", exact: true }).click();
-    await page.locator(`#gameTileGrid [data-view="${target}"]`).click();
+  // 二階層目もページに分かれることがある（画面が短いと1ページ2〜3件）。
+  // 直に click すると、2ページ目に居る項目に届かない——利用者と同じく
+  // 「つぎのページ」を辿ってから押す。
+  const activityTargets = [
+    ["matching", "マッチング"],
+    ["voca", "VOCA"],
+    ["letters", "文字学習"],
+  ];
+  for (const [target, name] of activityTargets) {
+    await openActivity(page, "学ぶ・伝える");
+    await openActivity(page, name);
     await waitForClass(page, `#${target}`, "is-active");
     await page.locator("#homeReturn").click();
     await waitForClass(page, "#homeView", "is-active");
@@ -669,10 +1345,7 @@ async function checkEmptyExportIsExplained(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await page.locator("#supporterEditToggle").click();
-  await page.waitForFunction(
-    () => document.querySelector("#supporterEditToggle")?.getAttribute("aria-pressed") === "true"
-  );
+  await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").click();
   await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
 
@@ -705,10 +1378,9 @@ async function checkResearcherModeTabsNoRegression(page) {
 
   // Research controls are protected from the user's scan order until a
   // supporter explicitly unlocks the editing session.
-  await page.locator("#supporterEditToggle").click();
-  await page.waitForFunction(() => document.querySelector("#supporterEditToggle")?.getAttribute("aria-pressed") === "true");
 
   // researcherMode defaults to OFF (P0-0); flip it on to reveal the tab.
+  await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").click();
   await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
 
@@ -726,29 +1398,38 @@ async function checkResearcherModeTabsNoRegression(page) {
   // researcherMode on).
   await page.locator('.tab[data-view="settings"]').click();
   await waitForClass(page, "#settings", "is-active");
+  await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").waitFor({ state: "visible" });
+  // 「出す遊び」は「そうさ」の面にある（設定はタブ分けされている）。
+  await openSettingsTab(page, "basic");
   await page.locator("#hideVisualTasks").click();
 
-  // Destructive operation reset is supporter-only and never part of custom
-  // scan, while the actual user training controls remain available when the
-  // editing lock is closed.
+  // 破壊的な操作（訓練記録のリセット）は走査の輪に入れない。支援者編集ロックを
+  // やめた（2026-08-17）ので、いま利用者の入力から守っているのはこれだけ
+  // ——「無効化されている」ではなく「輪に入っていない」で守る。
   await page.locator('.tab[data-view="operation"]').click();
   await waitForClass(page, "#operation", "is-active");
   assert(!(await page.locator("#resetOperation").getAttribute("data-scan")), "Operation reset must stay out of scan order");
-  assert(!(await page.locator("#resetOperation").isDisabled()), "Operation reset is available during supporter editing");
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForCount(page, "#gameTileGrid .game-tile", 4);
+  await waitForActivityChoices(page, 4);
+  // 1ページだけ見て判定すると、ページ分割の入る画面では「2ページ目に居る」
+  // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
+  const lobbyTitles = await collectActivityTitles(page);
   assert(
-    (await page.getByRole("button", { name: "アームを とめる", exact: true }).count()) === 0,
-    "Visual-task setting must remove crane from the lobby and scan order"
+    !lobbyTitles.includes("アームを止める"),
+    `Visual-task setting must remove crane from the lobby and scan order (saw: ${lobbyTitles.join(", ")})`
+  );
+  assert(
+    lobbyTitles.length === 4,
+    `Expected four remaining activities after hiding crane, got ${lobbyTitles.length}`
   );
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
   await page.locator('.tab[data-view="operation"]').click();
   await waitForClass(page, "#operation", "is-active");
-  assert(await page.locator("#resetOperation").isDisabled(), "Operation reset must relock outside supporter editing");
-  assert(!(await page.locator("#operationPrimary").isDisabled()), "User operation input must remain available while reset is locked");
+  // 利用者が使う訓練の入力は、いつでも押せる。
+  assert(!(await page.locator("#operationPrimary").isDisabled()), "User operation input must remain available");
 }
 
 async function checkPwaDelivery(page, project) {
@@ -826,7 +1507,10 @@ async function checkPwaDelivery(page, project) {
   // ephemeral context. Chromium verifies the complete first load -> install
   // precache -> controlled -> immediate offline reload path; WebKit still
   // verifies all manifest-relative URLs and the missing-asset 404 behavior.
-  if (project.name !== "chromium-desktop") return;
+  //
+  // SKIPPED は返さない。ここまでで WebKit も実際に検査を済ませているので、
+  // 「何も見ていない」と報告するのは実態と逆になる。
+  if (project.name !== "chromium-desktop") return undefined;
 
   await page.waitForFunction(async () => (await navigator.serviceWorker.getRegistrations()).length === 1);
   await page.evaluate(async () => navigator.serviceWorker.ready);
@@ -890,6 +1574,122 @@ async function checkMobileLayout(page) {
 }
 
 /**
+ * 画面ごとのレイアウト不変条件を、利用者の世界と支援者の世界の両方で見る。
+ *
+ * この2つは目で見れば分かるが、**実機が無いと目で見られない**種類の欠陥で、
+ * しかも壊れてもビルドは通る。手元の計測スクリプトでしか見ていなかったので、
+ * CI が唯一の確認手段である以上ここへ移す。実際にここで見つかった:
+ *   - 効果測定タブで横スクロール7〜22px（「測定リセット」が潰れて縦書きに
+ *     なり画面外へ出ていた）
+ *   - 設定のプルダウンが35px（指で押す最小の44pxを下回っていた）
+ *   - 横向きでモバイル用の圧縮が丸ごと効かず、タイル名が1文字ずつ折り返し
+ *
+ * 横スクロールが利用者にとって致命的なのは、走査で選ぶ相手は画面外の
+ * 操作子へたどり着けないから。タップ標的の大きさは、狙って押すこと自体が
+ * 難しい利用者にとって成功率そのものになる。
+ */
+async function checkLayoutInvariants(page) {
+  /** いま見えている画面の、はみ出しと小さすぎる標的を集める。 */
+  const inspect = async (where) => {
+    const found = await page.evaluate(() => {
+      const doc = document.documentElement;
+      const visible = (el) => el.getClientRects().length > 0;
+      const controls = [...document.querySelectorAll("button, select, input, [data-scan]")].filter(
+        visible
+      );
+      const describe = (el) => {
+        const rect = el.getBoundingClientRect();
+        const id = el.id || el.className.toString().split(" ")[0] || el.tagName.toLowerCase();
+        // 丸めずに出す。44px ちょうどの要素が 43.99 で落ちたとき、丸めた値を
+        // 出すと「44なのに落ちる」という読めないメッセージになる。
+        return `${id}=${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`;
+      };
+      return {
+        overflow: doc.scrollWidth - doc.clientWidth,
+        // 指で押す最小の大きさ（Apple HIG / WCAG 2.5.5 の目安が44px）。
+        // range スライダーは掴む部分が別なので、この検査からは外す。
+        //
+        // 1px の余裕を持たせるのは、レイアウト計算の端数で 44px 指定の要素が
+        // 43.99 になることがあるため。ここで拾いたいのは「44を狙ったのに
+        // 端数で落ちた」ではなく「そもそも小さい」ほうなので、
+        // 端数で落ちるとテストが狼少年になる。
+        tooSmall: controls
+          .filter((el) => el.type !== "range")
+          .filter((el) => {
+            const rect = el.getBoundingClientRect();
+            return rect.height < 43 || rect.width < 43;
+          })
+          .map(describe)
+          .slice(0, 8),
+      };
+    });
+    assert(
+      found.overflow <= 2,
+      `${where}: horizontal overflow ${found.overflow}px — a scanning user cannot reach controls off screen`
+    );
+    assert(
+      found.tooSmall.length === 0,
+      `${where}: touch targets below 44px — ${found.tooSmall.join(", ")}`
+    );
+  };
+
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await inspect("home");
+
+  // 選択肢の名前が読める幅で置かれていること。
+  //
+  // これははみ出しにもタップ標的の小ささにも現れない種類の壊れかたで、
+  // 実際に見落とした: 横向き（844px幅）でモバイル用の圧縮が丸ごと効かず、
+  // タイルの内側が desktop の 52px+88px 列のままになった結果、名前の欄が
+  // 13px まで潰れて「い / ろ / と」と1文字ずつ縦に折り返していた。
+  // ビルドも通るし、はみ出しも起きないので、数字でしか捕まえられない。
+  const tiles = await page.evaluate(() =>
+    [...document.querySelectorAll("#gameTileGrid .game-tile")].map((tile) => {
+      const text = tile.querySelector(".tile-text");
+      const heading = tile.querySelector("strong");
+      return {
+        label: tile.getAttribute("aria-label") || "",
+        textWidth: text ? text.getBoundingClientRect().width : 0,
+        headingHeight: heading ? heading.getBoundingClientRect().height : 0,
+        lineHeight: heading ? parseFloat(getComputedStyle(heading).lineHeight) || 0 : 0,
+        tileHeight: tile.getBoundingClientRect().height,
+      };
+    })
+  );
+  assert(tiles.length > 0, "Expected activity tiles on the home screen");
+  tiles.forEach((tile) => {
+    assert(
+      tile.textWidth >= 120,
+      `Activity "${tile.label}" has only ${Math.round(tile.textWidth)}px for its name — it will wrap per character`
+    );
+    // 見出しは2行までに収まること（3行以上は、幅が足りずに折り返している）。
+    if (tile.lineHeight > 0) {
+      const lines = tile.headingHeight / tile.lineHeight;
+      assert(
+        lines <= 2.2,
+        `Activity "${tile.label}" wraps its name over ${lines.toFixed(1)} lines`
+      );
+    }
+  });
+
+  // 支援者の世界。研究者モードを開けて、列の多い画面まで含めて見る。
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await inspect("settings (locked)");
+
+  await openSettingsTab(page, "measure");
+  await page.locator("#researcherMode").click();
+  await inspect("settings (unlocked)");
+
+  for (const view of ["evaluation", "research", "log", "operation"]) {
+    await page.locator(`.tab[data-view="${view}"]`).click();
+    await waitForClass(page, `#${view}`, "is-active");
+    await inspect(view);
+  }
+}
+
+/**
  * hidden 属性が CSS の display 指定に打ち消されていないこと。
  *
  * .calibration-offer に display:flex が当たっていたため、gameHost.js が
@@ -914,7 +1714,7 @@ async function checkHiddenAttributeIsRespected(page) {
     };
   });
   // 対象が0件だと、この検査は何も見ずに通ってしまう。
-  // calibrationOffer / supporterLockNotice など常設の hidden 要素がある前提。
+  // calibrationOffer / measureModeNotice など常設の hidden 要素がある前提。
   assert(total >= 3, `Expected several [hidden] elements to inspect, found ${total}`);
   assert(
     leaks.length === 0,
@@ -923,18 +1723,46 @@ async function checkHiddenAttributeIsRespected(page) {
 }
 
 async function checkIpadAccessibilityLayout(page, project) {
-  if (project.name !== "ipad-portrait") return;
+  if (project.name !== "ipad-portrait") return SKIPPED;
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await page.locator("#supporterEditToggle").click();
-  await page.locator("#largeText").click();
-  await page.locator("#highContrast").click();
+
+  // 押すのではなく、**その状態にする**。
+  //
+  // ここは長らく largeText を無条件にクリックしていた。ところが largeText の
+  // 既定は ON（state.js）なので、クリックは OFF にする操作だった——
+  // 「大きい文字で読めること」を確かめる検査が、大きい文字を切った状態を
+  // 見ていた。検査名と中身が逆を向いていても、テストは緑のまま通る。
+  // 「見え方」は senses の面にある（設定はタブ分けされている）。
+  await openSettingsTab(page, "senses");
+  const ensureChecked = async (id) => {
+    const box = page.locator(`#${id}`);
+    if (!(await box.isChecked())) await box.click();
+    assert(await box.isChecked(), `Expected #${id} to be on for this check`);
+  };
+  await ensureChecked("largeText");
+  await ensureChecked("highContrast");
+
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForCount(page, "#gameTileGrid .game-tile", 5);
+  await waitForActivityChoices(page, 5);
+
+  // 設定が実際に画面へ効いていること。チェックボックスが入っていても
+  // body へ反映されていなければ、以下の寸法検査は素の表示を測ってしまう。
+  const applied = await page.evaluate(() => ({
+    largeText: document.body.classList.contains("large-text"),
+    highContrast: document.body.classList.contains("high-contrast"),
+    rootFontPx: parseFloat(getComputedStyle(document.body).fontSize),
+  }));
+  assert(applied.largeText, "Expected body.large-text while checking the large-text layout");
+  assert(applied.highContrast, "Expected body.high-contrast while checking the layout");
+  assert(
+    applied.rootFontPx > 16,
+    `Expected large text to raise the base font above 16px, got ${applied.rootFontPx}px`
+  );
 
   const layout = await page.evaluate(() => {
     const rows = [...document.querySelectorAll("#gameTileGrid .game-tile")];
@@ -948,20 +1776,48 @@ async function checkIpadAccessibilityLayout(page, project) {
     };
   });
 
-  // content.js の description は読み上げ・VoiceOver にだけ載せる。
-  // 名前（aria-label）に混ぜると、走査のたびに説明まで読まれて選ぶ手がかりが
-  // 埋もれるので、名前は短い見出しのまま保つ。
+  // content.js の description の扱い。
+  //
+  // 名前（aria-label）には混ぜない。走査のたびに説明まで読まれると、選ぶ
+  // ための手がかりが埋もれるので、名前は短い見出しのまま保つ。説明は
+  // aria-describedby で別に渡す。ここは以前から変わらない。
+  //
+  // 画面には出す（以前は .sr-only で読み上げ経路にだけ流していた）。
+  // 目で見て選ぶ利用者と、隣で見ている支援者には何も届いていなかったため。
+  // 「見えないこと」を固定していた以前の assertion は、レイアウトを守って
+  // いたわけではなかった——行は .game-tile の min-height（145px）と84pxの
+  // アイコンで決まっていて、説明1行を足しても高さは変わらない（実測）。
+  //
+  // 代わりにここで守るのは、説明を出したことで壊れうる2つ:
+  //   1. 説明が見出しより目立たないこと（どちらが選ぶ手がかりか分からなくなる）
+  //   2. 説明のぶんで行が伸びていないこと（5行が入力ドックの上に収まる、
+  //      下の lastBottom <= dockTop と対になる）
   const tileNaming = await page.evaluate(() =>
     [...document.querySelectorAll("#gameTileGrid .game-tile")].map((tile) => {
       const describedBy = tile.getAttribute("aria-describedby");
       const description = describedBy ? document.getElementById(describedBy) : null;
+      const heading = tile.querySelector("strong");
+      const px = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
+      // 利用者向けの文言は総ルビなので、textContent にはふりがなの読みも
+      // 連結される（`色いろと音おと`）。ここで見たいのは「画面に本文として
+      // 出ている文字」なので、rt を落としてから読む。読み上げ名（aria-label）は
+      // 最初からプレーン文なので、この2つが一致することを下で確かめている。
+      const baseText = (el) => {
+        if (!el) return "";
+        const copy = el.cloneNode(true);
+        copy.querySelectorAll("rt").forEach((rt) => rt.remove());
+        return copy.textContent.trim();
+      };
       return {
         name: tile.getAttribute("aria-label") || "",
-        heading: tile.querySelector("strong")?.textContent?.trim() || "",
-        description: description?.textContent?.trim() || "",
-        descriptionRendersInvisible: description
-          ? description.getBoundingClientRect().width <= 2
+        heading: baseText(heading),
+        description: baseText(description),
+        descriptionIsVisible: description
+          ? description.getBoundingClientRect().width > 2
           : false,
+        headingFontPx: px(heading),
+        descriptionFontPx: px(description),
+        rowHeight: tile.getBoundingClientRect().height,
       };
     })
   );
@@ -971,8 +1827,17 @@ async function checkIpadAccessibilityLayout(page, project) {
     assert(tile.name === tile.heading, `Tile name must stay the short heading, got "${tile.name}"`);
     assert(tile.description.length > 0, `Tile "${tile.name}" must expose its description to AT`);
     assert(
-      tile.descriptionRendersInvisible,
-      `Tile "${tile.name}" description must not add visible text to the row`
+      tile.descriptionIsVisible,
+      `Tile "${tile.name}" description must be readable on screen, not only by AT`
+    );
+    assert(
+      tile.descriptionFontPx < tile.headingFontPx,
+      `Tile "${tile.name}" description must stay subordinate to the heading ` +
+        `(description ${tile.descriptionFontPx}px vs heading ${tile.headingFontPx}px)`
+    );
+    assert(
+      tile.rowHeight <= 200,
+      `Tile "${tile.name}" row grew to ${tile.rowHeight}px; five rows no longer fit above the dock`
     );
   });
 
@@ -981,9 +1846,138 @@ async function checkIpadAccessibilityLayout(page, project) {
     layout.rowWritingModes.every((mode) => mode === "horizontal-tb"),
     `Expected horizontal activity labels, got ${layout.rowWritingModes.join(", ")}`
   );
+  // 5枚すべてに手が届くこと。判定はアプリと同じ規則にする
+  // （src/lib/scanPaging.js の SCAN_OVERLAP_TOLERANCE_PX = 24px）。
+  //
+  // 厳密な「1pxも重ならない」にしていたころ、大きい文字（既定ON）を入れた
+  // iPad で 8px だけ重なって落ちていた。そこでページ分割へ倒すと、8px の
+  // ために選択肢が5つから3つへ減る——重なりの実害より、選べる数が減る害の
+  // ほうが大きい。走査は scrollIntoView するので、この幅なら現在位置は
+  // 必ず全体が見える。
+  const OVERLAP_TOLERANCE_PX = 24;
   assert(
-    layout.lastBottom !== null && layout.dockTop !== null && layout.lastBottom <= layout.dockTop,
-    `Expected all five rows above the input dock, got lastBottom=${layout.lastBottom} dockTop=${layout.dockTop}`
+    layout.lastBottom !== null &&
+      layout.dockTop !== null &&
+      layout.lastBottom - layout.dockTop <= OVERLAP_TOLERANCE_PX,
+    `Expected all five rows within reach of the dock, got lastBottom=${layout.lastBottom} dockTop=${layout.dockTop}`
+  );
+}
+
+/**
+ * ホーム（または二階層目）の選択肢を、名前で押す。
+ *
+ * 画面が短いと一覧はページに分かれる（src/lib/scanPaging.js）。走査で選ぶ
+ * 画面ではスクロールで追わせるより、一度に出す数を減らしてページを送る
+ * ほうが安全なため——利用者はスクロールを止められないので、選ぶたびに
+ * 画面が動くと「選ぶ」課題が「選ぶ＋動く画面を追う」課題になる。
+ *
+ * その結果、目的の選択肢が最初のページに無いことがある。テスト側も
+ * 実際の利用者と同じ経路（「つぎの ページ」を押す）でたどり着く。
+ * ページ数は有限で循環するので、一巡しても見つからなければ失敗にする。
+ */
+/**
+ * スタート押下のガードが切れるまで待つ。
+ *
+ * スタートを押した直後 500ms は、ホームのタイルへのクリックがアプリ側で
+ * 握りつぶされる（views/home.js の armStartInputGuard）。スタートのひと押しが
+ * そのままアクティビティまで届いてしまう事故を防ぐためのもので、**正しい挙動**。
+ *
+ * 待たずに押していたころは、他の待ち合わせでたまたま時間が経っていたので
+ * 通っていた。待ち合わせを速くした（画面高さからページ分割を予想するのを
+ * やめた）とたんにガード内で押すようになり、一斉に落ちた——テストが人間より
+ * 速いだけで、アプリは壊れていない。人が押せる速さに合わせる。
+ */
+async function settleStartGuard(page) {
+  await page.waitForTimeout(550);
+}
+
+async function openActivity(page, name) {
+  await settleStartGuard(page);
+  const target = page.getByRole("button", { name, exact: true });
+  const pager = page.locator(".game-tile.scan-pager");
+  for (let hop = 0; hop < 6; hop += 1) {
+    if ((await target.count()) > 0) {
+      await target.click();
+      return;
+    }
+    assert(
+      (await pager.count()) > 0,
+      `Activity "${name}" is not on this page and there is no way to page forward`
+    );
+    await pager.click();
+    await page.waitForTimeout(120);
+  }
+  assert(false, `Activity "${name}" never appeared while paging through the scan list`);
+}
+
+/**
+ * ホーム（または二階層目）に、その画面で出るはずの選択肢が並ぶのを待つ。
+ *
+ * 画面が短いと一覧はページに分かれる（src/lib/scanPaging.js の
+ * SCAN_PAGE_SIZE=3）。数を決め打ちすると、iPad では通ってスマホでは落ちる
+ * ——あるいはその逆——というテストになるので、画面の高さから期待値を出す。
+ * ページ送り自身は選択肢ではないので数に入れない。
+ */
+/**
+ * 一覧に並ぶ選択肢の名前を、全ページぶん集める。
+ *
+ * ページ分割が入ったあと、「この選択肢は出ていない」を1ページだけ見て
+ * 判定すると、モバイルでは常に真になる——2ページ目に居るだけの項目を
+ * 「隠れている」と読んでしまう。数と中身は必ず一巡して確かめる。
+ * 最後に先頭ページへ戻すので、呼んだ側の状態は変わらない。
+ */
+async function collectActivityTitles(page) {
+  const titles = [];
+  const pager = page.locator(".game-tile.scan-pager");
+  for (let hop = 0; hop < 6; hop += 1) {
+    const shown = await page.evaluate(() =>
+      [...document.querySelectorAll("#gameTileGrid .game-tile:not(.scan-pager)")].map(
+        (tile) => tile.getAttribute("aria-label") || ""
+      )
+    );
+    shown.forEach((title) => {
+      if (!titles.includes(title)) titles.push(title);
+    });
+    if ((await pager.count()) === 0) break;
+    await pager.click();
+    await page.waitForTimeout(120);
+    // 一周して先頭へ戻ったら終わり。
+    const firstOfPage = await page.evaluate(
+      () =>
+        document
+          .querySelector("#gameTileGrid .game-tile:not(.scan-pager)")
+          ?.getAttribute("aria-label") || ""
+    );
+    if (titles[0] === firstOfPage) break;
+  }
+  return titles;
+}
+
+async function waitForActivityChoices(page, total) {
+  // ページ分割が入るかどうかを画面高さから**予想しない**。
+  //
+  // scanPaging.js のしきい値は先読みの当てでしかなく、最終的な件数は描いた
+  // 結果の実測で決まる（views/home.js の refitIfOverflowing）——入りきらな
+  // ければ分割し、それでも入らなければ1ページの件数を減らす。ここで予想して
+  // いたころは、当てが外れる実寸（390x812）でテストが落ちた。
+  //
+  // 見たいのは「選択肢が並んでいること」なので、実際に並んだ数が落ち着くのを
+  // 待つ: 分割が無ければ全件、あれば全件より少ない件数＋ページ送り。
+  await page.waitForFunction(
+    (expectedTotal) => {
+      const grid = document.querySelector("#gameTileGrid");
+      if (!grid) return false;
+      const tiles = grid.querySelectorAll(".game-tile:not(.scan-pager)").length;
+      if (tiles === 0) return false;
+      const hasPager = grid.querySelectorAll(".scan-pager").length > 0;
+      return hasPager ? tiles < expectedTotal : tiles === expectedTotal;
+    },
+    total,
+    { timeout: 5_000 }
+  );
+  await settleStartGuard(page);
+  return page.evaluate(
+    () => document.querySelectorAll("#gameTileGrid .game-tile:not(.scan-pager)").length
   );
 }
 

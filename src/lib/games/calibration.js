@@ -1,13 +1,19 @@
 // =====================================================================
 // games/calibration.js — キャリブレーション（detailed-design.md §8）
 //
-// cued モード（rhythm-l1 と同じ判定エンジン）を bpm50/countIn4/target12 で
+// continuous モード（rhythm-l2 と同じ判定エンジン）を bpm50/countIn4/target24 で
 // 走らせるだけの課題であり、games/rhythm.js の createRhythmGame("calibration")
-// がそのまま契約を満たす。calibration 固有の2点は、gameId 分岐をエンジン側に
-// 持ち込まずデータ駆動で実装した:
+// がそのまま契約を満たす。
 //
-//   - 最初の2試行の除外（detailed-design.md §8.2 手順2）:
-//     content.js の rhythmPresets.calibration.excludedTrialCount = 2 を
+// cued ではなく continuous である理由は content.js の rhythmPresets に書いた
+// （要約: cued は試行ごとに位相修正の連鎖が切れるので、予測押しと反応押しが
+// 同じ分布に混ざり、中央値が baselineOffsetMs の推定量でなくなる）。
+//
+// calibration 固有の2点は、gameId 分岐をエンジン側に持ち込まずデータ駆動で
+// 実装した:
+//
+//   - 最初の4拍の除外（detailed-design.md §8.2 手順2）:
+//     content.js の rhythmPresets.calibration.excludedTrialCount = 4 を
 //     games/rhythm.js の resolveParams()/isExcludedTrial() が読む。
 //     達成率・平均オフセット等の集計（computeSummary）も excluded を
 //     除外して計算するため、リザルト画面の数字は最初から「有効試行のみ」になる。
