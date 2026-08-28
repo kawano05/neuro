@@ -10,7 +10,7 @@ import { cloneDefaultState } from "../state.js";
 import { evaluatePick, scanPercentAt } from "../games/pointing.js";
 
 export function initOperation(ctx) {
-  const { state, elements, save, announce, logEvent, speak, playTone, scan } = ctx;
+  const { state, elements, save, announce, logEvent, voiceFeedback, playTone, scan } = ctx;
 
   /** 現在選択中の訓練モード */
   function activeMode() {
@@ -250,8 +250,10 @@ export function initOperation(ctx) {
     if (typeof distance === "number") state.operation.distances.push(distance);
     state.operation.distances = state.operation.distances.slice(-40);
     playTone(success ? 700 : 240);
-    speak(success ? "成功です" : "もう一度です");
-    announce(success ? `${label}に成功しました` : `${label}に失敗しました`);
+    voiceFeedback(
+      success ? "成功です" : "もう一度です",
+      success ? `${label}に成功しました` : `${label}に失敗しました`
+    );
     logEvent({ type: "operation", label, correct: success, distance: Math.round(distance ?? 0) });
     save();
     renderMetrics();

@@ -8,7 +8,7 @@
 import { phraseCategories } from "../content.js";
 
 export function initVoca(ctx) {
-  const { state, elements, save, announce, logEvent, speak, playTone, scan } = ctx;
+  const { state, elements, save, logEvent, speak, voiceFeedback, playTone, scan } = ctx;
 
   /** カテゴリ行の描画 */
   function renderCategories() {
@@ -49,9 +49,8 @@ export function initVoca(ctx) {
   /** 定型句を選択して読み上げる */
   function selectPhrase(phrase) {
     state.currentPhrase = phrase;
-    speak(phrase);
     playTone(560);
-    announce(phrase);
+    voiceFeedback(phrase);
     logEvent({ type: "phrase", label: phrase });
     save();
     renderPhrases();

@@ -143,6 +143,39 @@ test("a session without a summary says nothing rather than guessing", () => {
   assert.equal(describeSessionResult({ taskType: "unknown", summary: {} }), "");
 });
 
+
+test("a slot session reports its sequential-stop setup and result", () => {
+  const session = {
+    taskType: "slot",
+    gameId: "slot-l2",
+    finished: true,
+    aborted: false,
+    config: {
+      difficultyMode: "measure",
+      cycleMs: 3200,
+      toleranceMs: 220,
+      rounds: 4,
+      reelCount: 3,
+    },
+    trials: Array.from({ length: 12 }, (_, index) => ({ index })),
+    summary: {
+      trials: 12,
+      hits: 9,
+      medianAbsoluteErrorMs: 142.4,
+      timeoutCount: 0,
+    },
+  };
+  assert.equal(
+    describeSessionConditions(session),
+    "そくてい / 1周 3200ms / 合う幅 ±220ms / 4ラウンド / 3本"
+  );
+  assert.equal(describeSessionOutcome(session), "完走 12回");
+  assert.equal(describeSessionResult(session), "あった 9/12 / ずれ 中央 142ms");
+
+  const interrupted = { ...session, finished: false, aborted: true, trials: session.trials.slice(0, 5) };
+  assert.equal(describeSessionOutcome(interrupted), "中断 5/12回");
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);
 console.log("session conditions tests passed");

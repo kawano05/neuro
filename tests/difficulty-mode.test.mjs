@@ -15,9 +15,10 @@ import {
   resolveCraneDifficulty,
   resolveDifficultyMode,
   resolveRhythmDifficulty,
+  resolveSlotDifficulty,
 } from "../src/lib/difficultyMode.js";
 import { resolveParams } from "../src/lib/games/rhythm.js";
-import { cranePresets, rhythmPresets } from "../src/lib/content.js";
+import { cranePresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
 
 let passed = 0;
 let failed = 0;
@@ -39,6 +40,10 @@ const TWEAKED = {
   rhythmBpm: 30,
   countInBeats: 1,
   targetBeats: 200,
+  slotCycleMs: 4200,
+  slotToleranceMs: 180,
+  slotL1Rounds: 9,
+  slotL2Rounds: 7,
   craneSweepMs: 800,
   craneToleranceR: 40,
   craneTargetTrials: 15,
@@ -86,6 +91,31 @@ test("practice runs keep the supporter's settings", () => {
 });
 
 test("the engine actually uses the protocol values, not just the resolver", () => {
+
+test("measurement runs fix every slot-v1 value and seed", () => {
+  const settings = { ...TWEAKED, difficultyMode: "measure" };
+  ["slot-l1", "slot-l2"].forEach((gameId) => {
+    const resolved = resolveSlotDifficulty(gameId, settings, slotPresets[gameId], "random-practice-seed");
+    assert.equal(resolved.cycleMs, MEASUREMENT_PROTOCOL.slot[gameId].cycleMs);
+    assert.equal(resolved.toleranceMs, MEASUREMENT_PROTOCOL.slot[gameId].toleranceMs);
+    assert.equal(resolved.rounds, MEASUREMENT_PROTOCOL.slot[gameId].rounds);
+    assert.equal(resolved.seed, "slot-measure-01");
+  });
+});
+
+test("practice slot runs keep supporter values and the recorded variable seed", () => {
+  const resolved = resolveSlotDifficulty(
+    "slot-l2",
+    { ...TWEAKED, difficultyMode: "practice" },
+    slotPresets["slot-l2"],
+    "slot-practice-test"
+  );
+  assert.equal(resolved.cycleMs, 4200);
+  assert.equal(resolved.toleranceMs, 180);
+  assert.equal(resolved.rounds, 7);
+  assert.equal(resolved.seed, "slot-practice-test");
+});
+
   // 解決器が正しくても、ゲーム側が呼んでいなければ意味がない。
   const measured = resolveParams("rhythm-l1", { ...TWEAKED, difficultyMode: "measure" });
   assert.equal(measured.bpm, MEASUREMENT_PROTOCOL.rhythm["rhythm-l1"].bpm);
@@ -140,6 +170,7 @@ test("the protocol is held separately from the play presets", () => {
   // 参照を共有していないことを確かめる。
   assert.notStrictEqual(MEASUREMENT_PROTOCOL.rhythm["rhythm-l1"], rhythmPresets["rhythm-l1"]);
   assert.notStrictEqual(MEASUREMENT_PROTOCOL.crane, cranePresets);
+  assert.notStrictEqual(MEASUREMENT_PROTOCOL.slot["slot-l1"], slotPresets["slot-l1"]);
   // そくていが返す値も、呼ぶたびに新しい object であること（呼び出し側が
   // 書き換えても protocol が汚れない）。
   const first = resolveRhythmDifficulty("rhythm-l1", { difficultyMode: "measure" }, rhythmPresets["rhythm-l1"]);

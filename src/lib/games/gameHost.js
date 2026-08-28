@@ -39,8 +39,9 @@
 import { findGameModule } from "./registry.js";
 import { displayOffsetMs } from "./rhythm.js";
 import { PRIZE_ART } from "./craneArt.js";
+import { slotSymbolHtml } from "./slotArt.js";
 import { MAX_SESSIONS } from "../state.js";
-import { gameHowTo } from "../content.js";
+import { gameHowTo, stageColors } from "../content.js";
 import { resolveReadinessState } from "../readinessCheck.js";
 
 /** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
@@ -71,20 +72,21 @@ function offsetDirectionLabel(value, t) {
 /**
  * その回のずれを、1枚の帯にまとめて描く（事後のKR）。
  *
- * 課題の最中にずれを出すかどうかは測定条件（settings.visualGuidance、既定
- * OFF）だが、**終わったあとのまとめは条件に関係なく出す**。理由は2つ。
+ * 通常練習は settings.visualGuidance 既定ONでノートレーンを出し、measure /
+ * calibration は強制OFFで未来ノートなしの計器盤を出す。ただし、
+ * **終わったあとのまとめはどちらの版面でも出す**。理由は2つ。
  *
  *  1. 測定として安全。セッションはもう終わっているので、ここで何を見せても
  *     その回の入力は変わらない。毎試行のKRが問題になるのは、次の試行を
  *     補正させてしまうからで、事後のまとめにはその経路が無い。
  *     運動学習の側から見ても、毎試行より要約のほうが望ましいとされる
  *     （guidance hypothesis）。
- *  2. これが無いと、素の測定条件で遊んだ回は「たっせいりつ 70%」以外に
+ *  2. これが無いと、予告なし計器盤で遊んだ回は「たっせいりつ 70%」以外に
  *     何も残らない。研究の中核である入力時刻のずれを、当のアプリが一度も
  *     見せないことになる。
  *
- * 位置は判定窓（±effectiveWindowMs）を幅いっぱいに写したもので、課題中の
- * 目盛りと同じ読み方。値は displayOffsetMs（基準補正後）を使う——記録の
+ * 位置は判定窓（±effectiveWindowMs）を幅いっぱいに写したもので、両版面の
+ * 事後目盛りと同じ読み方。値は displayOffsetMs（基準補正後）を使う——記録の
  * rawOffsetMs とは別物であることを、見出しでも書き分けている。
  */
 function renderOffsetSpread(trials, config, t) {
@@ -325,10 +327,68 @@ function renderReactionResult(summary, context = {}) {
   `;
 }
 
+/** 正誤のない「できた」型ゲームの軽量リザルト。研究taskTypeとは分離する。 */
+function renderCompletionResult(summary, context = {}) {
+  const t = context.t;
+  const presses = Number.isFinite(summary?.presses) ? Math.max(0, Math.round(summary.presses)) : 0;
+  const colorCount = Number.isFinite(summary?.colors) ? Math.max(0, Math.round(summary.colors)) : 0;
+  const swatches = stageColors
+    .slice(0, colorCount)
+    .map((color) => `<span class="color-result-swatch" style="--result-color:${color}"></span>`)
+    .join("");
+
+  return `
+    <div class="completion-result">
+      <span class="completion-result-icon" aria-hidden="true">
+        <i class="fa-solid fa-star"></i>
+      </span>
+      <strong class="completion-result-title">${t("result.completion.title")}</strong>
+      <p class="completion-result-summary">${t("result.completion.summary", { n: presses })}</p>
+      <div class="color-result-palette" aria-hidden="true">${swatches}</div>
+      <span class="color-result-caption">${t("result.completion.colors", { n: colorCount })}</span>
+    </div>
+  `;
+}
+
+
+
+/** slot-v1 の利用者向け結果。失敗数を主見出しにせず、成功とずれの要約を示す。 */
+function renderSlotResult(summary, context = {}) {
+  const t = context.t;
+  const tPlain = context.tPlain || context.t;
+  const total = Number.isFinite(summary?.trials) ? summary.trials : 0;
+  const hits = Number.isFinite(summary?.hits) ? summary.hits : 0;
+  const hitRate = total ? Math.round((hits / total) * 100) : 0;
+  const medianError = Number.isFinite(summary?.medianAbsoluteErrorMs)
+    ? `${Math.round(summary.medianAbsoluteErrorMs)}ms`
+    : "--";
+  const meanError = formatSignedMs(summary?.meanSignedErrorMs);
+  const lastRound = Array.isArray(summary?.lastRoundSymbols) && summary.lastRoundSymbols.length
+    ? `<div class="slot-result-symbols" role="img" aria-label="${tPlain("result.slot.lastRound")}">${summary.lastRoundSymbols
+        .map((symbolId) => slotSymbolHtml(symbolId))
+        .join("")}</div>`
+    : "";
+
+  return `
+    <div class="slot-result">
+      <strong class="slot-result-title">${t("result.slot.title")}</strong>
+      ${lastRound}
+      <div class="summary-grid">
+        <div class="summary-tile is-headline"><span class="metric-label">${t("result.slot.hitRate")}</span><strong>${hitRate}% <small>(${hits}/${total})</small></strong></div>
+        <div class="summary-tile"><span class="metric-label">${t("result.slot.medianError")}</span><strong>${medianError}</strong></div>
+        <div class="summary-tile"><span class="metric-label">${t("result.slot.meanError")}</span><strong>${meanError}</strong></div>
+        <div class="summary-tile"><span class="metric-label">${t("result.slot.timeouts")}</span><strong>${summary?.timeoutCount || 0}</strong></div>
+        <div class="summary-tile"><span class="metric-label">${t("result.slot.extras")}</span><strong>${summary?.extraInputCount || 0}</strong></div>
+      </div>
+    </div>
+  `;
+}
 const resultRenderers = {
+  completion: renderCompletionResult,
   sms: renderSmsResult,
   gonogo: renderGonogoResult,
   scan: renderScanResult,
+  slot: renderSlotResult,
   rt: renderReactionResult,
 };
 
@@ -416,6 +476,7 @@ export function createGameHost(ctx) {
       settings: state.settings,
       audio: ctx.audio,
       announce,
+      voiceFeedback: ctx.voiceFeedback,
       // 利用者向け文言の表記解決（src/lib/i18n.js）。ゲームは自前で文言を
       // 持たず、必ずここを通す——表記は設定で変わるので定数にできない。
       //
@@ -508,8 +569,7 @@ export function createGameHost(ctx) {
     // #gameStageContent は aria-hidden なので、説明は読み上げ経路で伝える。
     // 画面注視が困難な利用者にも届かせる必要がある（basic-design.md §1.2）。
     const spoken = [moduleTitle(module), ...spokenSteps].join(" ");
-    announce(spoken);
-    ctx.audio.speak(spoken);
+    ctx.voiceFeedback(spoken);
   }
 
   /** レディ画面のひと押しを受けて、実際にゲームを開始する。 */
@@ -539,9 +599,10 @@ export function createGameHost(ctx) {
     state.currentView = "game";
     save();
     ctx.renderAll();
-    announce(ctx.t("voice.gameStart", { name: moduleTitle(module) }));
 
     // content.js に「やりかた」を持つ課題は、レディ画面を挟んでから始める。
+    // renderReady() がゲーム名と説明を1つの所有者から通知するので、ここで
+    // 別の「ゲームを始めます」を重ねない。
     // 持たない課題（crane / fishing のように画面を見て操作するもの）は
     // 説明の作り方が別なので、従来どおり即開始する。
     const steps = gameHowTo[gameId];
@@ -551,6 +612,7 @@ export function createGameHost(ctx) {
       return;
     }
 
+    announce(ctx.t("voice.gameStart", { name: moduleTitle(module) }));
     activeInstance = module.create(buildGameCtx());
     activeInstance.mount(elements.gameStageContent);
   }
@@ -671,8 +733,19 @@ export function createGameHost(ctx) {
       // ここだけ日本語になる。
       elements.gameProgress.textContent = activeModule ? moduleTitle(activeModule) : "";
 
-      const resultRenderer = activeModule?.taskType
-        ? resultRenderers[activeModule.taskType]
+      // 正常終了の要約をアプリTTSが所有する場合、同じ遷移で結果DOMまで
+      // VoiceOverへ読ませない。TTSがOFFなら従来どおりpolite live regionが所有する。
+      elements.resultStats.setAttribute(
+        "aria-live",
+        state.settings.speechEnabled ? "off" : "polite"
+      );
+      const rendererType = activeModule?.resultType || activeModule?.taskType;
+      elements.resultStats.classList.toggle(
+        "is-completion-result",
+        rendererType === "completion"
+      );
+      const resultRenderer = rendererType
+        ? resultRenderers[rendererType]
         : null;
       if (lastResultSummary && resultRenderer) {
         const session = currentSession();

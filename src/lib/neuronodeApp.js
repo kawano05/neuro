@@ -143,9 +143,10 @@ export function initNeuroNodeApp() {
     ctx.announce("データの保存に失敗しました。端末の空き容量を確認してください。")
   );
 
-  const audio = createAudio(() => state.settings);
+  const audio = createAudio(() => state.settings, ctx.announce);
   ctx.audio = audio;
   ctx.speak = audio.speak;
+  ctx.voiceFeedback = audio.speakOrAnnounce;
   ctx.playTone = audio.playTone;
 
   ctx.scan = createScanEngine(ctx);

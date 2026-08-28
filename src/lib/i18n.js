@@ -129,10 +129,46 @@ const STRINGS = {
 
   // --- あそびの名前と説明（content.js の gameTiles と対応） ---
   "tile.color-legacy.title": { ruby: "色[いろ]と音[おと]", kanji: "色と音", kana: "いろと おと", en: "Colour & Sound" },
-  "tile.color-legacy.desc": { ruby: "押[お]すと色[いろ]と音[おと]が変[か]わるよ",
-    kanji: "押すと色と音が変わるよ",
-    kana: "おすと いろと おとが かわるよ",
-    en: "Press to change the colour and sound",
+  "tile.color-legacy.desc": { ruby: "5回[かい]押[お]して色[いろ]と音[おと]を変[か]えよう",
+    kanji: "5回押して色と音を変えよう",
+    kana: "5かい おして いろと おとを かえよう",
+    en: "Press 5 times to change colour and sound",
+  },
+  "color.changed": {
+    ruby: "色[いろ]が変[か]わった",
+    kanji: "色が変わった",
+    kana: "いろが かわった",
+    en: "Colour changed",
+  },
+  "color.complete": {
+    ruby: "できた！",
+    kanji: "できた！",
+    kana: "できた！",
+    en: "All done!",
+  },
+  "color.progress": {
+    ruby: "あと {n}回[かい]",
+    kanji: "あと {n}回",
+    kana: "あと {n}かい",
+    en: "{n} left",
+  },
+  "color.progressComplete": {
+    ruby: "ぜんぶ できた！",
+    kanji: "ぜんぶ できた！",
+    kana: "ぜんぶ できた！",
+    en: "All 5 done!",
+  },
+  "color.voice.progress": {
+    ruby: "色[いろ]が変[か]わった。あと {n}回[かい]",
+    kanji: "色が変わった。あと {n}回",
+    kana: "いろが かわった。あと {n}かい",
+    en: "Colour changed. {n} left",
+  },
+  "color.voice.finish": {
+    ruby: "{n}回[かい]できたよ。おしまいです",
+    kanji: "{n}回できたよ。おしまいです",
+    kana: "{n}かい できたよ。おしまいです",
+    en: "All done. You made {n} changes",
   },
   "tile.rhythm-l1.title": { ruby: "リズム 練習[れんしゅう]", kanji: "リズム 練習", kana: "リズム れんしゅう", en: "Rhythm: practice" },
   "tile.rhythm-l1.desc": { ruby: "音[おと]の合図[あいず]に合[あ]わせて押[お]そう",
@@ -265,10 +301,10 @@ const STRINGS = {
     kana: "がめんを おすと、いろと おとが かわります。",
     en: "Press the screen to change the colour and sound.",
   },
-  "howto.color-legacy.2": { ruby: "好[す]きなだけ押[お]してみましょう。",
-    kanji: "好きなだけ押してみましょう。",
-    kana: "すきなだけ おしてみましょう。",
-    en: "Press as much as you like.",
+  "howto.color-legacy.2": { ruby: "5回[かい]押[お]すと、おしまいの画面[がめん]が出[で]ます。",
+    kanji: "5回押すと、おしまいの画面が出ます。",
+    kana: "5かい おすと、おしまいの がめんが でます。",
+    en: "After 5 presses, the result screen appears.",
   },
   // 「2かい」は rhythmPresets["rhythm-l1"].countInBeats と揃えてある。
   // 以前は 3かい と書いてあり、実際に鳴る回数と食い違っていた。
@@ -529,7 +565,79 @@ const STRINGS = {
     en: "Fishing is finished. {n} fish, {cm} centimetres",
   },
 
-  // --- リズム系の音声 ---
+  // --- リズム系のゲーム表示と音声 ---
+  "rhythm.score": {
+    ruby: "スコア",
+    kanji: "スコア",
+    kana: "スコア",
+    en: "Score",
+  },
+  "rhythm.profile.game": {
+    ruby: "ゲーム",
+    kanji: "ゲーム",
+    kana: "ゲーム",
+    en: "Game",
+  },
+  "rhythm.profile.measure": {
+    ruby: "測定[そくてい]",
+    kanji: "測定",
+    kana: "そくてい",
+    en: "Measure",
+  },
+  "rhythm.profile.noPreview": {
+    ruby: "予告[よこく]なし",
+    kanji: "予告なし",
+    kana: "よこくなし",
+    en: "No preview",
+  },
+  "rhythm.phase.warmup": {
+    ruby: "ならし",
+    kanji: "ならし",
+    kana: "ならし",
+    en: "Warm-up",
+  },
+  "rhythm.phase.measure": {
+    ruby: "測定[そくてい]",
+    kanji: "測定",
+    kana: "そくてい",
+    en: "Measure",
+  },
+  "rhythm.combo": {
+    ruby: "{n} 連続[れんぞく]",
+    kanji: "{n} 連続",
+    kana: "{n} れんぞく",
+    en: "{n} in a row",
+  },
+  "rhythm.judgment.perfect": {
+    ruby: "ぴったり！",
+    kanji: "ぴったり！",
+    kana: "ぴったり！",
+    en: "Perfect!",
+  },
+  "rhythm.judgment.good": {
+    ruby: "いいね！",
+    kanji: "いいね！",
+    kana: "いいね！",
+    en: "Good!",
+  },
+  "rhythm.judgment.hold": {
+    ruby: "よく待[ま]てた！",
+    kanji: "よく待てた！",
+    kana: "よく まてた！",
+    en: "Good wait!",
+  },
+  "rhythm.judgment.wrong": {
+    ruby: "次[つぎ]は待[ま]とう",
+    kanji: "次は待とう",
+    kana: "つぎは まとう",
+    en: "Wait next time",
+  },
+  "rhythm.judgment.miss": {
+    ruby: "次[つぎ]は大丈夫[だいじょうぶ]",
+    kanji: "次は大丈夫",
+    kana: "つぎは だいじょうぶ",
+    en: "Try the next one",
+  },
   "rhythm.voice.start": {
     ruby: "リズムの 練習[れんしゅう]を はじめます",
     kanji: "リズムの 練習を はじめます",
@@ -544,6 +652,24 @@ const STRINGS = {
   },
 
 
+  "result.completion.title": {
+    ruby: "できた！",
+    kanji: "できた！",
+    kana: "できた！",
+    en: "All done!",
+  },
+  "result.completion.summary": {
+    ruby: "色[いろ]と音[おと]を {n}回[かい]変[か]えました",
+    kanji: "色と音を {n}回変えました",
+    kana: "いろと おとを {n}かい かえました",
+    en: "You changed colour and sound {n} times",
+  },
+  "result.completion.colors": {
+    ruby: "{n}つの色[いろ]",
+    kanji: "{n}つの色",
+    kana: "{n}つの いろ",
+    en: "Colours shown: {n}",
+  },
   // --- リザルトの見出し（課題ごと） ---
   "result.gonogo.goHit": { ruby: "Go せいこう", kanji: "Go せいこう", kana: "Go せいこう", en: "Go correct" },
   "result.gonogo.commission": { ruby: "No-Go まちがい", kanji: "No-Go まちがい", kana: "No-Go まちがい", en: "No-Go errors" },
@@ -676,6 +802,56 @@ const STRINGS = {
   "result.exact": { ruby: "（ぴったり！）", kanji: "（ぴったり！）", kana: "（ぴったり！）", en: "(right on!)" },
   "result.caught": { ruby: "取[と]れた", kanji: "取れた", kana: "とれた", en: "Caught" },
   "result.pieces": { ruby: "こ", kanji: "こ", kana: "こ", en: "" },
+
+
+  // --- slot-v1: スロット型逐次停止課題 ---
+  "tile.slot-l1.title": { ruby: "ひとつ 止[と]める", kanji: "ひとつ 止める", kana: "ひとつ とめる", en: "Stop one reel" },
+  "tile.slot-l1.desc": { ruby: "同[おな]じ絵[え]が真[ま]ん中[なか]に来[き]たら押[お]そう", kanji: "同じ絵が真ん中に来たら押そう", kana: "おなじ えが まんなかに きたら おそう", en: "Press when the matching shape reaches the centre" },
+  "tile.slot-l2.title": { ruby: "3つ 止[と]める", kanji: "3つ 止める", kana: "3つ とめる", en: "Stop three reels" },
+  "tile.slot-l2.desc": { ruby: "3つのリールを左[ひだり]から順番[じゅんばん]に止[と]めよう", kanji: "3つのリールを左から順番に止めよう", kana: "3つの リールを ひだりから じゅんばんに とめよう", en: "Stop three reels from left to right" },
+  "tile.slot-corner.title": { ruby: "リールを 止[と]める", kanji: "リールを 止める", kana: "リールを とめる", en: "Stop the reels" },
+  "tile.slot-corner.desc": { ruby: "動[うご]く絵[え]を真[ま]ん中[なか]で止[と]めよう", kanji: "動く絵を真ん中で止めよう", kana: "うごく えを まんなかで とめよう", en: "Stop moving shapes at the centre" },
+
+  "howto.slot-l1.1": { ruby: "上[うえ]の目標[もくひょう]の絵[え]を見[み]ます。", kanji: "上の目標の絵を見ます。", kana: "うえの もくひょうの えを みます。", en: "Look at the target shape above." },
+  "howto.slot-l1.2": { ruby: "同[おな]じ絵[え]が太[ふと]い線[せん]の間[あいだ]に来[き]たら押[お]します。", kanji: "同じ絵が太い線の間に来たら押します。", kana: "おなじ えが ふとい せんの あいだに きたら おします。", en: "Press when the same shape is between the thick lines." },
+  "howto.slot-l1.3": { ruby: "1回[かい]押[お]すと、1本[ぽん]だけ止[と]まります。", kanji: "1回押すと、1本だけ止まります。", kana: "1かい おすと、1ぽんだけ とまります。", en: "Each press stops one reel." },
+  "howto.slot-l2.1": { ruby: "上[うえ]の目標[もくひょう]の絵[え]を見[み]ます。", kanji: "上の目標の絵を見ます。", kana: "うえの もくひょうの えを みます。", en: "Look at the target shape above." },
+  "howto.slot-l2.2": { ruby: "左[ひだり]のリールから順番[じゅんばん]に止[と]めます。", kanji: "左のリールから順番に止めます。", kana: "ひだりの リールから じゅんばんに とめます。", en: "Stop the reels from left to right." },
+  "howto.slot-l2.3": { ruby: "1回[かい]の入力[にゅうりょく]で1本[ぽん]だけ止[と]まります。", kanji: "1回の入力で1本だけ止まります。", kana: "1かいの にゅうりょくで 1ぽんだけ とまります。", en: "One input stops exactly one reel." },
+
+  "slot.target": { ruby: "目標[もくひょう]", kanji: "目標", kana: "もくひょう", en: "Target" },
+  "slot.symbol.circle": { ruby: "丸[まる]", kanji: "丸", kana: "まる", en: "circle" },
+  "slot.symbol.fish": { ruby: "魚[さかな]", kanji: "魚", kana: "さかな", en: "fish" },
+  "slot.symbol.star": { ruby: "星[ほし]", kanji: "星", kana: "ほし", en: "star" },
+  "slot.symbol.flower": { ruby: "花[はな]", kanji: "花", kana: "はな", en: "flower" },
+  "slot.symbol.bird": { ruby: "鳥[とり]", kanji: "鳥", kana: "とり", en: "bird" },
+  "slot.symbol.square": { ruby: "四角[しかく]", kanji: "四角", kana: "しかく", en: "square" },
+  "slot.symbolGuide.alt": { ruby: "丸[まる]、魚[さかな]、星[ほし]、花[はな]、鳥[とり]、四角[しかく]の絵[え]", kanji: "丸、魚、星、花、鳥、四角の絵", kana: "まる、さかな、ほし、はな、とり、しかくの え", en: "Circle, fish, star, flower, bird and square shapes" },
+  "slot.symbolGuide.caption": { ruby: "この6つの絵[え]が動[うご]きます", kanji: "この6つの絵が動きます", kana: "この6つの えが うごきます", en: "These six shapes move on each reel" },
+  "slot.reel.label": { ruby: "{n}本目[ほんめ]のリール", kanji: "{n}本目のリール", kana: "{n}ほんめの リール", en: "Reel {n}" },
+  "slot.reel.active": { ruby: "いま 止[と]める", kanji: "いま 止める", kana: "いま とめる", en: "Stop this one" },
+  "slot.reel.waiting": { ruby: "待[ま]っています", kanji: "待っています", kana: "まっています", en: "Waiting" },
+  "slot.reel.stopped": { ruby: "止[と]まりました", kanji: "止まりました", kana: "とまりました", en: "Stopped" },
+  "slot.status.stopReel": { ruby: "{total}本[ほん]のうち {current}本目[ほんめ]を止[と]めよう", kanji: "{total}本のうち {current}本目を止めよう", kana: "{total}ほんの うち {current}ほんめを とめよう", en: "Stop reel {current} of {total}" },
+  "slot.status.roundComplete": { ruby: "ぜんぶ 止[と]まりました", kanji: "ぜんぶ 止まりました", kana: "ぜんぶ とまりました", en: "All reels stopped" },
+  "slot.status.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
+  "slot.progress": { ruby: "{current} / {total}本目[ほんめ]", kanji: "{current} / {total}本目", kana: "{current} / {total}ほんめ", en: "Stop {current} of {total}" },
+  "slot.progress.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
+  "slot.voice.round": { ruby: "{total}回[かい]のうち {current}回目[かいめ]です", kanji: "{total}回のうち {current}回目です", kana: "{total}かいの うち {current}かいめです", en: "Round {current} of {total}" },
+  "slot.voice.nextReel": { ruby: "次[つぎ]は {current}本目[ほんめ]です", kanji: "次は {current}本目です", kana: "つぎは {current}ほんめです", en: "Next is reel {current}" },
+  "slot.voice.finish": { ruby: "終[お]わりました。{total}本[ほん]のうち {hits}本[ほん]合[あ]いました", kanji: "終わりました。{total}本のうち {hits}本合いました", kana: "おわりました。{total}ほんの うち {hits}ほん あいました", en: "Finished. {hits} of {total} stops matched" },
+
+  "result.slot.title": { ruby: "ぜんぶ 止[と]められました", kanji: "ぜんぶ 止められました", kana: "ぜんぶ とめられました", en: "All reels stopped" },
+  "result.slot.hitRate": { ruby: "合[あ]った割合[わりあい]", kanji: "合った割合", kana: "あった わりあい", en: "Matched" },
+  "result.slot.medianError": { ruby: "目標[もくひょう]からのずれ（中央値[ちゅうおうち]）", kanji: "目標からのずれ（中央値）", kana: "もくひょうからの ずれ（ちゅうおうち）", en: "Typical timing error" },
+  "result.slot.meanError": { ruby: "早[はや]め・遅[おそ]めの平均[へいきん]", kanji: "早め・遅めの平均", kana: "はやめ・おそめの へいきん", en: "Mean early or late" },
+  "result.slot.timeouts": { ruby: "待[ま]ち時間[じかん]を超[こ]えた", kanji: "待ち時間を超えた", kana: "まちじかんを こえた", en: "Timed out" },
+  "result.slot.extras": { ruby: "受付外[うけつけがい]の入力[にゅうりょく]", kanji: "受付外の入力", kana: "うけつけがいの にゅうりょく", en: "Extra inputs" },
+  "result.slot.lastRound": { ruby: "最後[さいご]に止[と]まった絵[え]", kanji: "最後に止まった絵", kana: "さいごに とまった え", en: "Shapes stopped in the last round" },
+
+  "corner.slot.eyebrow": { ruby: "Reel stop", kanji: "Reel stop", kana: "Reel stop", en: "Reel stop" },
+  "corner.slot.title": { ruby: "リールを 止[と]める", kanji: "リールを 止める", kana: "リールを とめる", en: "Stop the reels" },
+  "corner.slot.guide": { ruby: "止[と]める本数[ほんすう]を選[えら]びます", kanji: "止める本数を選びます", kana: "とめる ほんすうを えらびます", en: "Choose how many reels to stop" },
 };
 
 /** 設定値から表記モードを決める。知らない値は既定へ倒す。 */

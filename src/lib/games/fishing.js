@@ -189,7 +189,7 @@ function computeSummary(trials) {
  */
 export function createFishingGame(gameId) {
   return function create(ctx) {
-  const { audio, announce, logTrial, finish, setProgress, t, tHtml } = ctx;
+  const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml } = ctx;
 
   const config = { ...fishingPresets[gameId] };
   let stageEl = null;
@@ -544,8 +544,10 @@ export function createFishingGame(gameId) {
     audio.scheduler.stop();
     const total = session.summary.totalLengthCm ?? 0;
     const catches = session.summary.catches ?? 0;
-    audio.speak(t("fishing.voice.finish", { n: catches, cm: total }));
-    announce(t("fishing.voice.finishAnnounce", { n: catches, cm: total }));
+    voiceFeedback(
+      t("fishing.voice.finish", { n: catches, cm: total }),
+      t("fishing.voice.finishAnnounce", { n: catches, cm: total })
+    );
     finish(session.summary);
   }
 

@@ -17,6 +17,7 @@ import {
   displayOffsetMs,
   resolveParams,
   resolveVisualGuidance,
+  scheduledBeatPulseScale,
 } from "../src/lib/games/rhythm.js";
 import { rhythmPresets } from "../src/lib/content.js";
 
@@ -258,6 +259,36 @@ test("the pulse only predicts the next beat when guidance is on", () => {
   assert.ok(
     beatPulseScale(0.95, true) > restingScale,
     "手がかりありでは、拍の直前に膨らんで「つぎ来るぞ」を伝える"
+  );
+});
+
+test("the pulse lands on the actual cued schedule after the inter-trial rest", () => {
+  const plan = buildPlan({ mode: "cued", bpm: 60, countInBeats: 1, targetBeats: 2 });
+  // 実際の音は 0s(low), 1s(high), 2.5s(low), 3.5s(high)。
+  // 単純な1秒modだと2.5sは位相0.5になり、2試行目から音と半拍ずれる。
+  assert.deepEqual(
+    plan.audioBeats.map((beat) => beat.timeS),
+    [0, 1, 2.5, 3.5]
+  );
+  assert.equal(
+    scheduledBeatPulseScale(12.5, 10, plan.audioBeats, plan.beatIntervalS, true),
+    beatPulseScale(0, true),
+    "2試行目の低音時刻でも円が着地する"
+  );
+  assert.equal(
+    scheduledBeatPulseScale(12, 10, plan.audioBeats, plan.beatIntervalS, true),
+    beatPulseScale(2 / 3, true),
+    "音の無い単純mod境界を拍として描かない"
+  );
+});
+
+test("the pulse never anticipates a beat that does not exist after the schedule", () => {
+  const beats = [{ timeS: 0 }, { timeS: 1 }];
+  const restingScale = beatPulseScale(0.5, false);
+  assert.equal(
+    scheduledBeatPulseScale(11.95, 10, beats, 1, true),
+    restingScale,
+    "最後の音から1拍近く経っても架空の次拍へ溜めない"
   );
 });
 

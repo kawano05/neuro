@@ -16,7 +16,9 @@
 export function describeSessionOutcome(session) {
   if (!session) return "";
   const trials = session.trials?.length ?? 0;
-  const planned = session.config?.targetTrials ?? null;
+  const planned = session.config?.targetTrials ??
+    (session.taskType === "slot" && Number.isFinite(session.config?.rounds) && Number.isFinite(session.config?.reelCount)
+      ? session.config.rounds * session.config.reelCount : null);
   if (session.finished === true && session.aborted === false) {
     return `完走 ${trials}回`;
   }
@@ -68,6 +70,17 @@ export function describeSessionResult(session) {
     // 抑制課題の主要指標は commissionRate（押してはいけない拍で押した割合）。
     return `あった ${summary.hits ?? 0} / つい おした ${summary.commissions ?? 0}`;
   }
+
+  if (session.taskType === "slot") {
+    const trials = summary.trials ?? session.trials?.length ?? 0;
+    const parts = [`あった ${summary.hits ?? 0}/${trials}`];
+    if (typeof summary.medianAbsoluteErrorMs === "number") {
+      parts.push(`ずれ 中央 ${Math.round(summary.medianAbsoluteErrorMs)}ms`);
+    }
+    if ((summary.timeoutCount ?? 0) > 0) parts.push(`時間切れ ${summary.timeoutCount}`);
+    return parts.join(" / ");
+  }
+
 
   if (session.taskType === "rt") {
     const parts = [];
@@ -123,6 +136,17 @@ export function describeSessionConditions(session) {
     // 成立していなかったのかを分けられない回なので、条件として出す。
     // 出すのは overridden のときだけ——met を毎行書くと札が並ぶだけで、
     // 見分けたいほうが埋もれる（そくていの札と同じ扱い）。
+    if (config.measurementReadiness === "overridden") parts.push("成立確認なし");
+    return parts.join(" / ");
+  }
+
+  if (session.taskType === "slot") {
+    const parts = [];
+    if (typeof config.cycleMs === "number") parts.push(`1周 ${config.cycleMs}ms`);
+    if (typeof config.toleranceMs === "number") parts.push(`合う幅 ±${config.toleranceMs}ms`);
+    if (typeof config.rounds === "number") parts.push(`${config.rounds}ラウンド`);
+    if (typeof config.reelCount === "number") parts.push(`${config.reelCount}本`);
+    if (config.difficultyMode === "measure") parts.unshift("そくてい");
     if (config.measurementReadiness === "overridden") parts.push("成立確認なし");
     return parts.join(" / ");
   }

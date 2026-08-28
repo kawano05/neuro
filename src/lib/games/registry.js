@@ -17,6 +17,7 @@
 import { gameTiles } from "../content.js";
 import { createColorLegacyGame } from "./colorLegacy.js";
 import { createRhythmGame } from "./rhythm.js";
+import { createSlotGame } from "./slot.js";
 import { createGonogoGame } from "./gonogo.js";
 import { createCalibrationGame } from "./calibration.js";
 import { createCraneGame } from "./crane.js";
@@ -25,8 +26,11 @@ import { createFishingGame } from "./fishing.js";
 /** id → create のひも付け。gameTiles の全idに実装を持たせる。 */
 export const gameCreators = {
   "color-legacy": createColorLegacyGame,
+  // 旧リズムcreatorは保存・互換確認用に残すが、gameTilesからは外して利用者導線に出さない。
   "rhythm-l1": createRhythmGame("rhythm-l1"),
   "rhythm-l2": createRhythmGame("rhythm-l2"),
+  "slot-l1": createSlotGame("slot-l1"),
+  "slot-l2": createSlotGame("slot-l2"),
   gonogo: createGonogoGame,
   crane: createCraneGame,
   fishing: createFishingGame("fishing"),

@@ -2,13 +2,13 @@
 // views/settings.js — 設定画面（走査間隔・音・表示の設定）
 // =====================================================================
 
-import { cranePresets } from "../content.js";
+import { cranePresets, slotPresets } from "../content.js";
 import { isMeasurementMode, resolveDifficultyMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
 import { evaluateReadiness } from "../readinessCheck.js";
 
 export function initSettings(ctx) {
-  const { state, elements, save, scan, announce, logEvent } = ctx;
+  const { state, elements, save, scan, announce, logEvent, audio } = ctx;
 
   // UFOキャッチャーの難易度。設定側が null のあいだは cranePresets の値を
   // 使うので、スライダーにもその既定値を映す（games/crane.js の
@@ -37,6 +37,38 @@ export function initSettings(ctx) {
     },
   ];
 
+  const slotSliders = [
+    {
+      key: "slotCycleMs",
+      input: elements.slotCycleMs,
+      output: elements.slotCycleMsValue,
+      fallback: slotPresets["slot-l1"].cycleMs,
+      format: (value) => `${value}ms`,
+    },
+    {
+      key: "slotToleranceMs",
+      input: elements.slotToleranceMs,
+      output: elements.slotToleranceMsValue,
+      fallback: slotPresets["slot-l1"].toleranceMs,
+      format: (value) => `${value}ms`,
+    },
+    {
+      key: "slotL1Rounds",
+      input: elements.slotL1Rounds,
+      output: elements.slotL1RoundsValue,
+      fallback: slotPresets["slot-l1"].rounds,
+      format: String,
+    },
+    {
+      key: "slotL2Rounds",
+      input: elements.slotL2Rounds,
+      output: elements.slotL2RoundsValue,
+      fallback: slotPresets["slot-l2"].rounds,
+      format: String,
+    },
+  ];
+  const difficultySliders = [...slotSliders, ...craneSliders];
+
   // リズム系の難易度。値を持たない（null）＝「あそびごとの既定を使う」を
   // 選択肢として表せる必要があるのでプルダウンにしてある。空文字が null。
   const rhythmChoices = [
@@ -52,13 +84,16 @@ export function initSettings(ctx) {
     });
     elements.scanInterval.value = settings.scanInterval;
     elements.scanIntervalValue.value = `${settings.scanInterval}ms`;
-    craneSliders.forEach(({ key, input, output, fallback, format }) => {
+    difficultySliders.forEach(({ key, input, output, fallback, format }) => {
       const value = settings[key] ?? fallback;
       input.value = value;
       output.value = format(value);
     });
+    elements.switchControlMode.checked = settings.switchControlMode;
     elements.autoScan.checked = settings.autoScan;
     elements.speechEnabled.checked = settings.speechEnabled;
+    elements.speechVolume.value = settings.speechVolume;
+    elements.speechVolumeValue.value = `${Math.round(settings.speechVolume * 100)}%`;
     elements.soundEnabled.checked = settings.soundEnabled;
     elements.largeText.checked = settings.largeText;
     elements.highContrast.checked = settings.highContrast;
@@ -68,7 +103,31 @@ export function initSettings(ctx) {
     elements.craneAudioGuidance.checked = settings.craneAudioGuidance;
     elements.difficultyMode.value = resolveDifficultyMode(settings);
     elements.textMode.value = resolveTextMode(settings);
+    applySwitchControlMode();
+    applySpeechSettings();
     applyDifficultyMode();
+  }
+
+  /** 使えない操作子を無効化し、自前走査の輪からも外す。 */
+  function setControlAvailable(control, available) {
+    if (!control) return;
+    control.disabled = !available;
+    control.setAttribute("aria-disabled", String(!available));
+    const row = control.closest(".setting-row");
+    if (row) row.classList.toggle("is-setting-disabled", !available);
+  }
+
+  /** iPad Switch Controlへ委譲中は自前走査の設定自体を操作不能にする。 */
+  function applySwitchControlMode() {
+    const delegated = Boolean(state.settings.switchControlMode);
+    elements.switchControlModeNotice.hidden = !delegated;
+    setControlAvailable(elements.scanInterval, !delegated);
+    setControlAvailable(elements.autoScan, !delegated);
+  }
+
+  /** アプリTTSがOFFなら、効かない音量つまみを走査対象に残さない。 */
+  function applySpeechSettings() {
+    setControlAvailable(elements.speechVolume, Boolean(state.settings.speechEnabled));
   }
 
   /**
@@ -86,6 +145,7 @@ export function initSettings(ctx) {
     const measuring = isMeasurementMode(state.settings);
     elements.measureModeNotice.hidden = !measuring;
     const locked = [
+      ...slotSliders.map(({ input }) => input),
       elements.rhythmBpm,
       elements.rhythmTargetBeats,
       elements.visualGuidance,
@@ -172,6 +232,7 @@ export function initSettings(ctx) {
     document.body.classList.toggle("large-text", state.settings.largeText);
     document.body.classList.toggle("high-contrast", state.settings.highContrast);
     document.body.classList.toggle("researcher-mode", state.settings.researcherMode);
+    document.body.classList.toggle("switch-control-mode", state.settings.switchControlMode);
 
     // ルート（html）にも付ける。
     //
@@ -190,10 +251,39 @@ export function initSettings(ctx) {
   }
 
   elements.scanInterval.addEventListener("input", (event) => {
+    if (state.settings.switchControlMode) return;
     state.settings.scanInterval = Number(event.target.value);
     elements.scanIntervalValue.value = `${state.settings.scanInterval}ms`;
     save();
     if (scan.isRunning()) scan.start();
+  });
+
+  elements.speechVolume.addEventListener("input", (event) => {
+    state.settings.speechVolume = Number(event.target.value);
+    elements.speechVolumeValue.value = `${Math.round(state.settings.speechVolume * 100)}%`;
+    save();
+  });
+
+  elements.switchControlMode.addEventListener("change", () => {
+    const delegated = elements.switchControlMode.checked;
+    state.settings.switchControlMode = delegated;
+    if (delegated) {
+      // 二重走査を保存状態としても許さない。TTSはOS読み上げとの比較を
+      // 始められるよう、モードを有効にした時点でいったんOFFにする。
+      state.settings.autoScan = false;
+      state.settings.speechEnabled = false;
+      audio.stopSpeech();
+    }
+    save();
+    render();
+    applyClasses();
+    scan.stop(true);
+    scan.refresh();
+    announce(
+      delegated
+        ? "iPad Switch Controlに選択を任せます。アプリの走査と音声を停止しました"
+        : "iPad Switch Controlモードを解除しました。アプリ走査は停止したままです"
+    );
   });
 
   rhythmChoices.forEach(({ key, select }) => {
@@ -205,7 +295,7 @@ export function initSettings(ctx) {
     });
   });
 
-  craneSliders.forEach(({ key, input, output, format }) => {
+  difficultySliders.forEach(({ key, input, output, format }) => {
     input.addEventListener("input", (event) => {
       const value = Number(event.target.value);
       state.settings[key] = value;
@@ -230,10 +320,22 @@ export function initSettings(ctx) {
       save();
       applyClasses();
       if (key === "autoScan") {
+        if (state.settings.switchControlMode) {
+          state.settings.autoScan = false;
+          element.checked = false;
+          save();
+          scan.stop(true);
+          return;
+        }
         // restartIfNeeded() はON時だけ再始動する。OFFへ切り替えた
         // ときは既存の interval を明示的に止める必要がある。
         if (element.checked) scan.restartIfNeeded();
-        else scan.stop();
+        else scan.stop(true);
+      }
+      if (key === "speechEnabled") {
+        if (!element.checked) audio.stopSpeech();
+        applySpeechSettings();
+        scan.refresh();
       }
       // researcherMode はタブの表示/非表示を切り替えるため、走査対象の再収集が要る。
       if (key === "researcherMode") scan.restartIfNeeded();

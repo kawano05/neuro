@@ -49,6 +49,10 @@ export const MEASUREMENT_PROTOCOL = {
     // calibration は元から protocol 固定（PROTOCOL_LOCKED_GAME_IDS）なので
     // ここには置かない。二重に持つと食い違う。
   },
+  slot: {
+    "slot-l1": { cycleMs: 3200, toleranceMs: 220, rounds: 8, seed: "slot-measure-01" },
+    "slot-l2": { cycleMs: 3200, toleranceMs: 220, rounds: 4, seed: "slot-measure-01" },
+  },
   crane: { sweepMs: 2200, toleranceR: 15, targetTrials: 5 },
 };
 
@@ -83,6 +87,33 @@ export function resolveRhythmDifficulty(gameId, settings, preset) {
     bpm: settings?.rhythmBpm ?? preset.bpm,
     countInBeats: settings?.countInBeats ?? preset.countInBeats,
     targetBeats: settings?.targetBeats ?? preset.targetBeats,
+  };
+}
+
+/**
+ * スロット型課題の実効パラメータ。測定ではslot-v1を固定し、練習だけを調整可能にする。
+ * 許容幅は常に絵柄間隔の半分以内へ収め、隣の絵柄なのにhitになる条件を作らない。
+ */
+export function resolveSlotDifficulty(gameId, settings, preset, practiceSeed) {
+  const protocolValues = MEASUREMENT_PROTOCOL.slot[gameId];
+  const measuring = isMeasurementMode(settings);
+  const cycleMs = measuring
+    ? protocolValues.cycleMs
+    : settings?.slotCycleMs ?? preset.cycleMs;
+  const requestedToleranceMs = measuring
+    ? protocolValues.toleranceMs
+    : settings?.slotToleranceMs ?? preset.toleranceMs;
+  const roundsKey = gameId === "slot-l2" ? "slotL2Rounds" : "slotL1Rounds";
+  const rounds = measuring
+    ? protocolValues.rounds
+    : settings?.[roundsKey] ?? preset.rounds;
+  const maximumUnambiguousTolerance = cycleMs / (preset.symbolCount * 2);
+  return {
+    ...preset,
+    cycleMs,
+    toleranceMs: Math.min(requestedToleranceMs, maximumUnambiguousTolerance),
+    rounds,
+    seed: measuring ? protocolValues.seed : practiceSeed,
   };
 }
 

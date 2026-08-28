@@ -15,8 +15,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   DEFAULT_TONE_GAIN,
+  DEFAULT_SPEECH_VOLUME,
   EFFECT_GAIN_CEILING,
   clampEffectGain,
+  clampSpeechVolume,
+  createAudio,
 } from "../src/lib/audio.js";
 
 let passed = 0;
@@ -52,6 +55,98 @@ test("clamps anything a caller passes", () => {
   assert.equal(clampEffectGain(Number.NaN), 0);
   assert.equal(clampEffectGain(undefined), 0);
   assert.equal(clampEffectGain("0.03"), 0);
+});
+
+test("keeps app TTS volume adjustable without changing cue or effect gain", () => {
+  assert.equal(DEFAULT_SPEECH_VOLUME, 1);
+  assert.equal(clampSpeechVolume(0.2), 0.2);
+  assert.equal(clampSpeechVolume(0.55), 0.6);
+  assert.equal(clampSpeechVolume(9), 1);
+  assert.equal(clampSpeechVolume(-1), 0.2);
+  assert.equal(clampSpeechVolume(Number.NaN), DEFAULT_SPEECH_VOLUME);
+  assert.equal(clampSpeechVolume("0.5"), DEFAULT_SPEECH_VOLUME);
+  // TTS側を下げても、測定刺激と効果音の安全上限は動かさない。
+  assert.equal(DEFAULT_TONE_GAIN, 0.05);
+  assert.equal(EFFECT_GAIN_CEILING, 0.04);
+});
+
+test("applies TTS volume and gives each message one speech owner", () => {
+  const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const oldUtterance = Object.getOwnPropertyDescriptor(globalThis, "SpeechSynthesisUtterance");
+  const spoken = [];
+  const announced = [];
+  let cancelCount = 0;
+  const settings = { speechEnabled: true, speechVolume: 0.4, textMode: "ruby" };
+
+  class FakeUtterance {
+    constructor(text) {
+      this.text = text;
+      this.lang = "";
+      this.rate = 1;
+      this.volume = 1;
+    }
+  }
+
+  try {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        speechSynthesis: {
+          cancel() { cancelCount += 1; },
+          speak(utterance) { spoken.push(utterance); },
+        },
+      },
+    });
+    Object.defineProperty(globalThis, "SpeechSynthesisUtterance", {
+      configurable: true,
+      value: FakeUtterance,
+    });
+
+    const audio = createAudio(() => settings, (message) => announced.push(message));
+    assert.equal(audio.speak("テスト"), true);
+    assert.equal(cancelCount, 1);
+    assert.equal(spoken.length, 1);
+    assert.equal(spoken[0].volume, 0.4);
+    assert.equal(spoken[0].rate, 0.92);
+
+    assert.equal(audio.speakOrAnnounce("アプリだけ", "OSだけ"), "app-tts");
+    assert.equal(spoken.length, 2);
+    assert.deepEqual(announced, []);
+
+    settings.speechEnabled = false;
+    assert.equal(audio.speak("読まない"), false);
+    assert.equal(spoken.length, 2);
+    assert.equal(audio.speakOrAnnounce("読まない", "OSだけ"), "live-region");
+    assert.deepEqual(announced, ["OSだけ"]);
+    audio.stopSpeech();
+    assert.equal(cancelCount, 3);
+
+    settings.speechEnabled = true;
+    delete globalThis.window.speechSynthesis;
+    assert.equal(
+      audio.speakOrAnnounce("APIがない", "APIなしはOS側"),
+      "live-region",
+      "Speech Synthesis APIが無い端末でもlive regionへ戻る"
+    );
+    assert.equal(spoken.length, 2);
+    assert.deepEqual(announced, ["OSだけ", "APIなしはOS側"]);
+
+    globalThis.window.speechSynthesis = {
+      cancel() { cancelCount += 1; },
+      speak() { throw new Error("WKWebView speech failure"); },
+    };
+    assert.equal(
+      audio.speakOrAnnounce("失敗するAPI", "例外時もOS側"),
+      "live-region",
+      "Speech Synthesisが例外を返してもlive regionへ戻る"
+    );
+    assert.deepEqual(announced, ["OSだけ", "APIなしはOS側", "例外時もOS側"]);
+  } finally {
+    if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow);
+    else delete globalThis.window;
+    if (oldUtterance) Object.defineProperty(globalThis, "SpeechSynthesisUtterance", oldUtterance);
+    else delete globalThis.SpeechSynthesisUtterance;
+  }
 });
 
 test("every effect call site asks for less than the cue tone", () => {

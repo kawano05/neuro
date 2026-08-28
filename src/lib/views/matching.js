@@ -5,7 +5,7 @@
 import { matchingTasks } from "../content.js";
 
 export function initMatching(ctx) {
-  const { state, elements, save, announce, logEvent, speak, playTone, scan } = ctx;
+  const { state, elements, save, logEvent, voiceFeedback, playTone, scan } = ctx;
 
   function render() {
     const task = matchingTasks[state.matchingIndex % matchingTasks.length];
@@ -27,8 +27,10 @@ export function initMatching(ctx) {
     const task = matchingTasks[state.matchingIndex % matchingTasks.length];
     const correct = answer === task.answer;
     playTone(correct ? 700 : 230);
-    speak(correct ? "正解です" : "違います");
-    announce(correct ? `正解: ${answer}` : `違います: ${answer}`);
+    voiceFeedback(
+      correct ? "正解です" : "違います",
+      correct ? `正解: ${answer}` : `違います: ${answer}`
+    );
     logEvent({ type: "matching", label: answer, correct });
     state.matchingIndex = (state.matchingIndex + 1) % matchingTasks.length;
     save();

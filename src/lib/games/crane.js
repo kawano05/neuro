@@ -211,7 +211,7 @@ function resolveCraneConfig(settings, readiness) {
 }
 
 export function createCraneGame(ctx) {
-  const { audio, announce, logTrial, finish, setProgress, t, tHtml } = ctx;
+  const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml } = ctx;
 
   /**
    * 景品の名前。
@@ -582,8 +582,10 @@ export function createCraneGame(ctx) {
       statusEl.innerHTML = tHtml("crane.gotPrize", { name: prizeName(prize) });
       clawEl.classList.add("is-holding");
       prizeEl.classList.add("is-lifted");
-      audio.speak(t("crane.voice.grip", { name: prizeName(prize) }));
-      announce(t("crane.voice.gripAnnounce", { name: prizeName(prize) }));
+      voiceFeedback(
+        t("crane.voice.grip", { name: prizeName(prize) }),
+        t("crane.voice.gripAnnounce", { name: prizeName(prize) })
+      );
     } else if (judgment === "slip") {
       audio.playToneAt(cueTones.noGo, now, FEEDBACK_GAIN);
       // 一度は噛んだ音を出してから、ずり落ちる音で下がる。「掴めてはいた」を
@@ -593,16 +595,20 @@ export function createCraneGame(ctx) {
       statusEl.innerHTML = tHtml("crane.slip");
       // 掴めてはいたので、景品が一度動いて戻ることで「惜しい」を絵でも返す。
       prizeEl.classList.add("is-slipped");
-      audio.speak(t("crane.voice.slip"));
-      announce(t("crane.voice.slipAnnounce"));
+      voiceFeedback(
+        t("crane.voice.slip"),
+        t("crane.voice.slipAnnounce")
+      );
     } else {
       audio.playToneAt(cueTones.miss, now, MISS_GAIN);
       // 何にも当たらず空を閉じた音。噛む音を鳴らさないことが「届かなかった」
       // の情報になる。罰にならないよう、いちばん小さく短くする。
       audio.playNoise({ durationS: 0.05, gain: 0.012, filter: "highpass", frequency: 1800 });
       statusEl.innerHTML = tHtml("crane.miss");
-      audio.speak(t("crane.voice.miss"));
-      announce(t("crane.voice.missAnnounce"));
+      voiceFeedback(
+        t("crane.voice.miss"),
+        t("crane.voice.missAnnounce")
+      );
     }
     updateScore();
     updateStreak();
@@ -617,8 +623,10 @@ export function createCraneGame(ctx) {
     stopLoop();
     audio.scheduler.stop();
     const grips = session.summary.grips ?? 0;
-    audio.speak(t("crane.voice.finish", { n: grips }));
-    announce(t("crane.voice.finishAnnounce", { n: grips }));
+    voiceFeedback(
+      t("crane.voice.finish", { n: grips }),
+      t("crane.voice.finishAnnounce", { n: grips })
+    );
     finish(session.summary);
   }
 

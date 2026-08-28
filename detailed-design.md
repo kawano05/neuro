@@ -1,8 +1,203 @@
 # neuro ゲーム基盤リファクタリング 詳細設計書
 
-- 版: 1.1（2026-07-03）レビュー反映（GPT-5.5 Pro 指摘1〜8、iOS最終形態対応を追加）
-- 前提: 基本設計書 1.1。本書は実装可能な粒度で各モジュールを規定する。
+- 版: 1.3（2026-08-20）slot-v1逐次停止課題、state v4、slot CSVを反映
+- 前提: 基本設計書 1.2。本書は実装可能な粒度で各モジュールを規定する。
 - 表記: 「MUST」は必須、「SHOULD」は推奨、「MAY」は任意。
+
+---
+
+## 0A. slot-v1 逐次停止課題（2026-08-20 現行正本）
+
+> 本節は、利用者向け `rhythm-l1` / `rhythm-l2` を `slot-l1` / `slot-l2`
+> へ置換した後の現行仕様である。旧リズムエンジン、`taskType: sms`、
+> calibration、旧リズムCSVは履歴互換のため残す。後続の `7`、`9.1〜9.5`、
+> `11.1〜11.2` にあるリズム中心の記述と本節が衝突する場合は、本節を優先する。
+> 固定した要求の全文は `docs/slot-game-replacement-plan.md` を正本とする。
+
+### 0A.1 識別子と置換境界
+
+| 項目 | L1 | L2 |
+|---|---|---|
+| 利用者向け名称 | ひとつ 止める | 3つ 止める |
+| gameId | `slot-l1` | `slot-l2` |
+| taskType | `slot` | `slot` |
+| protocolVersion | `slot-v1` | `slot-v1` |
+| engineVersion | `1` | `1` |
+| reelCount | 1 | 3 |
+| rounds | 8 | 4 |
+| 総停止数 | 8 | 12 |
+
+利用者ホームのカテゴリーは「リールを 止める」。`rhythm-l1` /
+`rhythm-l2` のIDを新課題へ再利用せず、旧SMSデータをslotへ変換しない。
+`gonogo` は独立したホーム項目、`calibration` は支援者設定内に残す。
+`slot-l1`、`slot-l2`、`crane` は `visualRequired: true` とし、
+`hideVisualTasks` でスロットカテゴリーごと除外する。
+
+### 0A.2 固定プロトコルと練習値
+
+| 条件 | measure | practice |
+|---|---|---|
+| symbolCount | 6 | 6 |
+| cycleMs | 3200 | 3200既定、2800〜6000 |
+| toleranceMs | 220 | 220既定、60〜220 |
+| maxCyclesPerReel | 4 | 4 |
+| L1 rounds | 8 | 8既定、3〜20 |
+| L2 rounds | 4 | 4既定、2〜12 |
+| seed | `slot-measure-01` | セッションごとに生成し記録 |
+
+図形IDは `circle`、`fish`、`star`、`flower`、`bird`、`square` の固定6種。
+測定は同じseedから目標、図形順、初期位相を再現する。練習は可変でも、実際に
+使ったseedと全 `symbolOrder` を保存する。入力後に乱数を引いて成功・失敗や
+停止図形を変更してはならない。
+
+### 0A.3 判定式
+
+入力時刻の正本は `src/lib/neuronodeApp.js` の入力ファネルがイベント入口で取得した
+`performance.now()`。ゲーム側で再計時しない。リール `r` の論理位相は次で求める。
+
+```text
+elapsedMs = inputPerfMs - reelStartPerfMs
+phase = positiveModulo(
+  initialPhase + elapsedMs / cycleMs * symbolCount,
+  symbolCount
+)
+stoppedIndex = floor(phase + 0.5) mod symbolCount
+signedErrorMs = inputPerfMs - nearestTargetPassPerfMs
+absoluteErrorMs = abs(signedErrorMs)
+judgment = absoluteErrorMs <= toleranceMs ? hit : miss
+```
+
+早押しは負、遅押しは正とし、許容幅ちょうどはhit。最近傍の目標通過は周期境界を
+またいで探索する。`requestAnimationFrame` は `phase` の見た目を描くためだけに使い、
+判定、timeout、保存値の正本にしない。聴覚 `baselineOffsetMs` は適用しない。
+
+activeになったリールが4周期を超えた場合は、期限時刻を使って `timeout` を1件記録する。
+期限後に到着した入力を次リールへ転用しない。
+
+### 0A.4 逐次停止状態機械
+
+```text
+ready
+  -> round 0 / reel 0 active
+  -> 入力またはtimeoutで現在の1本だけ停止
+  -> 同じroundの次reelをactive
+  -> 最終reel停止後560ms保持
+  -> 次round / reel 0
+  -> 全停止後620ms保持
+  -> result
+```
+
+- 1入力で更新できるのは現在の `roundIndex:reelIndex` 1位置だけ。
+- 各roundと各停止後は300msの入力ロックを置く。
+- シェルの150msイベントdedupeを抜けた余分な入力も、次リールを止めず
+  `extraInputCount` / `ignoredDuplicateInputs` として残す。
+- Escまたは終了ボタンでは、直前までの試行を `aborted: true`、
+  `finished: false` で保存する。
+- 完走時は必要な全 `roundIndex:reelIndex` が一意に揃った場合だけ
+  `finished: true`、`aborted: false` とする。
+
+### 0A.5 UI、画像、アクセシビリティ、倫理
+
+- 各roundで目標図形、太い上下停止線、リール番号、active/stopped状態、全停止数の進捗を示す。
+- L2は3本すべてを同時に動かし、停止操作だけを左から右へ1本ずつ受け付ける。
+- 生成画像 `src/assets/slot/slot-symbol-strip-v1.png` は6図形のガイドとして表示する。
+  リール本体はCSS形状とFont Awesomeアイコンでも識別でき、画像の有無が判定へ影響しない。
+- highContrastでは色に加えて形、太い輪郭、番号、短い文字を併用する。
+- 大文字、834×1194、507×1194、390×664、390×812、844×390で主操作、
+  停止線、進捗、終了導線が画面外へ出ないことをWebスモークで確認する。
+- `prefers-reduced-motion` は完了装飾等の非本質アニメーションを抑制する。
+- 利用者向けに「スロット」、BET、通貨、配当、BAR、777、ジャックポット、
+  near miss、無限継続、希少報酬を表示しない。
+- 結果は命中率、絶対ずれ中央値、符号付き平均ずれ、timeout、余分な入力、
+  最後の図形を中立的に示し、失敗回数を主見出しにしない。
+
+### 0A.6 セッションと試行
+
+セッション必須部:
+
+```js
+{
+  sessionId,
+  taskType: "slot",
+  protocolVersion: "slot-v1",
+  engineVersion: 1,
+  gameId: "slot-l1" | "slot-l2",
+  participantId,
+  startedAtIso,
+  endedAtIso,
+  aborted,
+  finished,
+  config: {
+    reelCount, symbolCount, cycleMs, toleranceMs, rounds,
+    maxCyclesPerReel, seed, difficultyMode, textMode,
+    measurementReadiness, visualGuidance: false
+  },
+  device,
+  trials,
+  summary
+}
+```
+
+各停止試行は、少なくとも `index`、`roundIndex`、`reelIndex`、
+`targetSymbol`、`targetIndex`、`symbolOrder`、`initialPhase`、
+`reelStartMs`、`activeStartMs`、`inputMs`、`timeoutAtMs`、
+`targetPassMs`、`signedErrorMs`、`absoluteErrorMs`、`stoppedPhase`、
+`stoppedIndex`、`stoppedSymbol`、`observedCycles`、`judgment`、
+`inputSource`、`ignoredDuplicateInputs` を持つ。
+
+summaryは `trials`、`hits`、`misses`、`timeouts`、`hitRate`、
+`meanSignedErrorMs`、`medianAbsoluteErrorMs`、`meanAbsoluteErrorMs`、
+`extraInputCount`、`completionTimeMs`、`lastRoundSymbols` を再計算できる形で持つ。
+
+### 0A.7 保存v4とサニタイズ
+
+保存キーは `neuronode-prototype-state-v4`。v4が無いときはv3を最優先に読み、
+既存settings、logs、evaluation、sessions、旧 `rhythm.sessions` を保持してv4へ保存する。
+v3キーは削除しない。v3が無い場合だけ従来のv2→v1移行へ進む。
+
+`sanitizeSlotSession` は次をMUSTとする。
+
+1. gameId、protocolVersion、engineVersion、図形ID、図形順を検証する。
+2. cycle、tolerance、rounds、reelCount、maxCyclesを安全範囲へclampする。
+3. 保存された時刻・位相から判定を再計算し、一致しない試行を個別に除外する。
+4. `roundIndex:reelIndex` の重複、範囲外、必要位置の欠落を検出する。
+5. 試行が欠落した完了セッションは `finished: false`、`aborted: true` に戻す。
+6. MAX_SESSIONS上限と旧SMSセッションを維持する。
+
+### 0A.8 スロットCSV
+
+出力名は `neuronode-slot-YYYY-MM-DD.csv`、BOM付きUTF-8、1停止1行。
+`escapeCsv` を通し、列順は次の28列で固定する。
+
+```text
+sessionId,participantId,gameId,protocolVersion,engineVersion,startedAtIso,
+aborted,difficultyMode,roundIndex,reelIndex,targetSymbol,targetIndex,
+stoppedSymbol,cycleMs,toleranceMs,inputMs,targetPassMs,signedErrorMs,
+absoluteErrorMs,observedCycles,judgment,seed,symbolOrder,
+deviceViewportWidth,deviceViewportHeight,devicePixelRatio,deviceUserAgent,
+measurementReadiness
+```
+
+`symbolOrder` はJSON文字列。旧 `neuronode-rhythm-YYYY-MM-DD.csv`、
+`neuronode-scan-YYYY-MM-DD.csv`、`neuronode-rt-YYYY-MM-DD.csv`、
+評価CSVを変更・統合しない。
+
+### 0A.9 実装ファイルと検証
+
+| パス | 責務 |
+|---|---|
+| `src/lib/games/slotJudge.js` | 位相、最近傍目標通過、判定、seed出題、summary |
+| `src/lib/games/slot.js` | L1/L2共通UI、逐次状態機械、timeout、中断 |
+| `src/lib/games/slotState.js` | 保存セッションの検証・再計算 |
+| `src/lib/games/slotArt.js` | 6図形HTMLと生成画像URL |
+| `src/lib/slotCsv.js` | 固定28列のCSV行 |
+| `tests/slot-judge.test.mjs` | 境界、符号、seed、fps非依存 |
+| `tests/slot-session.test.mjs` | 1入力1停止、遷移、sanitize、中断 |
+| `tests/data-integrity.test.mjs` | v3→v4、CSV、ID、画像 |
+| `tests/web-smoke.mjs` | L1画像・中断、L2全12停止、5実寸 |
+
+Windows上の自動検証は論理・DOM・レイアウト・PWAまでであり、NeuroNode実機、
+iPad実機のSwitch Control、実際の視距離、疲労、図形弁別性の人間確認を代替しない。
 
 ---
 
@@ -45,30 +240,32 @@
 
 | パス | 区分 | 内容 |
 |---|---|---|
-| src/lib/games/registry.js | 新規 | ゲーム定義の配列と検索関数 |
-| src/lib/games/gameHost.js | 新規 | ゲームの起動・入力振り分け・終了処理 |
-| src/lib/games/judge.js | 新規 | 判定・オフセット計算（純粋関数） |
-| src/lib/games/pointing.js | 追加 | 2軸走査位置・距離・決定的な掴み判定（純粋関数） |
-| src/lib/games/reaction.js | 追加 | 変動前刺激間隔・単純反応判定（純粋関数） |
-| src/lib/games/crane.js | 追加 | UFOキャッチャー（走査選択課題） |
-| src/lib/games/fishing.js | 追加 | さかなつり（単純反応時間課題） |
-| src/lib/games/rhythm.js | 新規 | リズムL1/L2（共通エンジン＋パラメータ） |
-| src/lib/games/gonogo.js | 新規 | Go・No-Go 課題 |
-| src/lib/games/calibration.js | 新規 | キャリブレーション |
-| src/lib/games/colorLegacy.js | 新規 | 既存「色変化」の契約ラッパ |
-| src/lib/views/home.js | 新規 | スタート画面＋アプリ選択 |
-| src/lib/views/switcher.js | 削除 | home.js と colorLegacy.js に分割吸収 |
-| src/lib/audio.js | 変更 | createBeatScheduler 追加、playTone の時刻指定版追加 |
-| src/lib/content.js | 変更 | storageKey v3、gameModules、各課題プリセット追加 |
-| src/lib/state.js | 変更 | taskType 横断の sessions、hideVisualTasks、旧 rhythm.sessions 移送。arcade は互換キーとしてのみ保持 |
-| src/lib/neuronodeApp.js | 変更 | 入力ファネル一元化、gameHost 配線、home 初期化 |
-| src/lib/scan.js | 変更 | game 中の start/restartIfNeeded ガード、activate の switcher 分岐削除 |
-| src/lib/dom.js | 変更 | 新画面の要素登録 |
-| src/App.svelte | **大幅変更** | **モノリス script（約560行）を削除しマークアップ骨格＋onMount(initNeuroNodeApp) に縮退（§0）**。スタート画面・アプリ選択・ゲームステージ・リザルトの HTML 追加 |
-| src/styles.css | 変更 | ゲームステージ・パルス円・タイルグリッドのスタイル |
-| src/lib/views/evaluation.js | 変更 | taskType 別の失敗集計、リズム/走査/反応CSV |
-| tests/web-smoke.mjs | 変更 | 新フローと新2ゲームのスモーク追加 |
-| README.md, docs/ | 変更 | フロー図・運用ノート更新 |
+| src/lib/games/registry.js | 変更 | slot-l1/l2 creator追加、旧rhythm creator保持 |
+| src/lib/games/gameHost.js | 変更 | taskType別の起動・入力・終了、slot結果 |
+| src/lib/games/slotJudge.js | 新規 | 位相・最近傍通過・判定・固定seed・集計の純粋関数 |
+| src/lib/games/slot.js | 新規 | 1/3リール共通UIと逐次停止状態機械 |
+| src/lib/games/slotState.js | 新規 | slotセッションのsanitize・判定再検証 |
+| src/lib/games/slotArt.js | 新規 | 6図形HTMLと生成画像URL |
+| src/lib/slotCsv.js | 新規 | slot-v1固定28列CSV |
+| src/assets/slot/slot-symbol-strip-v1.png | 新規 | 生成した透過6図形ガイド |
+| src/lib/games/judge.js / rhythm.js | 維持 | 旧SMSデータと旧リズムCSVの互換経路 |
+| src/lib/games/pointing.js / crane.js | 維持 | 2軸走査・UFOキャッチャー |
+| src/lib/games/reaction.js / fishing.js | 維持 | 反応時間課題 |
+| src/lib/games/gonogo.js / calibration.js | 維持 | 聴覚抑制・聴覚baseline |
+| src/lib/content.js | 変更 | storageKey v4、slotタイル・プリセット、visualRequired |
+| src/lib/difficultyMode.js | 変更 | measure固定slot-v1とpractice値解決 |
+| src/lib/state.js | 変更 | v3→v4移行、slot sanitize、旧SMS保持 |
+| src/lib/views/home.js | 変更 | 6項目、slotカテゴリー、gonogo独立、viewport再分割 |
+| src/lib/views/evaluation.js | 変更 | slot CSV、旧rhythm/scan/rt CSV併置 |
+| src/lib/views/settings.js | 変更 | slot周期・許容幅・L1/L2回数、measureロック |
+| src/lib/sessionConditions.js | 変更 | slot計画停止数と条件表示 |
+| src/App.svelte / src/lib/dom.js | 変更 | slot設定とCSV操作子 |
+| src/styles.css | 変更 | slot盤面、狭画面、高コントラスト、reduced-motion |
+| tests/slot-judge.test.mjs | 新規 | 判定境界、seed、fps非依存 |
+| tests/slot-session.test.mjs | 新規 | 逐次遷移、sanitize、中断 |
+| tests/data-integrity.test.mjs | 変更 | v3→v4、CSV、ID、画像 |
+| tests/web-smoke.mjs | 変更 | L1とL2全12停止を5実寸で検証 |
+| README.md / basic-design.md / detailed-design.md / docs/research-summary.md | 変更 | 現行パラダイムへ更新 |
 
 既存の views/matching.js, voca.js, letters.js, operation.js, research.js, log.js,
 settings.js は本リファクタでは原則変更しない。
@@ -168,9 +365,10 @@ settings.js は本リファクタでは原則変更しない。
     拍を鳴らしはじめていた。何をする課題なのかを伝える場所がどこにも無く、
     とくに gonogo は高音は押す・低音は見送るというルールを音だけからは
     推測できなかった。
-  - 説明を進行中ではなく開始前に置くのは、課題中の視覚が拍のキューとして働くと
-    聴覚キューに対する入力という測定の前提が崩れるため（基本設計書 §6）。
-    開始前はまだ計測が始まっていないので、図・手順・色を自由に使える。
+  - 説明を開始前に置くのは、測定中の追加説明が刺激へ重なるのを防ぐため。
+    §7.4 の `lane`（練習）では課題中の予告ノートを許可するが、`instrument`
+    （`measure` / calibration）では開始後の予告キューを禁止する。開始前はまだ
+    計測が始まっていないので、どちらも図・手順・色を自由に使える。
   - `gameHowTo` に無い課題（crane のように画面を見て操作するもの）は
     説明の作り方が別なので、従来どおり即開始する。
   - #gameStageContent は aria-hidden のため、説明は announce() と
@@ -179,8 +377,9 @@ settings.js は本リファクタでは原則変更しない。
   - レディ画面から「おわる」/Esc で抜けた場合、セッションは1件も作られない
     （中断記録も残らない。まだ計測が始まっていないため）。
 - タブバー・走査UI・ヘッダを非表示（`body.game-mode` クラスで CSS 制御）。
-- 画面構成: 中央にパルス円（§7.4）、上部にセッション進捗（「のこり 12」等・
-  largeText 連動）、右上に支援者用「おわる」ボタン（44px 角以上、タップ専用）。
+- 画面構成: 中央にゲーム別の視覚ステージ（§7.4）、上部にセッション進捗
+  （「のこり 12」等・largeText 連動）、右上に支援者用「おわる」ボタン
+  （44px 角以上、タップ専用）。中央パルス円は標準レイアウトとしない。
 - 終了条件（いずれか）:
   1. 規定試行数の完了（自動、通常経路）
   2. 支援者の「おわる」タップ、または Esc キー
@@ -191,6 +390,9 @@ settings.js は本リファクタでは原則変更しない。
 
 - 表示項目: 達成率（hit / 対象ビート数）、平均オフセット（符号付き ms、
   「はやめ/おそめ」の言い換え併記）、オフセット SD、extra 入力数。
+- 数値とボタン順は共通の意味構造を使うが、背景・見出し・獲得物はゲーム別テーマを
+  継続する。白い汎用カードだけへ切り替えない。装飾は `aria-hidden` とし、
+  同じ意味を1文の結果要約でも伝える。
 - ボタン2つ（走査対象）: 「もういちど」（同一ゲーム再起動）「メニューへ」。
 - speak で達成率を読み上げ（speechEnabled 時）。
 
@@ -328,8 +530,9 @@ export const rhythmPresets = {
 export const cueTones = { low: 440, high: 880, noGo: 330, hit: 660, miss: 220 };
 ```
 
-- テーマスキン用の口として、gameTiles に将来 `skin` フィールドを追加できる構造に
-  しておく（本リファクタでは未実装。コメントで意図を明記）。
+- `gameId` から解決する既定の視覚プロフィール（背景、主役、進捗、結果）は
+  必須の製品要件とする。将来の `skin` は外部差し替え用であり、未指定時を
+  無地にするための口ではない。
 
 ---
 
@@ -498,7 +701,8 @@ mode = "cued"（L1）の1試行:
 
 ---
 
-## 7. リズムゲーム本体（games/rhythm.js）
+## 7. 旧リズムゲーム本体（互換仕様・利用者導線なし）
+> 以下は旧SMSセッション復元と旧リズムCSV回帰のために保持する仕様である。
 
 ### 7.1 パラメータ解決
 
@@ -509,8 +713,9 @@ rhythmPresets[gameId]。settings 側が null のとき preset を使う。
 
 1. mount: プラン生成（ビート列＋乱数列）→ scheduler.start(plan) →
    requestAnimationFrame ループ開始（描画と sweepMisses 用）。
-2. rAF ループ毎フレーム: scheduler.now() を取得し、(a) パルス円の位相更新、
-   (b) sweepMisses() で期限切れ miss の確定、(c) 進捗表示更新。
+2. rAF ループ毎フレーム: scheduler.now() を取得し、(a) 表示プロフィールの更新、
+   (b) sweepMisses() で期限切れ miss の確定、(c) 進捗表示更新。ノート位置は
+   AudioContext の絶対時刻から求め、`performance.now()` だけで流さない。
 3. handleInput(t): §6.3 で変換 → judgeInput() → フィードバック音 →
    ctx.logTrial(record)。
 4. 全ビート消化（hit/miss/commission が確定）で ctx.finish(summary)。
@@ -521,86 +726,57 @@ rhythmPresets[gameId]。settings 側が null のとき preset を使う。
   セッションを aborted:true で確定（途中再開はしない。計時汚染防止、MUST）。
 - 「おわる」/Esc も同様に aborted:true。
 
-### 7.4 視覚補助（最小実装）
+### 7.4 視覚提示（練習と測定のモード分離）
 
-- パルス円: 直径 40vmin の単一 div。ビート位相に合わせて transform を
-  CSS transition ではなく rAF で更新（音との同期はあくまで見た目、
-  判定には使わない）。
-- **測定条件 `visualGuidance`（settings、既定 OFF）**。ONのとき次の2つが
-  同時に効く。片方だけ切っても測っているものは「聴覚キューへの同期」に
-  戻らないので、1つのつまみにまとめてある。
+中央パルス円は正本ではない。リズムというジャンル、AudioContext 基準の予定時刻、
+§5 の判定、§9 の生データを維持し、見た目は次の2プロフィールへ分ける。
 
-  1. パルス円が次の拍へ向けて「溜める」（＝拍の予告）
-  2. 押したあと、ずれの目盛りに「はやい/おそい」が出る（＝結果の知識 KR）
+| `visualPresentation` | 適用条件 | 拍より前の表示 |
+|---|---|---|
+| `lane` | calibration 以外、`difficultyMode=practice` かつ `visualGuidance=true` | 許可。流れるノート、次の音種の形、判定面を表示できる |
+| `instrument` | `measure`、calibration、または練習で `visualGuidance=false` | 禁止。予定ビートを表すDOM・移動・拍前拡縮を出さない |
 
-  既定 OFF の理由: この課題は聴覚キューへの同期を測る計測器なので、素の状態は
-  「手がかりは音だけ」でなければ `rawOffsetMs` が聴覚同期の指標にならない。
-  ONの回は視覚キューが混ざった別条件として扱う。訓練として使う回は支援者が
-  ONにする（運動学習では毎試行のKRが学習をかえって妨げうる＝guidance
-  hypothesis も知られているため、既定で配る側にはしない）。
-  ふだんの練習向けには、セッション終了後のリザルトがまとめてずれを見せる
-  ——事後のまとめなら、測っている最中の行動を変えない。
-  そくてい（calibration）は設定に関わらず常に OFF（`PROTOCOL_LOCKED_GAME_IDS`
-  と同じ線引き）。効いた値は `session.config.visualGuidance` に残し、
-  sanitize でも保持し、リズムCSV19列目に出す（§9.3）。3経路のどれか1つでも
-  欠けると条件を後から区別できない。
+- プロフィールは mount 時に1回だけ確定し、途中で切り替えない。実際に使った
+  `difficultyMode`、`visualGuidance`、`visualPresentation` を
+  `session.config` に保存し sanitize でも保持する。CSVには少なくとも
+  `difficultyMode` と `visualGuidance` を出し、条件を混ぜて集計しない。
+- calibration は設定値にかかわらず `instrument` / `visualGuidance=false`
+  に固定する。`measure` も同じく予告を強制OFFにする。
 
-- 拍あたりの倍率カーブ（games/rhythm.js `beatPulseScale`）は
-  「着地 → 沈む → 待つ → 溜める → 着地」の一巡り。ただし最後の**溜めだけ**は
-  `visualGuidance` が ON のときに限る（下表の 0.72→1 の区間）。着地と沈みは
-  拍が**起きたこと**を伝えるだけなので予告にならず、常に出してよい:
+#### 7.4.1 `lane`（通常練習）
 
-  | 位相 | 倍率 | 意味 |
-  |---|---|---|
-  | 0（拍の瞬間） | 1.00 | 着地。ここが最大 |
-  | 0 → 0.34 | 1.00 → 0.86（ease-out） | 沈む |
-  | 0.34 → 0.72 | 0.86 固定 | 待つ |
-  | 0.72 → 1（次の拍の直前） | 0.86 → 0.94（ease-in） | 溜める |
+- ゲーム別テーマを持つ1レーンのリズムゲームとする。ノート位置は
+  `scheduler.now()` と予定ビートの AudioContext 絶対時刻から求め、判定は
+  表示DOMの位置でなく §5 の時刻差だけで行う。
+- L1 は明るい空・疎な単発ノート（同時1〜2個）、L2 は夜景・連続列・コンボ蓄積、
+  gonogo は星／岩等を形・輪郭・アイコンで区別する。色だけで区別しない。
+- Perfect / Good は入力後の表示用評価であり、研究上の `judgment=hit` を
+  分割・上書きしない。miss / commission も罰的な全画面フラッシュを使わない。
+- correctRejection のシールド等は判定窓が閉じた後だけ表示し、320ms以内に消す。
+  次の試行の種類や時刻を知らせる動きへ連結しない。
 
-  - 当初は `scale = 0.85 + 0.15 * phase` の単純な鋸歯だった。これだと円が
-    最大になるのが拍の**直前**で、拍の瞬間は縮む。拍が「縮み」で表現される
-    うえ、あいだは等速で伸び続けるだけなので、拍ではなく単なる往復運動に
-    見えていた。
-  - 拍と拍のあいだに静止区間を置くのが要点で、動きが拍の前後だけの出来事に
-    なることで一拍ずつの合図として読める。溜めは最大まで上げきらない
-    （上げきると着地の瞬間に差が出ず、拍が見えなくなる）。
-  - 当初この溜めは無条件だった。だが「つぎ来るぞ」を伝えることが目的である
-    以上、それは拍が来る前に拍の位置を教える視覚キューであり、同じ設計書の
-    「拍に同期して動く視覚を増やさないこと自体が要件」と両立しない。放置すると
-    `rawOffsetMs` は「聴覚キューへの入力」ではなく「聴覚＋視覚キューへの入力」
-    を測ってしまう（基本設計書 §6 の聴覚優先が崩れる）。条件へ落として解いた。
-  - `prefers-reduced-motion: reduce` のときは円を動かさない（固定倍率）。
-    このカーブは rAF が毎フレーム transform を書くので、CSS の `@media` では
-    止まらない。JS 側で見る必要がある（games/rhythm.js `updatePulseVisual`）。
+#### 7.4.2 `instrument`（測定・予告なし練習）
 
-- **ずれの目盛り**（`visualGuidance` ON のときのみ）: 判定窓 ±`effectiveWindowMs`
-  を幅いっぱいに写した横帯。押して hit になるたび、その位置に印を1つ落とす。
-  印は出たあと動かない。直近 `MAX_OFFSET_MARKS` 件まで残し、3試行以上たまったら
-  平均位置に別の印を出す。
-  - 「拍に同期して動く視覚」に当たらないのは、ここに現れるものが全部
-    **押したあと**の出来事だから: 印が出るのは利用者が押した瞬間（拍の瞬間では
-    ない）、印は出たあと動かない、次の拍がいつ来るかはどこにも書かれていない。
-  - 表示する値は `rawOffsetMs - appliedBaselineMs`（`displayOffsetMs`）。生値を
-    そのまま出すと、基準オフセットが効いている利用者では「判定は当たりなのに
-    画面はいつも おそい と言う」状態になる。当たり外れを決めているのと同じ量を
-    出す。**記録される `rawOffsetMs` は常に生値**（§8.3 の最重要規則）。
+- 無地の白画面や中央円へ戻さない。暗色グリッド、静止判定線、24分割の外周目盛り、
+  現在区間、事後マーカー、計器盤型リザルトを持つ完成された精密機器として描く。
+- 音が鳴る前は静止し、未来のビート位置・音種・残り時間を空間配置で教えない。
+  入力位置マーカー、早い／ちょうど／遅いの形、波紋は入力または判定確定後だけ出す。
+- calibration の最初の4拍は「ならし」、後続20拍は「測定」として外周目盛りの
+  塗り分けで進捗を示す。この進捗は過去の完了数であり、次の拍の時刻を示さない。
+- ずれ表示は `rawOffsetMs - appliedBaselineMs` を用いるが、
+  **記録される `rawOffsetMs` は常に生値**（§8.3）。
 
-- **音が鳴らせない端末**（`audio.scheduler.start()` が null を返す＝AudioContext
-  が無い）では、セッションを開かずに理由を表示する（`renderUnavailable`）。
-  この場合 `now()` も常に 0 を返すため、拍が鳴らず・円も動かず・判定窓を過ぎた
-  拍が期限切れにならないので、放置すると「のこり N」のまま二度と終わらない。
-  合図が音である課題なので、続行しても測定にならない。
+#### 7.4.3 共通の表示条件
 
-- hit で 340ms の波紋（styles.css `rhythm-hit-ripple`。クラス除去で
-  animation が止まるため、保持時間を波紋の長さに合わせている）、
-  miss では変化なし（罰的演出をしない）。
-- ステージの地には動かない同心円の地紋を敷く（奥行きのため。拍に同期して
-  動く視覚を増やさないこと自体が要件）。「円ひとつ＋下に説明文」の版面を
-  持つ課題は `module-rhythm` / `module-color` クラスを立て、主役の円を
-  ステージのちょうど中央に置く（説明文は下端のキャプションへ外す）。
-  子要素の構成が違う crane / fishing にこの規則が及ばないよう、
-  クラスで範囲を限定している。
-- highContrast 時は輪郭線を強調。色は stageColors から1色を使用。
+- 音を開始できない端末ではセッションを開かず、テーマ内の故障表示と理由を出す。
+- `prefers-reduced-motion: reduce` ではJS側も連続移動を止める。lane は
+  固定ノート枠の段階切替、instrument は静止目盛り＋事後スタンプを使い、
+  背景・HUD・獲得物まで消して検査円だけにしない。
+- 通常高の画面では instrument の主計器220〜250pxを目安にする。844×390の
+  短横画面では、左右16px以上・ノート52px以上・判定面96px以上を優先し、
+  主計器はプレイ面内に収まる約168pxまで縮退する。進捗・終了・主役を重ねない。
+- highContrast では文字4.5:1、判定線・ノート輪郭等3:1以上、輪郭4px以上。
+  形・数字・短い文字を併用し、背景装飾だけを先に落とす。
 
 ### 7.5 さかなつり（games/fishing.js）
 
@@ -742,11 +918,19 @@ function restartIfNeeded() {
 
 activate() 内の switcher 分岐削除（§3.3）と合わせ、scan.js の変更はこの3点のみ。
 
+### 8.5 測定版面
+
+- calibration は §7.4.2 の `instrument` を必須とし、未来のノート、
+  拍前のパルス、次の音種を示す色・形を一切描かない。
+- 24目盛り、静止判定線、ならし4拍／測定20拍の完了進捗、入力後マーカーを持つ。
+  「予告禁止」は「簡素でよい」という意味ではなく、見た目の階層と質感を落とさない。
+- リザルトも計器盤の世界を継続し、候補中央値と支援者用保存操作を共通の意味構造で示す。
+
 ---
 
 ## 9. データモデル
 
-### 9.1 state v3 追加分
+### 9.1 旧state v3追加分（v4移行元）
 
 ```js
 settings: {
@@ -785,7 +969,8 @@ rhythm: {
   aborted: false,
   config: { bpm, countInBeats, targetBeats, judgmentWindowMs,
             effectiveWindowMs,                // §5.1 の実効値（MUST）
-            baselineOffsetMs, mode, goRatio, seedSequence: [...] },
+            baselineOffsetMs, mode, goRatio, seedSequence: [...],
+            difficultyMode, visualGuidance, visualPresentation },
   device: { outputLatencyS: 0.012 | null, baseLatencyS: ..., userAgent: ... },
   trials: [
     { index: 0, beatIndex: 0, beatKind: "go", // index/judgment は全課題共通
@@ -816,17 +1001,20 @@ rhythm: {
 - `rt` summary: hits/timeouts/falseStarts/commissions/correctRejections、
   hit/commission/falseStart率、反応時間の平均・SD・中央値
 
-### 9.3 リズム CSV 仕様
+### 9.3 旧リズム CSV 仕様（互換出力）
 
 - 出力場所: 評価ビューに「リズムCSV」ボタンを追加（既存 exportCsv と並置、
   BOM 付き UTF-8、escapeCsv 使用、ファイル名 `neuronode-rhythm-YYYY-MM-DD.csv`）。
-- 形式: 1試行1行のロング形式。列（19列、この順で固定）:
+- 形式: 1試行1行のロング形式。列（27列、この順で固定）:
 
 ```
 sessionId, participantId, gameId, startedAtIso, aborted,
 mode, bpm, countInBeats, judgmentWindowMs, effectiveWindowMs, appliedBaselineMs,
 beatIndex, beatKind, scheduledMs, inputMs, rawOffsetMs, judgment, excluded,
-visualGuidance
+visualGuidance, difficultyMode,
+deviceViewportWidth, deviceViewportHeight, devicePixelRatio,
+deviceOutputLatencyS, deviceBaseLatencyS, deviceUserAgent,
+measurementReadiness
 ```
 
 - judgment 列は5値（hit / miss / extra / commission / correctRejection）。
@@ -837,6 +1025,9 @@ visualGuidance
   **末尾に足すこと自体が要件**で、途中に挿してはならない——挿すとそれ以降の
   列位置がずれ、列位置で読んでいる解析側が黙って壊れる。この列が true の行は
   聴覚キューだけへの同期ではないので、分けずに混ぜて集計しない。
+- 20列目 `difficultyMode` は practice / measure を記録する。21〜26列目は
+  端末・表示領域、27列目 `measurementReadiness` は成立確認の状態を記録する。
+  `visualPresentation` はセッションJSONに保持し、lane / instrument の実版面を追跡する。
 - 走査CSVも同じ理由で末尾に `audioGuidance` を持つ（UFOキャッチャーで
   「ねらいの通過音」を鳴らしていたか。`settings.craneAudioGuidance` /
   `games/crane.js` の `maybePassTone`、既定 OFF）。この音は目標の座標そのものを
@@ -889,7 +1080,7 @@ visualGuidance
   リズム CSV の rawOffsetMs で行う）
 - logEvent({type:"game", label:`${gameId} 終了 go命中率${...}%`})
 
-### 9.5 保存データ移行（v1/v2 → v3）
+### 9.5 旧保存データ移行（v1/v2 → v3。v3→v4は§0A.7）
 
 loadState() は v3 キーが空のとき次の順で移行を試みる（MUST）:
 
@@ -914,12 +1105,29 @@ loadState() は v3 キーが空のとき次の順で移行を試みる（MUST）
 - タイルグリッドは既存 .module-grid / .module-button のスタイルを流用。
 - フォントサイズ・コントラストは既存 largeText / highContrast のクラス切替を
   そのまま適用（新規セレクタを既存規約に合わせて追加）。
+- `#gameStage` に `data-game-id` と表示プロフィールを付け、ゲーム別背景と
+  リザルトテーマの継ぎ目にする。`#gameProgress` は兄弟要素なので
+  `:has()` に依存せず、古い WKWebView でも同じテーマを解決できるようにする。
+- 装飾は `aria-hidden=true` / `pointer-events:none` とし、走査対象や
+  フォーカス順を増やさない。ゲーム中はステージ全体が唯一の入力面。レディと
+  リザルトは「開始」または「もういちど → メニューへ」の順を固定する。
+- `prefers-reduced-motion` はCSSアニメーションだけでなく、rAF更新側でも分岐する。
+  連続スクロール、パララックス、粒子を止め、静止差分・輪郭・事後スタンプへ置換する。
+- highContrast では意味を色だけへ依存させず、4px輪郭、形、数字、文字を併用する。
+  文字4.5:1、主要な非文字UI 3:1以上を満たす。
+- 844×390と200%拡大では、装飾、パララックス、補助文の順に縮退する。進捗、
+  44×44px以上の終了／CTA、主操作面、判定面、結果要約は隠さず、横スクロールと
+  重なりを発生させない。
 
 ---
 
 ## 11. テスト
 
-### 11.1 単体（node 実行）
+### 11.1 単体（node 実行、slot-v1を含む）
+
+slot-v1は `tests/slot-judge.test.mjs` と `tests/slot-session.test.mjs` で、
+位相0、周期境界、符号、許容幅、timeout、fps非依存、seed再現、1入力1停止、
+round遷移、sanitize、中断を検証する。以下は残存課題・互換経路の検証である。
 
 judge.js を対象に最低限以下を検証:
 
@@ -941,21 +1149,36 @@ package.json の `test:unit` は judge / pointing / reaction / data-integrity �
 前刺激間隔生成を検証する。`data-integrity.test.mjs` は4つの taskType、
 旧セッション移送、registry/preset整合、scan/rt CSV列数を検証する。
 
-### 11.2 スモーク（tests/web-smoke.mjs 追加分）
+### 11.2 スモーク（tests/web-smoke.mjs、slot-v1を含む）
 
-1. 起動 → start 表示 → 入力 → home 表示
-2. rhythm-l1 タイル決定 → game 表示・タブバー非表示・走査停止表示
-3. Esc で home へ復帰（aborted セッションが sessions に記録）
-4. fishing 起動 → 1試行 → おわる（taskType=rt, aborted=true）
-5. crane 起動 → X/Y/GRASPで1試行 → おわる（taskType=scan, aborted=true）
-6. 既存タブ（評価・設定）が従来どおり表示される（不退行）
+現行の必須経路は、slot-l1の生成画像読込・1停止・中断保存と、slot-l2の
+4round×3reel完走である。各入力後に試行数が1だけ増え、active reelが
+0→1→2を繰り返すこと、300ms内の追加clickが次リールへ流れないことを、
+1280×900、390×664、834×1194、390×812、844×390で確認する。
+
+1. 起動 → start → 6項目home、短画面では全ページへ到達できる
+2. 「リールを 止める」→ slot-l1/l2を走査とclick-only入力で選べる
+3. slot-l1で生成画像が読み込まれ、1入力で1停止だけ保存される
+4. slot-l1をEsc中断するとpartial trialがaborted=trueで残る
+5. slot-l2で全3本が動き、0→1→2の順を4round繰り返して12件で結果へ進む
+6. 150msシェルdedupe後・300ms課題ガード内の追加入力が次リールを止めない
+7. fishingとcraneの中断保存、gonogo/fishingの無音時データ拒否を維持する
+8. slot CSVと旧rhythm/scan/rt CSV、評価・設定タブを維持する
+9. 全5実寸で横overflow、44px標的、停止線・進捗・CTAの画面外逸脱がない
+10. PWAのサブパス、offline reload、v1→v2更新競合で資産が混在しない
+
+gonogo の correctRejection 演出時刻、reduced-motion、高コントラスト、
+リザルトCTAを含む全画面の実機条件は §11.3 の確認対象であり、上記Webスモークの
+PASSだけを実機合格とは扱わない。
 
 ### 11.3 実機確認チェックリスト（docs に追記）
 
-- 内蔵スピーカーでのキュー再生、サイレントスイッチON時の挙動
-- NeuroNode（Switch Control 経由）入力での L1 プレイとオフセット記録
-- 二重走査が発生しないこと（ゲーム中）
-- crane の X/Y/GRASP 各位相で二重走査が発生しないこと
+- NeuroNode実入力でslot-l1を8停止、slot-l2を左→右12停止し、二重停止しない
+- 実iPadの60/120Hz、縦横、Switch Control、Guided Accessで入力と終了導線が成立する
+- 丸・魚・星・花・鳥・四角を利用者が弁別でき、停止線・activeリールが理解できる
+- 長時間利用で疲労、焦り、余分な入力が増えないか支援者が観察する
+- highContrast、大きい文字、動きを減らす条件で主操作・進捗・結果へ到達できる
+- 残存する聴覚課題は内蔵スピーカーとサイレントスイッチ条件を別途確認する
 
 ---
 
@@ -1031,6 +1254,9 @@ docs/measurement-protocol.md を新設し以下を固定する:
 4. 画面自動ロックは Guided Access ＋ 自動ロックなしで運用。
 5. セッション中の中断（ホーム移動・ロック）はデータ上 aborted となり
   解析から除外されることを支援者に周知。
+6. `measure` と calibration は `visualGuidance=false` /
+   `visualPresentation=instrument` を固定し、未来ノートが描画されないことを
+   条件記録と実機画面の両方で確認する。
 
 ### 14.5 実機確認への追記
 

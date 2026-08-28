@@ -3,8 +3,9 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer as createNetServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
-import { rhythmPresets, storageKey } from "../src/lib/content.js";
+import { colorLegacyPreset, rhythmPresets, storageKey } from "../src/lib/content.js";
 import { resolveTextMode, translate } from "../src/lib/i18n.js";
+import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
 // 持つと、辞書を直したときにテストだけが古い文言を主張して落ちる——あるいは
@@ -65,16 +66,18 @@ const checks = [
   ["loads the main learning app", checkMainApp],
   ["keeps the start press from falling through into a home activity", checkStartInputGuard],
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
-  ["picks rhythm-l1, hides the shell chrome, and records an aborted session on Esc", checkRhythmL1GameFlow],
+  ["finishes color-legacy with progress, result, retry, and home", checkColorCompletionFlow],
+  ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
+  ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
   ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
   ["keeps the result screen free of supporter chrome", checkResultScreenStaysInTheUserWorld],
   ["keeps every scan target visible above the input dock", checkScanFocusStaysVisible],
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
-  ["records real offsets across a full rhythm session", checkRhythmRecordsRealOffsets],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
+  ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
   ["moves between visible feature tabs", checkFeatureTabs],
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
@@ -117,7 +120,12 @@ try {
     try {
       for (const [name, check] of checks) {
         const context = await browser.newContext(project.contextOptions);
-        await context.addInitScript(() => localStorage.clear());
+        await context.addInitScript(() => {
+          const marker = "neuro-smoke-initialized";
+          if (sessionStorage.getItem(marker) === "1") return;
+          localStorage.clear();
+          sessionStorage.setItem(marker, "1");
+        });
         const page = await context.newPage();
         // 実行中に投げられた例外とエラーログを拾う。
         //
@@ -261,7 +269,7 @@ async function checkStartInputGuard(page) {
   await page.mouse.down();
   await page.mouse.up();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 5);
+  await waitForActivityChoices(page, 6);
   await page.waitForTimeout(600);
   assert(
     await page.locator("#homeView").evaluate((view) => view.classList.contains("is-active")),
@@ -286,7 +294,7 @@ async function checkStartToHomeToGameFlow(page) {
   // logs a "switch" event, and advances to home (detailed-design.md §2.2).
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 5);
+  await waitForActivityChoices(page, 6);
 
   // The color-legacy tile is enabled and first by order (content.js gameTiles).
   const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
@@ -338,13 +346,176 @@ async function checkStartToHomeToGameFlow(page) {
     "Expected the ready-screen press to start the session without logging an input"
   );
 
-  // Tapping the full-screen game stage is a switch input for color-legacy:
-  // it changes color/tone and announces via the live region. Click the
-  // center (default) rather than a corner, since #gameProgress/#gameExit are
-  // absolutely positioned in the corners and would intercept a corner click.
+  // Pure tone owns the first ~0.2s. Spy on the actual app-TTS call and both
+  // aria-live regions: checking #liveRegion text alone would miss immediate
+  // speechSynthesis or the polite #gameProgress channel.
   await page.waitForTimeout(200);
-  await page.locator("#gameStage").click();
-  await waitForText(page, "#liveRegion", t("voice.pressed", { name: t("tile.color-legacy.title") }));
+  const logsBeforeTimedFeedback = await readLogCount(page);
+  const earlyFeedback = await page.evaluate(async () => {
+    const stage = document.querySelector("#gameStage");
+    const stageContent = document.querySelector("#gameStageContent");
+    const live = document.querySelector("#liveRegion");
+    const progress = document.querySelector("#gameProgress");
+    let synth = window.speechSynthesis;
+    if (!synth) {
+      synth = {};
+      Object.defineProperty(window, "speechSynthesis", {
+        configurable: true,
+        value: synth,
+      });
+    }
+    if (!("SpeechSynthesisUtterance" in window)) {
+      Object.defineProperty(window, "SpeechSynthesisUtterance", {
+        configurable: true,
+        value: class FakeSpeechSynthesisUtterance {
+          constructor(text) {
+            this.text = text;
+            this.lang = "";
+            this.rate = 1;
+            this.volume = 1;
+          }
+        },
+      });
+    }
+    const speechCalls = [];
+    const cancelCalls = [];
+    Object.defineProperty(synth, "speak", {
+      configurable: true,
+      value: (utterance) => speechCalls.push({
+        text: utterance.text,
+        volume: utterance.volume,
+        at: performance.now(),
+      }),
+    });
+    Object.defineProperty(synth, "cancel", {
+      configurable: true,
+      value: () => cancelCalls.push(performance.now()),
+    });
+    live.textContent = "";
+    const liveEvents = [];
+    const progressEvents = [];
+    const liveObserver = new MutationObserver(() => {
+      liveEvents.push({ text: live.textContent, at: performance.now() });
+    });
+    const progressObserver = new MutationObserver(() => {
+      progressEvents.push({ text: progress.textContent, at: performance.now() });
+    });
+    liveObserver.observe(live, { childList: true, characterData: true, subtree: true });
+    progressObserver.observe(progress, { childList: true, characterData: true, subtree: true });
+    window.__colorSpeechCalls = speechCalls;
+    window.__colorCancelCalls = cancelCalls;
+    window.__colorLiveEvents = liveEvents;
+    window.__colorProgressEvents = progressEvents;
+    window.__colorObservers = [liveObserver, progressObserver];
+
+    const progressBefore = progress.textContent;
+    const clickAt = performance.now();
+    window.__colorClickAt = clickAt;
+    stage.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const feedback = stageContent.querySelector(".color-feedback");
+    const feedbackText = feedback?.cloneNode(true);
+    feedbackText?.querySelectorAll("rt").forEach((reading) => reading.remove());
+    const box = feedback?.getBoundingClientRect();
+    const opacity = feedback ? Number(getComputedStyle(feedback).opacity) : 0;
+    return {
+      speechCount: speechCalls.length,
+      liveCount: liveEvents.length,
+      progressCount: progressEvents.length,
+      progressBefore,
+      progressAfter: progress.textContent,
+      hasFeedbackClass: stageContent.classList.contains("is-feedback"),
+      feedbackText: feedbackText?.textContent?.trim() || "",
+      feedbackOpacity: opacity,
+      feedbackInViewport: Boolean(
+        box && box.width > 0 && box.height > 0 && box.left >= 0 && box.top >= 0 &&
+        box.right <= window.innerWidth && box.bottom <= window.innerHeight
+      ),
+    };
+  });
+  assert(earlyFeedback.speechCount === 0, "App TTS must not start during the pure tone");
+  assert(earlyFeedback.liveCount === 0, "Assertive live region must stay unchanged during the pure tone");
+  assert(earlyFeedback.progressCount === 0, "Polite game progress must stay unchanged during the pure tone");
+  assert(earlyFeedback.progressAfter === earlyFeedback.progressBefore, "Color input must not use live progress");
+  assert(earlyFeedback.hasFeedbackClass, "Expected short visual feedback after color input");
+  assert(earlyFeedback.feedbackText === t("color.changed"), "Visual feedback must say what changed");
+  assert(earlyFeedback.feedbackOpacity >= 0.9, `Expected visible feedback, opacity=${earlyFeedback.feedbackOpacity}`);
+  assert(earlyFeedback.feedbackInViewport, "Visual feedback must stay inside the viewport");
+  assert((await readLogCount(page)) === logsBeforeTimedFeedback + 1, "Timed click must log one input");
+
+  await page.waitForFunction(() => window.__colorSpeechCalls?.length === 1, null, { timeout: 2_000 });
+  const deliveredFeedback = await page.evaluate(() => ({
+    speech: window.__colorSpeechCalls[0],
+    clickAt: window.__colorClickAt,
+    liveCount: window.__colorLiveEvents.length,
+    progressCount: window.__colorProgressEvents.length,
+  }));
+  assert(deliveredFeedback.speech.text === t("color.voice.progress", { n: 4 }), "App TTS must report the change and remaining presses");
+  assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt >= 220, "App TTS started before the tone ended");
+  assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt <= 600, "App TTS arrived too late for a short response");
+  assert(deliveredFeedback.speech.volume === 1, "Normal-mode TTS must retain the existing full-volume default");
+  assert(deliveredFeedback.liveCount === 0, "App TTS ownership must suppress duplicate live-region speech");
+  assert(deliveredFeedback.progressCount === 0, "Color feedback must not leak through polite progress");
+
+  // Once that app utterance has begun, the next accepted input must return
+  // ownership to its pure tone synchronously, not merely cancel a pending timer.
+  const nextInputCancellation = await page.evaluate(() => {
+    const stage = document.querySelector("#gameStage");
+    const before = window.__colorCancelCalls.length;
+    const speechBefore = window.__colorSpeechCalls.length;
+    const clickAt = performance.now();
+    stage.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    return {
+      before,
+      after: window.__colorCancelCalls.length,
+      speechBefore,
+      clickAt,
+    };
+  });
+  assert(
+    nextInputCancellation.after === nextInputCancellation.before + 1,
+    "The next color input must synchronously cancel the in-progress app TTS"
+  );
+  await page.waitForFunction(
+    (previousCount) => window.__colorSpeechCalls?.length === previousCount + 1,
+    nextInputCancellation.speechBefore,
+    { timeout: 2_000 }
+  );
+  const nextSpeech = await page.evaluate(
+    (index) => window.__colorSpeechCalls[index],
+    nextInputCancellation.speechBefore
+  );
+  assert(nextSpeech.at - nextInputCancellation.clickAt >= 220, "Replacement TTS started before its tone ended");
+  assert(nextSpeech.at - nextInputCancellation.clickAt <= 600, "Replacement TTS arrived too late");
+  assert(
+    nextSpeech.text === t("color.voice.progress", { n: 3 }),
+    "Replacement TTS must report the new remaining count"
+  );
+
+  await page.waitForFunction(
+    () => !document.querySelector("#gameStageContent")?.classList.contains("is-feedback"),
+    null,
+    { timeout: 2_000 }
+  );
+  const feedbackEndedAt = await page.evaluate(() => performance.now());
+  assert(feedbackEndedAt - nextInputCancellation.clickAt >= 430, "Visual feedback disappeared too early");
+  assert(feedbackEndedAt - nextInputCancellation.clickAt < 2_000, "Visual feedback stayed on screen too long");
+  await page.waitForTimeout(130);
+  const endedOpacity = await page.locator(".color-feedback").evaluate(
+    (feedback) => Number(getComputedStyle(feedback).opacity)
+  );
+  assert(endedOpacity <= 0.1, `Visual feedback remained visible after its timeout (opacity=${endedOpacity})`);
+
+  // Turning app TTS off must cancel current speech. Later color feedback then
+  // belongs to the live region only.
+  const cancelsBeforeSpeechOff = await page.evaluate(() => window.__colorCancelCalls.length);
+  await page.locator("#speechEnabled").evaluate((input) => {
+    input.checked = false;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  const cancelsAfterSpeechOff = await page.evaluate(() => window.__colorCancelCalls.length);
+  assert(cancelsAfterSpeechOff === cancelsBeforeSpeechOff + 1, "Disabling app TTS must cancel current speech");
+  await page.evaluate(() => window.__colorObservers.forEach((observer) => observer.disconnect()));
 
   // A long physical press produces pointerdown immediately and click only on
   // release. It is still one physical input even when the gap exceeds the
@@ -362,39 +533,265 @@ async function checkStartToHomeToGameFlow(page) {
     (await readLogCount(page)) === logsBeforeLongPress + 1,
     "Expected pointerdown plus delayed click to record exactly one switch input"
   );
-
-  // Switch Control / assistive technologies may emit only a synthetic click
-  // (detail=0) with no pointerdown. That click remains a valid single input.
+  // The game now ends after five presses. Start a fresh session before the
+  // rapid-click and destroy checks so those independent input contracts do not
+  // accidentally consume the completion press.
+  await page.keyboard.press("Escape");
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.waitForTimeout(200);
-  const logsBeforeSyntheticClick = await readLogCount(page);
-  await page.locator("#gameStage").evaluate((target) => {
-    target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+
+  // Switch Control / assistive technologies may emit click-only input. Two
+  // accepted presses 170ms apart are outside shell dedupe but inside the
+  // 240ms speech delay: the first pending announcement must be cancelled.
+  await page.waitForTimeout(200);
+  const logsBeforeRapidClicks = await readLogCount(page);
+  const rapidEarly = await page.evaluate(async () => {
+    const stage = document.querySelector("#gameStage");
+    const live = document.querySelector("#liveRegion");
+    live.textContent = "";
+    window.__colorSpeechCalls.length = 0;
+    const events = [];
+    const observer = new MutationObserver(() => {
+      events.push({ text: live.textContent, at: performance.now() });
+    });
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    window.__rapidColorEvents = events;
+    window.__rapidColorObserver = observer;
+
+    const firstAt = performance.now();
+    stage.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    await new Promise((resolve) => setTimeout(resolve, 170));
+    const secondAt = performance.now();
+    window.__rapidSecondAt = secondAt;
+    stage.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return {
+      firstAt,
+      secondAt,
+      eventCount: events.length,
+      liveText: live.textContent,
+      speechCount: window.__colorSpeechCalls.length,
+    };
   });
-  await page.waitForTimeout(50);
+  assert(rapidEarly.secondAt - rapidEarly.firstAt >= 150, "Rapid clicks must both pass shell dedupe");
+  assert(rapidEarly.eventCount === 0, "No rapid-click announcement may start before the last tone ends");
+  assert(rapidEarly.liveText === "", "Rapid clicks must keep the live region quiet during the tones");
+  assert(rapidEarly.speechCount === 0, "Disabled app TTS must not speak during rapid clicks");
   assert(
-    (await readLogCount(page)) === logsBeforeSyntheticClick + 1,
-    "Expected click-only assistive activation to record one switch input"
+    (await readLogCount(page)) === logsBeforeRapidClicks + 2,
+    "Expected both click-only assistive activations to record"
   );
+  await page.waitForFunction(() => window.__rapidColorEvents?.length === 1, null, { timeout: 2_000 });
+  const rapidDelivered = await page.evaluate(() => ({
+    events: [...window.__rapidColorEvents],
+    secondAt: window.__rapidSecondAt,
+    speechCount: window.__colorSpeechCalls.length,
+  }));
+  assert(rapidDelivered.events[0].text === t("color.voice.progress", { n: 3 }), "Last rapid click must own the remaining-count announcement");
+  assert(rapidDelivered.events[0].at - rapidDelivered.secondAt >= 220, "Rapid announcement started too early");
+  assert(rapidDelivered.events[0].at - rapidDelivered.secondAt <= 600, "Rapid announcement arrived too late");
+  assert(rapidDelivered.speechCount === 0, "Live-region ownership must suppress app TTS");
+  await page.waitForTimeout(200);
+  assert(
+    (await page.evaluate(() => window.__rapidColorEvents.length)) === 1,
+    "Cancelled rapid-click announcement must not fire later"
+  );
+  await page.evaluate(() => window.__rapidColorObserver.disconnect());
 
   // The keyboard fallback (Space) goes through the same input funnel and
-  // reaches the game too (detailed-design.md §3.3). Wait past the dedupe
-  // window again (same reasoning as above).
-  await page.evaluate(() => document.querySelector("#liveRegion").textContent = "");
+  // reaches the game too. Escape immediately destroys the game, so the
+  // pending delayed announcement and visual timer must never fire afterward.
   await page.waitForTimeout(200);
+  await page.evaluate(() => {
+    const live = document.querySelector("#liveRegion");
+    live.textContent = "";
+    const events = [];
+    const observer = new MutationObserver(() => {
+      events.push({ text: live.textContent, at: performance.now() });
+    });
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    window.__destroyColorEvents = events;
+    window.__destroyColorObserver = observer;
+  });
   const logsBeforeRepeatedKey = await readLogCount(page);
   await page.evaluate(() => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, repeat: true }));
   });
   assert((await readLogCount(page)) === logsBeforeRepeatedKey, "Expected repeated keydown to be ignored");
   await page.keyboard.press("Space");
-  await waitForText(page, "#liveRegion", t("voice.pressed", { name: t("tile.color-legacy.title") }));
-
-  // Esc aborts the game and returns to home directly (no result screen for
-  // color-legacy; see games/colorLegacy.js for the design rationale).
   await page.keyboard.press("Escape");
   await waitForClass(page, "#homeView", "is-active");
   await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
+  await page.waitForTimeout(350);
+  assert((await readLogCount(page)) === logsBeforeRepeatedKey + 1, "Space must record exactly one input");
+  const destroyEventTexts = await page.evaluate(() =>
+    window.__destroyColorEvents.map((event) => event.text)
+  );
+  assert(
+    !destroyEventTexts.includes(t("color.voice.progress", { n: 2 })),
+    "destroy() must cancel the pending delayed color announcement"
+  );
+  assert(
+    !(await page.locator("#gameStageContent").evaluate((target) => target.classList.contains("is-feedback"))),
+    "destroy() must clear visual feedback state"
+  );
+  const destroyedOpacity = await page.evaluate(() => {
+    const feedback = document.querySelector("#gameStageContent .color-feedback");
+    return feedback ? Number(getComputedStyle(feedback).opacity) : 0;
+  });
+  assert(destroyedOpacity <= 0.1, `destroy() left visual feedback visible (opacity=${destroyedOpacity})`);
+  await page.evaluate(() => window.__destroyColorObserver.disconnect());
+
+  // Aborting remains distinct from normal completion: Esc returns directly to home.
   await page.locator(".tabbar").waitFor({ state: "hidden" });
+  await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
+}
+/**
+ * Completes the formerly open-ended colour activity and fixes its quality
+ * contract: visible goal and progress, one normal finish, a meaningful result,
+ * a clean retry reset, and the shared route back to the menu.
+ */
+async function checkColorCompletionFlow(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 6);
+  await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
+  await waitForClass(page, "#gameView", "is-active");
+
+  async function beginReadySession() {
+    await page.locator(".game-ready").waitFor({ state: "visible" });
+    await page.waitForTimeout(200);
+    await page.locator("#gameStage").click();
+    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await page.waitForTimeout(200);
+  }
+
+  async function progressSnapshot() {
+    return page.evaluate(() => {
+      const plainText = (selector) => {
+        const source = document.querySelector(selector);
+        const clone = source?.cloneNode(true);
+        clone?.querySelectorAll("rt").forEach((reading) => reading.remove());
+        return clone?.textContent?.trim() || "";
+      };
+      return {
+        total: document.querySelectorAll(".color-progress-dot").length,
+        done: document.querySelectorAll(".color-progress-dot.is-done").length,
+        label: plainText(".color-session-progress .reaction-detail"),
+        feedback: plainText(".color-feedback"),
+        chipColor: document.querySelector(".color-chip")?.style.getPropertyValue("--chip-color").trim() || "",
+        lastDoneColor:
+          [...document.querySelectorAll(".color-progress-dot.is-done")].at(-1)
+            ?.style.getPropertyValue("--dot-color").trim() || "",
+      };
+    });
+  }
+
+  await beginReadySession();
+  const initial = await progressSnapshot();
+  assert(initial.total === colorLegacyPreset.targetPresses, "Color session must show one dot per required press");
+  assert(initial.done === 0, "A new color session must start with zero completed dots");
+  assert(
+    initial.label === t("color.progress", { n: colorLegacyPreset.targetPresses }),
+    "A new color session must state the complete remaining goal"
+  );
+
+  const logsBefore = await readLogCount(page);
+  for (let press = 1; press <= colorLegacyPreset.targetPresses; press += 1) {
+    await page.locator("#gameStage").click();
+    const snapshot = await progressSnapshot();
+    assert(snapshot.done === press, "Expected " + press + " completed color progress dots");
+    assert(
+      snapshot.chipColor === snapshot.lastDoneColor,
+      `Press ${press} must collect the same colour shown in the centre (${snapshot.chipColor} vs ${snapshot.lastDoneColor})`
+    );
+    if (press < colorLegacyPreset.targetPresses) {
+      assert(
+        snapshot.label === t("color.progress", { n: colorLegacyPreset.targetPresses - press }),
+        "Color progress must count down after every accepted press"
+      );
+      assert(snapshot.feedback === t("color.changed"), "Non-final color presses must show the change");
+      await page.waitForTimeout(170);
+    } else {
+      assert(snapshot.label === t("color.progressComplete"), "The fifth press must show visual completion");
+      assert(snapshot.feedback === t("color.complete"), "The fifth press must say that the goal is complete");
+    }
+  }
+  assert(
+    (await readLogCount(page)) === logsBefore + colorLegacyPreset.targetPresses,
+    "A completed color session must log exactly the required number of presses"
+  );
+
+  // The completion card stays on screen briefly. A sixth accepted activation
+  // during that interval must be ignored rather than producing an extra tone/log.
+  await page.waitForTimeout(180);
+  // The new prism is still in its 360ms arrival animation here. Playwright's
+  // actionability wait can outlast the 560ms finish delay and then find the
+  // stage hidden by the result view, although a real switch event is accepted
+  // immediately. Dispatch the same click event directly: this assertion is
+  // about the input guard, not about animation stability.
+  await page.locator("#gameStage").dispatchEvent("click");
+  assert(
+    (await readLogCount(page)) === logsBefore + colorLegacyPreset.targetPresses,
+    "Color completion must ignore presses beyond the fixed goal"
+  );
+
+  await waitForClass(page, "#resultView", "is-active");
+  await page.locator(".completion-result").waitFor({ state: "visible" });
+  assert(
+    await page.locator(".completion-result-title").evaluate(
+      (element, expected) => element.textContent.trim() === expected,
+      t("result.completion.title")
+    ),
+    "Color result must have an explicit completion heading"
+  );
+  assert(
+    await page.locator(".completion-result-summary").evaluate(
+      (element, expected) => {
+        const clone = element.cloneNode(true);
+        clone.querySelectorAll("rt").forEach((reading) => reading.remove());
+        return clone.textContent.trim() === expected;
+      },
+      t("result.completion.summary", { n: colorLegacyPreset.targetPresses })
+    ),
+    "Color result must report the completed press count"
+  );
+  assert(
+    (await page.locator(".color-result-swatch").count()) === colorLegacyPreset.targetPresses,
+    "Color result must retain the five-colour visual history"
+  );
+  assert(
+    (await page.locator("#resultStats").getAttribute("aria-live")) === "off",
+    "App TTS completion must suppress a duplicate result live-region announcement"
+  );
+  const hasFakeResearchSession = await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    return (saved.sessions || []).some((session) => session.gameId === "color-legacy");
+  }, storageKey);
+  assert(!hasFakeResearchSession, "Completion-only color play must not create a fake research taskType session");
+
+  await page.locator("#resultRetry").click();
+  await waitForClass(page, "#gameView", "is-active");
+  await beginReadySession();
+  const retried = await progressSnapshot();
+  assert(retried.done === 0, "Retry must reset color progress to zero");
+  assert(
+    retried.label === t("color.progress", { n: colorLegacyPreset.targetPresses }),
+    "Retry must restore the full five-press goal"
+  );
+
+  for (let press = 0; press < colorLegacyPreset.targetPresses; press += 1) {
+    await page.locator("#gameStage").click();
+    if (press < colorLegacyPreset.targetPresses - 1) await page.waitForTimeout(170);
+  }
+  await waitForClass(page, "#resultView", "is-active");
+  await page.locator("#resultHome").click();
+  await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
 }
 
@@ -541,6 +938,374 @@ async function checkSettingsTabs(page) {
 }
 
 /**
+ * 実機監査P0: iPad Switch Controlとアプリ自前走査を製品設定で同時に
+ * 動かせないこと。WebではOSの青枠そのものを生成できないため、ここでは
+ * アプリ側が完全に黙ることと、OS相当の直接clickでシェルを巡れることを固定する。
+ */
+async function checkIpadSwitchControlMode(page, project) {
+  if (project.name !== "ipad-portrait") return SKIPPED;
+
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await waitForText(page, "#scanState", "走査中");
+
+  const mode = page.locator("#switchControlMode");
+  assert(!(await mode.isChecked()), "Switch Control mode must be explicit and default off");
+  assert((await mode.getAttribute("data-scan")) === null, "App scan must not let a user disable their only scan owner");
+  assert(
+    (await page.locator('#scanInterval[data-scan], #speechVolume[data-scan]').count()) === 0,
+    "Click-only app scanning must not stop on range controls"
+  );
+  // Safe hand-off order: supporter stops app scanning, then enables iPad
+  // Switch Control outside the app, then activates this native checkbox.
+  await page.locator("#autoScan").click();
+  await waitForText(page, "#scanState", "走査停止中");
+  assert((await page.locator(".scan-focus").count()) === 0, "Stopping app scan must clear its yellow focus");
+  await mode.click();
+  await page.waitForFunction(() => document.body.classList.contains("switch-control-mode"));
+  await page.locator("#switchControlModeNotice").waitFor({ state: "visible" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await waitForText(page, "#scanState", "iPad走査を使用");
+
+  assert(await page.locator("#autoScan").isDisabled(), "App auto scan must be locked out in iPad mode");
+  assert(!(await page.locator("#autoScan").isChecked()), "App auto scan must be forced off");
+  assert(await page.locator("#scanInterval").isDisabled(), "Scan speed is meaningless while OS owns scanning");
+  assert(!(await page.locator("#speechEnabled").isChecked()), "App TTS must start off for OS/TTS A-B testing");
+  assert(await page.locator("#speechVolume").isDisabled(), "TTS volume must not be a dead control while TTS is off");
+
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).settings, storageKey);
+  assert(saved.switchControlMode === true, "Switch Control mode must persist");
+  assert(saved.autoScan === false, "Persisted state must not restore both scan owners");
+  assert(saved.speechEnabled === false, "Enabling iPad mode must persist app TTS off initially");
+
+  // Persisted delegation must survive a real loadState() path. The app always
+  // starts on the start screen, but must not revive its timer or dock.
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  await page.waitForFunction(() => document.body.classList.contains("switch-control-mode"));
+  assert(await mode.isChecked(), "Switch Control mode must restore after reload");
+  assert(!(await page.locator("#autoScan").isChecked()), "Reload must preserve app scan off");
+  assert(await page.locator("#autoScan").isDisabled(), "Reloaded delegation must keep app scan locked");
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await waitForText(page, "#scanState", "iPad走査を使用");
+
+  // 手動ボタン・右矢印・自動タイマーのどの入口からも黄色い枠を復活させない。
+  await page.evaluate(() => {
+    document.querySelector("#toggleScan").click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  });
+  await page.waitForTimeout(1_900);
+  assert((await page.locator(".scan-focus").count()) === 0, "No app scan focus may survive in iPad mode");
+  await waitForText(page, "#scanState", "iPad走査を使用");
+
+  // Reloaded start -> home also uses click-only input. Compare the exact home
+  // choice order at full width and a 507px Split View approximation.
+  await page.locator("#startStage").evaluate((target) => {
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+  });
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await waitForActivityChoices(page, 6);
+  const fullLayout = await collectActivityLayout(page, { checkViewport: true });
+  const fullWidthTitles = fullLayout.titles;
+  assert(
+    fullWidthTitles.length === 6,
+    "Expected all six home choices, got " + fullWidthTitles.join(", ")
+  );
+
+  await page.setViewportSize({ width: 507, height: 1194 });
+  // Width breakpoints re-render the home list; wait until layout and bounding
+  // boxes reflect the Split View dimensions before taking the snapshot.
+  await page.waitForTimeout(200);
+  const splitLayout = await collectActivityLayout(page, { checkViewport: true });
+  const splitViewTitles = splitLayout.titles;
+  assert(
+    JSON.stringify(splitViewTitles) === JSON.stringify(fullWidthTitles),
+    `Split View changed home order: ${splitViewTitles.join(", ")}`
+  );
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  assert(overflow <= 2, `Switch Control Split View overflowed horizontally by ${overflow}px`);
+
+  // Representative click-only game round trip while delegation stays on.
+  const firstTile = page.locator("#gameTileGrid .game-tile:not([disabled])").first();
+  await firstTile.evaluate((target) => {
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+  });
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.waitForTimeout(200);
+  await page.locator("#gameStage").evaluate((target) => {
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+  });
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await page.locator("#gameExit").evaluate((target) => {
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+  });
+  await waitForClass(page, "#homeView", "is-active");
+  await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await page.waitForTimeout(400);
+  assert((await page.locator(".scan-focus").count()) === 0, "Game return must not revive app scan");
+  await waitForText(page, "#scanState", "iPad走査を使用");
+
+  // OS項目走査が送るclick-only入力相当で支援者画面へ戻れる。
+  await page.locator("#homeSupporterMenu").evaluate((target) => {
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+  });
+  await waitForClass(page, "#settings", "is-active");
+
+  // 2x2比較用に、モード中でも支援者がアプリTTSを明示的にONへ戻せる。
+  await openSettingsTab(page, "senses");
+  await page.locator("#speechEnabled").click();
+  assert(await page.locator("#speechEnabled").isChecked(), "Supporter must be able to enable app TTS for A-B testing");
+  assert(!(await page.locator("#speechVolume").isDisabled()), "TTS volume must unlock with app TTS");
+  await page.locator("#speechVolume").evaluate((input) => {
+    input.value = "0.3";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const speechVolume = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)).settings.speechVolume,
+    storageKey
+  );
+  assert(speechVolume === 0.3, `Expected adjustable TTS volume 0.3, got ${speechVolume}`);
+
+  // 解除しても自前走査を勝手に再開しない。支援者が明示的にONにしたときだけ再開。
+  await openSettingsTab(page, "basic");
+  await mode.click();
+  await page.waitForFunction(() => !document.body.classList.contains("switch-control-mode"));
+  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  assert(!(await page.locator("#autoScan").isDisabled()), "Auto scan control must unlock after delegation ends");
+  assert(!(await page.locator("#autoScan").isChecked()), "Auto scan must remain stopped until explicitly enabled");
+  await page.locator("#autoScan").click();
+  await waitForText(page, "#scanState", "走査中");
+
+  // Safe operating instructions stop app scanning first, but the product
+  // invariant must also survive an incorrect order. Exercise the actual UI
+  // transition from autoScan=true so the mode handler cannot become a no-op.
+  await page.waitForFunction(() => document.querySelectorAll(".scan-focus").length > 0);
+  await mode.click();
+  await page.waitForFunction(() => document.body.classList.contains("switch-control-mode"));
+  assert(!(await page.locator("#autoScan").isChecked()), "Mode activation must force a running app scan off");
+  assert(await page.locator("#autoScan").isDisabled(), "Forced delegation must lock the app scan control");
+  assert((await page.locator(".scan-focus").count()) === 0, "Forced delegation must clear the active yellow focus");
+  await waitForText(page, "#scanState", "iPad走査を使用");
+  const forcedSaved = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)).settings,
+    storageKey
+  );
+  assert(forcedSaved.switchControlMode === true, "Forced delegation must persist the mode");
+  assert(forcedSaved.autoScan === false, "Forced delegation must persist app scanning off");
+}
+
+/**
+ * slot-v1 L1 の実画面契約。生成画像が読み込まれ、1回の入力で1試行だけ
+ * 記録されたあと、Esc 中断が partial session として失われず残ることを確認する。
+ */
+async function checkSlotL1GameFlow(page) {
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 6);
+
+  await openActivity(page, t("tile.slot-corner.title"));
+  await waitForActivityChoices(page, 3);
+  await openActivity(page, t("tile.slot-l1.title"));
+
+  await waitForClass(page, "#gameView", "is-active");
+  await page.waitForFunction(() => document.body.classList.contains("game-mode"));
+  await page.locator(".tabbar").waitFor({ state: "hidden" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
+  assert(
+    (await page.locator(".slot-reel").count()) === 1,
+    "slot-l1 must render exactly one reel"
+  );
+
+  const imageReady = await page.locator(".slot-symbol-guide img").evaluate(
+    (image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
+  );
+  assert(imageReady, "Generated six-symbol guide PNG must load in the actual game");
+
+  const beforeOffset = await page.locator(".slot-reel-track").evaluate(
+    (track) => track.style.getPropertyValue("--slot-track-offset")
+  );
+  await page.waitForTimeout(140);
+  const afterOffset = await page.locator(".slot-reel-track").evaluate(
+    (track) => track.style.getPropertyValue("--slot-track-offset")
+  );
+  assert(
+    beforeOffset !== afterOffset,
+    "The reel must visibly move before stopping (" + beforeOffset + " -> " + afterOffset + ")"
+  );
+
+  const visibleCopy = await page.locator("#gameStageContent").innerText();
+  assert(
+    !/(?:BET|JACKPOT|CASINO|COIN|BAR|777|コイン|賭け|大当たり)/iu.test(visibleCopy),
+    "The assistive task must not show gambling vocabulary: " + visibleCopy.replace(/\s+/g, " ")
+  );
+
+  await page.waitForTimeout(330);
+  await page.locator("#gameStage").click();
+  await page.waitForFunction(
+    ({ key }) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])]
+        .reverse()
+        .find((item) => item.gameId === "slot-l1");
+      return session?.trials?.length === 1;
+    },
+    { key: storageKey }
+  );
+
+  await page.keyboard.press("Escape");
+  await waitForClass(page, "#homeView", "is-active");
+  await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
+
+  const session = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return [...(state.sessions || [])]
+      .reverse()
+      .find((item) => item.gameId === "slot-l1") || null;
+  }, storageKey);
+
+  assert(session?.taskType === "slot", "slot-l1 must persist taskType=slot");
+  assert(session?.protocolVersion === "slot-v1", "slot-l1 must persist protocolVersion=slot-v1");
+  assert(session?.engineVersion === 1, "slot-l1 must persist engineVersion=1");
+  assert(session?.aborted === true && session?.finished === false, "Esc must persist an aborted partial slot session");
+  assert(session?.trials?.length === 1, "One accepted L1 input must produce exactly one stop row");
+  assert(session?.config?.reelCount === 1, "slot-l1 must persist reelCount=1");
+}
+
+/**
+ * slot-v1 L2 の逐次停止を最後まで通す。各入力後の保存件数と active reel を
+ * 1件ずつ追い、1入力が2本以上を止めないこと、左→右、ラウンド遷移、
+ * 300msガード、完了結果のすべてを実ブラウザで固定する。
+ */
+async function checkSlotSequentialFlow(page) {
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 6);
+
+  await openActivity(page, t("tile.slot-corner.title"));
+  await waitForActivityChoices(page, 3);
+  await openActivity(page, t("tile.slot-l2.title"));
+
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await page.locator(".slot-task[data-game-id='slot-l2']").waitFor({ state: "visible" });
+  assert(
+    (await page.locator(".slot-reel").count()) === 3,
+    "slot-l2 must render exactly three reels"
+  );
+
+  const beforeOffsets = await page.locator(".slot-reel-track").evaluateAll((tracks) =>
+    tracks.map((track) => track.style.getPropertyValue("--slot-track-offset"))
+  );
+  await page.waitForTimeout(140);
+  const afterOffsets = await page.locator(".slot-reel-track").evaluateAll((tracks) =>
+    tracks.map((track) => track.style.getPropertyValue("--slot-track-offset"))
+  );
+  assert(
+    afterOffsets.every((offset, index) => offset !== beforeOffsets[index]),
+    "All three reels must move before sequential stopping (" +
+      beforeOffsets.join(", ") + " -> " + afterOffsets.join(", ") + ")"
+  );
+
+  const totalStops = 12;
+  for (let expected = 0; expected < totalStops; expected += 1) {
+    const expectedReel = expected % 3;
+    await page.waitForFunction(
+      (reelIndex) =>
+        Number(document.querySelector(".slot-reel.is-active")?.dataset.slotReel) === reelIndex,
+      expectedReel
+    );
+
+    // beginRound / advanceAfterStop の300msガードを抜けてから、人が押せる間隔で入力。
+    await page.waitForTimeout(330);
+    await page.locator("#gameStage").click();
+
+    await page.waitForFunction(
+      ({ key, count }) => {
+        const state = JSON.parse(localStorage.getItem(key) || "{}");
+        const session = [...(state.sessions || [])]
+          .reverse()
+          .find((item) => item.gameId === "slot-l2");
+        return session?.trials?.length === count;
+      },
+      { key: storageKey, count: expected + 1 }
+    );
+
+    if (expected === 0) {
+      // シェル側150ms dedupeは抜けるが、課題側300msガード内に収める。
+      // detail=0 は Switch Control / AT の click-only 入力と同じ入口を通る。
+      await page.waitForTimeout(180);
+      await page.locator("#gameStage").evaluate((stage) => {
+        stage.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+      });
+      await page.waitForTimeout(80);
+      const duplicateState = await page.evaluate((key) => {
+        const state = JSON.parse(localStorage.getItem(key) || "{}");
+        return [...(state.sessions || [])]
+          .reverse()
+          .find((item) => item.gameId === "slot-l2") || null;
+      }, storageKey);
+      assert(
+        duplicateState?.trials?.length === 1,
+        "A guarded duplicate must not stop the next reel"
+      );
+      assert(
+        duplicateState?.summary?.extraInputCount >= 1,
+        "A guarded duplicate must be counted explicitly"
+      );
+    }
+  }
+
+  await waitForClass(page, "#resultView", "is-active");
+  await page.locator(".slot-result").waitFor({ state: "visible" });
+
+  const session = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return [...(state.sessions || [])]
+      .reverse()
+      .find((item) => item.gameId === "slot-l2") || null;
+  }, storageKey);
+
+  assert(session?.taskType === "slot", "slot-l2 must persist taskType=slot");
+  assert(session?.protocolVersion === "slot-v1", "slot-l2 must persist protocolVersion=slot-v1");
+  assert(session?.finished === true && session?.aborted === false, "slot-l2 must finish normally");
+  assert(session?.trials?.length === totalStops, "Expected " + totalStops + " stop rows");
+  assert(session?.config?.rounds === 4 && session?.config?.reelCount === 3, "slot-l2 must keep the 4x3 protocol");
+
+  const positions = (session?.trials || []).map(
+    (trial) => trial.roundIndex + ":" + trial.reelIndex
+  );
+  assert(
+    new Set(positions).size === totalStops,
+    "Every round/reel position must be unique, got " + positions.join(", ")
+  );
+  positions.forEach((position, index) => {
+    const expectedPosition = Math.floor(index / 3) + ":" + (index % 3);
+    assert(
+      position === expectedPosition,
+      "Stops must stay left-to-right; expected " + expectedPosition + ", got " + position
+    );
+  });
+  assert(
+    session?.summary?.extraInputCount >= 1,
+    "Completed summary must retain the guarded extra input"
+  );
+}
+
+/**
  * P5-1 (detailed-design.md §11.2 items 2-3): pick the rhythm-l1 tile, confirm
  * the game screen hides the shell chrome and stops scanning the same way
  * color-legacy does, then abort with Esc and confirm the shell returns to
@@ -552,7 +1317,7 @@ async function checkRhythmL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 5);
+  await waitForActivityChoices(page, 6);
 
   await openActivity(page, "リズム");
   await waitForActivityChoices(page, 4);
@@ -632,6 +1397,393 @@ async function checkRhythmL1GameFlow(page) {
     );
   }, storageKey);
   assert(hasAbortedSession, "Expected an aborted rhythm-l1 session in state.sessions");
+}
+
+/**
+ * 通常練習のゲーム版面と、measure / calibration の計器盤を同じDOM契約で固定する。
+ *
+ * 音の無いWebKitではリズム課題自体を開始しないのが正しいため、AudioContextが
+ * 使えるデスクトップChromiumだけで行う。ここで見る「未来ノート0件」は hidden
+ * では足りない。測定中にCSSが外れたときも予告が現れないよう、ノート要素そのものを
+ * 作らないことまで確認する。
+ */
+async function checkRhythmVisualProfiles(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  const audioAvailable = await page.evaluate(
+    () => Boolean(window.AudioContext || window.webkitAudioContext)
+  );
+  if (!audioAvailable) return SKIPPED;
+
+  const practiceThemes = [];
+
+  async function launchPracticeTask(name) {
+    await waitForClass(page, "#homeView", "is-active");
+    await openActivity(page, t("tile.rhythm-corner.title"));
+    await waitForActivityChoices(page, 4);
+    await openActivity(page, name);
+    await startReadyRhythm();
+  }
+
+  async function startReadyRhythm() {
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator(".game-ready").waitFor({ state: "visible" });
+    // タイルを選んだ物理入力と、開始のひと押しを同じ入力としてdedupeしない。
+    await page.waitForTimeout(180);
+    await page.locator("#gameStage").click();
+    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await page.locator("#gameStageContent[data-rhythm-profile]").waitFor({ state: "visible" });
+  }
+
+  async function rhythmSnapshot(expectedProfile, expectedTheme) {
+    const stage = page.locator("#gameStageContent");
+    await page.waitForFunction(
+      ({ profile, theme }) => {
+        const target = document.querySelector("#gameStageContent");
+        return target?.dataset.rhythmProfile === profile && target?.dataset.rhythmTheme === theme;
+      },
+      { profile: expectedProfile, theme: expectedTheme }
+    );
+    await page.locator(".rhythm-note-layer").waitFor({ state: "attached" });
+
+    if (expectedProfile === "lane") {
+      await page.waitForFunction(
+        () => document.querySelectorAll(".rhythm-note-layer .rhythm-note").length > 0
+      );
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll(".rhythm-note-layer .rhythm-note")].some((note) => {
+          const rect = note.getBoundingClientRect();
+          return !note.hidden && rect.width > 0 && rect.height > 0;
+        })
+      );
+    } else {
+      // mount直後の最初のrAFで静止値を書き込む。空のstyleを先に読むと、
+      // 実装ではなくテストの競合で不安定になる。
+      await page.waitForFunction(
+        () => document.querySelector(".rhythm-pulse")?.style.transform === "scale(0.93)"
+      );
+    }
+
+    const snapshot = await stage.evaluate((target) => {
+      const notes = [...target.querySelectorAll(".rhythm-note-layer .rhythm-note")];
+      const visibleNotes = notes.filter((note) => {
+        const rect = note.getBoundingClientRect();
+        const style = getComputedStyle(note);
+        return !note.hidden && style.display !== "none" && rect.width > 0 && rect.height > 0;
+      });
+      const paintedHiddenNotes = notes.filter((note) => {
+        const rect = note.getBoundingClientRect();
+        const style = getComputedStyle(note);
+        return note.hidden && style.display !== "none" && rect.width > 0 && rect.height > 0;
+      });
+      const world = target.querySelector(".rhythm-world");
+      const instrument = target.querySelector(".rhythm-instrument-face");
+      const instrumentRect = instrument?.getBoundingClientRect();
+      return {
+        profile: target.dataset.rhythmProfile,
+        theme: target.dataset.rhythmTheme,
+        icon: target.querySelector(".rhythm-cabinet-icon i")?.getAttribute("class") || "",
+        background: world ? getComputedStyle(world).backgroundImage : "",
+        noteLayerCount: target.querySelectorAll(".rhythm-note-layer").length,
+        noteCount: notes.length,
+        visibleNoteCount: visibleNotes.length,
+        paintedHiddenNoteCount: paintedHiddenNotes.length,
+        pulseInlineTransform: target.querySelector(".rhythm-pulse")?.style.transform || "",
+        instrumentVisible: Boolean(
+          instrument &&
+          getComputedStyle(instrument).display !== "none" &&
+          instrumentRect &&
+          instrumentRect.width > 0 &&
+          instrumentRect.height > 0
+        ),
+      };
+    });
+
+    assert(snapshot.profile === expectedProfile, `${expectedTheme}: expected ${expectedProfile}, got ${snapshot.profile}`);
+    assert(snapshot.theme === expectedTheme, `Expected rhythm theme ${expectedTheme}, got ${snapshot.theme}`);
+    assert(snapshot.noteLayerCount === 1, `${expectedTheme}: expected exactly one persistent note layer`);
+    assert(
+      snapshot.paintedHiddenNoteCount === 0,
+      `${expectedTheme}: hidden future notes must not be painted; found ${snapshot.paintedHiddenNoteCount}`
+    );
+    if (expectedProfile === "lane") {
+      assert(snapshot.noteCount > 0, `${expectedTheme}: guided practice must create future notes`);
+      assert(snapshot.visibleNoteCount > 0, `${expectedTheme}: at least one future note must be visible`);
+      assert(!snapshot.instrumentVisible, `${expectedTheme}: practice lane must not show the instrument face`);
+    } else {
+      assert(snapshot.noteCount === 0, `${expectedTheme}: measurement must not create future-note elements`);
+      assert(snapshot.visibleNoteCount === 0, `${expectedTheme}: measurement must expose zero visible future notes`);
+      assert(snapshot.instrumentVisible, `${expectedTheme}: measurement must show the finished instrument face`);
+      assert(
+        snapshot.pulseInlineTransform === "scale(0.93)",
+        `${expectedTheme}: measurement instrument must keep its pulse static, got ${snapshot.pulseInlineTransform}`
+      );
+    }
+    return snapshot;
+  }
+
+  async function abortToLobby() {
+    await page.keyboard.press("Escape");
+    await waitForClass(page, "#homeView", "is-active");
+  }
+
+  async function assertLandscapeCabinetFits() {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.waitForTimeout(120);
+    const layout = await page.evaluate(() => {
+      const selectors = [
+        "#gameStage",
+        "#gameProgress",
+        "#gameExit",
+        ".rhythm-cabinet",
+        ".rhythm-main-display",
+        ".rhythm-console",
+      ];
+      const boxes = Object.fromEntries(
+        selectors.map((selector) => {
+          const rect = document.querySelector(selector)?.getBoundingClientRect();
+          return [
+            selector,
+            rect
+              ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
+              : null,
+          ];
+        })
+      );
+      return {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+        boxes,
+      };
+    });
+    assert(
+      layout.scrollWidth <= layout.width + 2,
+      `Rhythm landscape must not overflow horizontally: scrollWidth=${layout.scrollWidth}, viewport=${layout.width}`
+    );
+    Object.entries(layout.boxes).forEach(([selector, box]) => {
+      assert(box, `${selector} must have a bounding box at 844x390`);
+      assert(box.width > 0 && box.height > 0, `${selector} must remain visible at 844x390`);
+      assert(
+        box.left >= -2 && box.top >= -2 && box.right <= layout.width + 2 && box.bottom <= layout.height + 2,
+        `${selector} left the 844x390 viewport: ${JSON.stringify(box)}`
+      );
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.waitForTimeout(120);
+  }
+
+  async function assertNarrowConsoleFits(width) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.waitForTimeout(120);
+    const layout = await page.evaluate(() => {
+      const consoleEl = document.querySelector(".rhythm-console");
+      const consoleRect = consoleEl?.getBoundingClientRect();
+      const children = consoleEl
+        ? [...consoleEl.children].map((child) => {
+            const rect = child.getBoundingClientRect();
+            return {
+              className: child.className,
+              display: getComputedStyle(child).display,
+              left: rect.left,
+              right: rect.right,
+              width: rect.width,
+            };
+          })
+        : [];
+      return {
+        viewportWidth: window.innerWidth,
+        consoleRect: consoleRect
+          ? { left: consoleRect.left, right: consoleRect.right, width: consoleRect.width }
+          : null,
+        children,
+      };
+    });
+    assert(layout.consoleRect, `Rhythm console must exist at ${width}px`);
+    assert(layout.children.length === 3, `Rhythm console must keep all three panels at ${width}px`);
+    layout.children.forEach((child) => {
+      assert(child.display !== "none" && child.width > 0, `${child.className} disappeared at ${width}px`);
+      assert(
+        child.left >= layout.consoleRect.left - 2 && child.right <= layout.consoleRect.right + 2,
+        `${child.className} was clipped by the console at ${width}px: ${JSON.stringify(child)}`
+      );
+    });
+    const main = layout.children.find((child) => String(child.className).includes("rhythm-console-main"));
+    assert(main?.width >= 86, `Offset scale became unreadably narrow at ${width}px: ${main?.width}`);
+  }
+
+  async function assertShortRhythmComposition(width, height) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(120);
+    const layout = await page.evaluate(() => {
+      const rectOf = (selector) => {
+        const element = document.querySelector(selector);
+        const rect = element?.getBoundingClientRect();
+        return element && rect
+          ? {
+              display: getComputedStyle(element).display,
+              left: rect.left,
+              top: rect.top,
+              right: rect.right,
+              bottom: rect.bottom,
+              width: rect.width,
+              height: rect.height,
+            }
+          : null;
+      };
+      const consoleEl = document.querySelector(".rhythm-console");
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+        cabinet: rectOf(".rhythm-cabinet"),
+        header: rectOf(".rhythm-cabinet-header"),
+        playfield: rectOf(".rhythm-playfield"),
+        main: rectOf(".rhythm-main-display"),
+        console: rectOf(".rhythm-console"),
+        instruction: rectOf(".rhythm-stage-instruction"),
+        progress: rectOf("#gameProgress"),
+        exit: rectOf("#gameExit"),
+        consoleChildren: consoleEl
+          ? [...consoleEl.children].map((child) => {
+              const rect = child.getBoundingClientRect();
+              return { left: rect.left, right: rect.right, width: rect.width };
+            })
+          : [],
+      };
+    });
+    const { cabinet, header, playfield, main, console: consoleBox, instruction } = layout;
+    assert(layout.scrollWidth <= width + 2, `Rhythm must not overflow at ${width}x${height}`);
+    [cabinet, header, playfield, main, consoleBox, layout.progress, layout.exit].forEach((box) => {
+      assert(box && box.width > 0 && box.height > 0, `Rhythm structure disappeared at ${width}x${height}`);
+      assert(
+        box.left >= -2 && box.top >= -2 && box.right <= width + 2 && box.bottom <= height + 2,
+        `Rhythm structure left ${width}x${height}: ${JSON.stringify(box)}`
+      );
+    });
+    assert(header.bottom <= playfield.top + 2, `Header overlaps playfield at ${width}x${height}`);
+    assert(playfield.bottom <= consoleBox.top + 2, `Playfield overlaps console at ${width}x${height}`);
+    assert(
+      main.top >= playfield.top - 2 && main.bottom <= playfield.bottom + 2,
+      `Main display is clipped by playfield at ${width}x${height}: ${JSON.stringify({ main, playfield })}`
+    );
+    if (instruction?.display !== "none") {
+      assert(consoleBox.bottom <= instruction.top + 2, `Console overlaps instruction at ${width}x${height}`);
+      assert(instruction.bottom <= cabinet.bottom + 2, `Instruction is clipped at ${width}x${height}`);
+    }
+    assert(layout.consoleChildren.length === 3, `Console lost a panel at ${width}x${height}`);
+    layout.consoleChildren.forEach((child) => {
+      assert(child.width > 0, `Console child disappeared at ${width}x${height}`);
+      assert(
+        child.left >= consoleBox.left - 2 && child.right <= consoleBox.right + 2,
+        `Console child was clipped at ${width}x${height}: ${JSON.stringify(child)}`
+      );
+    });
+  }
+
+  async function assertShortColorComposition(width, height) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(120);
+    const layout = await page.evaluate(() => {
+      const rectOf = (selector) => {
+        const rect = document.querySelector(selector)?.getBoundingClientRect();
+        return rect
+          ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
+          : null;
+      };
+      return {
+        chip: rectOf(".color-chip"),
+        progress: rectOf(".color-session-progress"),
+        hud: rectOf(".color-stage-hud"),
+        exit: rectOf("#gameExit"),
+        gameProgress: rectOf("#gameProgress"),
+        scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+      };
+    });
+    assert(layout.scrollWidth <= width + 2, `Colour stage must not overflow at ${width}x${height}`);
+    [layout.chip, layout.progress, layout.hud, layout.exit, layout.gameProgress].forEach((box) => {
+      assert(box && box.width > 0 && box.height > 0, `Colour structure disappeared at ${width}x${height}`);
+      assert(
+        box.left >= -2 && box.top >= -2 && box.right <= width + 2 && box.bottom <= height + 2,
+        `Colour structure left ${width}x${height}: ${JSON.stringify(box)}`
+      );
+    });
+    assert(
+      layout.chip.bottom <= layout.progress.top + 2,
+      `Colour prism overlaps progress at ${width}x${height}: ${JSON.stringify(layout)}`
+    );
+  }
+
+  // 新規利用者は、支援者が設定を触らなくても通常練習のレーンから始まる。
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  const freshSettings = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key) || "{}").settings || {},
+    storageKey
+  );
+  assert(freshSettings.visualGuidance === true, "Fresh practice must default visualGuidance to true");
+  assert(freshSettings.difficultyMode === "practice", "Fresh state must begin in practice mode");
+
+  await launchPracticeTask(t("tile.rhythm-l1.title"));
+  practiceThemes.push(await rhythmSnapshot("lane", "rhythm-l1"));
+  await assertLandscapeCabinetFits();
+  await assertNarrowConsoleFits(390);
+  await assertNarrowConsoleFits(507);
+  await assertShortRhythmComposition(619, 390);
+  await assertShortRhythmComposition(568, 320);
+  await assertShortRhythmComposition(422, 195);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForTimeout(120);
+  await abortToLobby();
+
+  await openActivity(page, t("tile.color-legacy.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.waitForTimeout(180);
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await page.locator("#gameStageContent.module-color").waitFor({ state: "visible" });
+  await assertShortColorComposition(619, 390);
+  await assertShortColorComposition(568, 320);
+  await assertShortColorComposition(422, 195);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForTimeout(120);
+  await abortToLobby();
+
+  await launchPracticeTask(t("tile.rhythm-l2.title"));
+  practiceThemes.push(await rhythmSnapshot("lane", "rhythm-l2"));
+  await abortToLobby();
+
+  await launchPracticeTask(t("tile.gonogo.title"));
+  practiceThemes.push(await rhythmSnapshot("lane", "gonogo"));
+  await abortToLobby();
+
+  // 保存値がONのままでも、measureは実効値をOFFへ固定して計器盤にする。
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key));
+    state.settings.difficultyMode = "measure";
+    state.settings.visualGuidance = true;
+    localStorage.setItem(key, JSON.stringify(state));
+  }, storageKey);
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await launchPracticeTask(t("tile.rhythm-l1.title"));
+  await rhythmSnapshot("instrument", "rhythm-l1");
+  await abortToLobby();
+
+  // calibrationは支援者画面から起動する専用手順。設定値に関係なくinstrument。
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await openSettingsTab(page, "measure");
+  await page.locator("#startCalibration").click();
+  await startReadyRhythm();
+  const calibrationTheme = await rhythmSnapshot("instrument", "calibration");
+
+  const allThemes = [...practiceThemes, calibrationTheme];
+  assert(new Set(allThemes.map((item) => item.theme)).size === 4, "All four rhythm games need distinct theme identifiers");
+  assert(new Set(allThemes.map((item) => item.icon)).size === 4, "All four rhythm games need distinct cabinet icons");
+  assert(new Set(allThemes.map((item) => item.background)).size === 4, "All four rhythm games need distinct rendered worlds");
 }
 
 async function checkFishingGameFlow(page) {
@@ -848,6 +2000,10 @@ async function checkResultScreenStaysInTheUserWorld(page) {
   }
 
   await waitForClass(page, "#resultView", "is-active");
+  assert(
+    (await page.locator("#resultStats").getAttribute("aria-live")) === "off",
+    "App TTS ownership must suppress duplicate result live-region speech"
+  );
 
   // 支援者のタブバーは出ない。
   await page.locator(".tabbar").waitFor({ state: "hidden" });
@@ -878,7 +2034,7 @@ async function checkScanFocusStaysVisible(page, project) {
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 5);
+  await waitForActivityChoices(page, 6);
 
   const tiles = await page.locator("#gameTileGrid .game-tile").count();
   for (let index = 0; index < tiles; index += 1) {
@@ -1111,7 +2267,7 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
   await page.reload();
 
   for (const [corner, task] of [
-    [null, "リズム"],
+    [null, t("tile.gonogo.title")],
     ["さかなつり", "アタリで釣る"],
   ]) {
     await page.locator("#startStage").click();
@@ -1121,7 +2277,6 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
       await openActivity(page, task);
     } else {
       await openActivity(page, task);
-      await openActivity(page, "リズム 練習");
     }
     await waitForClass(page, "#gameView", "is-active");
 
@@ -1215,6 +2370,20 @@ async function checkRhythmRecordsRealOffsets(page, project) {
     if (wait > 0) await page.waitForTimeout(wait);
     await page.locator("#gameStage").click({ position: { x: 400, y: 300 } });
   }
+
+  // 最後の判定も、同じJSタスク内で結果へ消さず、利用者が読める時間を残す。
+  await page.waitForFunction(
+    () => (document.querySelector(".rhythm-judgment strong")?.textContent || "").trim().length > 0
+  );
+  assert(
+    await page.locator("#gameView").evaluate((element) => element.classList.contains("is-active")),
+    "The final rhythm judgment must remain on the game screen before the result transition"
+  );
+  await page.waitForTimeout(Math.max(120, RHYTHM_FINAL_FEEDBACK_MS - 180));
+  assert(
+    await page.locator("#gameView").evaluate((element) => element.classList.contains("is-active")),
+    "The final rhythm feedback must remain visible for a perceivable interval"
+  );
 
   await waitForClass(page, "#resultView", "is-active");
   const session = await page.evaluate((key) => {
@@ -1388,8 +2557,9 @@ async function checkResearcherModeTabsNoRegression(page) {
   await waitForClass(page, "#evaluation", "is-active");
   await page.locator("#participantId").waitFor({ state: "visible" });
   await page.locator("#exportEvaluationCsv").waitFor({ state: "visible" });
-  // P3-1's rhythm CSV export button lives alongside the pre-existing
-  // evaluation CSV export; both must still be there (no regression).
+  // New slot-v1 export and retained legacy rhythm export both live alongside
+  // the pre-existing evaluation export (no historical data regression).
+  await page.locator("#exportSlotCsv").waitFor({ state: "visible" });
   await page.locator("#exportRhythmCsv").waitFor({ state: "visible" });
   await page.locator("#exportScanCsv").waitFor({ state: "visible" });
   await page.locator("#exportRtCsv").waitFor({ state: "visible" });
@@ -1748,7 +2918,12 @@ async function checkIpadAccessibilityLayout(page, project) {
 
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 5);
+  await waitForActivityChoices(page, 6);
+  const homeLayout = await collectActivityLayout(page, { checkViewport: true });
+  assert(
+    homeLayout.titles.length === 6,
+    "Expected all six accessible home choices, got " + homeLayout.titles.join(", ")
+  );
 
   // 設定が実際に画面へ効いていること。チェックボックスが入っていても
   // body へ反映されていなければ、以下の寸法検査は素の表示を測ってしまう。
@@ -1790,7 +2965,7 @@ async function checkIpadAccessibilityLayout(page, project) {
   //
   // 代わりにここで守るのは、説明を出したことで壊れうる2つ:
   //   1. 説明が見出しより目立たないこと（どちらが選ぶ手がかりか分からなくなる）
-  //   2. 説明のぶんで行が伸びていないこと（5行が入力ドックの上に収まる、
+  //   2. 説明のぶんで行が伸びていないこと（現在ページが入力ドックの上に収まる、
   //      下の lastBottom <= dockTop と対になる）
   const tileNaming = await page.evaluate(() =>
     [...document.querySelectorAll("#gameTileGrid .game-tile")].map((tile) => {
@@ -1810,6 +2985,7 @@ async function checkIpadAccessibilityLayout(page, project) {
       };
       return {
         name: tile.getAttribute("aria-label") || "",
+        isPager: tile.classList.contains("scan-pager"),
         heading: baseText(heading),
         description: baseText(description),
         descriptionIsVisible: description
@@ -1822,7 +2998,16 @@ async function checkIpadAccessibilityLayout(page, project) {
     })
   );
   // 0件だと以下の forEach が何も検証しないまま通る。
-  assert(tileNaming.length === 5, `Expected 5 activity tiles, got ${tileNaming.length}`);
+  const firstPageActivities = tileNaming.filter((tile) => !tile.isPager);
+  assert(
+    firstPageActivities.length === homeLayout.pages[0].length,
+    "Expected " + homeLayout.pages[0].length +
+      " activities on the first page, got " + firstPageActivities.length
+  );
+  assert(
+    tileNaming.filter((tile) => tile.isPager).length === (homeLayout.pages.length > 1 ? 1 : 0),
+    "A paginated home must expose exactly one reachable next-page control"
+  );
   tileNaming.forEach((tile) => {
     assert(tile.name === tile.heading, `Tile name must stay the short heading, got "${tile.name}"`);
     assert(tile.description.length > 0, `Tile "${tile.name}" must expose its description to AT`);
@@ -1837,7 +3022,7 @@ async function checkIpadAccessibilityLayout(page, project) {
     );
     assert(
       tile.rowHeight <= 200,
-      `Tile "${tile.name}" row grew to ${tile.rowHeight}px; five rows no longer fit above the dock`
+      `Tile "${tile.name}" row grew to ${tile.rowHeight}px; the current page no longer fits above the dock`
     );
   });
 
@@ -1846,7 +3031,7 @@ async function checkIpadAccessibilityLayout(page, project) {
     layout.rowWritingModes.every((mode) => mode === "horizontal-tb"),
     `Expected horizontal activity labels, got ${layout.rowWritingModes.join(", ")}`
   );
-  // 5枚すべてに手が届くこと。判定はアプリと同じ規則にする
+  // 現在ページの全項目に手が届くこと。判定はアプリと同じ規則にする
   // （src/lib/scanPaging.js の SCAN_OVERLAP_TOLERANCE_PX = 24px）。
   //
   // 厳密な「1pxも重ならない」にしていたころ、大きい文字（既定ON）を入れた
@@ -1859,7 +3044,7 @@ async function checkIpadAccessibilityLayout(page, project) {
     layout.lastBottom !== null &&
       layout.dockTop !== null &&
       layout.lastBottom - layout.dockTop <= OVERLAP_TOLERANCE_PX,
-    `Expected all five rows within reach of the dock, got lastBottom=${layout.lastBottom} dockTop=${layout.dockTop}`
+    `Expected every control on the current page within reach of the dock, got lastBottom=${layout.lastBottom} dockTop=${layout.dockTop}`
   );
 }
 
@@ -1926,20 +3111,46 @@ async function openActivity(page, name) {
  * 「隠れている」と読んでしまう。数と中身は必ず一巡して確かめる。
  * 最後に先頭ページへ戻すので、呼んだ側の状態は変わらない。
  */
-async function collectActivityTitles(page) {
+async function collectActivityLayout(page, { checkViewport = false } = {}) {
   const titles = [];
+  const pages = [];
   const pager = page.locator(".game-tile.scan-pager");
   for (let hop = 0; hop < 6; hop += 1) {
-    const shown = await page.evaluate(() =>
-      [...document.querySelectorAll("#gameTileGrid .game-tile:not(.scan-pager)")].map(
-        (tile) => tile.getAttribute("aria-label") || ""
-      )
-    );
-    shown.forEach((title) => {
+    const snapshot = await page.evaluate(() => {
+      const controls = [...document.querySelectorAll("#gameTileGrid .game-tile")];
+      const shown = controls
+        .filter((tile) => !tile.classList.contains("scan-pager"))
+        .map((tile) => tile.getAttribute("aria-label") || "");
+      const outside = controls
+        .filter((control) => {
+          const rect = control.getBoundingClientRect();
+          return (
+            rect.width <= 0 ||
+            rect.height <= 0 ||
+            rect.left < -1 ||
+            rect.top < -1 ||
+            rect.right > window.innerWidth + 1 ||
+            rect.bottom > window.innerHeight + 1
+          );
+        })
+        .map((control) => control.getAttribute("aria-label") || control.textContent.trim());
+      return { shown, outside };
+    });
+    assert(snapshot.shown.length > 0, "Activity page must contain at least one choice");
+    if (checkViewport) {
+      assert(
+        snapshot.outside.length === 0,
+        `Activity controls left the viewport: ${snapshot.outside.join(", ")}`
+      );
+    }
+    pages.push(snapshot.shown);
+    snapshot.shown.forEach((title) => {
       if (!titles.includes(title)) titles.push(title);
     });
     if ((await pager.count()) === 0) break;
-    await pager.click();
+    await pager.evaluate((target) => {
+      target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    });
     await page.waitForTimeout(120);
     // 一周して先頭へ戻ったら終わり。
     const firstOfPage = await page.evaluate(
@@ -1950,7 +3161,11 @@ async function collectActivityTitles(page) {
     );
     if (titles[0] === firstOfPage) break;
   }
-  return titles;
+  return { titles, pages };
+}
+
+async function collectActivityTitles(page) {
+  return (await collectActivityLayout(page)).titles;
 }
 
 async function waitForActivityChoices(page, total) {

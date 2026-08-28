@@ -23,6 +23,19 @@ import { resolveTextMode, speechLangFor } from "./i18n.js";
 
 /** ビート予約の既定包絡（sine, gain 0.05, 約0.18秒で減衰）。detailed-design.md §6.2。 */
 export const DEFAULT_TONE_GAIN = 0.05;
+/** 既存利用者の通常時音量を変えない。Switch ControlモードはTTS自体を既定OFFにする。 */
+export const DEFAULT_SPEECH_VOLUME = 1;
+
+/** SpeechSynthesisUtterance.volume に渡せる安全な範囲へ正規化する。 */
+export function clampSpeechVolume(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_SPEECH_VOLUME;
+  }
+  // 0は speechEnabled=false と役割が重なる。比較試験で「ONなのに無音」を
+  // 作らないよう、設定UIと同じ 0.2〜1.0 に限定する。
+  const clamped = Math.min(Math.max(value, 0.2), 1);
+  return Math.round(clamped * 10) / 10;
+}
 const TONE_DECAY_S = 0.18;
 const TONE_STOP_MARGIN_S = 0.02;
 
@@ -182,7 +195,7 @@ const NOISE_BUFFER_S = 2;
  * @param {() => {speechEnabled: boolean, soundEnabled: boolean}} getSettings
  *   設定の現在値を返す関数（state.settings への遅延参照）
  */
-export function createAudio(getSettings) {
+export function createAudio(getSettings, announce = () => {}) {
   let audioContext;
   let scheduler;
   let noiseBuffer = null;
@@ -204,14 +217,39 @@ export function createAudio(getSettings) {
 
   /** 日本語で読み上げる（speechEnabled が ON のときのみ） */
   function speak(text) {
-    if (!getSettings().speechEnabled || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    // 表記に合わせて読み上げの言語も変える。英語表記のまま日本語音声で
-    // 読ませると、意味の通らない発音になる（src/lib/i18n.js）。
-    utterance.lang = speechLangFor(resolveTextMode(getSettings()));
-    utterance.rate = 0.92;
-    window.speechSynthesis.speak(utterance);
+    const speechSettings = getSettings();
+    const synth = window.speechSynthesis;
+    if (
+      !speechSettings.speechEnabled ||
+      !synth ||
+      typeof synth.speak !== "function" ||
+      typeof globalThis.SpeechSynthesisUtterance !== "function"
+    ) {
+      return false;
+    }
+    try {
+      if (typeof synth.cancel === "function") synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      // 表記に合わせて読み上げの言語も変える。英語表記のまま日本語音声で
+      // 読ませると、意味の通らない発音になる（src/lib/i18n.js）。
+      utterance.lang = speechLangFor(resolveTextMode(speechSettings));
+      utterance.rate = 0.92;
+      // 合図音・効果音を増量せず、相対的に大きかったTTS側を先に調整する。
+      utterance.volume = clampSpeechVolume(speechSettings.speechVolume);
+      synth.speak(utterance);
+      return true;
+    } catch {
+      // 一部のWKWebViewはAPIを公開していても初期化直後に例外を返す。
+      // その場合は所有権をlive regionへ戻し、通知自体を失わない。
+      return false;
+    }
+  }
+
+  /** アプリTTSかlive regionの一方だけに、その回の音声所有権を与える。 */
+  function speakOrAnnounce(spokenText, announcementText = spokenText) {
+    if (speak(spokenText)) return "app-tts";
+    announce(announcementText);
+    return "live-region";
   }
 
   /**
@@ -394,6 +432,7 @@ export function createAudio(getSettings) {
 
   return {
     speak,
+    speakOrAnnounce,
     stopSpeech,
     playTone,
     playToneAt,

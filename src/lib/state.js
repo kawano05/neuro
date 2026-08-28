@@ -27,13 +27,15 @@ import { judgeReaction } from "./games/reaction.js";
 import { DIFFICULTY_MODES } from "./difficultyMode.js";
 import { READINESS_STATES } from "./readinessCheck.js";
 import { SELECTABLE_TEXT_MODES, TEXT_MODES } from "./i18n.js";
+import { sanitizeSlotSession } from "./games/slotState.js";
 
 /**
  * 旧保存キー（P0-0 移行元、detailed-design.md §9.5）。
  * v2 … src/lib 分割版（リファクタリングノート2026-06-10時点）。
  * v1 … App.svelte モノリス版（P0-0 で起動経路を一本化する前の実装）。
- * どちらも削除はせず、v3 が空のときの移行元としてのみ参照する。
+ * いずれも削除せず、v4 が空のときの移行元としてのみ参照する。
  */
+const legacyStorageKeyV3 = "neuronode-prototype-state-v3";
 const legacyStorageKeyV2 = "neuronode-prototype-state-v2";
 const legacyStorageKeyV1 = "neuro-trainer-state-v1";
 
@@ -68,7 +70,13 @@ export const defaultState = {
   settings: {
     scanInterval: 1600,
     autoScan: true,
+    // iPadのSwitch Controlへシェル走査を委譲する明示モード。
+    // 自動検知はネイティブブリッジが必要なので行わず、支援者が切り替える。
+    switchControlMode: false,
     speechEnabled: true,
+    // speechSynthesisの相対音量。通常時は従来相当の1.0を維持し、
+    // Switch Controlモードでは発話自体をいったんOFFにして比較する。
+    speechVolume: 1,
     soundEnabled: true,
     largeText: true,
     highContrast: false,
@@ -86,6 +94,12 @@ export const defaultState = {
     rhythmBpm: null,
     countInBeats: null,
     targetBeats: null,
+    // スロット型課題の練習条件。測定時は difficultyMode.js の slot-v1 固定値を使う。
+    slotCycleMs: 3200,
+    slotToleranceMs: 220,
+    slotL1Rounds: 8,
+    slotL2Rounds: 4,
+
     // UFOキャッチャーの難易度。null のとき content.js の cranePresets を使う
     // （games/crane.js の resolveCraneConfig が優先順位を解決する）。
     // craneSweepMs はアームが端から端まで動く時間、craneToleranceR は床
@@ -103,22 +117,14 @@ export const defaultState = {
     // 配る手がかりとしては正当なので、支援者が必要な回だけONにする。
     // 実際に効いた値は session.config.audioGuidance に残り、走査CSVにも出る。
     craneAudioGuidance: false,
-    // リズム系で、拍について画面から手がかりを出すか
-    // （games/rhythm.js、detailed-design.md §7.4）。ONで2つが同時に効く:
-    //   1. パルス円が次の拍へ向けて「溜める」（＝拍の予告になる）
-    //   2. 押したあと、ずれの目盛りに「はやい/おそい」が出る（＝結果の知識KR）
+    // リズム系で、次の拍を予告するゲーム表示を出すか
+    // （games/rhythm.js / rhythmVisuals.js）。ONなら通常練習はノートレーン、
+    // OFFまたは測定では予告のない計器盤になる。押したあとのずれの目盛りは
+    // 事後フィードバックなので、どちらの版面にも出す。
     //
-    // 既定 OFF。この課題は聴覚キューへの同期を測る計測器なので、素の状態は
-    // 「手がかりは音だけ」でなければならない。上の2つはどちらも視覚から拍の
-    // 情報を足すので、入れたまま測ると rawOffsetMs は「聴覚キューへの入力」
-    // ではなく「聴覚＋視覚キューへの入力」になり、研究上の構成概念が変わる。
-    //
-    // 訓練として使いたい回は支援者が ON にする。自分のずれが見えることは
-    // 上達の手がかりとして強い。ただし運動学習では毎試行のKRが学習を
-    // かえって妨げうる（guidance hypothesis）ことも知られているので、
-    // 既定で配る側にはしない。ふだんの練習では、セッションが終わったあとの
-    // リザルト画面がまとめてずれを見せる（games/gameHost.js）——事後の
-    // まとめなら、測っている最中の行動を変えない。
+    // 既定 ON。ふだんの練習はゲームとしてノートを見ながら取り組めるようにする。
+    // 測定モードでは difficultyMode.js が必ず OFF に解決するため、rawOffsetMs を
+    // 取る回へ予告ノートが混ざることはない。
     //
     // そくてい（calibration）は手順そのものなので、この設定に関わらず常に
     // OFF（games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS と同じ線引き）。
@@ -126,7 +132,7 @@ export const defaultState = {
     // 実際に効いていた値は session.config.visualGuidance に毎回残し、
     // sanitizeRhythmSession でも保持し、リズムCSVにも列として出す。
     // どれか1つでも欠けると、条件の違う回をあとから区別できなくなる。
-    visualGuidance: false,
+    visualGuidance: true,
     // 「そくてい（研究）」か「れんしゅう（訓練）」か（src/lib/difficultyMode.js）。
     //
     // 既定は practice。ふだん使うのは訓練で、測定は支援者が意図して選ぶもの。
@@ -212,11 +218,13 @@ const MAX_EVALUATION_DISTANCES = 1_000;
 const MAX_BASELINE_OFFSET_MS = 5_000;
 const MAX_TRIALS_PER_SESSION = 1_000;
 const MAX_ARCADE_HISTORY = 100;
-const TASK_TYPES = new Set(["sms", "gonogo", "scan", "rt"]);
+const TASK_TYPES = new Set(["sms", "gonogo", "scan", "rt", "slot"]);
 const RHYTHM_GAME_IDS = new Set(["rhythm-l1", "rhythm-l2", "gonogo", "calibration"]);
+const SLOT_GAME_IDS = new Set(["slot-l1", "slot-l2"]);
 const SCAN_GAME_IDS = new Set(["crane"]);
 const RT_GAME_IDS = new Set(["fishing", "fishing-gonogo"]);
 const RHYTHM_MODES = new Set(["cued", "continuous", "gonogo"]);
+const RHYTHM_VISUAL_PRESENTATIONS = new Set(["lane", "instrument"]);
 const RHYTHM_MODE_BY_GAME_ID = new Map([
   ["rhythm-l1", "cued"],
   ["rhythm-l2", "continuous"],
@@ -537,6 +545,10 @@ function hasCompleteRhythmPlan(trials, config) {
 function sanitizeRhythmSession(session, taskType) {
   if (!isRecord(session)) return null;
   const config = isRecord(session.config) ? session.config : {};
+  const visualPresentationFallback =
+    session.gameId === "calibration" || config.visualGuidance !== true
+      ? "instrument"
+      : "lane";
   const sanitizedConfig = {
     mode: enumOr(config.mode, RHYTHM_MODES, "cued"),
     bpm: numberInRange(config.bpm, 40, 20, 240, true),
@@ -557,6 +569,13 @@ function sanitizeRhythmSession(session, taskType) {
     // 意味がなくなる。既定は false にしてある: この列を持たない古い記録は
     // 手がかりを出す仕組み自体が無かった頃のもので、実際に出していない。
     visualGuidance: config.visualGuidance === true,
+    // 実際に表示したリズム版面。古い記録は当時の visualGuidance と gameId から
+    // 復元し、未知値は保存しない。
+    visualPresentation: enumOr(
+      config.visualPresentation,
+      RHYTHM_VISUAL_PRESENTATIONS,
+      visualPresentationFallback
+    ),
     // そくてい／れんしゅうのどちらの回か（src/lib/difficultyMode.js）。
     // 落とすと再読み込みで消え、測定の回と練習の回を後から分けられない。
     // 既定は practice: この列を持たない古い記録は、モードという概念自体が
@@ -901,6 +920,7 @@ function inferredTaskType(session) {
   if (TASK_TYPES.has(session?.taskType)) return session.taskType;
   if (session?.gameId === "gonogo") return "gonogo";
   if (RHYTHM_GAME_IDS.has(session?.gameId)) return "sms";
+  if (SLOT_GAME_IDS.has(session?.gameId)) return "slot";
   if (SCAN_GAME_IDS.has(session?.gameId)) return "scan";
   if (RT_GAME_IDS.has(session?.gameId)) return "rt";
   return null;
@@ -911,6 +931,7 @@ function sanitizeSession(session) {
   if (taskType === "sms" || taskType === "gonogo") {
     return sanitizeRhythmSession(session, taskType);
   }
+  if (taskType === "slot") return sanitizeSlotSession(session);
   if (taskType === "scan") return sanitizeScanSession(session);
   if (taskType === "rt") return sanitizeReactionSession(session);
   return null;
@@ -949,6 +970,10 @@ export function sanitizeState(candidate) {
   if (!isRecord(candidate)) return fallback;
 
   const settings = isRecord(candidate.settings) ? candidate.settings : {};
+  const switchControlMode = booleanOr(
+    settings.switchControlMode,
+    fallback.settings.switchControlMode
+  );
   const operation = isRecord(candidate.operation) ? candidate.operation : {};
   const evaluation = isRecord(candidate.evaluation) ? candidate.evaluation : {};
   const research = isRecord(candidate.research) ? candidate.research : {};
@@ -1059,8 +1084,17 @@ export function sanitizeState(candidate) {
         3200,
         true
       ),
-      autoScan: booleanOr(settings.autoScan, fallback.settings.autoScan),
+      // Switch Controlへ委譲しているあいだは、自前走査との同時ONを
+      // 保存データからも復元させない。二重走査は製品設定として不許可。
+      autoScan: switchControlMode
+        ? false
+        : booleanOr(settings.autoScan, fallback.settings.autoScan),
+      switchControlMode,
       speechEnabled: booleanOr(settings.speechEnabled, fallback.settings.speechEnabled),
+      speechVolume:
+        Math.round(
+          numberInRange(settings.speechVolume, fallback.settings.speechVolume, 0.2, 1) * 10
+        ) / 10,
       soundEnabled: booleanOr(settings.soundEnabled, fallback.settings.soundEnabled),
       largeText: booleanOr(settings.largeText, fallback.settings.largeText),
       highContrast: booleanOr(settings.highContrast, fallback.settings.highContrast),
@@ -1086,6 +1120,22 @@ export function sanitizeState(candidate) {
       rhythmBpm: nullableNumberInRange(settings.rhythmBpm, null, 20, 240, true),
       countInBeats: nullableNumberInRange(settings.countInBeats, null, 1, 16, true),
       targetBeats: nullableNumberInRange(settings.targetBeats, null, 1, 200, true),
+      slotCycleMs: numberInRange(
+        settings.slotCycleMs,
+        fallback.settings.slotCycleMs,
+        2800,
+        6000,
+        true
+      ),
+      slotToleranceMs: numberInRange(
+        settings.slotToleranceMs,
+        fallback.settings.slotToleranceMs,
+        60,
+        220,
+        true
+      ),
+      slotL1Rounds: numberInRange(settings.slotL1Rounds, fallback.settings.slotL1Rounds, 3, 20, true),
+      slotL2Rounds: numberInRange(settings.slotL2Rounds, fallback.settings.slotL2Rounds, 2, 12, true),
       // 範囲は sanitizeScanSession が config に許す幅（sweepMs 400〜10000 /
       // toleranceR 1〜50）の内側に収める。ここを外すと、設定どおりに遊んだ
       // セッションが保存時に別の値へ丸められて記録と食い違う。
@@ -1305,7 +1355,7 @@ function migrateLegacyLogEntryV1(entry) {
 }
 
 /**
- * v3 が空のときに、v2 → v1 の順で旧保存を読み、移行できる範囲を v3 へ写す
+ * v4 が空のときに、v3 → v2 → v1 の順で旧保存を読む。v3はセッションも保持する
  * （detailed-design.md §9.5）。移行できるのは settings（同名キーのみ）・logs・
  * evaluation（v2 のみ保有、participantId・completedSessions 等）まで。
  * v1 の metrics 構造は v3 に対応先がないため移行しない。移行元・移行範囲は
@@ -1314,6 +1364,19 @@ function migrateLegacyLogEntryV1(entry) {
  */
 function migrateLegacyState() {
   const v2 = readLegacyState(legacyStorageKeyV2);
+  const v3 = readLegacyState(legacyStorageKeyV3);
+  if (v3) {
+    const migrated = sanitizeState(v3);
+    migrated.logs.unshift({
+      time: new Date().toISOString(),
+      view: "system",
+      type: "migration",
+      label: `旧保存(${legacyStorageKeyV3})からv4へ移行しました。`,
+      success: true,
+    });
+    return sanitizeState(migrated);
+  }
+
   if (v2) {
     const migrated = cloneDefaultState();
     migrated.settings = { ...migrated.settings, ...migrateSettingsKeys(v2.settings) };
@@ -1362,7 +1425,7 @@ function migrateLegacyState() {
 /**
  * localStorage から状態を読み込む。
  * 保存形式の差分（古い保存・欠落キー）は defaultState とマージして吸収する。
- * v3 キーが空の場合は v2 → v1 の順で旧保存からの移行を試みる（§9.5）。
+ * v4 キーが空の場合は v3 → v2 → v1 の順で旧保存からの移行を試みる（§9.5）。
  */
 export function loadState() {
   try {

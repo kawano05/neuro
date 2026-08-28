@@ -20,6 +20,8 @@
 import { evaluationTasks, researchConditionProfiles } from "../content.js";
 import { cloneDefaultState, MAX_EVALUATION_SESSIONS } from "../state.js";
 import { escapeHtml, escapeCsv, formatDuration } from "../utils.js";
+import { buildSlotCsvRows } from "../slotCsv.js";
+export { buildSlotCsvRows };
 
 function evaluationResultKey(result) {
   return JSON.stringify([
@@ -575,6 +577,9 @@ export function initEvaluation(ctx) {
     if (taskType === "sms" || taskType === "gonogo") {
       state.evaluation.taskTimingMissed += summary.misses || 0;
       state.evaluation.taskMistakes += (summary.commissions || 0) + (summary.extras || 0);
+    } else if (taskType === "slot") {
+      state.evaluation.taskTimingMissed += summary.timeouts || 0;
+      state.evaluation.taskMistakes += (summary.misses || 0) + (summary.extras || 0);
     } else if (taskType === "scan") {
       state.evaluation.taskTimingMissed += summary.misses || 0;
       state.evaluation.taskMistakes += summary.slips || 0;
@@ -706,6 +711,25 @@ export function initEvaluation(ctx) {
     link.download = `neuronode-rhythm-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+
+  /** slot-v1を旧リズムと混ぜず、1停止1行の専用CSVとして書き出す。 */
+  function exportSlotCsv() {
+    const sessions = state.sessions.filter((session) => session.taskType === "slot");
+    if (!sessions.length) {
+      announce("書き出すリール停止データがありません");
+      notifySupporter("書き出すリール停止データがありません。L1またはL2を1回終えると記録されます。");
+      return;
+    }
+    const rows = buildSlotCsvRows(sessions);
+    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `neuronode-slot-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
   }
 
   function exportTaskCsv(taskType) {
@@ -853,6 +877,7 @@ export function initEvaluation(ctx) {
   });
   elements.exportEvaluationCsv.addEventListener("click", exportCsv);
   elements.exportRhythmCsv.addEventListener("click", exportRhythmCsv);
+  elements.exportSlotCsv.addEventListener("click", exportSlotCsv);
   elements.exportScanCsv.addEventListener("click", () => exportTaskCsv("scan"));
   elements.exportRtCsv.addEventListener("click", () => exportTaskCsv("rt"));
   elements.resetEvaluation.addEventListener("click", reset);

@@ -13,6 +13,7 @@ import {
 } from "../src/lib/state.js";
 import { escapeCsv, formatTime } from "../src/lib/utils.js";
 import {
+  buildSlotCsvRows,
   buildRhythmCsvRows,
   buildTaskCsvRows,
   flattenEvaluationResults,
@@ -21,14 +22,17 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PRIZE_ART } from "../src/lib/games/craneArt.js";
 import {
+  colorLegacyPreset,
   cranePresets,
   cranePrizes,
   fishingPresets,
   fishingSpecies,
   gameTiles,
   rhythmPresets,
+  slotPresets,
 } from "../src/lib/content.js";
 import { gameCreators, gameModules } from "../src/lib/games/registry.js";
+import { slotSymbolStripUrl } from "../src/lib/games/slotArt.js";
 
 class MemoryStorage {
   constructor() {
@@ -119,6 +123,34 @@ test("crane difficulty settings stay inside the range the scan session schema ac
   assert.ok(low.craneToleranceR >= 1 && low.craneToleranceR <= 50);
 });
 
+test("Switch Control mode owns shell scanning and speech volume stays in range", () => {
+  const delegated = sanitizeState({
+    settings: {
+      switchControlMode: true,
+      autoScan: true,
+      speechEnabled: false,
+      speechVolume: 9,
+    },
+  }).settings;
+  assert.equal(delegated.switchControlMode, true);
+  assert.equal(delegated.autoScan, false, "native and app scanning must never restore together");
+  assert.equal(delegated.speechEnabled, false);
+  assert.equal(delegated.speechVolume, 1);
+
+  const quiet = sanitizeState({ settings: { speechVolume: -1 } }).settings;
+  assert.equal(quiet.speechVolume, 0.2);
+
+  const stepped = sanitizeState({ settings: { speechVolume: 0.55 } }).settings;
+  assert.equal(stepped.speechVolume, 0.6);
+
+  const invalid = sanitizeState({
+    settings: { switchControlMode: "true", speechVolume: "0.4" },
+  }).settings;
+  assert.equal(invalid.switchControlMode, false);
+  assert.equal(invalid.speechVolume, 1);
+  assert.equal(invalid.autoScan, true);
+});
+
 test("sanitizeState keeps scan trials whose tolerance differs from the session default", () => {
   const base = {
     sessionId: "assist-1",
@@ -203,6 +235,8 @@ test("game art referenced by content.js exists on disk", () => {
     const file = assetPath(`fishing/fish-${species.asset}.png`);
     assert.ok(existsSync(file), `missing fishing art: fish-${species.asset}.png`);
   });
+  assert.ok(existsSync(fileURLToPath(slotSymbolStripUrl)), "missing generated slot symbol strip");
+  assert.match(slotSymbolStripUrl, /slot-symbol-strip-v1\.png$/);
 });
 
 test("sanitizeState rejects invalid shapes, enums and unsafe ranges item by item", () => {
@@ -651,6 +685,46 @@ test("loadState keeps v2 migration priority while sanitizing migrated values", (
   assert.equal(migrated.evaluation.condition, "native");
   assert.equal(migrated.logs[0].type, "migration");
   assert.equal(migrated.logs[1].time, "");
+
+test("loadState migrates the complete v3 state to v4 without converting old rhythm sessions", () => {
+  const storage = new MemoryStorage();
+  globalThis.localStorage = storage;
+  storage.values.set(
+    "neuronode-prototype-state-v3",
+    JSON.stringify({
+      settings: { scanInterval: 2800, rhythmBpm: 50, hideVisualTasks: true },
+      sessions: [
+        {
+          sessionId: "legacy-rhythm-v3",
+          taskType: "sms",
+          gameId: "rhythm-l1",
+          participantId: "P-v3",
+          startedAtIso: "2026-08-19T00:00:00.000Z",
+          finished: false,
+          aborted: true,
+          config: { mode: "cued", targetBeats: 1 },
+          device: {},
+          trials: [],
+        },
+      ],
+      logs: [],
+    })
+  );
+  storage.values.set(
+    "neuronode-prototype-state-v2",
+    JSON.stringify({ settings: { scanInterval: 900 }, evaluation: { participantId: "P-v2" } })
+  );
+
+  const migrated = loadState();
+  assert.equal(migrated.settings.scanInterval, 2800, "v3 must win over v2");
+  assert.equal(migrated.settings.rhythmBpm, 50, "legacy rhythm settings stay for one version");
+  assert.equal(migrated.settings.slotCycleMs, 3200, "new v4 settings receive safe defaults");
+  assert.equal(migrated.sessions.length, 1);
+  assert.equal(migrated.sessions[0].gameId, "rhythm-l1");
+  assert.equal(migrated.sessions[0].taskType, "sms");
+  assert.match(migrated.logs[0].label, /state-v3.*v4/);
+});
+
 });
 
 test("createStateSaver notifies once per failure streak and re-arms after recovery", async () => {
@@ -728,7 +802,8 @@ test("flattenEvaluationResults removes legacy active/completed and double-finish
 });
 
 test("game registry, presets and persisted task types stay aligned", () => {
-  const knownTaskTypes = new Set(["sms", "gonogo", "scan", "rt"]);
+  const knownTaskTypes = new Set(["sms", "gonogo", "scan", "rt", "slot"]);
+  const knownResultTypes = new Set(["completion"]);
   assert.deepEqual(
     gameModules.map((game) => game.id),
     [...gameTiles].sort((a, b) => a.order - b.order).map((game) => game.id)
@@ -736,6 +811,13 @@ test("game registry, presets and persisted task types stay aligned", () => {
   gameTiles
     .filter((game) => game.taskType !== null)
     .forEach((game) => assert(knownTaskTypes.has(game.taskType), `unknown taskType: ${game.id}`));
+  gameTiles
+    .filter((game) => game.resultType !== undefined)
+    .forEach((game) => assert(knownResultTypes.has(game.resultType), `unknown resultType: ${game.id}`));
+  const colorTile = gameTiles.find((game) => game.id === "color-legacy");
+  assert.equal(colorTile.taskType, null);
+  assert.equal(colorTile.resultType, "completion");
+  assert.equal(colorLegacyPreset.targetPresses, 5);
   gameTiles.forEach((game) => assert.equal(typeof gameCreators[game.id], "function"));
   assert.deepEqual(Object.keys(rhythmPresets).sort(), [
     "calibration",
@@ -743,6 +825,14 @@ test("game registry, presets and persisted task types stay aligned", () => {
     "rhythm-l1",
     "rhythm-l2",
   ]);
+  assert.deepEqual(Object.keys(slotPresets).sort(), ["slot-l1", "slot-l2"]);
+  assert.equal(slotPresets["slot-l1"].reelCount, 1);
+  assert.equal(slotPresets["slot-l2"].reelCount, 3);
+  assert.equal(slotPresets["slot-l1"].cycleMs, slotPresets["slot-l2"].cycleMs);
+  assert.equal(slotPresets["slot-l1"].toleranceMs, slotPresets["slot-l2"].toleranceMs);
+  assert.ok(gameTiles.every((game) => !["rhythm-l1", "rhythm-l2"].includes(game.id)));
+  assert.ok(gameTiles.filter((game) => game.taskType === "slot").every((game) => game.visualRequired));
+  assert.equal(typeof gameCreators["rhythm-l1"], "function", "legacy creator stays for old data support");
   assert.equal(cranePresets.targetTrials, 5);
   // さかなつりは試行数ではなく時間（1分）で1ゲームを区切るので、プリセットに
   // targetTrials は持たない。実際の試行数は前刺激間隔の乱数で毎回変わり、
@@ -775,6 +865,66 @@ test("game registry, presets and persisted task types stay aligned", () => {
   assert.equal(migrated.sessions[0].taskType, "gonogo");
   assert.deepEqual(migrated.rhythm.sessions, []);
 });
+
+test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
+  const expectedHeaders = [
+    "sessionId", "participantId", "gameId", "protocolVersion", "engineVersion",
+    "startedAtIso", "aborted", "difficultyMode", "roundIndex", "reelIndex",
+    "targetSymbol", "targetIndex", "stoppedSymbol", "cycleMs", "toleranceMs",
+    "inputMs", "targetPassMs", "signedErrorMs", "absoluteErrorMs", "observedCycles",
+    "judgment", "seed", "symbolOrder", "deviceViewportWidth", "deviceViewportHeight",
+    "devicePixelRatio", "deviceUserAgent", "measurementReadiness",
+  ];
+  const rows = buildSlotCsvRows([
+    {
+      sessionId: "slot-1",
+      participantId: "=FORMULA()",
+      taskType: "slot",
+      gameId: "slot-l2",
+      protocolVersion: "slot-v1",
+      engineVersion: 1,
+      startedAtIso: "2026-08-20T00:00:00.000Z",
+      aborted: false,
+      config: {
+        difficultyMode: "measure",
+        cycleMs: 3200,
+        toleranceMs: 220,
+        seed: "slot-measure-01",
+        measurementReadiness: "met",
+      },
+      device: {
+        viewportWidth: 1024,
+        viewportHeight: 768,
+        devicePixelRatio: 2,
+        userAgent: "@unsafe",
+      },
+      trials: [
+        {
+          roundIndex: 0,
+          reelIndex: 0,
+          targetSymbol: "star",
+          targetIndex: 2,
+          stoppedSymbol: "star",
+          inputMs: 4380,
+          targetPassMs: 4200,
+          signedErrorMs: 180,
+          absoluteErrorMs: 180,
+          observedCycles: 1,
+          judgment: "hit",
+          symbolOrder: ["circle", "fish", "star", "flower", "bird", "square"],
+        },
+      ],
+    },
+  ]);
+  assert.deepEqual(rows[0], expectedHeaders);
+  assert.equal(rows[0].length, 28);
+  assert.equal(rows[1].length, 28);
+  assert.equal(rows[1][22], JSON.stringify(["circle", "fish", "star", "flower", "bird", "square"]));
+  const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+  assert.ok(csv.includes("'=FORMULA()"), "participant IDs cannot become spreadsheet formulas");
+  assert.ok(csv.includes("'@unsafe"), "device strings cannot become spreadsheet formulas");
+});
+
 
 test("scan and rt CSV builders keep task-specific column counts", () => {
   const base = {
@@ -965,6 +1115,11 @@ test("sanitizeState restores valid scan/rt sessions and rejects unknown task typ
 // 2 と 3 は落としても画面上は何も壊れないので、ここで固定する。
 // ---------------------------------------------------------------------
 
+test("fresh state enables the guided practice lane by default", () => {
+  assert.equal(cloneDefaultState().settings.visualGuidance, true);
+  assert.equal(sanitizeState({}).settings.visualGuidance, true);
+});
+
 // 条件の有無だけを見たいので、それ以外は既定どおりの1セッション分。
 const RHYTHM_CONFIG = {
   mode: "cued",
@@ -992,9 +1147,32 @@ test("a rhythm session keeps its visual-guidance condition across a reload", () 
   };
   const guided = sanitizeState({
     version: 3,
-    sessions: [{ ...base, config: { ...RHYTHM_CONFIG, visualGuidance: true } }],
+    sessions: [
+      {
+        ...base,
+        config: {
+          ...RHYTHM_CONFIG,
+          visualGuidance: true,
+          visualPresentation: "lane",
+        },
+      },
+    ],
   });
   assert.equal(guided.sessions[0].config.visualGuidance, true);
+  assert.equal(guided.sessions[0].config.visualPresentation, "lane");
+
+  const oldGuided = sanitizeState({
+    version: 3,
+    sessions: [
+      {
+        ...base,
+        sessionId: "r-old-guided",
+        config: { ...RHYTHM_CONFIG, visualGuidance: true },
+      },
+    ],
+  });
+  // visualPresentation 導入前のガイドあり記録は、当時の条件から lane と復元する。
+  assert.equal(oldGuided.sessions[0].config.visualPresentation, "lane");
 
   const plain = sanitizeState({
     version: 3,
@@ -1003,6 +1181,21 @@ test("a rhythm session keeps its visual-guidance condition across a reload", () 
   // 条件を持たない記録を true と復元しない（手がかりの仕組みが無かった頃の
   // 記録を「支援者が意図してONにした回」と取り違えない）。
   assert.equal(plain.sessions[0].config.visualGuidance, false);
+  assert.equal(plain.sessions[0].config.visualPresentation, "instrument");
+
+  const oldCalibration = sanitizeState({
+    version: 3,
+    sessions: [
+      {
+        ...base,
+        sessionId: "r-old-calibration",
+        gameId: "calibration",
+        config: { ...RHYTHM_CONFIG, visualGuidance: true },
+      },
+    ],
+  });
+  // そくていは古い記録に誤って true があっても、未来ノートありへ復元しない。
+  assert.equal(oldCalibration.sessions[0].config.visualPresentation, "instrument");
 });
 
 // 記録は3経路（session.config → sanitize → CSV）すべてを通らないと意味が

@@ -16,3 +16,7 @@ artifacts/
 
 # OMC local session data
 .omc/
+
+# Local presentation/video production intermediates
+_deck_build/
+_video_build/

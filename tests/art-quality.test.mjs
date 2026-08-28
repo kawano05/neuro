@@ -207,6 +207,16 @@ test("the two claw frames line up, so swapping them does not move the arm", () =
   );
 });
 
+
+test("generated slot symbol strip is wide, transparent and anti-aliased", () => {
+  const info = describeAlpha(assetPath("slot/slot-symbol-strip-v1.png"));
+  assert.ok(info.width >= 1200, `slot strip is too small: ${info.width}px`);
+  assert.ok(info.width / info.height >= 2.5, "six symbols must stay in a wide strip");
+  assert.deepEqual(info.corners, [0, 0, 0, 0], "slot strip background must remain transparent");
+  assert.ok(info.opaque + info.semi > 100_000, "slot strip has too little visible art");
+  assert.ok(info.semi > 1_000, "slot strip lost anti-aliased edges");
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);
 console.log("art quality tests passed");

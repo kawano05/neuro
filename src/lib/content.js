@@ -16,7 +16,7 @@
  * v1: "neuro-trainer-state-v1"）は state.js の loadState() が v3 未保存時にのみ
  * 読み、settings・logs・evaluation を移行する。旧キー自体は削除しない。
  */
-export const storageKey = "neuronode-prototype-state-v3";
+export const storageKey = "neuronode-prototype-state-v4";
 
 /**
  * スイッチ教材モジュールの一覧（現状 "color" の1件のみ）。
@@ -36,6 +36,11 @@ export const switchModules = [
 /** スイッチ教材ステージの背景色サイクル */
 export const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747"];
 
+/** 色と音の通常セッション。効果測定の「スイッチ教材を5回入力」と同じ長さ。 */
+export const colorLegacyPreset = {
+  targetPresses: 5,
+};
+
 /**
  * ゲームタイル（アプリ選択画面の表示に使う純粋データ）。detailed-design.md §4.1。
  *
@@ -50,9 +55,9 @@ export const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747
 export const gameTiles = [
   // iconClass は Font Awesome Free の統一アイコン。製品アイコンに絵文字を
   // 使わず、年齢を限定しない視覚言語に揃える。
-  { id: "color-legacy", taskType: null, title: "いろと おと", description: "おすと いろと おとが かわるよ", order: 1, enabled: true, iconClass: "fa-solid fa-palette" },
-  { id: "rhythm-l1", taskType: "sms", title: "リズム れんしゅう", description: "おとの あいずに あわせて おそう", order: 2, enabled: true, iconClass: "fa-solid fa-drum" },
-  { id: "rhythm-l2", taskType: "sms", title: "リズム つづけて", description: "おとに あわせて つづけて おそう", order: 3, enabled: true, iconClass: "fa-solid fa-music" },
+  { id: "color-legacy", taskType: null, resultType: "completion", title: "いろと おと", description: "5かい おして いろと おとを かえよう", order: 1, enabled: true, iconClass: "fa-solid fa-palette" },
+  { id: "slot-l1", taskType: "slot", title: "ひとつ とめる", description: "おなじ えが まんなかに きたら おそう", order: 2, enabled: true, visualRequired: true, iconClass: "fa-solid fa-circle-stop" },
+  { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの リールを じゅんばんに とめよう", order: 3, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
   { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true, iconClass: "fa-solid fa-bell" },
   { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
   // さかなつりは2種類ある。どちらも反応時間を測るが、測っているものが違う:
@@ -67,12 +72,12 @@ export const gameTiles = [
   { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 8, enabled: true, iconClass: "fa-solid fa-stopwatch" },
 ];
 
-/** ロビーで複数のリズム課題をまとめる二階層目への入口。 */
-export const rhythmCornerTile = {
-  id: "rhythm-corner",
-  title: "リズム",
-  description: "3つの おとの あそびから えらぼう",
-  iconClass: "fa-solid fa-music",
+/** 視覚タイミング課題2種をまとめる二階層目への入口。 */
+export const slotCornerTile = {
+  id: "slot-corner",
+  title: "リールを とめる",
+  description: "ひとつ または 3つの えを とめよう",
+  iconClass: "fa-solid fa-circle-stop",
 };
 
 /** さかなつり2種（純粋な反応時間 / 抑制つき）をまとめる二階層目への入口。 */
@@ -173,6 +178,31 @@ export const rhythmPresets = {
   // 捨てるため（cued の 2 は「最初の数試行は手順に慣れていない」という別の
   // 理由だった）。カウントイン直後の数拍は初期偏差を引きずる。
   calibration: { bpm: 50, countInBeats: 4, targetBeats: 24, mode: "continuous", excludedTrialCount: 4 },
+};
+
+/**
+ * スロット型逐次停止課題 slot-v1 の既定値。
+ * L1/L2で周期と許容幅を揃え、難度差をリール数（入力系列）だけに限定する。
+ */
+export const slotPresets = {
+  "slot-l1": {
+    reelCount: 1,
+    symbolCount: 6,
+    cycleMs: 3200,
+    toleranceMs: 220,
+    rounds: 8,
+    maxCyclesPerReel: 4,
+    seed: "slot-measure-01",
+  },
+  "slot-l2": {
+    reelCount: 3,
+    symbolCount: 6,
+    cycleMs: 3200,
+    toleranceMs: 220,
+    rounds: 4,
+    maxCyclesPerReel: 4,
+    seed: "slot-measure-01",
+  },
 };
 
 /**
@@ -322,8 +352,8 @@ export const fishingSpecies = [
  */
 export const gameHowTo = {
   "color-legacy": ["howto.color-legacy.1", "howto.color-legacy.2"],
-  "rhythm-l1": ["howto.rhythm-l1.1", "howto.rhythm-l1.2", "howto.rhythm-l1.3"],
-  "rhythm-l2": ["howto.rhythm-l2.1", "howto.rhythm-l2.2"],
+  "slot-l1": ["howto.slot-l1.1", "howto.slot-l1.2", "howto.slot-l1.3"],
+  "slot-l2": ["howto.slot-l2.1", "howto.slot-l2.2", "howto.slot-l2.3"],
   gonogo: ["howto.gonogo.1", "howto.gonogo.2"],
   calibration: ["howto.calibration.1", "howto.calibration.2", "howto.calibration.3"],
   crane: ["howto.crane.1", "howto.crane.2", "howto.crane.3", "howto.crane.4"],

@@ -27,7 +27,7 @@ import {
   gameTiles,
   fishingCornerTile,
   learningCornerTile,
-  rhythmCornerTile,
+  slotCornerTile,
 } from "../src/lib/content.js";
 
 let passed = 0;
@@ -204,7 +204,7 @@ test("covers every activity the user can choose", () => {
   // タイルを足したのに文言を足し忘れると、その行だけキーが出る。
   const ids = [
     ...gameTiles.map((tile) => tile.id),
-    rhythmCornerTile.id,
+    slotCornerTile.id,
     fishingCornerTile.id,
     learningCornerTile.id,
     ...activityTiles.map((tile) => tile.view),
@@ -268,6 +268,7 @@ test("no local binding shadows the translate function", async () => {
     "../src/lib/games/crane.js",
     "../src/lib/games/fishing.js",
     "../src/lib/games/rhythm.js",
+    "../src/lib/games/slot.js",
   ];
   // ローカルに t を作る書き方。関数の仮引数と宣言の両方を見る。
   const shadowPatterns = [

@@ -247,6 +247,7 @@
         <div class="action-row">
           <button class="secondary" id="exportEvaluationCsv" data-scan>測定CSV</button>
           <button class="secondary" id="exportRhythmCsv" data-scan>リズムCSV</button>
+          <button class="secondary" id="exportSlotCsv" data-scan>リールCSV</button>
           <button class="secondary" id="exportScanCsv" data-scan>走査CSV</button>
           <button class="secondary" id="exportRtCsv" data-scan>反応CSV</button>
           <button class="danger" id="resetEvaluation" data-scan>測定リセット</button>
@@ -578,6 +579,24 @@
       </p>
 
       <div class="settings-grid">
+        <label class="setting-row toggle-row">
+          <span>
+            <strong>iPad Switch Controlモード</strong>
+            <small>支援者が自動走査をOFF→iPad側をONの順に準備してから切り替えます</small>
+          </span>
+          <input
+            id="switchControlMode"
+            type="checkbox"
+            role="switch"
+            aria-describedby="switchControlModeNotice"
+          />
+        </label>
+
+        <p class="settings-mode-notice" id="switchControlModeNotice" hidden>
+          iPadの「設定」でもSwitch ControlをONにしてください。アプリ音声は比較しやすいよう、
+          このモードをONにした時点でいったんOFFになります。
+        </p>
+
         <label class="setting-row">
           <span>
             <strong>走査間隔</strong>
@@ -602,7 +621,7 @@
         <label class="setting-row toggle-row">
           <span>
             <strong>視覚課題を隠す</strong>
-            <small>画面注視が必要なUFOキャッチャーをロビーから外します</small>
+            <small>画面注視が必要なリール停止とUFOキャッチャーをロビーから外します</small>
           </span>
           <input id="hideVisualTasks" type="checkbox" role="switch" data-scan />
         </label>
@@ -624,6 +643,15 @@
             <small>定型句やフィードバックを読み上げます</small>
           </span>
           <input id="speechEnabled" type="checkbox" role="switch" data-scan />
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>アプリ音声の音量</strong>
+            <small>OSの読み上げではなく、このアプリが出す声だけを調整します</small>
+          </span>
+          <input id="speechVolume" type="range" min="0.2" max="1" step="0.1" />
+          <output id="speechVolumeValue" for="speechVolume">100%</output>
         </label>
 
         <label class="setting-row toggle-row">
@@ -697,10 +725,52 @@
         </span>
       </p>
 
-      <h3 class="settings-group-title">リズムの難易度</h3>
+      <h3 class="settings-group-title">リール停止の難易度</h3>
       <p class="settings-group-note">
-        「リズム れんしゅう」「リズム つづけて」「たかいおとだけ」の3つに ききます。
-        そくていは 手順を そろえるため 変わりません。
+        練習のL1とL2にききます。測定ではslot-v1の値（3200ms・220ms・L1 8回・L2 4回）に固定されます。
+      </p>
+
+      <div class="settings-grid">
+        <label class="setting-row">
+          <span>
+            <strong>リールの速さ</strong>
+            <small>絵柄が1周する時間。短いほど速くなります</small>
+          </span>
+          <input id="slotCycleMs" type="range" min="2800" max="6000" step="100" data-scan />
+          <output id="slotCycleMsValue" for="slotCycleMs">3200ms</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>合う時間の広さ</strong>
+            <small>目標の中心から前後何msまでを「合った」とするか</small>
+          </span>
+          <input id="slotToleranceMs" type="range" min="60" max="220" step="10" data-scan />
+          <output id="slotToleranceMsValue" for="slotToleranceMs">220ms</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>L1のラウンド数</strong>
+            <small>1本のリールを止める回数です</small>
+          </span>
+          <input id="slotL1Rounds" type="range" min="3" max="20" step="1" data-scan />
+          <output id="slotL1RoundsValue" for="slotL1Rounds">8</output>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>L2のラウンド数</strong>
+            <small>1ラウンドで3本を左から順に止めます</small>
+          </span>
+          <input id="slotL2Rounds" type="range" min="2" max="12" step="1" data-scan />
+          <output id="slotL2RoundsValue" for="slotL2Rounds">4</output>
+        </label>
+      </div>
+
+      <h3 class="settings-group-title">音の課題の難易度</h3>
+      <p class="settings-group-note">
+        「たかいおとだけ」にききます。支援者向けの「そくてい」は固定条件です。
       </p>
 
       <div class="settings-grid">
@@ -734,22 +804,22 @@
         </label>
 
         <!--
-          画面から拍の手がかりを出すか。ONで2つが同時に効く:
-            1. 円が次の拍へ向けて「溜める」（＝拍の予告）
-            2. 押したあと、ずれの目盛りが「はやい/おそい」を出す（＝KR）
+          通常練習で流れるノートを出すか。ONが制御するのは、ノートが
+          判定面へ流れる「次の拍の予告」だけ。押したあとのずれ目盛り（KR）は、
+          ON/OFFどちらの版面にも残り、未来の拍は示さない。
 
-          既定OFF。この課題は聴覚キューへの同期を測る計測器なので、素の状態は
-          「手がかりは音だけ」でなければ rawOffsetMs が聴覚同期の指標にならない。
-          訓練として使う回だけ支援者がONにする。実際に効いた値はセッションごとに
-          記録され、評価ログとリズムCSVにも出る。
+          既定ON。ふだんの練習は本格的なリズムゲームとして取り組めるようにする。
+          OFFの練習と measure / calibration は、未来ノートを作らない予告なし計器盤。
+          実際に効いた visualGuidance / visualPresentation はセッションごとに記録され、
+          visualGuidance と difficultyMode は評価ログとリズムCSVにも出る。
         -->
         <label class="setting-row toggle-row">
           <span>
-            <strong>がめんに 手がかりを出す</strong>
+            <strong>練習で 流れるノートを出す</strong>
             <small>
-              つぎの拍がくる合図を円で予告し、おしたあと はやい/おそいを見せます。
-              練習むけ。切ると、手がかりは音だけになります（測定はこちら。
-              そくていは、はじめから出しません）
+              ノートが判定面へ流れます（練習の既定）。切ると未来ノートなしの
+              計器盤になり、おしたあとの はやい/おそいだけを見せます。
+              測定と そくていは自動で計器盤です
             </small>
           </span>
           <input id="visualGuidance" type="checkbox" role="switch" data-scan />

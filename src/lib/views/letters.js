@@ -5,7 +5,7 @@
 import { letterTasks } from "../content.js";
 
 export function initLetters(ctx) {
-  const { state, elements, save, announce, logEvent, speak, playTone, scan } = ctx;
+  const { state, elements, save, logEvent, voiceFeedback, playTone, scan } = ctx;
 
   function render() {
     const task = letterTasks[state.letterIndex % letterTasks.length];
@@ -27,8 +27,10 @@ export function initLetters(ctx) {
     const task = letterTasks[state.letterIndex % letterTasks.length];
     const correct = letter === task.answer;
     playTone(correct ? 760 : 240);
-    speak(correct ? "正解です" : "違います");
-    announce(correct ? `正解: ${letter}` : `違います: ${letter}`);
+    voiceFeedback(
+      correct ? "正解です" : "違います",
+      correct ? `正解: ${letter}` : `違います: ${letter}`
+    );
     logEvent({ type: "letter", label: letter, correct });
     state.letterIndex = (state.letterIndex + 1) % letterTasks.length;
     save();

@@ -7,9 +7,9 @@
 // 既知の制約（docs/refactoring-notes 参照）:
 //   - 各ビューが innerHTML を全面再構築すると .scan-focus が消え、
 //     走査位置が実質リセットされる（refresh() 内の index 補正のみ）。
-//   - これは Web 上で Switch Control を「模擬」するための自前走査であり、
-//     iOS 実機の Switch Control とは二重走査になる。iOS 版では自前走査を
-//     OFF にする運用（autoScan=false + 走査UI非表示）を検討すること。
+//   - Web上の自前走査とiOS実機のSwitch Controlは同時に動かさない。
+//     settings.switchControlMode=true のときは、このエンジンの全入口を
+//     停止し、OS側だけへ走査所有権を委譲する。
 // =====================================================================
 
 /**
@@ -23,8 +23,24 @@ export function createScanEngine(ctx) {
   let scanIndex = -1;
   let scanTimer = null;
 
+  /** iPad Switch Controlへ走査所有権を委譲しているか。 */
+  function usesNativeSwitchControl() {
+    return Boolean(state.settings.switchControlMode);
+  }
+
+  /** 残っている黄色い枠を消し、自前走査の位置を破棄する。 */
+  function clearScanFocus() {
+    scanIndex = -1;
+    document.querySelectorAll(".scan-focus").forEach((target) => target.classList.remove("scan-focus"));
+  }
+
   /** 現在のアクティブビューから走査対象を再収集する */
   function refresh() {
+    if (usesNativeSwitchControl()) {
+      scanTargets = [];
+      clearScanFocus();
+      return;
+    }
     const activeView = document.querySelector(".view.is-active");
     scanTargets = [
       ...document.querySelectorAll(".tabbar [data-scan]"),
@@ -52,6 +68,10 @@ export function createScanEngine(ctx) {
 
   /** ハイライトを1つ進める（自動走査のタイマー、または → キー） */
   function step() {
+    if (usesNativeSwitchControl()) {
+      stop(true);
+      return;
+    }
     refresh();
     if (!scanTargets.length) return;
     scanIndex = (scanIndex + 1) % scanTargets.length;
@@ -60,6 +80,11 @@ export function createScanEngine(ctx) {
 
   /** 走査を開始する（既に動いていれば作り直す） */
   function start() {
+    // 明示モード中は手動ボタンや将来の呼び出し元からも再開させない。
+    if (usesNativeSwitchControl()) {
+      stop(true);
+      return;
+    }
     // ゲーム中・スタート画面中は絶対に走査しない（不変条件、
     // detailed-design.md §8.4の二重防御をstartにも拡張）。
     // gameHost.launch() の scan.stop(true) が一次防御、これは二次防御。
@@ -81,11 +106,10 @@ export function createScanEngine(ctx) {
       window.clearInterval(scanTimer);
       scanTimer = null;
     }
-    elements.scanState.textContent = "走査停止中";
+    elements.scanState.textContent = usesNativeSwitchControl() ? "iPad走査を使用" : "走査停止中";
     elements.toggleScanLabel.textContent = "走査開始";
     if (clearFocus) {
-      scanIndex = -1;
-      document.querySelectorAll(".scan-focus").forEach((target) => target.classList.remove("scan-focus"));
+      clearScanFocus();
     }
   }
 
@@ -94,6 +118,10 @@ export function createScanEngine(ctx) {
    * setTimeout(0) で再描画完了後に走査対象を収集し直す。
    */
   function restartIfNeeded() {
+    if (usesNativeSwitchControl()) {
+      stop(true);
+      return;
+    }
     // ゲーム中・スタート画面中は絶対に走査しない（不変条件、
     // detailed-design.md §8.4の二重防御をstartにも拡張、§2.1）。
     if (state.currentView === "game" || state.currentView === "start") return;
@@ -109,6 +137,7 @@ export function createScanEngine(ctx) {
    * 現在のビューに応じた既定アクションへフォールバックする。
    */
   function activate() {
+    if (usesNativeSwitchControl()) return;
     refresh();
     if (!scanTargets.length || scanIndex < 0) {
       if (state.currentView === "operation") ctx.views.operation.handlePrimary();
@@ -124,6 +153,10 @@ export function createScanEngine(ctx) {
 
   /** 走査の開始/停止をトグルする */
   function toggle() {
+    if (usesNativeSwitchControl()) {
+      stop(true);
+      return;
+    }
     if (scanTimer) {
       stop();
     } else {

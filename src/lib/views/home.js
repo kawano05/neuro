@@ -21,7 +21,7 @@ import {
   cueTones,
   fishingCornerTile,
   learningCornerTile,
-  rhythmCornerTile,
+  slotCornerTile,
 } from "../content.js";
 
 export function initHome(ctx) {
@@ -285,20 +285,29 @@ export function initHome(ctx) {
   }
 
   /**
-   * いま描いた走査対象が、入力ドックの裏へはみ出しているか。
+   * いま描いた走査対象が、入力ドックまたは画面下端へはみ出しているか。
    *
    * ドックは画面下に固定されているので、その上端より下にある項目は
    * 隠れている。利用者はスクロールを戻せないため、隠れた項目は
-   * 「選べない項目が走査の輪に居る」ことになる。
+   * 「選べない項目が走査の輪に居る」ことになる。iPad Switch Control
+   * モードではドック自体を隠すため、その場合は viewport 下端を使う。
    */
   function listOverflowsDock() {
     if (typeof document === "undefined") return false;
     const dock = document.querySelector(".switch-dock");
     const tiles = [...elements.gameTileGrid.querySelectorAll(".game-tile")];
-    if (!dock || !tiles.length) return false;
-    const dockRect = dock.getBoundingClientRect();
-    // ドックが出ていない画面（高さ0）では判定材料にならない。
-    if (dockRect.height <= 0) return false;
+    if (!tiles.length) return false;
+    const dockRect = dock?.getBoundingClientRect();
+
+    // OS走査へ委譲中はアプリのドックが display:none になる。以前はここで
+    // 常に false にしていたため、ホームが6項目になった時点で最後の項目が
+    // viewport外へ出てもページ分割されなかった。
+    if (!dockRect || dockRect.height <= 0) {
+      return tiles.some((tile) => {
+        const rect = tile.getBoundingClientRect();
+        return rect.top < -1 || rect.bottom > window.innerHeight + 1;
+      });
+    }
     // 数pxの重なりは「届かない」ではない。実測で 2px だけ重なる実寸があり
     // （スマホ横 844x390）、そこでページを分けると1周が伸びるだけだった。
     return tiles.some(
@@ -331,11 +340,16 @@ export function initHome(ctx) {
       scan.restartIfNeeded();
     }
 
-    if (activeCorner === "rhythm") {
-      renderCornerHeadings("rhythm");
-      const cornerGames = ["rhythm-l1", "rhythm-l2", "gonogo"]
+    if (activeCorner === "slot") {
+      renderCornerHeadings("slot");
+      const cornerGames = ["slot-l1", "slot-l2"]
         .map(gameById)
-        .filter(Boolean);
+        .filter((game) => game && (!state.settings.hideVisualTasks || !game.visualRequired));
+      if (!cornerGames.length) {
+        activeCorner = null;
+        renderTiles();
+        return;
+      }
       renderScanList([...cornerGames, cornerBackTile()], (game) => {
         if (game.id === "home-back") leaveCorner();
         else ctx.gameHost.launch(game.id);
@@ -365,9 +379,13 @@ export function initHome(ctx) {
     elements.homeEyebrow.innerHTML = ctx.tHtml("home.eyebrow");
     elements.homeTitle.innerHTML = ctx.tHtml("home.title");
     elements.homeGuide.innerHTML = ctx.tHtml("home.guide");
+    const visibleSlotGames = ["slot-l1", "slot-l2"]
+      .map(gameById)
+      .filter((game) => game && (!state.settings.hideVisualTasks || !game.visualRequired));
     const homeTiles = [
       gameById("color-legacy"),
-      rhythmCornerTile,
+      visibleSlotGames.length ? slotCornerTile : null,
+      gameById("gonogo"),
       !state.settings.hideVisualTasks ? gameById("crane") : null,
       fishingCornerTile,
       learningCornerTile,
@@ -386,7 +404,7 @@ export function initHome(ctx) {
     }
 
     renderScanList(homeTiles, (game) => {
-      if (game.id === "rhythm-corner") enterCorner("rhythm", ctx.t("voice.enterCorner", { name: ctx.t("corner.rhythm.title") }));
+      if (game.id === "slot-corner") enterCorner("slot", ctx.t("voice.enterCorner", { name: ctx.t("corner.slot.title") }));
       else if (game.id === "fishing-corner") enterCorner("fishing", ctx.t("voice.enterCorner", { name: ctx.t("corner.fishing.title") }));
       else if (game.id === "learning-corner") enterCorner("learning", ctx.t("voice.enterCorner", { name: ctx.t("corner.learning.title") }));
       else ctx.gameHost.launch(game.id);
@@ -455,19 +473,25 @@ export function initHome(ctx) {
   }
 
   if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-    const shortScreen = window.matchMedia("(max-height: 740px)");
+    const layoutBreakpoints = [
+      window.matchMedia("(max-height: 740px)"),
+      // iPad full width→Split Viewでは高さが変わらない。幅側のCSS境界も
+      // 監視しないと、広い画面で決めたページ構成をそのまま持ち越す。
+      window.matchMedia("(max-width: 820px)"),
+      window.matchMedia("(max-width: 620px)"),
+    ];
     const onChange = () => {
       if (state.currentView !== "home") return;
       pageIndex = 0;
-      // 画面の高さが変わったら入る枚数も変わる。判定をやり直す。
+      // 画面の高さ・幅の段階が変わったら入る枚数も変わる。判定をやり直す。
       overflowPaginate = false;
       pageSizeOverride = null;
       renderTiles();
       scan.restartIfNeeded();
     };
-    if (typeof shortScreen.addEventListener === "function") {
-      shortScreen.addEventListener("change", onChange);
-    }
+    layoutBreakpoints.forEach((query) => {
+      if (typeof query.addEventListener === "function") query.addEventListener("change", onChange);
+    });
   }
 
   return {
