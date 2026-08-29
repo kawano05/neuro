@@ -14,11 +14,14 @@ import {
   isMeasurementMode,
   resolveCraneDifficulty,
   resolveDifficultyMode,
+  endlessDifficultyStep,
+  resolveEndlessMode,
   resolveRhythmDifficulty,
   resolveSlotDifficulty,
 } from "../src/lib/difficultyMode.js";
 import { resolveParams } from "../src/lib/games/rhythm.js";
 import { cranePresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
+import { sanitizeState } from "../src/lib/state.js";
 
 let passed = 0;
 let failed = 0;
@@ -177,6 +180,82 @@ test("the protocol is held separately from the play presets", () => {
   first.bpm = 999;
   const second = resolveRhythmDifficulty("rhythm-l1", { difficultyMode: "measure" }, rhythmPresets["rhythm-l1"]);
   assert.equal(second.bpm, MEASUREMENT_PROTOCOL.rhythm["rhythm-l1"].bpm);
+});
+
+test("endless is chosen at the game entrance and never reaches a measurement run", () => {
+  // れんしゅうでは、あそびの入口が渡した希望どおり。
+  assert.equal(resolveEndlessMode({ difficultyMode: "practice" }, true), true);
+  assert.equal(resolveEndlessMode({ difficultyMode: "practice" }, false), false);
+
+  // そくていでは、入口から希望が来ても必ずOFFへ解決する。そくていは試行数と
+  // パラメータを固定することが条件そのもので、難度が回の途中で動くと同じ回の
+  // 中の試行すら同じ条件でなくなる（ホームにも出さないが、二重防御）。
+  assert.equal(resolveEndlessMode({ ...TWEAKED, difficultyMode: "measure" }, true), false);
+
+  // 希望が無い・壊れている呼び出しは既定（OFF）へ。
+  assert.equal(resolveEndlessMode({}), false);
+  assert.equal(resolveEndlessMode(null, undefined), false);
+  assert.equal(resolveEndlessMode({}, "yes"), false);
+});
+
+test("endless difficulty rises by trial count, in fixed steps with a ceiling", () => {
+  // 上げ方は試行数ごと。出来高制にすると、上達したから上がったのか
+  // たまたま当たったから上がったのかが記録から分けられなくなる。
+  assert.equal(endlessDifficultyStep(0, 3, 5), 0);
+  assert.equal(endlessDifficultyStep(2, 3, 5), 0);
+  assert.equal(endlessDifficultyStep(3, 3, 5), 1);
+  assert.equal(endlessDifficultyStep(14, 3, 5), 4);
+  // 天井を越えない（越えると、狙って押す練習ではなく偶然の当たりになる）。
+  assert.equal(endlessDifficultyStep(15, 3, 5), 5);
+  assert.equal(endlessDifficultyStep(999, 3, 5), 5);
+  // 壊れた入力は0段（難度を勝手に上げない）。
+  assert.equal(endlessDifficultyStep(-5, 3, 5), 0);
+  assert.equal(endlessDifficultyStep(10, 0, 5), 0);
+  assert.equal(endlessDifficultyStep(10, 3, 0), 0);
+  assert.equal(endlessDifficultyStep(NaN, 3, 5), 0);
+});
+
+test("an endless run survives a reload as a completed practice run", () => {
+  // config → sanitize → CSV の3経路。落とすと、回数が回ごとに違う理由が
+  // あとから言えなくなる。
+  const restored = sanitizeState({
+    sessions: [
+      {
+        sessionId: "endless-1",
+        taskType: "scan",
+        gameId: "crane",
+        participantId: "P1",
+        startedAtIso: "2026-08-28T00:00:00.000Z",
+        finished: true,
+        aborted: false,
+        device: {},
+        // ゲーム側が終了時に実際の回数を書き戻す（games/crane.js の destroy）。
+        config: { targetTrials: 1, endless: true, difficultyMode: "practice" },
+        trials: [
+          {
+            index: 0,
+            targetX: 10,
+            targetY: 10,
+            toleranceR: 15,
+            selectedX: 10,
+            selectedY: 10,
+            dx: 0,
+            dy: 0,
+            distance: 0,
+            xPhaseMs: 100,
+            yPhaseMs: 100,
+            judgment: "grip",
+          },
+        ],
+      },
+    ],
+  }).sessions[0];
+  assert.equal(restored.config.endless, true);
+  // 完走扱いのまま残ること。aborted に倒れると、その回は成立確認の材料から
+  // 外れる（readinessCheck.js の isUsable は aborted を使わない）——
+  // れんしゅうを重ねているのに成立確認が通らない、という見えない詰まりになる。
+  assert.equal(restored.aborted, false);
+  assert.equal(restored.finished, true);
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

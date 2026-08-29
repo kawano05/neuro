@@ -62,6 +62,53 @@ export function resolveDifficultyMode(settings) {
   return DIFFICULTY_MODES.has(mode) ? mode : DEFAULT_DIFFICULTY_MODE;
 }
 
+/**
+ * 「エンドレス」の回か。
+ *
+ * 決まった回数・決まった時間で終わらず、続けるほど難しくなる。終わりは
+ * 支援者が「おわる」を押したとき（または上限に届いたとき）。
+ *
+ * 選ぶのは**あそびの入口**（ホームのコーナー）であって支援者の設定ではない。
+ * 利用者が自分で選ぶ遊び方なので、支援者メニューのつまみとして置くと、
+ * 選んだ本人からは何が変わったのか見えないまま挙動だけが変わる。
+ *
+ * そくていでは必ず false に解決する（MUST）。そくていは protocol で試行数と
+ * パラメータを固定することが条件そのもので、難度が回の途中で動くと、回どうし
+ * どころか同じ回の中の試行すら同じ条件でなくなる。エンドレスの入口は
+ * そくていモード中はホームに出さないが、二重防御としてここでも落とす。
+ *
+ * 上限はある（各ゲームの ENDLESS_MAX_TRIALS）。state.js の検証範囲が
+ * targetTrials を scan=100 / rt=200 で切るので、そこを超えて記録すると
+ * 再読み込みで「完走していない回」に倒れる。無限に見せて記録が壊れるより、
+ * 上限で終わるほうがよい。
+ *
+ * @param {object} settings state.settings
+ * @param {boolean} requested ゲームの入口から渡された希望（gameHost.launch）
+ */
+export function resolveEndlessMode(settings, requested) {
+  if (isMeasurementMode(settings)) return false;
+  return requested === true;
+}
+
+/**
+ * エンドレスで、いま何段目の難度か。
+ *
+ * 上げ方は「一定の試行数ごとに1段」。連続で成功したら上げる、という
+ * 出来高制にはしない——上達したから上がったのか、たまたま当たったから
+ * 上がったのかが記録から分けられなくなる。試行数で上がるなら、何試行目が
+ * どの段だったかは後から必ず言える（試行ごとに実際に適用した値を記録して
+ * あるので、解析側は段を数え直さなくてよい）。
+ *
+ * @param {number} trialIndex 0始まり
+ * @param {number} trialsPerStep 1段あたりの試行数
+ * @param {number} maxStep 最大段数（これ以上は上げない）
+ */
+export function endlessDifficultyStep(trialIndex, trialsPerStep, maxStep) {
+  if (!(trialsPerStep > 0) || !(maxStep > 0)) return 0;
+  const index = Number.isFinite(trialIndex) && trialIndex > 0 ? Math.floor(trialIndex) : 0;
+  return Math.min(maxStep, Math.floor(index / trialsPerStep));
+}
+
 /** そくていの回か。支援者のつまみを効かせてよいかの判断はすべてこれで引く。 */
 export function isMeasurementMode(settings) {
   return resolveDifficultyMode(settings) === "measure";

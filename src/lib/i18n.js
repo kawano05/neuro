@@ -222,6 +222,48 @@ const STRINGS = {
     kana: "3つの おとの あそびから えらぼう",
     en: "Three sound activities",
   },
+  // コーナー名は中の課題名（「アームを止める」）と別にする。同じ名前だと、
+  // 選んだ先に同じ名前が出て、入ったのか押し損ねたのかが分からない。
+  // ゲームセンターの語（UFOキャッチャー等）は既定表示しない方針なので中立に。
+  "tile.crane-corner.title": {
+    ruby: "アームで つかむ",
+    kanji: "アームで つかむ",
+    kana: "アームで つかむ",
+    en: "Claw grab",
+  },
+  "tile.crane-corner.desc": {
+    ruby: "2つの あそびかたから選[えら]ぶ",
+    kanji: "2つの あそびかたから選ぶ",
+    kana: "2つの あそびかたから えらぶ",
+    en: "Choose one of two ways to play",
+  },
+  // エンドレスの2枚。説明はどちらも「続けるほど難しくなる」で揃える
+  // ——何が難しくなるか（範囲・時間）は遊べば分かるが、終わらないことと
+  // 難しくなることは、選ぶ前に分かっている必要がある。
+  "tile.crane-endless.title": {
+    ruby: "ずっと止[と]める",
+    kanji: "ずっと止める",
+    kana: "ずっと とめる",
+    en: "Endless claw",
+  },
+  "tile.crane-endless.desc": {
+    ruby: "続[つづ]けるほど 難[むずか]しくなる",
+    kanji: "続けるほど 難しくなる",
+    kana: "つづけるほど むずかしくなる",
+    en: "It gets harder the longer you play",
+  },
+  "tile.fishing-endless.title": {
+    ruby: "ずっと釣[つ]る",
+    kanji: "ずっと釣る",
+    kana: "ずっと つる",
+    en: "Endless fishing",
+  },
+  "tile.fishing-endless.desc": {
+    ruby: "続[つづ]けるほど 難[むずか]しくなる",
+    kanji: "続けるほど 難しくなる",
+    kana: "つづけるほど むずかしくなる",
+    en: "It gets harder the longer you play",
+  },
   "tile.fishing-corner.title": { ruby: "さかなつり", kanji: "さかなつり", kana: "さかなつり", en: "Fishing" },
   "tile.fishing-corner.desc": { ruby: "2つの釣[つ]りかたから選[えら]ぶ",
     kanji: "2つの釣りかたから選ぶ",
@@ -380,6 +422,22 @@ const STRINGS = {
     kana: "ゆかの ひかる わの なかで とめると つかめます。",
     en: "Stop inside the glowing ring on the floor to grab it.",
   },
+  // エンドレスでは「やりかた」の最後の1行だけを差し替える
+  // （games/gameHost.js の renderReady）。回数や時間の約束が変わるのは
+  // 最後の行だけで、押し方の説明はどちらも同じ——全文を別キーで二重に
+  // 持つと、片方だけ直したときに静かに食い違う。
+  "howto.endless.fishing": {
+    ruby: "続[つづ]けるほど難[むずか]しくなります。1回[かい]失敗[しっぱい]すると終[お]わりです。",
+    kanji: "続けるほど難しくなります。1回失敗すると終わりです。",
+    kana: "つづけるほど むずかしく なります。1かい しっぱいすると おわりです。",
+    en: "It gets harder as you go. One miss ends the run.",
+  },
+  "howto.endless.crane": {
+    ruby: "続[つづ]けるほど難[むずか]しくなります。1回[かい]失敗[しっぱい]すると終[お]わりです。",
+    kanji: "続けるほど難しくなります。1回失敗すると終わりです。",
+    kana: "つづけるほど むずかしく なります。1かい しっぱいすると おわりです。",
+    en: "It gets harder as you go. One miss ends the run.",
+  },
   "howto.fishing.1": { ruby: "魚[さかな]が右[みぎ]から泳[およ]いできます。",
     kanji: "魚が右から泳いできます。",
     kana: "さかなが みぎから およいで きます。",
@@ -433,6 +491,14 @@ const STRINGS = {
     kanji: "のこり {n}かい",
     kana: "のこり {n}かい",
     en: "{n} left",
+  },
+  // 「ずっとあそぶ」ときは残りが無い。やった数を出す（0からの積み上げは、
+  // 残り時間より達成として読みやすい）。
+  "progress.endlessCount": {
+    ruby: "{n}回目[かいめ]",
+    kanji: "{n}回目",
+    kana: "{n}かいめ",
+    en: "#{n}",
   },
   "progress.remainingTime": {
     ruby: "のこり {time}",
@@ -702,6 +768,19 @@ const STRINGS = {
   "corner.rhythm.eyebrow": { ruby: "Rhythm", kanji: "Rhythm", kana: "Rhythm", en: "Rhythm" },
   "corner.rhythm.title": { ruby: "リズム", kanji: "リズム", kana: "リズム", en: "Rhythm" },
   "corner.rhythm.guide": { ruby: "おとの アクティビティを えらびます", kanji: "おとの アクティビティを えらびます", kana: "おとの アクティビティを えらびます", en: "Choose a sound activity" },
+  "corner.crane.eyebrow": { ruby: "Crane", kanji: "Crane", kana: "Crane", en: "Crane" },
+  "corner.crane.title": {
+    ruby: "アームで つかむ",
+    kanji: "アームで つかむ",
+    kana: "アームで つかむ",
+    en: "Claw grab",
+  },
+  "corner.crane.guide": {
+    ruby: "あそびかたを えらびます",
+    kanji: "あそびかたを えらびます",
+    kana: "あそびかたを えらびます",
+    en: "Choose how to play",
+  },
   "corner.fishing.eyebrow": { ruby: "Fishing", kanji: "Fishing", kana: "Fishing", en: "Fishing" },
   "corner.fishing.title": { ruby: "さかなつり", kanji: "さかなつり", kana: "さかなつり", en: "Fishing" },
   "corner.fishing.guide": { ruby: "つりかたを えらびます", kanji: "つりかたを えらびます", kana: "つりかたを えらびます", en: "Choose how to fish" },

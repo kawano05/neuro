@@ -1977,6 +1977,62 @@ async function checkRhythmVisualProfiles(page, project) {
   assert(new Set(allThemes.map((item) => item.background)).size === 4, "All four rhythm games need distinct rendered worlds");
 }
 
+/**
+ * エンドレスのさかなつりに「のこり時間」を出さない。
+ *
+ * 実装の都合で内部には15分の上限がある（合図の音を最初にまとめて計画する
+ * 作りなので、途中で計画を作り直すと時刻の基準ごと取り直すことになる。§9.6）。
+ * これは記録が壊れないための上限であって、利用者への約束ではない。
+ * カウントダウンを出すと終わりが時間で決まるように読めるが、実際は
+ * 1回失敗したら終わり——画面が嘘をつくことになる。
+ *
+ * 夕暮れ（is-dusk）も「もうすぐ終わり」の合図なので出さない。
+ */
+async function checkEndlessFishingHasNoClock(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, "さかなつり");
+  await openActivity(page, "ずっと釣る");
+  await waitForClass(page, "#gameView", "is-active");
+
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  const readyText = (await page.locator(".game-ready").textContent()) || "";
+  assert(
+    !readyText.includes("1分間") && !readyText.includes("1ぷんかん"),
+    `Endless fishing must not promise a one-minute run: ${readyText.replace(/\s+/g, " ").trim()}`
+  );
+
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+
+  const audioAvailable = await page.evaluate(
+    () => Boolean(window.AudioContext || window.webkitAudioContext)
+  );
+  if (!audioAvailable) {
+    // 音が出せない端末ではセッションを開かない（checkFishingGameFlow と同じ）。
+    await page.locator(".game-unavailable").waitFor({ state: "visible" });
+    return SKIPPED;
+  }
+
+  await page.waitForTimeout(900);
+  const progress = ((await page.locator("#gameProgress").textContent()) || "").trim();
+  assert(
+    !progress.includes("のこり") && !progress.includes("残り"),
+    `Endless fishing must not show a countdown, got "${progress}"`
+  );
+  assert(
+    /\d/.test(progress),
+    `Endless fishing should show how far the run has got, got "${progress}"`
+  );
+  assert(
+    (await page.locator(".fishing-scene.is-dusk").count()) === 0,
+    "Endless fishing must not show the dusk cue that means the run is nearly over"
+  );
+
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
+}
+
 async function checkFishingGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -2081,9 +2137,71 @@ async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
   throw new Error(`crane status never became "${text}" (last seen: "${seen}")`);
 }
 
+/**
+ * エンドレスは1回失敗したら終わり、結果画面へ進む。
+ *
+ * 難度が上がりつづける遊びに終わりの条件が無いと、いつ終わるかが「支援者が
+ * 見ていて止める」だけになる——利用者からは、自分の操作と終わりが結びつかない。
+ *
+ * 失敗はわざと作る。走査が始まった直後（アームが端にいるうち）に両軸を止めると
+ * 狙いから大きく外れる。狙いは内側に寄せて置かれるので（craneGeometry.js の
+ * pickTarget）、端で止めれば grip 圏には入らない。
+ */
+async function checkEndlessEndsOnFailure(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, "アームで つかむ");
+  await openActivity(page, "ずっと止める");
+  await waitForClass(page, "#gameView", "is-active");
+
+  // レディ画面の文言が、エンドレスの約束（終わり方）に差し替わっていること。
+  // ここが元のままだと、画面は「5回」と言っているのに終わり方が違う。
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  const readyText = (await page.locator(".game-ready").textContent()) || "";
+  assert(
+    readyText.includes("失敗") || readyText.includes("しっぱい"),
+    `Endless ready screen must state how the run ends, got: ${readyText.replace(/\s+/g, " ").trim()}`
+  );
+
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+
+  // 端で止めて外す。ガードを抜ける最小限だけ待つ。
+  await waitForCraneStatus(page, "横に動きます");
+  await page.waitForTimeout(400);
+  await page.locator("#gameStage").click();
+  await waitForCraneStatus(page, "奥に動きます");
+  await page.waitForTimeout(400);
+  await page.locator("#gameStage").click();
+
+  // 1試行で結果画面へ抜けること。回数で終わるゲームなら5回続くので、
+  // ここで結果が出れば「失敗で終わった」ことの証拠になる。
+  await waitForClass(page, "#resultView", "is-active");
+
+  const session = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    const runs = (state.sessions || []).filter((item) => item.gameId === "crane");
+    return runs[runs.length - 1] || null;
+  }, storageKey);
+  assert(session, "An endless crane run must be recorded");
+  assert(session.config?.endless === true, "The run must be recorded as endless");
+  assert(
+    session.trials.length >= 1 && session.trials.at(-1).judgment !== "grip",
+    `The run must end on a failed trial, got ${JSON.stringify(session.trials.map((t) => t.judgment))}`
+  );
+  // 完走扱いで残ること。aborted に倒れると成立確認の材料から外れる
+  // （readinessCheck.js の isUsable）。
+  assert(session.aborted === false, "An endless run that ended on a miss is not an abort");
+  assert(
+    session.config.targetTrials === session.trials.length,
+    "The actual trial count must be written back so the record stays self-consistent"
+  );
+}
+
 async function checkCraneGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, "アームで つかむ");
   await openActivity(page, "アームを止める");
   await waitForClass(page, "#gameView", "is-active");
   // crane も content.js の gameHowTo を持つようになったので、レディ画面を
@@ -2174,6 +2292,7 @@ async function checkResultScreenStaysInTheUserWorld(page) {
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, "アームで つかむ");
   await openActivity(page, "アームを止める");
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
@@ -2314,6 +2433,7 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
     await page.reload();
     await page.locator("#startStage").click();
     await waitForClass(page, "#homeView", "is-active");
+    await openActivity(page, "アームで つかむ");
     await openActivity(page, "アームを止める");
     await page.locator(".game-ready").waitFor({ state: "visible" });
     // タイルを押した直後のこの押下は、入力ファネルの多重発火除去

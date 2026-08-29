@@ -27,6 +27,11 @@
 // =====================================================================
 
 import { cueTones, fishingPresets, fishingSpecies } from "../content.js";
+import {
+  endlessDifficultyStep,
+  resolveDifficultyMode,
+  resolveEndlessMode,
+} from "../difficultyMode.js";
 import { generateGoNoGoSequence } from "./judge.js";
 import { generateForeperiods, judgeReaction } from "./reaction.js";
 
@@ -187,11 +192,62 @@ function computeSummary(trials) {
  *   （games/rhythm.js の createRhythmGame(gameId) と同じ作法）。
  * @returns {(ctx: import("./gameHost.js").GameCtx) => import("./gameHost.js").GameInstance}
  */
+/**
+ * エンドレスの難度の上げ方。
+ *
+ * 上げるのは受付時間（limitMs）。反応課題の難しさは「合図からどれだけの
+ * うちに押さないといけないか」そのものなので、ここを詰めるのがいちばん
+ * 素直で、遊んでいて分かる。魚の速さや音を変えても、測っているものが
+ * 変わるだけで難しさは変わらない。
+ *
+ * 4回ごとに1段、1段で150ms短縮。5段で打ち止め（既定の2000msなら
+ * 2000 → 1850 → 1700 → 1550 → 1400 → 1250ms）。
+ *
+ * 下限 1250ms には根拠がある。成立確認（readinessCheck.js）が随意運動として
+ * 認める反応時間の上限は 1500ms で、スイッチ操作を行う利用者はその近くに
+ * 分布しうる。下限をそれより下に置くと「押せたはずの入力が間に合わない」
+ * 課題になり、難しい課題ではなく成立していない課題になる。
+ *
+ * 適用した値は試行ごとに記録する（state.js が試行の limitMs を優先して
+ * 判定するのはこのため）。config の値だけでは、何段目の試行かを後から
+ * 復元できない。
+ */
+const ENDLESS_TRIALS_PER_STEP = 4;
+const ENDLESS_MAX_STEP = 5;
+const ENDLESS_LIMIT_STEP_MS = 150;
+const ENDLESS_MIN_LIMIT_MS = 1250;
+
+function endlessLimitMs(baseLimitMs, trialIndex) {
+  const step = endlessDifficultyStep(trialIndex, ENDLESS_TRIALS_PER_STEP, ENDLESS_MAX_STEP);
+  return Math.max(ENDLESS_MIN_LIMIT_MS, baseLimitMs - ENDLESS_LIMIT_STEP_MS * step);
+}
+
+/**
+ * エンドレスの長さと上限。
+ *
+ * さかなつりは時間で区切る課題で、合図の音は最初にまとめて計画し、
+ * lookahead スケジューラ（audio.js）が窓に入ったものだけを予約していく。
+ * 途中で計画を作り直すと、時刻の基準（anchorPerfMs / sessionStartAudioMs）を
+ * 取り直すことになり、反応時間の測り方そのものが変わる——遊びのために
+ * 測定の土台を動かすのは割に合わない。
+ *
+ * なので「無限」ではなく「長い1回」にする。支援者が終わらせるまで続き、
+ * 誰も終わらせなければ15分で終わる。試行数の上限は state.js の rt 検証が
+ * targetTrials を 1〜200 で切ることに合わせる（超えると再読み込みで
+ * 「完走していない回」に倒れ、成立確認の材料からも外れる）。
+ */
+const ENDLESS_SESSION_MS = 15 * 60_000;
+const ENDLESS_MAX_TRIALS = 200;
+
 export function createFishingGame(gameId) {
   return function create(ctx) {
   const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml } = ctx;
 
   const config = { ...fishingPresets[gameId] };
+  // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
+  // 返すので、測る回の長さは protocol のまま動かない。
+  config.endless = resolveEndlessMode(ctx.settings, ctx.endless);
+  if (config.endless) config.sessionMs = ENDLESS_SESSION_MS;
   let stageEl = null;
   let statusEl = null;
   // いま状態表示に出している文言のキー。
@@ -219,6 +275,10 @@ export function createFishingGame(gameId) {
   let currentIndex = 0;
   let session = null;
   let sessionEndMs = 0;
+  // エンドレスで失敗が出たか。記録の直後にその場で finalize すると、
+  // 釣り上げ／逃げの演出と読み上げが途中で切れる。旗だけ立てて、枠が
+  // 終わるところ（advanceSlot）で畳む。
+  let endlessFailed = false;
   // 巻き上げ演出中は rAF による位置更新を止め、CSS の遷移に任せる。
   let reelingIndex = -1;
   // 「その枠の試行が記録済みか」と「枠そのものが終わったか」を分けて持つ。
@@ -352,6 +412,14 @@ export function createFishingGame(gameId) {
   }
 
   function updateProgress(nowRelativeMs) {
+    // エンドレスには「のこり時間」が無い。15分は記録が壊れないための上限で
+    // あって、利用者への約束ではない——カウントダウンを出すと、終わりが
+    // 時間で決まるように読める（実際は1回失敗したら終わり）。crane と同じく
+    // やった数を出す。
+    if (config.endless) {
+      setProgress(t("progress.endlessCount", { n: session ? session.trials.length + 1 : 1 }));
+      return;
+    }
     setProgress(t("progress.remainingTime", { time: formatRemaining(sessionEndMs - nowRelativeMs) }));
   }
 
@@ -429,6 +497,17 @@ export function createFishingGame(gameId) {
     return reactionTimeMs < median(priorRts);
   }
 
+  /**
+   * その試行の受付時間。
+   *
+   * エンドレスでは試行ごとに変わる（endlessLimitMs）。判定・表示・終端の
+   * すべてが同じ値を見ていないと、「画面ではまだ食いついているのに判定は
+   * 時間切れ」のような食い違いが出る。config の値を直に読まず必ずここを通す。
+   */
+  function limitMsOf(planned) {
+    return typeof planned?.limitMs === "number" ? planned.limitMs : config.limitMs;
+  }
+
   function recordCurrent(judgment, inputMs = null) {
     if (finished || currentIndex >= trialsPlan.length) return;
     if (resolvedIndex === currentIndex) return; // 1枠1行（多重記録を防ぐ）
@@ -440,6 +519,10 @@ export function createFishingGame(gameId) {
       kind: planned.kind,
       foreperiodMs: planned.foreperiodMs,
       cueMs: planned.cueMs,
+      // その試行の受付時間。エンドレスでは試行ごとに変わるので、config の値
+      // だけでは再読み込み時に判定を再現できない（state.js が試行の limitMs を
+      // 優先するのはこのため）。何段目の試行かも、この値から復元できる。
+      limitMs: limitMsOf(planned),
       inputMs: normalizedInput,
       reactionTimeMs:
         judgment === "hit" && normalizedInput !== null
@@ -456,6 +539,15 @@ export function createFishingGame(gameId) {
     session.trials.push(row);
     session.summary = computeSummary(session.trials);
     logTrial(session);
+
+    // エンドレスは1回でも失敗したところで終わり（crane と同じ規則）。
+    //
+    // correctRejection は「押してはいけない合図で押さなかった」で、正しく
+    // できた回。失敗に数えない——長靴で待てたことを失敗にすると、抑制の
+    // 練習が成立しなくなる。
+    if (config.endless && judgment !== "hit" && judgment !== "correctRejection") {
+      endlessFailed = true;
+    }
 
     // ここから先はすべて**入力より後**の音。
     //
@@ -531,6 +623,14 @@ export function createFishingGame(gameId) {
     currentIndex += 1;
     resolvedJudgment = null;
     swimmerEl?.classList.remove("is-lost");
+    // エンドレスは1回失敗したら終わり。難度が上がりつづける遊びに終わりの
+    // 条件が無いと、いつ終わるかが「支援者が見ていて止める」だけになる
+    // ——利用者からは、自分の操作と終わりが結びつかない。失敗で終わるなら、
+    // どこまで続けられたかがそのまま結果になる。
+    if (endlessFailed) {
+      finalize();
+      return;
+    }
     if (currentIndex >= trialsPlan.length) finalize();
   }
 
@@ -538,6 +638,12 @@ export function createFishingGame(gameId) {
     if (finished || !session) return;
     finished = true;
     session.finished = true;
+    if (config.endless) {
+      // エンドレスには「予定した試行数」が無い。実際にやった数を書き戻さないと
+      // state.js の完走判定（trials.length === targetTrials）が合わず、
+      // 再読み込みで aborted に倒れて成立確認の材料からも外れる。
+      session.config.targetTrials = session.trials.length;
+    }
     session.summary = computeSummary(session.trials);
     logTrial(session);
     stopLoop();
@@ -566,7 +672,7 @@ export function createFishingGame(gameId) {
    */
   function swimX(nowRelativeMs, planned) {
     const appearMs = planned.cueMs - config.approachMs;
-    const holdEndMs = planned.cueMs + config.limitMs;
+    const holdEndMs = planned.cueMs + limitMsOf(planned);
     const leaveMs = holdEndMs + config.exitMs;
     if (nowRelativeMs < appearMs || nowRelativeMs > leaveMs) return null;
     if (nowRelativeMs <= planned.cueMs) {
@@ -624,7 +730,7 @@ export function createFishingGame(gameId) {
     }
 
     const beforeCue = nowRelativeMs < planned.cueMs;
-    const withinWindow = nowRelativeMs <= planned.cueMs + config.limitMs;
+    const withinWindow = nowRelativeMs <= planned.cueMs + limitMsOf(planned);
     if (beforeCue) {
       if (shownStatusKey !== "fishing.wait" && x !== null && x > 70) {
         setStatus("fishing.wait");
@@ -639,7 +745,7 @@ export function createFishingGame(gameId) {
     if (destroyed || finished || !session) return;
     const nowRelativeMs = toSessionRelativeMs(audio.scheduler.now() * 1000);
     const planned = trialsPlan[currentIndex];
-    if (planned && nowRelativeMs > planned.cueMs + config.limitMs) {
+    if (planned && nowRelativeMs > planned.cueMs + limitMsOf(planned)) {
       advanceSlot();
       if (finished || destroyed) return;
     }
@@ -647,7 +753,13 @@ export function createFishingGame(gameId) {
     updateProgress(nowRelativeMs);
     // 残りが少なくなったら空を夕方の色にする。音で急かすとアタリ音と
     // 混ざるので、時間の経過は光の変化だけで伝える。
-    sceneEl?.classList.toggle("is-dusk", sessionEndMs - nowRelativeMs <= DUSK_MS);
+    // 夕暮れも「もうすぐ終わり」の合図なので、エンドレスでは出さない。
+    // 上限の15分に近づいたことを空の色で伝えても、利用者にとっては
+    // 意味の無い合図になる（終わりは失敗で決まる）。
+    sceneEl?.classList.toggle(
+      "is-dusk",
+      !config.endless && sessionEndMs - nowRelativeMs <= DUSK_MS
+    );
     rafId = window.requestAnimationFrame(loop);
   }
 
@@ -659,7 +771,7 @@ export function createFishingGame(gameId) {
 
     // rAFの境界直前に入力が来ても、期限切れの枠を正常に確定してから
     // 次の前刺激区間の入力として扱う。
-    while (planned && inputMs > planned.cueMs + config.limitMs) {
+    while (planned && inputMs > planned.cueMs + limitMsOf(planned)) {
       advanceSlot();
       if (finished) return;
       planned = trialsPlan[currentIndex];
@@ -683,7 +795,7 @@ export function createFishingGame(gameId) {
     // 記録せずに捨てる（誤った試行へ付け替えるより実態に近い）。
     if (inputMs < planned.startMs) return;
 
-    const judgment = judgeReaction(inputMs, planned.cueMs, config.limitMs, planned.kind);
+    const judgment = judgeReaction(inputMs, planned.cueMs, limitMsOf(planned), planned.kind);
     recordCurrent(judgment, inputMs);
   }
 
@@ -694,7 +806,10 @@ export function createFishingGame(gameId) {
    * trials.length === targetTrials を見るため）。
    */
   function buildPlan() {
-    const maxTrials = Math.ceil(config.sessionMs / (config.foreperiodMinMs + config.limitMs)) + 2;
+    const maxTrials = Math.min(
+      ENDLESS_MAX_TRIALS,
+      Math.ceil(config.sessionMs / (config.foreperiodMinMs + config.limitMs)) + 2
+    );
     const foreperiods = generateForeperiods(
       maxTrials,
       config.foreperiodMinMs,
@@ -704,13 +819,20 @@ export function createFishingGame(gameId) {
     const planned = [];
     let cursorMs = 0;
     for (const foreperiodMs of foreperiods) {
+      // エンドレスでは試行ごとに受付時間が短くなる。枠の長さが変わるので、
+      // 次の試行の開始位置もその試行の limitMs で決める。
+      const limitMs = config.endless
+        ? endlessLimitMs(config.limitMs, planned.length)
+        : config.limitMs;
       const cueMs = cursorMs + foreperiodMs;
-      if (cueMs + config.limitMs > config.sessionMs) break;
+      if (cueMs + limitMs > config.sessionMs) break;
+      // 記録が壊れる長さまでは伸ばさない（ENDLESS_MAX_TRIALS のコメント）。
+      if (planned.length >= ENDLESS_MAX_TRIALS) break;
       // startMs = この試行の受付が始まる時刻（前の試行の枠の終わり）。
       // handleInput がこれを使って、決着済みの試行の残り時間に来た入力を
       // 次の試行へ持ち越さないようにする。
-      planned.push({ index: planned.length, startMs: cursorMs, foreperiodMs, cueMs });
-      cursorMs = cueMs + config.limitMs;
+      planned.push({ index: planned.length, startMs: cursorMs, foreperiodMs, cueMs, limitMs });
+      cursorMs = cueMs + limitMs;
     }
 
     const kindSequence = generateGoNoGoSequence(planned.length, 1 - config.fakeRatio).map(
@@ -745,6 +867,7 @@ export function createFishingGame(gameId) {
     const { trials, kindSequence, foreperiods } = buildPlan();
     trialsPlan = trials;
     currentIndex = 0;
+    endlessFailed = false;
     resolvedIndex = -1;
     resolvedJudgment = null;
     reelingIndex = -1;
@@ -801,7 +924,7 @@ export function createFishingGame(gameId) {
     // ゲームが終わってしまう（実測でそうなっていた）。
     const lastTrial = trialsPlan[trialsPlan.length - 1];
     sessionEndMs = lastTrial
-      ? lastTrial.cueMs + config.limitMs
+      ? lastTrial.cueMs + limitMsOf(lastTrial)
       : config.sessionMs + startOffsetMs;
 
     session = {
@@ -816,6 +939,22 @@ export function createFishingGame(gameId) {
         ...config,
         seedSequence: foreperiods,
         kindSequence,
+        // その回が「そくてい」か「れんしゅう」か（src/lib/difficultyMode.js）。
+        //
+        // リズム・クレーン・リールは記録していたのに、反応課題だけ落ちていた
+        // ——config にも sanitize にもCSVにも無く、3経路すべてで欠けていた。
+        // さかなつりは成立確認の「いしを もって おせる」の根拠にも使う
+        // （src/lib/readinessCheck.js）ので、どちらの回の記録かを言えないと、
+        // 成立確認の材料そのものが層別できない。
+        //
+        // 注意: fishing は MEASUREMENT_PROTOCOL に項目を持たない。つまり
+        // ここでの "measure" は「そくていモードで走らせた回」であって
+        // 「パラメータが protocol で固定されていた回」ではない。パラメータは
+        // fishingPresets 由来のまま同じ行に出るので、解析側はそちらで確かめ
+        // られる。
+        difficultyMode: resolveDifficultyMode(ctx.settings),
+        // 成立確認の状態（met / overridden / n/a）。他の課題と同じ意味。
+        measurementReadiness: ctx.readiness || "n/a",
       },
       device: audio.getDeviceInfo(),
       trials: [],
@@ -842,7 +981,20 @@ export function createFishingGame(gameId) {
     window.clearTimeout(catchTimer);
     audio.scheduler.stop();
     if (session && !finished) {
-      session.aborted = true;
+      if (config.endless) {
+        // エンドレスには「予定した終わり」が無いので、止めたところが終わり。
+        // aborted のままにすると成立確認の材料から外れる（readinessCheck.js の
+        // isUsable は aborted を使わない）——さかなつりは「いしを もって
+        // おせる」の根拠なので、ここが外れると成立確認が通らなくなる。
+        //
+        // 実際にやった数を targetTrials へ書き戻す（state.js の完走判定が
+        // trials.length === targetTrials を見る）。
+        session.finished = true;
+        session.aborted = false;
+        session.config.targetTrials = session.trials.length;
+      } else {
+        session.aborted = true;
+      }
       session.summary = computeSummary(session.trials);
       logTrial(session);
     }

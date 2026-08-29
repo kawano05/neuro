@@ -80,6 +80,43 @@ export const slotCornerTile = {
   iconClass: "fa-solid fa-circle-stop",
 };
 
+/** UFOキャッチャー（ふつう / エンドレス）をまとめる二階層目への入口。 */
+export const craneCornerTile = {
+  id: "crane-corner",
+  title: "アームで つかむ",
+  description: "2つの あそびかたから えらぶ",
+  iconClass: "fa-solid fa-hand",
+};
+
+/**
+ * エンドレスの選択肢。
+ *
+ * gameTiles とは別に持つ。エンドレスは**遊び方**であって別の課題ではない
+ * ——同じ gameId・同じ taskType で走り、記録は session.config.endless で
+ * 区別する。ここに新しい gameId を足すと、taskType の判定・成立確認の材料・
+ * そくていの protocol まで枝分かれし、「同じ課題の別の遊び方」という事実が
+ * コードから消える。
+ *
+ * launch は gameId と { endless: true } を渡す（games/gameHost.js）。
+ */
+export const endlessTiles = [
+  {
+    id: "crane-endless",
+    gameId: "crane",
+    title: "ずっと とめる",
+    description: "つづけるほど むずかしくなる",
+    iconClass: "fa-solid fa-infinity",
+    visualRequired: true,
+  },
+  {
+    id: "fishing-endless",
+    gameId: "fishing",
+    title: "ずっと つる",
+    description: "つづけるほど むずかしくなる",
+    iconClass: "fa-solid fa-infinity",
+  },
+];
+
 /** さかなつり2種（純粋な反応時間 / 抑制つき）をまとめる二階層目への入口。 */
 export const fishingCornerTile = {
   id: "fishing-corner",

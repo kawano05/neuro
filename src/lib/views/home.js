@@ -9,6 +9,7 @@
 // =====================================================================
 
 import { gameModules } from "../games/registry.js";
+import { isMeasurementMode } from "../difficultyMode.js";
 import {
   SCAN_OVERLAP_TOLERANCE_PX,
   SCAN_PAGE_SIZE,
@@ -19,6 +20,8 @@ import {
 import {
   activityTiles,
   cueTones,
+  craneCornerTile,
+  endlessTiles,
   fishingCornerTile,
   learningCornerTile,
   slotCornerTile,
@@ -333,6 +336,19 @@ export function initHome(ctx) {
   function renderTiles() {
     elements.gameTileGrid.innerHTML = "";
 
+    /**
+     * エンドレスの選択肢を引く。
+     *
+     * そくてい中は出さない。そくていは試行数とパラメータを固定することが
+     * 条件そのもので、難度が回の途中で動く遊び方は選ばせない
+     * （difficultyMode.js の resolveEndlessMode が二重防御で落とすが、
+     * 押せてしまうと「選んだのに効かない」入口になる）。
+     */
+    function endlessTileFor(gameId) {
+      if (isMeasurementMode(state.settings)) return null;
+      return endlessTiles.find((tile) => tile.gameId === gameId) || null;
+    }
+
     /** 二階層目から一覧へ戻る（コーナー共通）。 */
     function leaveCorner() {
       showLobby();
@@ -357,11 +373,26 @@ export function initHome(ctx) {
       return;
     }
 
-    if (activeCorner === "fishing") {
-      renderCornerHeadings("fishing");
-      const cornerGames = ["fishing", "fishing-gonogo"].map(gameById).filter(Boolean);
+    if (activeCorner === "crane") {
+      renderCornerHeadings("crane");
+      const cornerGames = [gameById("crane"), endlessTileFor("crane")].filter(Boolean);
       renderScanList([...cornerGames, cornerBackTile()], (game) => {
         if (game.id === "home-back") leaveCorner();
+        else if (game.gameId) ctx.gameHost.launch(game.gameId, { endless: true });
+        else ctx.gameHost.launch(game.id);
+      });
+      return;
+    }
+
+    if (activeCorner === "fishing") {
+      renderCornerHeadings("fishing");
+      const cornerGames = [
+        ...["fishing", "fishing-gonogo"].map(gameById),
+        endlessTileFor("fishing"),
+      ].filter(Boolean);
+      renderScanList([...cornerGames, cornerBackTile()], (game) => {
+        if (game.id === "home-back") leaveCorner();
+        else if (game.gameId) ctx.gameHost.launch(game.gameId, { endless: true });
         else ctx.gameHost.launch(game.id);
       });
       return;
@@ -386,7 +417,7 @@ export function initHome(ctx) {
       gameById("color-legacy"),
       visibleSlotGames.length ? slotCornerTile : null,
       gameById("gonogo"),
-      !state.settings.hideVisualTasks ? gameById("crane") : null,
+      !state.settings.hideVisualTasks ? craneCornerTile : null,
       fishingCornerTile,
       learningCornerTile,
     ].filter(Boolean);
@@ -404,7 +435,8 @@ export function initHome(ctx) {
     }
 
     renderScanList(homeTiles, (game) => {
-      if (game.id === "slot-corner") enterCorner("slot", ctx.t("voice.enterCorner", { name: ctx.t("corner.slot.title") }));
+      if (game.id === "crane-corner") enterCorner("crane", ctx.t("voice.enterCorner", { name: ctx.t("corner.crane.title") }));
+      else if (game.id === "slot-corner") enterCorner("slot", ctx.t("voice.enterCorner", { name: ctx.t("corner.slot.title") }));
       else if (game.id === "fishing-corner") enterCorner("fishing", ctx.t("voice.enterCorner", { name: ctx.t("corner.fishing.title") }));
       else if (game.id === "learning-corner") enterCorner("learning", ctx.t("voice.enterCorner", { name: ctx.t("corner.learning.title") }));
       else ctx.gameHost.launch(game.id);

@@ -35,7 +35,12 @@
 // =====================================================================
 
 import { cranePresets, cranePrizes, cueTones } from "../content.js";
-import { resolveCraneDifficulty, resolveDifficultyMode } from "../difficultyMode.js";
+import {
+  endlessDifficultyStep,
+  resolveCraneDifficulty,
+  resolveDifficultyMode,
+  resolveEndlessMode,
+} from "../difficultyMode.js";
 import { evaluatePick, graspOutcome, scanPercentAt } from "./pointing.js";
 import {
   CRANE_CHUTE as CHUTE,
@@ -197,12 +202,90 @@ function computeSummary(trials, collected = []) {
  * 無かった）。値そのものはセッションの config と各試行に記録されるので、
  * どの条件で測ったかは後から追える。
  */
-function resolveCraneConfig(settings, readiness) {
+/**
+ * エンドレスの上限回数。
+ *
+ * 無制限にはしない。state.js の scan セッション検証が targetTrials を
+ * 1〜100 で切るため、これを超えて記録すると再読み込みで「完走していない回」
+ * に倒れ、成立確認の材料からも外れる（readinessCheck.js の isUsable は
+ * aborted の回を使わない）。記録が壊れるくらいなら上限で終わる。
+ */
+const ENDLESS_MAX_TRIALS = 100;
+
+/**
+ * エンドレスの難度の上げ方。
+ *
+ * 2段構えにする。**先に掴める範囲を詰め、詰めきってから速さを上げる。**
+ *
+ *   1段目（0〜5段） 掴める範囲 toleranceR を 15%ずつ狭める
+ *                    15 → 12.75 → 10.8 → 9.2 → 7.8 → 6.6
+ *   2段目（6〜11段） 範囲は下限のまま、アームの速さ sweepMs を 12%ずつ詰める
+ *                    2200 → 1936 → 1704 → 1500 → 1320 → 1161 → 1100ms
+ *
+ * 順番に意味がある。範囲を狭めるのは「どこを狙うか」の課題を難しくする
+ * ——見て狙う練習はここで伸びる。速さを上げるのは「いつ押すか」の課題を
+ * 難しくする。同時に上げると、外した原因が狙いなのか間合いなのか、本人にも
+ * 支援者にも分からない。片方ずつなら、どこで終わったかがそのまま「何が
+ * 難しかったか」になる。
+ *
+ * 要求される時間精度は「grip圏の半径 × sweepMs/100」（content.js）。
+ * 既定 15/2200 で各軸 ±165ms、1段目の終わりで ±73ms、2段目の終わりで ±36ms。
+ * 人が確実に出せる精度は超える——が、エンドレスは1回失敗で終わる遊びなので、
+ * いつか必ず届かなくなるのが正しい。どこまで続けられたかが結果になる。
+ *
+ * 速さの下限 1100ms には別の理由もある。フェーズ開始から INPUT_GUARD_MS
+ * （320ms）の入力は捨てるので、掃引がこれに近づくと「押せない時間」が
+ * 掃引の大半を占める。掃引は往復する（pointing.js の scanPercentAt は
+ * 周期 2×sweepMs の三角波）ので位置そのものは到達可能なままだが、
+ * 3倍以上の余裕は残す。
+ */
+const ENDLESS_TRIALS_PER_STEP = 3;
+const ENDLESS_TOLERANCE_STEPS = 5;
+const ENDLESS_SPEED_STEPS = 6;
+const ENDLESS_MAX_STEP = ENDLESS_TOLERANCE_STEPS + ENDLESS_SPEED_STEPS;
+const ENDLESS_TOLERANCE_RATIO = 0.85;
+const ENDLESS_MIN_TOLERANCE_R = 6;
+const ENDLESS_SWEEP_RATIO = 0.88;
+const ENDLESS_MIN_SWEEP_MS = 1100;
+
+/** この試行が何段目か（0始まり）。1段目と2段目の切り分けはここが元。 */
+function endlessStepAt(trialIndex) {
+  return endlessDifficultyStep(trialIndex, ENDLESS_TRIALS_PER_STEP, ENDLESS_MAX_STEP);
+}
+
+/**
+ * エンドレスで、この試行に適用する掴める範囲。
+ *
+ * アシスト（連続で外したときに一時的に広げる assistedToleranceR）とは別物で、
+ * こちらが先に効く土台。土台を狭めたうえで、外しつづければアシストが広げる
+ * ——「難しくなるが、詰むことはない」を両方成り立たせる。
+ */
+export function endlessToleranceR(baseR, trialIndex) {
+  const step = Math.min(endlessStepAt(trialIndex), ENDLESS_TOLERANCE_STEPS);
+  return Math.max(ENDLESS_MIN_TOLERANCE_R, baseR * ENDLESS_TOLERANCE_RATIO ** step);
+}
+
+/**
+ * エンドレスで、この試行に適用するアームの速さ（片道の掃引時間）。
+ *
+ * 範囲を詰めきる（ENDLESS_TOLERANCE_STEPS 段）まではプリセットのまま。
+ * そこから先だけ速くする。
+ */
+export function endlessSweepMs(baseSweepMs, trialIndex) {
+  const speedStep = Math.max(0, endlessStepAt(trialIndex) - ENDLESS_TOLERANCE_STEPS);
+  if (speedStep === 0) return baseSweepMs;
+  return Math.max(ENDLESS_MIN_SWEEP_MS, baseSweepMs * ENDLESS_SWEEP_RATIO ** speedStep);
+}
+
+function resolveCraneConfig(settings, readiness, requestedEndless) {
   // そくていの回は protocol 固定・アシスト無し・通過音無し、
   // れんしゅうの回は支援者の設定 → 既定の順（src/lib/difficultyMode.js）。
   // どちらの回だったかも config に残して、CSVと評価ログに出す。
   return {
     ...resolveCraneDifficulty(settings, cranePresets),
+    // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
+    // 返すので、測る回の試行数は protocol のまま動かない。
+    endless: resolveEndlessMode(settings, requestedEndless),
     difficultyMode: resolveDifficultyMode(settings),
     // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
     // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
@@ -231,7 +314,7 @@ export function createCraneGame(ctx) {
   // ルビは乗らない**。いまの景品名はすべてかな・カタカナなので問題ないが、
   // 漢字の名前を足すと静かにルビだけ落ちる。その線は
   // tests/i18n.test.mjs の「景品名に漢字を使わない」で縛ってある。
-  const config = resolveCraneConfig(ctx.settings, ctx.readiness);
+  const config = resolveCraneConfig(ctx.settings, ctx.readiness, ctx.endless);
   let stageEl = null;
   let sceneEl = null;
   let statusEl = null;
@@ -270,6 +353,9 @@ export function createCraneGame(ctx) {
   let consecutiveFailures = 0;
   /** この試行で実際に適用する許容半径。試行ごとに記録する。 */
   let trialToleranceR = config.toleranceR;
+  // この試行に適用したアームの速さ。エンドレスでは試行ごとに変わるので、
+  // 描画・判定・記録がすべて同じ値を見る必要がある（config を直に読まない）。
+  let trialSweepMs = config.sweepMs;
   /** 走査カーソルの前フレーム位置。目標通過の合図音を1回だけ鳴らすのに使う。 */
   let lastPercent = null;
   let waitNudgeTimer = null;
@@ -450,6 +536,10 @@ export function createCraneGame(ctx) {
   }
 
   function updateProgress() {
+    if (config.endless) {
+      setProgress(t("progress.endlessCount", { n: currentIndex + 1 }));
+      return;
+    }
     setProgress(t("progress.remainingCount", { n: Math.max(0, config.targetTrials - currentIndex) }));
   }
 
@@ -496,8 +586,20 @@ export function createCraneGame(ctx) {
     selectedY = null;
     judgment = null;
     // この試行の許容半径を先に決める。リングの大きさと判定は必ず同じ値を使う。
+    //
+    // エンドレスでは土台そのものが試行とともに狭くなる。その上に従来の
+    // アシスト（連続で外したら一時的に広げる）を重ねる——難しくしつつ、
+    // 外しつづけたときの逃げ道は残す。
+    const baseToleranceR = config.endless
+      ? endlessToleranceR(config.toleranceR, currentIndex)
+      : config.toleranceR;
+    // 速さもここで確定させる。掃引の描画と、押した瞬間の位置計算が別の値を
+    // 使うと、見えている場所と判定される場所がずれる。
+    trialSweepMs = config.endless
+      ? endlessSweepMs(config.sweepMs, currentIndex)
+      : config.sweepMs;
     trialToleranceR = assistedToleranceR(
-      config.toleranceR,
+      baseToleranceR,
       consecutiveFailures,
       config.assistMaxSteps,
       config.assistStepRatio
@@ -555,6 +657,10 @@ export function createCraneGame(ctx) {
       targetX: target.x,
       targetY: target.y,
       toleranceR: trialToleranceR,
+      // その試行のアームの速さ。要求された時間精度は
+      // 「grip圏の半径 × sweepMs/100」なので、これが無いと、同じ距離の外れ方
+      // でも「どれだけ難しい試行だったか」を後から言えない。
+      sweepMs: trialSweepMs,
       selectedX,
       selectedY,
       dx: result.dx,
@@ -618,6 +724,12 @@ export function createCraneGame(ctx) {
     if (finished || !session) return;
     finished = true;
     session.finished = true;
+    if (config.endless) {
+      // エンドレスには「予定した回数」が無い。実際にやった回数を書き戻さないと
+      // state.js の完走判定（trials.length === targetTrials）が合わず、
+      // 再読み込みで aborted に倒れて成立確認の材料からも外れる。
+      session.config.targetTrials = session.trials.length;
+    }
     session.summary = computeSummary(session.trials, collected);
     logTrial(session);
     stopLoop();
@@ -631,8 +743,36 @@ export function createCraneGame(ctx) {
   }
 
   function nextTrial(perfMs) {
+    // エンドレスは1回でも掴めなかったところで終わり。
+    //
+    // 難度が上がりつづける遊びに終わりの条件が無いと、いつ終わるかが
+    // 「支援者が見ていて止める」だけになる——利用者からは、自分の操作と
+    // 終わりが結びつかない。失敗で終わるなら、どこまで続けられたかが
+    // そのまま結果になる。
+    //
+    // 直前の試行の判定を見る（この時点ではまだ resolveTrial の judgment が
+    // 残っている）。currentIndex を進める前に判定すること。
+    if (config.endless && judgment !== "grip") {
+      finalize();
+      return;
+    }
     currentIndex += 1;
     updateProgress();
+    if (config.endless) {
+      // 計画を使い切ったら、その場で1回ぶんだけ足す。最初にまとめて100回分
+      // 作らないのは、ほとんどの回がそこまで続かないから（作った景品の分だけ
+      // 抽選が進み、出方の履歴も変わる）。
+      if (currentIndex >= targets.length) {
+        targets.push(pickTarget(targets[targets.length - 1]));
+        prizes.push(pickPrize());
+      }
+      if (currentIndex >= ENDLESS_MAX_TRIALS) {
+        finalize();
+        return;
+      }
+      startXPhase(perfMs);
+      return;
+    }
     if (currentIndex >= config.targetTrials) {
       finalize();
       return;
@@ -686,12 +826,12 @@ export function createCraneGame(ctx) {
       const byWallClock = nowPerfMs - mountedPerfMs >= COUNT_IN_FALLBACK_MS;
       if (byAudioClock || byWallClock) startXPhase(nowPerfMs);
     } else if (phase === "x") {
-      const percent = scanPercentAt(elapsed, config.sweepMs);
+      const percent = scanPercentAt(elapsed, trialSweepMs);
       placeClaw(percent, 50, 0);
       updateGuides(percent, null);
       maybePassTone(percent, target.x, cueTones.low);
     } else if (phase === "y") {
-      const percent = scanPercentAt(elapsed, config.sweepMs);
+      const percent = scanPercentAt(elapsed, trialSweepMs);
       placeClaw(selectedX, percent, 0);
       updateGuides(selectedX, percent);
       maybePassTone(percent, target.y, cueTones.high);
@@ -809,12 +949,12 @@ export function createCraneGame(ctx) {
 
     if (phase === "x") {
       xPhaseMs = Math.max(0, perfMs - phaseStartedPerfMs);
-      selectedX = scanPercentAt(xPhaseMs, config.sweepMs);
+      selectedX = scanPercentAt(xPhaseMs, trialSweepMs);
       placeClaw(selectedX, 50, 0);
       startYPhase(perfMs);
     } else {
       yPhaseMs = Math.max(0, perfMs - phaseStartedPerfMs);
-      selectedY = scanPercentAt(yPhaseMs, config.sweepMs);
+      selectedY = scanPercentAt(yPhaseMs, trialSweepMs);
       placeClaw(selectedX, selectedY, 0);
       startDrop(perfMs);
     }
@@ -831,6 +971,7 @@ export function createCraneGame(ctx) {
     collected = [];
     consecutiveFailures = 0;
     trialToleranceR = config.toleranceR;
+    trialSweepMs = config.sweepMs;
     for (let index = 0; index < config.targetTrials; index += 1) {
       targets.push(pickTarget(targets[index - 1]));
       prizes.push(pickPrize());
@@ -884,7 +1025,22 @@ export function createCraneGame(ctx) {
     window.clearTimeout(waitNudgeTimer);
     audio.scheduler.stop();
     if (session && !finished) {
-      session.aborted = true;
+      if (config.endless) {
+        // エンドレスには「予定した回数」が無いので、途中で止めたのではなく
+        // ここが終わり。aborted のままにすると、その回は成立確認の材料から
+        // 外れる（readinessCheck.js の isUsable は aborted を使わない）——
+        // れんしゅうを重ねているのに成立確認がいつまでも通らない、という
+        // 見えない詰まりになる。
+        //
+        // 実際にやった回数を targetTrials へ書き戻す。state.js の完走判定が
+        // trials.length === targetTrials を見るため、書き戻さないと
+        // 再読み込みで aborted に倒れる。
+        session.finished = true;
+        session.aborted = false;
+        session.config.targetTrials = session.trials.length;
+      } else {
+        session.aborted = true;
+      }
       session.summary = computeSummary(session.trials, collected);
       logTrial(session);
     }

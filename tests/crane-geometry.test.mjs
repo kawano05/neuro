@@ -15,6 +15,7 @@ import {
   pickTarget,
   project,
 } from "../src/lib/games/craneGeometry.js";
+import { endlessSweepMs, endlessToleranceR } from "../src/lib/games/crane.js";
 
 let passed = 0;
 let failed = 0;
@@ -179,6 +180,50 @@ test("pickTarget still returns a usable point when every retry is too close", ()
   assert.ok(Number.isFinite(target.x) && Number.isFinite(target.y));
   assert.ok(target.x >= 20 && target.x <= 80);
   assert.ok(target.y >= 22 && target.y <= 78);
+});
+
+test("endless narrows the grab zone first, then speeds the arm up", () => {
+  // 順番に意味がある。範囲を狭めるのは「どこを狙うか」、速さを上げるのは
+  // 「いつ押すか」を難しくする。同時に上げると、外した原因が狙いなのか
+  // 間合いなのか、本人にも支援者にも分からなくなる。
+
+  // 1段目: 3試行ごとに範囲が狭まり、速さはプリセットのまま。
+  assert.equal(Math.round(endlessToleranceR(15, 0) * 100) / 100, 15);
+  assert.equal(Math.round(endlessToleranceR(15, 3) * 100) / 100, 12.75);
+  assert.equal(Math.round(endlessToleranceR(15, 6) * 100) / 100, 10.84);
+  assert.equal(endlessSweepMs(2200, 0), 2200);
+  assert.equal(endlessSweepMs(2200, 6), 2200, "範囲を詰めきるまで速さは動かさない");
+  assert.equal(endlessSweepMs(2200, 14), 2200);
+
+  // 5段目（試行15）で範囲は下限へ。
+  const floorR = endlessToleranceR(15, 15);
+  assert.ok(floorR >= 6, "掴める範囲には下限がある");
+  assert.equal(Math.round(floorR * 100) / 100, Math.round(endlessToleranceR(15, 30) * 100) / 100,
+    "下限に達したら、それ以上は狭めない");
+
+  // 2段目: ここから速さだけが上がる。
+  const at18 = endlessSweepMs(2200, 18);
+  const at21 = endlessSweepMs(2200, 21);
+  assert.ok(at18 < 2200, "範囲を詰めきったら速さが上がる");
+  assert.ok(at21 < at18, "続けるほどさらに速くなる");
+
+  // 速さにも下限がある。フェーズ開始から320msの入力は捨てるので、掃引が
+  // それに近づくと「押せない時間」が掃引の大半を占める。
+  const fastest = endlessSweepMs(2200, 300);
+  assert.ok(fastest >= 1100, `速さの下限を割ってはいけない: ${fastest}`);
+  assert.equal(fastest, endlessSweepMs(2200, 1000), "下限に達したら、それ以上は速くしない");
+
+  // 単調であること（途中で緩まない）。
+  let previousR = Infinity;
+  let previousSweep = Infinity;
+  for (let index = 0; index <= 60; index += 1) {
+    const r = endlessToleranceR(15, index);
+    const sweep = endlessSweepMs(2200, index);
+    assert.ok(r <= previousR + 1e-9, `範囲が途中で広がった (試行${index})`);
+    assert.ok(sweep <= previousSweep + 1e-9, `速さが途中で遅くなった (試行${index})`);
+    previousR = r;
+    previousSweep = sweep;
+  }
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
