@@ -383,6 +383,44 @@ export function initNeuroNodeApp() {
       }
       return;
     }
+    // 走査中は、どのキーでもスイッチ入力として受ける。
+    //
+    // スイッチ機器はキーボードとして見えることが多く、機種によって送る
+    // キーが違う（Space / Enter のほか、F1〜F12 や1文字キーを送るものも
+    // ある）。利用者ごとに機器が違う以上、こちらが受けるキーを限ると
+    // 「押しているのに何も起きない」が起きる——本人には理由が分からない。
+    //
+    // 走査中に限る。止まっているあいだは、支援者がキーボードで通常の
+    // 操作（Tab移動・Enterでの決定）をしている場面なので、そこまで
+    // 奪うと支援者の操作が壊れる。
+    //
+    // 修飾キー単独（Shift だけ等）と、修飾キー付き（Ctrl+R など）は除く。
+    // 前者は「押した」と言えないし、後者はブラウザやOSの操作を潰す。
+    // Escape は走査停止として先に処理済み。
+    const modifierOnly =
+      event.key === "Shift" ||
+      event.key === "Control" ||
+      event.key === "Alt" ||
+      event.key === "Meta" ||
+      event.key === "CapsLock" ||
+      event.key === "NumLock" ||
+      event.key === "ScrollLock" ||
+      event.key === "Dead";
+    const withModifier = event.ctrlKey || event.metaKey || event.altKey;
+    if (
+      ctx.scan.isRunning() &&
+      !modifierOnly &&
+      !withModifier &&
+      event.key !== " " &&
+      event.key !== "Enter" &&
+      event.key !== "ArrowRight" &&
+      event.key !== "Tab"
+    ) {
+      event.preventDefault();
+      if (event.repeat) return; // 押しっぱなしの連続 keydown は無視する（§3.3）
+      acceptSwitchEvent("keyboard");
+      return;
+    }
     if (event.key === " " || event.key === "Enter") {
       // Tab移動でフォーカスした通常のボタン等はブラウザ本来の操作に任せる。
       // スタート／ゲーム／画面下部の入力面だけは同じ入力ファネルへ通す。

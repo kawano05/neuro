@@ -84,6 +84,7 @@ const checks = [
   ["moves between visible feature tabs", checkFeatureTabs],
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
+  ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
   ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
@@ -845,6 +846,57 @@ async function checkHomeReturnFromTabs(page) {
  * single-switch input. This protects both keyboard accessibility and the
  * dedicated switch funnel from the old hidden-action regression.
  */
+/**
+ * 走査中は、どのキーでもスイッチ入力として受ける。
+ *
+ * スイッチ機器はキーボードとして見えることが多く、機種によって送るキーが
+ * 違う（Space / Enter のほか F1〜F12 や1文字キーを送るものもある）。受ける
+ * キーを限ると「押しているのに何も起きない」が起きる——本人には理由が
+ * 分からない。
+ *
+ * ただし走査中に限る。止まっているあいだは支援者がキーボードで普通に
+ * 操作している場面なので、そこまで奪うと支援者の操作が壊れる。
+ * 修飾キー単独と修飾キー付き（Ctrl+R 等）も奪わない。
+ */
+async function checkAnyKeyWhileScanning(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
+  // 走査を動かす。
+  if (((await page.locator("#scanState").textContent()) || "").trim() !== "走査中") {
+    await page.locator("#toggleScan").click();
+  }
+  await waitForText(page, "#scanState", "走査中");
+  await page.waitForFunction(() => document.querySelectorAll(".scan-focus").length > 0);
+  await page.waitForTimeout(200);
+
+  // 修飾キー付きは奪わない（ブラウザ・OSの操作を潰さない）。
+  const viewBefore = await page.evaluate(() => document.querySelector(".view.is-active")?.id);
+  await page.keyboard.press("Control+KeyR".replace("KeyR", "r"));
+  await page.waitForTimeout(150);
+  assert(
+    (await page.evaluate(() => document.querySelector(".view.is-active")?.id)) === viewBefore,
+    "Ctrl+r must not act as switch input"
+  );
+
+  // 修飾キー単独も「押した」ではない。
+  await page.keyboard.press("Shift");
+  await page.waitForTimeout(150);
+  assert(
+    (await page.evaluate(() => document.querySelector(".view.is-active")?.id)) === viewBefore,
+    "A bare modifier must not act as switch input"
+  );
+
+  // ふつうのキー（F5）は入力として通る。いまハイライトしている項目が選ばれる。
+  await page.keyboard.press("F5");
+  await page.waitForTimeout(600);
+  const moved = await page.evaluate(() => document.querySelector(".view.is-active")?.id);
+  assert(
+    moved !== viewBefore,
+    `F5 while scanning must activate the highlighted item (view stayed ${moved})`
+  );
+}
+
 async function checkKeyboardAndSwitchInput(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
