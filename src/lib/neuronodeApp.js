@@ -12,7 +12,7 @@
 //   scan.js      … 走査エンジン
 //   games/*.js   … ゲーム基盤（registry / gameHost / colorLegacy 等）
 //   views/*.js   … 各画面（home / matching / voca / letters /
-//                  operation / evaluation / research / log / settings）
+//                  log / settings）
 //
 // 各モジュールは共有コンテキスト ctx を介して連携する:
 //   ctx = { state, elements, save, announce, speak, playTone, audio,
@@ -34,9 +34,7 @@ import { initHome } from "./views/home.js";
 import { initMatching } from "./views/matching.js";
 import { initVoca } from "./views/voca.js";
 import { initLetters } from "./views/letters.js";
-import { initOperation } from "./views/operation.js";
-import { initEvaluation } from "./views/evaluation.js";
-import { initResearch } from "./views/research.js";
+import { initDataExport } from "./dataExport.js";
 import { initLog } from "./views/log.js";
 import { initSettings } from "./views/settings.js";
 
@@ -63,9 +61,6 @@ const TAB_WORLD_VIEWS = new Set([
   "matching",
   "voca",
   "letters",
-  "operation",
-  "evaluation",
-  "research",
   "log",
   "settings",
 ]);
@@ -162,10 +157,8 @@ export function initNeuroNodeApp() {
       ...entry,
     });
     state.logs = state.logs.slice(0, MAX_LOG_ENTRIES);
-    ctx.views.evaluation.countEntry(entry);
     ctx.save();
     ctx.views.log.render();
-    ctx.views.evaluation.render();
   };
 
   /** 画面の切り替え。visibleViews にない画面は start へフォールバックする。 */
@@ -187,9 +180,8 @@ export function initNeuroNodeApp() {
   ctx.views.matching = initMatching(ctx);
   ctx.views.voca = initVoca(ctx);
   ctx.views.letters = initLetters(ctx);
-  ctx.views.operation = initOperation(ctx);
-  ctx.views.evaluation = initEvaluation(ctx);
-  ctx.views.research = initResearch(ctx);
+  // 支援者のデータ画面（書き出し・参加者ID・切り替え）は評価ログの中に置く。
+  ctx.views.dataExport = initDataExport(ctx);
   ctx.views.log = initLog(ctx);
   ctx.views.settings = initSettings(ctx);
 
@@ -256,9 +248,7 @@ export function initNeuroNodeApp() {
     ctx.views.matching.render();
     ctx.views.voca.render();
     ctx.views.letters.render();
-    ctx.views.operation.render();
-    ctx.views.evaluation.render();
-    ctx.views.research.render();
+    ctx.views.dataExport.render();
     ctx.views.settings.render();
     ctx.views.log.render();
     ctx.gameHost.render();
@@ -480,11 +470,6 @@ export function initNeuroNodeApp() {
     window.setTimeout(syncTextEntryMode, 0);
   });
 
-  // タスク計測中の経過時間表示（1秒）とポイントスキャンのカーソル（200ms）
-  window.setInterval(() => {
-    if (state.evaluation.taskStartedAt) ctx.views.evaluation.render();
-  }, 1000);
-  window.setInterval(() => ctx.views.operation.updatePointCursor(), 200);
 
   // --- 初期描画 ---
   ctx.renderAll();

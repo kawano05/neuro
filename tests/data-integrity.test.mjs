@@ -17,9 +17,8 @@ import {
   buildSlotCsvRows,
   buildRhythmCsvRows,
   buildTaskCsvRows,
-  flattenEvaluationResults,
   SESSION_LEDGER_HEADERS,
-} from "../src/lib/views/evaluation.js";
+} from "../src/lib/dataExport.js";
 import { buildLogCsvRows } from "../src/lib/views/log.js";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -762,46 +761,6 @@ test("createStateSaver notifies once per failure streak and re-arms after recove
   } finally {
     console.error = originalConsoleError;
   }
-});
-
-test("flattenEvaluationResults removes legacy active/completed and double-finish duplicates", () => {
-  const result = {
-    participantId: "P001",
-    condition: "web",
-    taskId: "switch-5",
-    taskTitle: "task",
-    startedAt: "2026-07-10T00:00:00.000Z",
-    endedAt: "2026-07-10T00:00:01.000Z",
-  };
-  const uniqueActive = {
-    ...result,
-    taskId: "matching-1",
-    startedAt: "2026-07-10T00:01:00.000Z",
-    endedAt: "2026-07-10T00:01:01.000Z",
-  };
-  const flattened = flattenEvaluationResults({
-    results: [result, uniqueActive, uniqueActive],
-    completedSessions: [
-      {
-        startedAt: "session-new",
-        endedAt: "session-new-end",
-        observerNotes: "newest",
-        taskResults: [result],
-      },
-      {
-        startedAt: "session-duplicate",
-        endedAt: "session-duplicate-end",
-        observerNotes: "old duplicate",
-        taskResults: [result],
-      },
-    ],
-  });
-
-  assert.equal(flattened.length, 2);
-  assert.equal(flattened[0].taskId, "matching-1");
-  assert.equal(flattened[1].taskId, "switch-5");
-  assert.equal(flattened[1].sessionStartedAt, "session-new");
-  assert.equal(flattened[1].observerNotes, "newest");
 });
 
 test("game registry, presets and persisted task types stay aligned", () => {

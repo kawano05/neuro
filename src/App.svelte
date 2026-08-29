@@ -61,15 +61,6 @@
       なくホームの「まなぶ・つたえる」二階層から入る。
       タブバーに残るのは支援者機能（評価ログ・設定＋研究者モードの3タブ）のみ。
     -->
-    <button class="tab researcher-tab" data-view="operation" data-scan aria-label="操作訓練">
-      <span class="tab-full">操作訓練</span><span class="tab-short">訓練</span>
-    </button>
-    <button class="tab researcher-tab" data-view="evaluation" data-scan aria-label="効果測定">
-      <span class="tab-full">効果測定</span><span class="tab-short">測定</span>
-    </button>
-    <button class="tab researcher-tab" data-view="research" data-scan aria-label="研究">
-      <span class="tab-full">研究</span><span class="tab-short">研究</span>
-    </button>
     <button class="tab" data-view="log" data-scan aria-label="評価ログ">
       <span class="tab-full">評価ログ</span><span class="tab-short">ログ</span>
     </button>
@@ -199,303 +190,47 @@
       <div class="letter-grid" id="letterGrid" aria-label="文字選択肢"></div>
     </section>
 
-    <section class="view" id="operation" aria-labelledby="operation-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">iOS Switch Control training</p>
-          <h2 id="operation-title">iOS操作訓練</h2>
-        </div>
-        <button class="secondary" id="resetOperation">訓練記録をリセット</button>
-      </div>
-
-      <div class="module-grid" id="operationModeGrid" aria-label="操作訓練の種類"></div>
-
-      <div class="operation-layout">
-        <section class="eval-panel">
-          <h3 id="operationModeTitle">項目スキャン訓練</h3>
-          <p class="operation-guide" id="operationGuide">項目が順番にハイライトされる前提で、目的の項目を選びます。</p>
-          <div class="operation-stage" id="operationStage" aria-label="操作訓練ステージ"></div>
-          <div class="action-row wrap">
-            <button class="primary-small" id="operationPrimary" data-scan>訓練入力</button>
-            <button class="secondary" id="nextOperationTarget" data-scan>次の課題</button>
-          </div>
-        </section>
-
-        <aside class="metrics" aria-label="操作訓練の記録">
-          <div>
-            <span class="metric-label">試行回数</span>
-            <strong id="operationTrials">0</strong>
-          </div>
-          <div>
-            <span class="metric-label">成功率</span>
-            <strong id="operationSuccessRate">--</strong>
-          </div>
-          <div>
-            <span class="metric-label">平均ズレ</span>
-            <strong id="operationAverageDistance">--</strong>
-          </div>
-        </aside>
-      </div>
-    </section>
-
-    <section class="view" id="evaluation" aria-labelledby="evaluation-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Research measurement</p>
-          <h2 id="evaluation-title">効果測定セッション</h2>
-        </div>
-        <div class="action-row">
-          <button class="secondary" id="exportEvaluationCsv" data-scan>測定CSV</button>
-          <button class="secondary" id="exportRhythmCsv" data-scan>リズムCSV</button>
-          <button class="secondary" id="exportSlotCsv" data-scan>リールCSV</button>
-          <button class="secondary" id="exportScanCsv" data-scan>走査CSV</button>
-          <button class="secondary" id="exportRtCsv" data-scan>反応CSV</button>
-          <!--
-            セッション台帳（1セッション1行）と生データの控え。試行ロング形式の
-            5本だけでは、試行が0件で終わった回（中断・音が出なかった回）が
-            どのCSVにも現れず、欠測を数えられない。
-          -->
-          <button class="secondary" id="exportSessionLedgerCsv" data-scan>セッション台帳</button>
-          <button class="secondary" id="exportRawJson" data-scan>生データ(JSON)</button>
-          <button class="danger" id="resetEvaluation" data-scan>測定リセット</button>
-          <!--
-            参加者ひとりぶんを終えて、端末を空にする導線。
-            測定リセットは evaluation だけ、ログ削除は logs だけを消す。
-            研究データ本体（state.sessions）を消す手段がこれまで無く、
-            共用端末では前の参加者の回が残りつづけていた。
-          -->
-          <button class="danger" id="handOverParticipant" data-scan>参加者を切り替える</button>
-        </div>
-      </div>
-
-      <!--
-        保存上限に達したことの警告。操作ログ（300件）には出していたのに、
-        研究データ本体であるセッション（50件）には何も出ていなかった。
-        古い回から黙って消えるので、気づけるのは書き出したあと。
-      -->
-      <p class="empty-state" id="sessionRetentionWarning" hidden></p>
-
-      <div class="evaluation-grid">
-        <section class="eval-panel">
-          <h3>セッション情報</h3>
-          <label class="field-row">
-            <span>参加者ID</span>
-            <input id="participantId" type="text" inputmode="text" placeholder="例: P001" />
-          </label>
-          <label class="field-row">
-            <span>条件</span>
-            <select id="evaluationCondition">
-              <option value="web">Web版</option>
-              <option value="native">iOSネイティブ版</option>
-              <option value="reference">参照構成</option>
-              <option value="optimized">最適化構成</option>
-            </select>
-          </label>
-          <div class="action-row wrap">
-            <button class="primary-small" id="startSession" data-scan>セッション開始</button>
-            <button class="secondary" id="finishSession" data-scan>セッション終了</button>
-          </div>
-        </section>
-
-        <section class="eval-panel">
-          <h3>現在のタスク</h3>
-          <div class="current-task">
-            <span class="metric-label" id="evaluationStatus">未開始</span>
-            <strong id="currentTaskTitle">セッションを開始してください</strong>
-            <p id="currentTaskGuide">研究協力者ごとに同じ順番でタスクを実施します。</p>
-          </div>
-          <div class="action-row wrap">
-            <button class="primary-small" id="startTask" data-scan>タスク開始</button>
-            <button class="secondary" id="openTaskView" data-scan>タスク画面へ</button>
-            <button class="secondary" id="markTaskSuccess" data-scan>成功で終了</button>
-            <button class="danger" id="markTaskFail" data-scan>中止/失敗</button>
-          </div>
-        </section>
-      </div>
-
-      <div class="summary-grid evaluation-summary">
-        <div class="summary-tile">
-          <span class="metric-label">経過時間</span>
-          <strong id="taskElapsed">--</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">入力回数</span>
-          <strong id="taskInputs">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">誤選択</span>
-          <strong id="taskMistakes">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">戻り操作</span>
-          <strong id="taskBacks">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">タイミングエラー</span>
-          <strong id="taskTimingErrors">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">介助回数</span>
-          <strong id="taskAssists">0</strong>
-        </div>
-      </div>
-
-      <div class="action-row wrap evaluation-counters">
-        <button class="secondary" id="addMistake" data-scan>誤選択 +1</button>
-        <button class="secondary" id="addBack" data-scan>戻り操作 +1</button>
-        <button class="secondary" id="addTimingMissed" data-scan>見逃し +1</button>
-        <button class="secondary" id="addTimingEarly" data-scan>早押し +1</button>
-        <button class="secondary" id="addTimingLate" data-scan>遅押し +1</button>
-        <button class="secondary" id="addAssist" data-scan>介助 +1</button>
-      </div>
-
-      <div class="evaluation-grid">
-        <section class="eval-panel">
-          <h3>主観評価</h3>
-          <label class="scale-row">
-            <span>負担感</span>
-            <input id="effortRating" type="range" min="1" max="5" step="1" />
-            <output id="effortRatingValue">3</output>
-          </label>
-          <label class="scale-row">
-            <span>操作しやすさ</span>
-            <input id="easeRating" type="range" min="1" max="5" step="1" />
-            <output id="easeRatingValue">3</output>
-          </label>
-          <label class="scale-row">
-            <span>集中・関心</span>
-            <input id="engagementRating" type="range" min="1" max="5" step="1" />
-            <output id="engagementRatingValue">3</output>
-          </label>
-          <label class="note-row">
-            <span>観察メモ</span>
-            <textarea id="observerNotes" rows="4" placeholder="例: 走査速度は適切。3問目で見逃しがあった。"></textarea>
-          </label>
-        </section>
-
-        <section class="eval-panel">
-          <h3>タスク一覧</h3>
-          <div class="task-list" id="evaluationTaskList"></div>
-        </section>
-      </div>
-
-      <section class="eval-panel">
-        <h3>測定結果</h3>
-        <div class="log-list" id="evaluationResultList"></div>
-      </section>
-    </section>
-
-    <section class="view" id="research" aria-labelledby="research-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Original research design</p>
-          <h2 id="research-title">neuro独自要素</h2>
-        </div>
-      </div>
-
-      <div class="summary-grid research-axis-grid">
-        <div class="summary-tile">
-          <span class="metric-label">二段階開発</span>
-          <strong>Web → iOS</strong>
-          <p>Webで高速に試作し、CapacitorでiOS公開候補版へつなげる。</p>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">比較条件</span>
-          <strong>参照 / 最適化</strong>
-          <p>先行Web教材に近い構成と、Switch Control向けに調整した構成を比較する。</p>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">実運用</span>
-          <strong>共有iPad</strong>
-          <p>Guided Access、オフライン動作、単一アプリ運用を確認する。</p>
-        </div>
-      </div>
-
-      <!--
-        入力オフセットの分布。このアプリの研究上の位置づけそのもの
-        （全試行のずれを記録する計測器）なのに、集めた値を通しで見る場所が
-        どこにも無く、CSVを書き出して別のツールへ持っていくしかなかった。
-        平均とSDは1回ぶんならリザルトに出るが、分布の形は数値2つでは分からない。
-
-        「がめんに 手がかりを出す」を入れていた回は別の山として描く
-        （聴覚キューだけへの同期ではないので、混ぜると母集団が違う値が
-        1つの山になる。src/lib/offsetDistribution.js）。
-      -->
-      <section class="eval-panel">
-        <h3>入力オフセットの分布</h3>
-        <p class="panel-note">
-          記録済みのリズム課題から、当たった試行の生オフセット（rawOffsetMs）を
-          50msごとに数えたものです。そくていの回と、慣らしの除外試行は含みません。
-        </p>
-        <div id="offsetDistribution"></div>
-      </section>
-
-      <div class="evaluation-grid">
-        <section class="eval-panel">
-          <h3>研究条件プロファイル</h3>
-          <p class="panel-note">
-            効果測定の条件欄と連動させ、Web版/iOS版、参照構成/最適化構成の比較を明確にします。
-          </p>
-          <div class="condition-profile-grid" id="researchProfileGrid"></div>
-        </section>
-
-        <section class="eval-panel">
-          <h3>公開候補チェック</h3>
-          <div class="readiness-meter">
-            <span class="metric-label">実用化準備</span>
-            <strong id="readinessScore">0/0</strong>
-          </div>
-          <div class="readiness-list" id="readinessChecklist"></div>
-        </section>
-      </div>
-
-      <div class="evaluation-grid">
-        <section class="eval-panel">
-          <h3>現場運用メモ</h3>
-          <label class="field-row">
-            <span>利用場面</span>
-            <select id="researchEnvironment">
-              <option value="hospital">病院</option>
-              <option value="facility">施設</option>
-              <option value="home">在宅</option>
-            </select>
-          </label>
-          <label class="note-row">
-            <span>運用メモ</span>
-            <textarea
-              id="deploymentNotes"
-              rows="4"
-              placeholder="例: 共有iPadでアクセスガイドを有効化。支援者が走査間隔を調整。"
-            ></textarea>
-          </label>
-          <button class="secondary" id="copyDeploymentNote" data-scan>観察メモへ反映</button>
-        </section>
-
-        <section class="eval-panel research-protocol">
-          <h3>計画書からの研究軸</h3>
-          <p id="researchProtocolHint">
-            Web先行開発、iOSネイティブ化、共有端末運用、App Store公開準備を評価対象に含めます。
-          </p>
-          <ul class="research-points">
-            <li>教材機能だけでなく、変換工程と運用要件を研究対象にする。</li>
-            <li>Switch Controlに合わせた要素配置と走査順序を比較する。</li>
-            <li>支援者の観察メモを、タスク結果と同じ記録として残す。</li>
-          </ul>
-        </section>
-      </div>
-    </section>
-
     <section class="view" id="log" aria-labelledby="log-title">
       <div class="section-head">
         <div>
           <p class="eyebrow">Evaluation</p>
           <h2 id="log-title">評価ログ</h2>
         </div>
+        <!--
+          支援者が使うデータ画面はここ1枚にまとめる（2026-08-29）。
+          測定手順のUI（効果測定セッション）・操作訓練・研究メモの3画面は
+          別紙の手順書に置き換えて削除した。アプリに残すのは、記録を取り出す
+          手段と、取り違えを防ぐ手当てだけ。
+        -->
         <div class="action-row">
-          <button class="secondary" id="exportCsv" data-scan>CSVを書き出す</button>
+          <button class="secondary" id="exportSessionLedgerCsv" data-scan>セッション台帳</button>
+          <button class="secondary" id="exportRhythmCsv" data-scan>リズムCSV</button>
+          <button class="secondary" id="exportSlotCsv" data-scan>リールCSV</button>
+          <button class="secondary" id="exportScanCsv" data-scan>走査CSV</button>
+          <button class="secondary" id="exportRtCsv" data-scan>反応CSV</button>
+          <button class="secondary" id="exportRawJson" data-scan>生データ(JSON)</button>
+          <button class="secondary" id="exportCsv" data-scan>操作ログCSV</button>
           <button class="danger" id="clearLog" data-scan>ログ削除</button>
+          <button class="danger" id="handOverParticipant" data-scan>参加者を切り替える</button>
         </div>
       </div>
+
+      <!--
+        参加者ID。全セッションにこの値が焼き付き、成立確認もこれで絞る。
+        書き出しの前に必ず目に入る位置へ置く——切り替え忘れは記録から
+        見分けられないので、気づける場所に出しておくしかない。
+      -->
+      <div class="supporter-fields">
+          <label class="field-row">
+            <span>参加者ID</span>
+            <input id="participantId" type="text" inputmode="text" placeholder="例: P001" />
+          </label>
+      </div>
+
+      <!--
+        保存上限（MAX_SESSIONS）の警告。研究データ本体は古い順に消える。
+      -->
+      <p class="empty-state" id="sessionRetentionWarning" hidden></p>
 
       <div class="summary-grid">
         <div class="summary-tile">

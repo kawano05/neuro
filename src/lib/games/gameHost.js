@@ -13,7 +13,7 @@
 //
 // GameCtx の拡張について: detailed-design.md §3.1 の GameCtx 型は
 // { settings, audio, logTrial, announce, finish, abort } を最小契約として
-// 定義しているが、既存の評価/ログ連動（views/evaluation.js の countEntry が
+// 定義しているが、既存のログ連動（logEvent が
 // entry.type を見て自動集計する仕組み、基本設計書 §1.3 の「継承」領域）を
 // ゲーム契約の外から壊さずに使えるよう、ここでは logEvent（アプリ全体の
 // ログ関数）も GameCtx に含めて渡す。
@@ -705,7 +705,9 @@ export function createGameHost(ctx) {
     const activeModule = activeGameId ? findGameModule(activeGameId) : null;
     const taskType = activeModule?.taskType;
     if (summary && taskType) {
-      ctx.views.evaluation.recordSessionOutcome(taskType, summary);
+      // 効果測定セッション（手動カウンタ・評定・観察メモ）は別紙の手順書へ
+      // 置き換えて削除した（2026-08-29）。研究データ本体は state.sessions に
+      // 集約されているので、ここでの連動は要らない。
       logEvent({
         type: "game",
         label: `${activeGameId} 終了 taskType=${taskType}`,

@@ -7,7 +7,7 @@
 //   node scripts/probes/probe-csv-output.mjs
 
 import { escapeCsv } from "../../src/lib/utils.js";
-import { buildRhythmCsvRows, buildTaskCsvRows, buildSessionLedgerRows } from "../../src/lib/views/evaluation.js";
+import { buildRhythmCsvRows, buildTaskCsvRows, buildSessionLedgerRows } from "../../src/lib/dataExport.js";
 import { buildSlotCsvRows } from "../../src/lib/slotCsv.js";
 import { buildLogCsvRows } from "../../src/lib/views/log.js";
 

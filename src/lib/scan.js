@@ -157,7 +157,9 @@ export function createScanEngine(ctx) {
     if (usesNativeSwitchControl()) return;
     refresh();
     if (!scanTargets.length || scanIndex < 0) {
-      if (state.currentView === "operation") ctx.views.operation.handlePrimary();
+      // 対象が無いときの入力では何も起こさない（隠れた動作を作らない）。
+      // 以前は操作訓練ビューだけ既定の動作へ落としていたが、その画面は
+      // 別紙の手順書へ置き換えて削除した（2026-08-29）。
       return;
     }
     const target = scanTargets[scanIndex];

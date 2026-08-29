@@ -240,13 +240,11 @@ async function waitForServer() {
 
 async function checkMainApp(page) {
   await waitForText(page, "h1", "NEURONODE");
-  // 5 tabs exist in the DOM (2 always-visible supporter tabs — log/settings —
-  // + 3 researcher-mode tabs that stay hidden until settings.researcherMode
-  // is enabled, see App.svelte / styles.css .researcher-tab). The former
-  // matching/voca/letters tabs moved into the home screen's
-  // "まなぶ・つたえる" second level since they are user-facing activities,
-  // not supporter tools.
-  await waitForCount(page, ".tab", 5);
+  // タブは2つ（評価ログ・設定）＋「← ホームへ」。効果測定・操作訓練・研究の
+  // 3画面は 2026-08-29 に削除し、支援者のデータ画面は評価ログ1枚へまとめた
+  // （手順は別紙の手順書に置く）。matching/voca/letters は利用者向けなので、
+  // 以前にホームの「まなぶ・つたえる」二階層目へ移している。
+  await waitForCount(page, ".tab", 2);
   // The app always boots into the start screen (detailed-design.md §2.1:
   // MUST start from "start" even on revisit, to guarantee the AudioContext
   // unlock + input continuity check every time).
@@ -976,10 +974,8 @@ async function checkHandOverNeedsAnExportFirst(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await openSettingsTab(page, "measure");
-  await page.locator("#researcherMode").check();
-  await page.locator('.tab[data-view="evaluation"]').click();
-  await waitForClass(page, "#evaluation", "is-active");
+    await page.locator('.tab[data-view="log"]').click();
+    await waitForClass(page, "#log", "is-active");
 
   // 消す対象を作る（1件でも入っていれば導線は同じ）。
   await page.evaluate((key) => {
@@ -993,8 +989,8 @@ async function checkHandOverNeedsAnExportFirst(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
-  await page.locator('.tab[data-view="evaluation"]').click();
-  await waitForClass(page, "#evaluation", "is-active");
+    await page.locator('.tab[data-view="log"]').click();
+    await waitForClass(page, "#log", "is-active");
 
   // 確認ダイアログが出たら必ず承諾する。それでも書き出し前は消えないこと。
   page.on("dialog", (dialog) => dialog.accept());
@@ -1038,10 +1034,8 @@ async function checkExportButtonsAreWired(page) {
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
   // 効果測定タブは研究者モードでのみ出る。
-  await openSettingsTab(page, "measure");
-  await page.locator("#researcherMode").check();
-  await page.locator('.tab[data-view="evaluation"]').click();
-  await waitForClass(page, "#evaluation", "is-active");
+    await page.locator('.tab[data-view="log"]').click();
+    await waitForClass(page, "#log", "is-active");
 
   // データが1件も無い状態では「ありません」を出して書き出さないのが正しい
   // 挙動なので、押して数える前に1回ぶんの記録を差し込む。
@@ -1062,7 +1056,8 @@ async function checkExportButtonsAreWired(page) {
     "#exportRtCsv",
     "#exportSessionLedgerCsv",
     "#exportRawJson",
-    "#exportEvaluationCsv",
+    // 操作ログCSVもこの1枚に居る（効果測定タブを畳んだ 2026-08-29 以降）。
+    "#exportCsv",
   ];
   for (const selector of buttons) {
     const count = await page.locator(selector).count();
@@ -2645,20 +2640,16 @@ async function checkDockStepsAsideForTextEntry(page) {
   await waitForClass(page, "#settings", "is-active");
   await page.locator(".switch-dock").waitFor({ state: "visible" });
 
-  // 参加者IDの入力欄は効果測定タブ側にある。研究者モードを開けて移動する。
-  await openSettingsTab(page, "measure");
-  await page.locator("#researcherMode").click();
-  await page.locator('.tab[data-view="evaluation"]').click();
-  await waitForClass(page, "#evaluation", "is-active");
+  // 支援者が文字を打つ欄は、いまは評価ログの参加者IDだけ（観察メモは
+  // 効果測定セッションごと別紙へ移した。2026-08-29）。
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
 
   await page.locator("#participantId").focus();
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
 
-  await page.locator("#observerNotes").focus();
-  await page.locator(".switch-dock").waitFor({ state: "hidden" });
-
   // 文字入力から離れたらドックは戻る。
-  await page.locator("#observerNotes").evaluate((el) => el.blur());
+  await page.locator("#participantId").evaluate((el) => el.blur());
   await page.locator(".switch-dock").waitFor({ state: "visible" });
 }
 
@@ -2959,8 +2950,8 @@ async function checkEmptyExportIsExplained(page) {
   await page.locator("#researcherMode").click();
   await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
 
-  await page.locator('.tab[data-view="evaluation"]').click();
-  await waitForClass(page, "#evaluation", "is-active");
+    await page.locator('.tab[data-view="log"]').click();
+    await waitForClass(page, "#log", "is-active");
 
   // まだ1回も遊んでいないので走査課題データは0件。
   const message = page.locator("#supporterMessage");
@@ -2989,24 +2980,42 @@ async function checkResearcherModeTabsNoRegression(page) {
   // Research controls are protected from the user's scan order until a
   // supporter explicitly unlocks the editing session.
 
-  // researcherMode defaults to OFF (P0-0); flip it on to reveal the tab.
+  // researcherMode は設定の面（そくてい）の出し分けに使う。効果測定・操作訓練・
+  // 研究の3タブは 2026-08-29 に削除したので、ここで確かめるのは「支援者の
+  // データ画面が評価ログ1枚にまとまっていること」。
   await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").click();
   await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
 
-  await page.locator('.tab[data-view="evaluation"]').click();
-  await waitForClass(page, "#evaluation", "is-active");
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
+  // 参加者IDと書き出しは、すべてこの1枚に居る。
   await page.locator("#participantId").waitFor({ state: "visible" });
-  await page.locator("#exportEvaluationCsv").waitFor({ state: "visible" });
-  // New slot-v1 export and retained legacy rhythm export both live alongside
-  // the pre-existing evaluation export (no historical data regression).
-  await page.locator("#exportSlotCsv").waitFor({ state: "visible" });
-  await page.locator("#exportRhythmCsv").waitFor({ state: "visible" });
-  await page.locator("#exportScanCsv").waitFor({ state: "visible" });
-  await page.locator("#exportRtCsv").waitFor({ state: "visible" });
+  for (const selector of [
+    "#exportSessionLedgerCsv",
+    "#exportRhythmCsv",
+    "#exportSlotCsv",
+    "#exportScanCsv",
+    "#exportRtCsv",
+    "#exportRawJson",
+    "#exportCsv",
+    "#handOverParticipant",
+  ]) {
+    await page.locator(selector).waitFor({ state: "visible" });
+  }
 
-  // Settings itself must keep working too (the tab we just used to flip
-  // researcherMode on).
+  // 消した画面が本当に消えていること。マークアップに残したまま到達できない
+  // 状態にすると、次に触る人が「動かない画面」を直そうとする。
+  for (const gone of ["#evaluation", "#operation", "#research"]) {
+    assert((await page.locator(gone).count()) === 0, `${gone} must be gone, not hidden`);
+  }
+  const tabs = await page.locator(".tabbar button").allTextContents();
+  assert(
+    tabs.length === 3,
+    `Expected three shell tabs (home / log / settings), got ${tabs.length}: ${tabs.join(" ")}`
+  );
+
+  // 設定そのものは、researcherMode を入れたあとも動く。
   await page.locator('.tab[data-view="settings"]').click();
   await waitForClass(page, "#settings", "is-active");
   await openSettingsTab(page, "measure");
@@ -3015,12 +3024,6 @@ async function checkResearcherModeTabsNoRegression(page) {
   await openSettingsTab(page, "basic");
   await page.locator("#hideVisualTasks").click();
 
-  // 破壊的な操作（訓練記録のリセット）は走査の輪に入れない。支援者編集ロックを
-  // やめた（2026-08-17）ので、いま利用者の入力から守っているのはこれだけ
-  // ——「無効化されている」ではなく「輪に入っていない」で守る。
-  await page.locator('.tab[data-view="operation"]').click();
-  await waitForClass(page, "#operation", "is-active");
-  assert(!(await page.locator("#resetOperation").getAttribute("data-scan")), "Operation reset must stay out of scan order");
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 4);
@@ -3028,19 +3031,13 @@ async function checkResearcherModeTabsNoRegression(page) {
   // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
   const lobbyTitles = await collectActivityTitles(page);
   assert(
-    !lobbyTitles.includes("アームを止める"),
-    `Visual-task setting must remove crane from the lobby and scan order (saw: ${lobbyTitles.join(", ")})`
+    !lobbyTitles.includes("アームで つかむ"),
+    `Visual-task setting must remove the claw corner from the lobby (saw: ${lobbyTitles.join(", ")})`
   );
   assert(
     lobbyTitles.length === 4,
-    `Expected four remaining activities after hiding crane, got ${lobbyTitles.length}`
+    `Expected four remaining activities after hiding the claw, got ${lobbyTitles.length}`
   );
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-  await page.locator('.tab[data-view="operation"]').click();
-  await waitForClass(page, "#operation", "is-active");
-  // 利用者が使う訓練の入力は、いつでも押せる。
-  assert(!(await page.locator("#operationPrimary").isDisabled()), "User operation input must remain available");
 }
 
 async function checkPwaDelivery(page, project) {
@@ -3293,7 +3290,10 @@ async function checkLayoutInvariants(page) {
   await page.locator("#researcherMode").click();
   await inspect("settings (unlocked)");
 
-  for (const view of ["evaluation", "research", "log", "operation"]) {
+  // 支援者が見る面は評価ログと設定の2つだけになった（2026-08-29）。
+  // 評価ログは列の多い画面（書き出し9個・推移のタブ・セッション一覧）なので、
+  // はみ出しが出るならここに出る。
+  for (const view of ["log"]) {
     await page.locator(`.tab[data-view="${view}"]`).click();
     await waitForClass(page, `#${view}`, "is-active");
     await inspect(view);
