@@ -191,7 +191,7 @@ export const rhythmPresets = {
   // キャリブレーションは測定手順そのもので、訓練の都合では動かさない
   // （games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS）。
   //
-  // mode="continuous" である理由（cued から変更。test-results/probe-calibration-mode.mjs）:
+  // mode="continuous" である理由（cued から変更。scripts/probes/probe-calibration-mode.mjs）:
   //
   //   cued は毎回カウントインでリセットするので、連続同期の中心である位相修正の
   //   連鎖が試行ごとに切れる。切れると各試行は独立になり、「拍を予測して押した

@@ -70,7 +70,7 @@ test("calibration ignores every difficulty setting", () => {
 // 「予測して押した試行」と「高音を聞いてから反応した試行」が同じ分布へ
 // 混ざる。両者は平均で 300ms 以上違うため、混合比が変わるだけで中央値が
 // 動く（反応押し30%で +46ms、50%で +146ms。
-// test-results/probe-calibration-mode.mjs）。10試行では二峰性を検定できず、
+// scripts/probes/probe-calibration-mode.mjs）。10試行では二峰性を検定できず、
 // データを見ても気づけない。そしてその値は baselineOffsetMs として
 // 全セッションの判定窓中心に効く。
 //
