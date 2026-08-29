@@ -1,6 +1,6 @@
 // slot-v1専用CSV（1停止1行）。旧リズムCSVとは意図的に分離する。
 
-import { toJstIso } from "./utils.js";
+import { toLocalIso } from "./utils.js";
 
 export const SLOT_CSV_HEADERS = Object.freeze([
   "sessionId",
@@ -8,7 +8,7 @@ export const SLOT_CSV_HEADERS = Object.freeze([
   "gameId",
   "protocolVersion",
   "engineVersion",
-  "startedAtJst",
+  "startedAtLocal",
   "aborted",
   "difficultyMode",
   "roundIndex",
@@ -39,12 +39,17 @@ export const SLOT_CSV_HEADERS = Object.freeze([
   // 列は末尾へ足す（既存28列の位置を動かさない）。
   "deviceOutputLatencyS",
   "deviceBaseLatencyS",
+  // その回の入力経路（direct / ios-switch-control）。他のCSVと同じ意味。
+  "deviceInputMethod",
 ]);
 
 export function buildSlotCsvRows(sessions) {
   const rows = [[...SLOT_CSV_HEADERS]];
   (Array.isArray(sessions) ? sessions : [])
-    .filter((session) => session?.taskType === "slot")
+    // いまの版で検証していない回は出さない。列の意味が当時の判定規則の
+    // ものなので、同じ表に混ぜると1つの列に2つの意味が入る。
+    // 残っていること自体は台帳CSV（legacyVersion 列）から分かる。
+    .filter((session) => session?.taskType === "slot" && session.legacyVersion !== true)
     .forEach((session) => {
       const config = session.config || {};
       const device = session.device || {};
@@ -55,7 +60,7 @@ export function buildSlotCsvRows(sessions) {
           session.gameId,
           session.protocolVersion,
           session.engineVersion,
-          toJstIso(session.startedAtIso),
+          toLocalIso(session.startedAtIso),
           session.aborted,
           config.difficultyMode ?? "practice",
           trial.roundIndex,
@@ -80,6 +85,7 @@ export function buildSlotCsvRows(sessions) {
           config.measurementReadiness ?? "n/a",
           device.outputLatencyS ?? "",
           device.baseLatencyS ?? "",
+          device.inputMethod ?? "",
         ]);
       });
     });

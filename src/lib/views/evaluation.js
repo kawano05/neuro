@@ -19,7 +19,7 @@
 
 import { evaluationTasks, researchConditionProfiles, storageKey } from "../content.js";
 import { cloneDefaultState, MAX_EVALUATION_SESSIONS, MAX_SESSIONS } from "../state.js";
-import { escapeHtml, escapeCsv, formatDuration, toJstIso } from "../utils.js";
+import { escapeHtml, escapeCsv, formatDuration, localFileStamp, toLocalIso } from "../utils.js";
 import { buildSlotCsvRows } from "../slotCsv.js";
 export { buildSlotCsvRows };
 
@@ -86,9 +86,9 @@ const COMMON_TASK_HEADERS = [
   "taskType",
   "participantId",
   "gameId",
-  // 日本時間（+09:00付き）。名前も Jst にして、UTCだった頃の書き出しと
+  // 端末のローカル時刻（オフセット付き）。名前も Jst にして、UTCだった頃の書き出しと
   // 取り違えられないようにする。
-  "startedAtJst",
+  "startedAtLocal",
   "aborted",
   "trialIndex",
 ];
@@ -114,6 +114,10 @@ const DEVICE_HEADERS = [
   "deviceOutputLatencyS",
   "deviceBaseLatencyS",
   "deviceUserAgent",
+  // その回の入力経路（direct / ios-switch-control）。OS走査経由の入力は
+  // 合成clickのみが届き、経路も遅延も違う——反応時間の一次の交絡。
+  // 空欄は「記録していない回」（この列を足す前の記録）。
+  "deviceInputMethod",
 ];
 
 function deviceColumns(session) {
@@ -125,6 +129,7 @@ function deviceColumns(session) {
     device.outputLatencyS ?? "",
     device.baseLatencyS ?? "",
     device.userAgent ?? "",
+    device.inputMethod ?? "",
   ];
 }
 
@@ -145,11 +150,11 @@ export function buildRhythmCsvRows(sessions) {
       "sessionId",
       "participantId",
       "gameId",
-      // 日本時間（+09:00付き）。列名も Iso から Jst へ変える——中身の意味を
+      // 端末のローカル時刻（オフセット付き）。列名も Iso から Local へ変える——中身の意味を
       // 変えるのに名前を残すと、以前の書き出しをUTCとして読んでいる手元の
       // 集計が、黙って9時間ずれた値を受け取る。名前を変えれば、そこで
       // 止まって気づける。
-      "startedAtJst",
+      "startedAtLocal",
       "aborted",
       "mode",
       "bpm",
@@ -195,7 +200,7 @@ export function buildRhythmCsvRows(sessions) {
         session.sessionId,
         session.participantId || "",
         session.gameId,
-        toJstIso(session.startedAtIso),
+        toLocalIso(session.startedAtIso),
         session.aborted,
         config.mode ?? "",
         config.bpm ?? "",
@@ -239,18 +244,27 @@ export const SESSION_LEDGER_HEADERS = Object.freeze([
   "participantId",
   "taskType",
   "gameId",
-  "startedAtJst",
-  "endedAtJst",
+  "startedAtLocal",
+  "endedAtLocal",
   "finished",
   "aborted",
   "difficultyMode",
   "measurementReadiness",
   // 「ずっとあそぶ」の回か。trialCount が回ごとに変わる理由がこれ。
   "endless",
+  // 難度の上げ方の版。定数を変えると変更前後の回を比べられない。
+  "endlessProtocolVersion",
+  // その回がどう終わったか（planned / failure / cap / manual）。
+  // エンドレスでは trialCount が主要指標になるので、同じ数でも
+  // 「失敗して終わった」「支援者が止めた」「上限に達した」で意味が違う。
+  "endReason",
   "trialCount",
   "excludedTrialCount",
   "protocolVersion",
   "engineVersion",
+  // いまの版で検証していない回か（games/slotState.js）。版を上げたあとも
+  // 記録は残すが、現行版の回と同じ分布に混ぜてはいけない。
+  "legacyVersion",
   ...DEVICE_HEADERS,
   "configJson",
   "summaryJson",
@@ -266,20 +280,23 @@ export function buildSessionLedgerRows(sessions) {
       session.participantId || "",
       session.taskType ?? "",
       session.gameId ?? "",
-      toJstIso(session.startedAtIso),
+      toLocalIso(session.startedAtIso),
       // 終端を立てないまま消えた回は空欄。終わった回と見分けられるようにする。
-      toJstIso(session.endedAtIso),
+      toLocalIso(session.endedAtIso),
       session.finished === true,
       session.aborted === true,
       session.config?.difficultyMode ?? "practice",
       session.config?.measurementReadiness ?? "n/a",
       session.config?.endless === true,
+      session.config?.endlessProtocolVersion ?? "",
+      session.endReason ?? "",
       trials.length,
       // 除外した試行の数。excluded を持たない課題では常に0になる。
       trials.filter((trial) => trial?.excluded === true).length,
       // slot だけが持つ版。他の課題では空欄——「無い」ことを空欄で表す。
       session.protocolVersion ?? "",
       session.engineVersion ?? "",
+      session.legacyVersion === true,
       ...deviceColumns(session),
       JSON.stringify(session.config ?? {}),
       JSON.stringify(session.summary ?? {}),
@@ -323,6 +340,8 @@ export function buildTaskCsvRows(sessions, taskType) {
         // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、
         // toleranceR だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
         "sweepMs",
+        "endlessProtocolVersion",
+        "endReason",
       ],
     ];
     sessions
@@ -334,7 +353,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.taskType,
             session.participantId || "",
             session.gameId,
-            toJstIso(session.startedAtIso),
+            toLocalIso(session.startedAtIso),
             session.aborted,
             trial.index,
             trial.targetX,
@@ -354,6 +373,8 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.config?.measurementReadiness ?? "n/a",
             session.config?.endless === true,
             trial.sweepMs ?? session.config?.sweepMs ?? "",
+            session.config?.endlessProtocolVersion ?? "",
+            session.endReason ?? "",
           ]);
         });
       });
@@ -378,6 +399,11 @@ export function buildTaskCsvRows(sessions, taskType) {
         "measurementReadiness",
         // その回が「ずっとあそぶ」だったか（走査CSVと同じ意味）。
         "endless",
+        // その試行の受付時間。エンドレスでは試行ごとに短くなるので、
+        // config の値だけでは何段目の試行かを復元できない。
+        "limitMs",
+        "endlessProtocolVersion",
+        "endReason",
       ],
     ];
     sessions
@@ -389,7 +415,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.taskType,
             session.participantId || "",
             session.gameId,
-            toJstIso(session.startedAtIso),
+            toLocalIso(session.startedAtIso),
             session.aborted,
             trial.index,
             trial.kind,
@@ -403,6 +429,9 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.config?.difficultyMode ?? "practice",
             session.config?.measurementReadiness ?? "n/a",
             session.config?.endless === true,
+            trial.limitMs ?? session.config?.limitMs ?? "",
+            session.config?.endlessProtocolVersion ?? "",
+            session.endReason ?? "",
           ]);
         });
       });
@@ -743,11 +772,11 @@ export function initEvaluation(ctx) {
         "ease_rating",
         "engagement_rating",
         "observer_notes",
-        // すべて日本時間（+09:00付き）。
-        "task_started_at_jst",
-        "task_ended_at_jst",
-        "session_started_at_jst",
-        "session_ended_at_jst",
+        // すべて端末のローカル時刻（オフセット付き）。
+        "task_started_at_local",
+        "task_ended_at_local",
+        "session_started_at_local",
+        "session_ended_at_local",
       ],
       ...results.map((result) => [
         result.participantId || "",
@@ -773,10 +802,10 @@ export function initEvaluation(ctx) {
         result.easeRating,
         result.engagementRating ?? "",
         result.observerNotes ?? "",
-        toJstIso(result.startedAt),
-        toJstIso(result.endedAt),
-        toJstIso(result.sessionStartedAt || state.evaluation.sessionStartedAt || ""),
-        toJstIso(result.sessionEndedAt || state.evaluation.sessionEndedAt || ""),
+        toLocalIso(result.startedAt),
+        toLocalIso(result.endedAt),
+        toLocalIso(result.sessionStartedAt || state.evaluation.sessionStartedAt || ""),
+        toLocalIso(result.sessionEndedAt || state.evaluation.sessionEndedAt || ""),
       ]),
     ];
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
@@ -784,7 +813,7 @@ export function initEvaluation(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-evaluation-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `neuronode-evaluation-${localFileStamp()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -818,7 +847,7 @@ export function initEvaluation(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-rhythm-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `neuronode-rhythm-${localFileStamp()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -847,7 +876,7 @@ export function initEvaluation(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-slot-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `neuronode-slot-${localFileStamp()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -869,7 +898,7 @@ export function initEvaluation(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-${taskType}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `neuronode-${taskType}-${localFileStamp()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -882,7 +911,7 @@ export function initEvaluation(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${filenameStem}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `${filenameStem}-${localFileStamp()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -915,7 +944,7 @@ export function initEvaluation(ctx) {
       // 控えの中身は state そのまま（保存はUTC）。読む人のために、
       // 書き出した時刻だけ日本時間も併記する。
       exportedAtIso: new Date().toISOString(),
-      exportedAtJst: toJstIso(new Date().toISOString()),
+      exportedAtLocal: toLocalIso(new Date().toISOString()),
       storageKey,
       // CSVの列は増えるが、この控えは state の形そのもの。読む側が形を
       // 判別できるように、書き出し時のキー名を添える。
@@ -929,7 +958,7 @@ export function initEvaluation(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-raw-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `neuronode-raw-${localFileStamp()}.json`;
     link.click();
     URL.revokeObjectURL(url);
     notifySupporter(

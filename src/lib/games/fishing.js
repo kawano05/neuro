@@ -28,6 +28,7 @@
 
 import { cueTones, fishingPresets, fishingSpecies } from "../content.js";
 import {
+  ENDLESS_PROTOCOL_VERSION,
   endlessDifficultyStep,
   resolveDifficultyMode,
   resolveEndlessMode,
@@ -252,6 +253,9 @@ export function createFishingGame(gameId) {
   // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
   // 返すので、測る回の長さは protocol のまま動かない。
   config.endless = resolveEndlessMode(ctx.settings, ctx.endless);
+  // 難度の上げ方の版（difficultyMode.js）。定数を変えると回どうしを
+  // 比べられなくなるので、どの版で走ったかを残す。
+  config.endlessProtocolVersion = config.endless ? ENDLESS_PROTOCOL_VERSION : null;
   if (config.endless) config.sessionMs = ENDLESS_SESSION_MS;
   let stageEl = null;
   let statusEl = null;
@@ -633,16 +637,25 @@ export function createFishingGame(gameId) {
     // ——利用者からは、自分の操作と終わりが結びつかない。失敗で終わるなら、
     // どこまで続けられたかがそのまま結果になる。
     if (endlessFailed) {
-      finalize();
+      finalize("failure");
       return;
     }
-    if (currentIndex >= trialsPlan.length) finalize();
+    // 計画を使い切った。エンドレスでは上限（時間・試行数）に達したという
+    // ことなので、失敗で終わった回とは分けて記録する。
+    if (currentIndex >= trialsPlan.length) finalize(config.endless ? "cap" : "planned");
   }
 
-  function finalize() {
+  /**
+   * @param {"planned"|"failure"|"cap"|"manual"} endReason その回がどう終わったか。
+   *   エンドレスでは「続いた回数」が主要指標になるので、同じ数でも
+   *   「失敗して終わった」「支援者が止めた」「計画を使い切った」で意味が
+   *   違う。理由が無いと、打ち切りを成績として読んでしまう。
+   */
+  function finalize(endReason = "planned") {
     if (finished || !session) return;
     finished = true;
     session.finished = true;
+    session.endReason = endReason;
     if (config.endless) {
       // エンドレスには「予定した試行数」が無い。実際にやった数を書き戻さないと
       // state.js の完走判定（trials.length === targetTrials）が合わず、
@@ -987,6 +1000,8 @@ export function createFishingGame(gameId) {
     audio.scheduler.stop();
     if (session && !finished) {
       if (config.endless) {
+        // 支援者が「おわる」を押した（または画面を離れた）。
+        session.endReason = "manual";
         // エンドレスには「予定した終わり」が無いので、止めたところが終わり。
         // aborted のままにすると成立確認の材料から外れる（readinessCheck.js の
         // isUsable は aborted を使わない）——さかなつりは「いしを もって
@@ -999,6 +1014,7 @@ export function createFishingGame(gameId) {
         session.config.targetTrials = session.trials.length;
       } else {
         session.aborted = true;
+        session.endReason = "manual";
       }
       session.summary = computeSummary(session.trials);
       logTrial(session);

@@ -219,6 +219,10 @@ const MAX_BASELINE_OFFSET_MS = 5_000;
 const MAX_TRIALS_PER_SESSION = 1_000;
 const MAX_ARCADE_HISTORY = 100;
 const TASK_TYPES = new Set(["sms", "gonogo", "scan", "rt", "slot"]);
+/** その回の入力経路（sanitizeDevice の inputMethod）。 */
+const INPUT_METHODS = new Set(["direct", "ios-switch-control"]);
+/** その回がどう終わったか（session.endReason）。 */
+const END_REASONS = new Set(["planned", "failure", "cap", "manual"]);
 const RHYTHM_GAME_IDS = new Set(["rhythm-l1", "rhythm-l2", "gonogo", "calibration"]);
 const SLOT_GAME_IDS = new Set(["slot-l1", "slot-l2"]);
 const SCAN_GAME_IDS = new Set(["crane"]);
@@ -636,6 +640,10 @@ function sanitizeRhythmSession(session, taskType) {
     // その回が終わった時刻（games/gameHost.js の persistSession が押す）。
     // 終端を立てないまま消えた回は null のまま残す。
     endedAtIso: isoStringOr(session.endedAtIso, "") || null,
+    // その回がどう終わったか。エンドレスでは「続いた回数」が主要指標に
+    // なるので、同じ数でも失敗・支援者の停止・上限到達で意味が違う。
+    // 記録の無い回は null（「分からない」と「予定どおり終わった」は違う）。
+    endReason: enumOr(session.endReason, END_REASONS, null),
     aborted: !completedNormally,
     finished: completedNormally,
     config: sanitizedConfig,
@@ -661,6 +669,20 @@ function sanitizeDevice(device) {
     viewportWidth: nullableNumberInRange(value.viewportWidth, null, 0, 20_000, true),
     viewportHeight: nullableNumberInRange(value.viewportHeight, null, 0, 20_000, true),
     devicePixelRatio: nullableNumberInRange(value.devicePixelRatio, null, 0, 16),
+    // その回の入力がどの経路で届いていたか（games/gameHost.js の
+    // persistSession が押す）。
+    //
+    //   "direct"             … アプリが直接受ける（物理スイッチ・キーボード・タップ）
+    //   "ios-switch-control" … iPad の Switch Control へ走査を委譲中
+    //
+    // 経路が違えば届くイベントも遅延も違う（OS走査は合成clickのみを送る）。
+    // 反応時間はここが一次の交絡になるのに、他の測定条件（手がかり・端末・
+    // そくてい／れんしゅう）を全部記録しながら、ここだけ残していなかった。
+    // 記録が無いと、あとから分離する手立てが無い。
+    //
+    // 値を持たない古い記録は null のまま（「記録していない」と「direct
+    // だった」は違う）。
+    inputMethod: enumOr(value.inputMethod, INPUT_METHODS, null),
   };
 }
 
@@ -764,6 +786,9 @@ function sanitizeScanSession(session) {
     // その回が「ずっとあそぶ」だったか。回数が回ごとに変わるので、決まった
     // 回数の回と同じ分布に混ぜてはいけない（試行の後半ほど疲れが乗る）。
     endless: config.endless === true,
+    // 難度の上げ方の版（difficultyMode.js の ENDLESS_PROTOCOL_VERSION）。
+    // 定数を変えると変更前後の回が見分けられなくなる。
+    endlessProtocolVersion: stringOr(config.endlessProtocolVersion) || null,
     // そくてい／れんしゅうのどちらの回か（src/lib/difficultyMode.js）。
     difficultyMode: enumOr(config.difficultyMode, DIFFICULTY_MODES, "practice"),
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
@@ -811,6 +836,10 @@ function sanitizeScanSession(session) {
     // その回が終わった時刻（games/gameHost.js の persistSession が押す）。
     // 終端を立てないまま消えた回は null のまま残す。
     endedAtIso: isoStringOr(session.endedAtIso, "") || null,
+    // その回がどう終わったか。エンドレスでは「続いた回数」が主要指標に
+    // なるので、同じ数でも失敗・支援者の停止・上限到達で意味が違う。
+    // 記録の無い回は null（「分からない」と「予定どおり終わった」は違う）。
+    endReason: enumOr(session.endReason, END_REASONS, null),
     aborted: !completedNormally,
     finished: completedNormally,
     config: sanitizedConfig,
@@ -913,6 +942,7 @@ function sanitizeReactionSession(session) {
       : [],
     // その回が「ずっとあそぶ」だったか（scan 側と同じ意味）。
     endless: config.endless === true,
+    endlessProtocolVersion: stringOr(config.endlessProtocolVersion) || null,
     // そくてい／れんしゅうのどちらの回か（src/lib/difficultyMode.js）。
     // sanitize が落とすと、再読み込みしただけで測定条件が消える——
     // visualGuidance を落としていたときと同じ穴なので、ここで必ず保持する。
@@ -953,6 +983,10 @@ function sanitizeReactionSession(session) {
     // その回が終わった時刻（games/gameHost.js の persistSession が押す）。
     // 終端を立てないまま消えた回は null のまま残す。
     endedAtIso: isoStringOr(session.endedAtIso, "") || null,
+    // その回がどう終わったか。エンドレスでは「続いた回数」が主要指標に
+    // なるので、同じ数でも失敗・支援者の停止・上限到達で意味が違う。
+    // 記録の無い回は null（「分からない」と「予定どおり終わった」は違う）。
+    endReason: enumOr(session.endReason, END_REASONS, null),
     aborted: !completedNormally,
     finished: completedNormally,
     config: sanitizedConfig,

@@ -36,6 +36,7 @@
 
 import { cranePresets, cranePrizes, cueTones } from "../content.js";
 import {
+  ENDLESS_PROTOCOL_VERSION,
   endlessDifficultyStep,
   resolveCraneDifficulty,
   resolveDifficultyMode,
@@ -296,6 +297,11 @@ function resolveCraneConfig(settings, readiness, requestedEndless) {
     // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
     // 返すので、測る回の試行数は protocol のまま動かない。
     endless: resolveEndlessMode(settings, requestedEndless),
+    // 難度の上げ方の版。定数を変えると回どうしを比べられなくなるので、
+    // どの版で走った回かを残す（difficultyMode.js）。
+    endlessProtocolVersion: resolveEndlessMode(settings, requestedEndless)
+      ? ENDLESS_PROTOCOL_VERSION
+      : null,
     difficultyMode: resolveDifficultyMode(settings),
     // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
     // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
@@ -730,10 +736,17 @@ export function createCraneGame(ctx) {
     updateStreak();
   }
 
-  function finalize() {
+  /**
+   * @param {"planned"|"failure"|"cap"|"manual"} endReason その回がどう終わったか。
+   *   エンドレスでは「続いた回数」が主要指標になるので、同じ5でも
+   *   「5回目で失敗した」「5回やって支援者が止めた」「上限に達した」で
+   *   意味が違う。理由が無いと、打ち切りを成績として読んでしまう。
+   */
+  function finalize(endReason = "planned") {
     if (finished || !session) return;
     finished = true;
     session.finished = true;
+    session.endReason = endReason;
     if (config.endless) {
       // エンドレスには「予定した回数」が無い。実際にやった回数を書き戻さないと
       // state.js の完走判定（trials.length === targetTrials）が合わず、
@@ -763,7 +776,7 @@ export function createCraneGame(ctx) {
     // 直前の試行の判定を見る（この時点ではまだ resolveTrial の judgment が
     // 残っている）。currentIndex を進める前に判定すること。
     if (config.endless && judgment !== "grip") {
-      finalize();
+      finalize("failure");
       return;
     }
     currentIndex += 1;
@@ -777,7 +790,7 @@ export function createCraneGame(ctx) {
         prizes.push(pickPrize());
       }
       if (currentIndex >= ENDLESS_MAX_TRIALS) {
-        finalize();
+        finalize("cap");
         return;
       }
       startXPhase(perfMs);
@@ -1036,6 +1049,9 @@ export function createCraneGame(ctx) {
     audio.scheduler.stop();
     if (session && !finished) {
       if (config.endless) {
+        // 支援者が「おわる」を押した（または画面を離れた）。失敗で終わった
+        // 回と同じ「続いた回数」でも意味が違う。
+        session.endReason = "manual";
         // エンドレスには「予定した回数」が無いので、途中で止めたのではなく
         // ここが終わり。aborted のままにすると、その回は成立確認の材料から
         // 外れる（readinessCheck.js の isUsable は aborted を使わない）——
@@ -1050,6 +1066,7 @@ export function createCraneGame(ctx) {
         session.config.targetTrials = session.trials.length;
       } else {
         session.aborted = true;
+        session.endReason = "manual";
       }
       session.summary = computeSummary(session.trials, collected);
       logTrial(session);

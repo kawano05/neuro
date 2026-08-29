@@ -11,7 +11,7 @@ import {
   sanitizeState,
   summarizeRhythmTrials,
 } from "../src/lib/state.js";
-import { escapeCsv, formatTime, toJstIso } from "../src/lib/utils.js";
+import { escapeCsv, formatTime, localFileStamp, toLocalIso } from "../src/lib/utils.js";
 import {
   buildSessionLedgerRows,
   buildSlotCsvRows,
@@ -872,7 +872,7 @@ test("game registry, presets and persisted task types stay aligned", () => {
 test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
   const expectedHeaders = [
     "sessionId", "participantId", "gameId", "protocolVersion", "engineVersion",
-    "startedAtJst", "aborted", "difficultyMode", "roundIndex", "reelIndex",
+    "startedAtLocal", "aborted", "difficultyMode", "roundIndex", "reelIndex",
     "targetSymbol", "targetIndex", "stoppedSymbol", "cycleMs", "toleranceMs",
     "inputMs", "targetPassMs", "signedErrorMs", "absoluteErrorMs", "observedCycles",
     "judgment", "seed", "symbolOrder", "deviceViewportWidth", "deviceViewportHeight",
@@ -922,9 +922,13 @@ test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
   // 既存28列の**うしろ**に端末の遅延2列を足した（2026-08-28）。保存はして
   // いたのにリールCSVだけ出していなかった。位置を動かさないことも固定する。
   assert.deepEqual(rows[0].slice(0, 28), expectedHeaders);
-  assert.deepEqual(rows[0].slice(28), ["deviceOutputLatencyS", "deviceBaseLatencyS"]);
-  assert.equal(rows[0].length, 30);
-  assert.equal(rows[1].length, 30);
+  assert.deepEqual(rows[0].slice(28), [
+    "deviceOutputLatencyS",
+    "deviceBaseLatencyS",
+    "deviceInputMethod",
+  ]);
+  assert.equal(rows[0].length, 31);
+  assert.equal(rows[1].length, 31);
   assert.equal(rows[1][22], JSON.stringify(["circle", "fish", "star", "flower", "bird", "square"]));
   // 遅延を持たない端末の記録は空欄（0にしない——測っていないことと、
   // 遅延が0だったことは違う）。
@@ -974,11 +978,13 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   //
   // 列数だけでなく「末尾に足した」ことを固定する: 途中に挿すと既存列の位置が
   // ずれ、列位置で読んでいる解析側が黙って壊れる（detailed-design.md §9.3）。
-  const DEVICE_COLUMNS = 6;
+  // 端末列は7つ（2026-08-29に deviceInputMethod を末尾へ足した）。
+  const DEVICE_COLUMNS = 7;
   // 既存18列 ＋ audioGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness
   // ＋ endless ＋ sweepMs。
-  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 3);
-  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 3);
+  // ＋ endless ＋ sweepMs ＋ endlessProtocolVersion ＋ endReason。
+  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 5);
+  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 5);
   assert.equal(scanRows[0][17], "judgment");
   assert.equal(scanRows[1][17], "grip");
   assert.equal(scanRows[0][18], "audioGuidance");
@@ -989,25 +995,29 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   assert.equal(scanRows[1][19], "practice");
   // 端末は「記録したのに書き出さない」状態が実際にあった。列として出ることを
   // 固定する——保存されているだけの値は解析に使えない。
-  assert.deepEqual(scanRows[0].slice(20, 26), [
+  assert.deepEqual(scanRows[0].slice(20, 27), [
     "deviceViewportWidth",
     "deviceViewportHeight",
     "devicePixelRatio",
     "deviceOutputLatencyS",
     "deviceBaseLatencyS",
     "deviceUserAgent",
+    "deviceInputMethod",
   ]);
   // 成立確認の状態（リズムCSVと同じ）。列を持たない古い記録は n/a。
   // 位置を固定する: endless を足したときに、ここへ挿し込んで既存列を
   // 1つずつずらしかけた（このテストが止めた）。
-  assert.equal(scanRows[0][26], "measurementReadiness");
-  assert.equal(scanRows[1][26], "n/a");
+  assert.equal(scanRows[0][27], "measurementReadiness");
+  assert.equal(scanRows[1][27], "n/a");
   // エンドレスの回か。config に無い古い記録は false。
-  assert.equal(scanRows[0][27], "endless");
-  assert.equal(scanRows[1][27], false);
+  assert.equal(scanRows[0][28], "endless");
+  assert.equal(scanRows[1][28], false);
   // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、toleranceR
   // だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
-  assert.equal(scanRows[0].at(-1), "sweepMs");
+  assert.equal(scanRows[0][29], "sweepMs");
+  assert.equal(scanRows[0].at(-1), "endReason");
+  assert.equal(scanRows[1][29], "");
+  // 終了理由を持たない回は空欄（「分からない」と「予定どおり」は違う）。
   assert.equal(scanRows[1].at(-1), "");
 
   const rtRows = buildTaskCsvRows(
@@ -1035,17 +1045,23 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   );
   // 反応課題だけ測定条件が1列も出ていなかった（2026-08-28）。リズム・走査と
   // 同じ2列を、既存列の**うしろ**に足す。
-  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 3);
-  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 3);
+  // ＋ difficultyMode ＋ readiness ＋ endless ＋ limitMs
+  //   ＋ endlessProtocolVersion ＋ endReason。
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 6);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 6);
   assert.equal(rtRows[0][13], "excluded");
-  assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceUserAgent");
+  assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 2], "deviceUserAgent");
+  assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceInputMethod");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS], "difficultyMode");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 1], "measurementReadiness");
-  assert.equal(rtRows[0].at(-1), "endless");
+  assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 2], "endless");
+  // 試行ごとの受付時間。エンドレスでは試行ごとに短くなる。
+  assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 3], "limitMs");
+  assert.equal(rtRows[0].at(-1), "endReason");
   // 列を持たない古い記録は practice / n/a / false に倒す（scan と同じ既定）。
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS], "practice");
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 1], "n/a");
-  assert.equal(rtRows[1].at(-1), false);
+  assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 2], false);
 });
 
 test("a reaction session keeps difficultyMode and readiness across a reload", () => {
@@ -1177,8 +1193,8 @@ test("the session ledger lists one row per session, including runs with no trial
   assert.equal(aborted[header.indexOf("measurementReadiness")], "n/a");
   // 終端の時刻。押されている回は出し、押されないまま消えた回は空欄にする
   // ——「終わらなかった回」を、終わった回のように見せない。
-  assert.equal(first[header.indexOf("endedAtJst")], "2026-08-28T09:04:10.000+09:00");
-  assert.equal(aborted[header.indexOf("endedAtJst")], "");
+  assert.equal(first[header.indexOf("endedAtLocal")], "2026-08-28T09:04:10.000+09:00");
+  assert.equal(aborted[header.indexOf("endedAtLocal")], "");
 
   // ロング形式では消えていることの対比（この回はrt CSVに1行も出ない）。
   const rtRows = buildTaskCsvRows(sessions, "rt");
@@ -1260,28 +1276,228 @@ test("a reaction trial keeps the response window it was actually judged against"
   assert.equal(legacy.trials[0].limitMs, 2000);
 });
 
-test("exported timestamps are Japan time with the offset kept", () => {
-  // 記録はUTC。書き出しだけを日本時間にする。
-  assert.equal(toJstIso("2026-08-28T15:00:00.000Z"), "2026-08-29T00:00:00.000+09:00");
-  // 日本時間の夕方はUTCでは同じ日の朝。日ごとの集計はここでずれる。
-  assert.equal(toJstIso("2026-08-28T09:30:00.000Z"), "2026-08-28T18:30:00.000+09:00");
-  // オフセットを必ず残す。落とすとUTCの値と見分けがつかなくなる。
-  assert.ok(toJstIso("2026-08-28T00:00:00.000Z").endsWith("+09:00"));
-  // 端末のタイムゾーン設定に依存させない（固定 +09:00）。
-  assert.equal(toJstIso("2026-01-15T12:00:00.000Z"), "2026-01-15T21:00:00.000+09:00");
-  // 読めない値・空値は空欄にする（0時や現在時刻をでっち上げない）。
-  assert.equal(toJstIso(""), "");
-  assert.equal(toJstIso("not a date"), "");
-  assert.equal(toJstIso(undefined), "");
-  assert.equal(toJstIso(null), "");
+test("bumping the slot engine version keeps old runs instead of deleting them", () => {
+  // 以前は版が違う回を sanitize が null にしていた。sanitize は読み込みの
+  // たびに走るので、SLOT_ENGINE_VERSION を上げたビルドを配ると、その端末に
+  // 溜まっていたリールの回は次の起動で消えた——警告も書き出しの猶予も無く。
+  // データ収集の途中で更新を配ると、それまでの回が失われる（2026-08-29）。
+  //
+  // 混ぜてはいけないのは確かだが、それは解析で分けることで、削除で果たす
+  // ことではない。
+  const run = (id, engineVersion) => ({
+    sessionId: id,
+    taskType: "slot",
+    gameId: "slot-l1",
+    participantId: "P1",
+    protocolVersion: "slot-v1",
+    engineVersion,
+    startedAtIso: "2026-08-29T00:00:00.000Z",
+    finished: true,
+    aborted: false,
+    device: {},
+    config: { cycleMs: 3200, toleranceMs: 220, seed: "x", reelCount: 3, symbolCount: 6, rounds: 8 },
+    trials: [{ roundIndex: 0, reelIndex: 0, judgment: "hit" }],
+    summary: { hits: 1 },
+  });
 
-  // 各CSVが実際に日本時間で出ること。
-  const session = {
-    sessionId: "jst-1",
+  const restored = sanitizeState({ sessions: [run("cur", 1), run("old", 0)] }).sessions;
+  assert.equal(restored.length, 2, "版が違うだけの回を消してはいけない");
+  const legacy = restored.find((session) => session.sessionId === "old");
+  assert.equal(legacy.legacyVersion, true, "いまの版で検証していないことを記録に持たせる");
+  assert.equal(legacy.trials.length, 1, "中身も残す");
+  assert.ok(!restored.find((session) => session.sessionId === "cur").legacyVersion);
+
+  // ただし現行版と同じ表・同じ線には混ぜない。
+  const rows = buildSlotCsvRows(restored);
+  const sessionColumn = rows[0].indexOf("sessionId");
+  assert.ok(
+    !rows.slice(1).some((row) => row[sessionColumn] === "old"),
+    "リールCSVに旧版の回を混ぜてはいけない（列の意味が当時の規則のもの）"
+  );
+  // 残っていること自体は台帳から分かる。
+  const ledger = buildSessionLedgerRows(restored);
+  assert.equal(ledger.length, 3, "台帳には両方出る");
+  assert.equal(ledger[2][ledger[0].indexOf("legacyVersion")], true);
+});
+
+test("an endless run records how it ended and which ramp it ran under", () => {
+  // エンドレスでは「続いた回数」が主要指標になる。同じ5でも
+  //   5回目で失敗した／5回やって支援者が止めた／上限に達した
+  // で意味が違う。理由が無いと、打ち切りを成績として読んでしまう。
+  //
+  // 傾斜の版も要る。定数（何試行ごとに何%か、下限をどこに置くか）は
+  // そのままその回のプロトコルで、実際 2026-08-29 に下限の当て方を直した
+  // ——版が無いと、変更前後の回を見分けられない。
+  const base = {
     taskType: "scan",
     gameId: "crane",
     participantId: "P1",
-    startedAtIso: "2026-08-28T15:30:00.000Z",
+    startedAtIso: "2026-08-29T00:00:00.000Z",
+    finished: true,
+    aborted: false,
+    device: {},
+    trials: [
+      {
+        index: 0,
+        targetX: 40,
+        targetY: 40,
+        toleranceR: 15,
+        selectedX: 42,
+        selectedY: 40,
+        dx: 2,
+        dy: 0,
+        distance: 2,
+        xPhaseMs: 100,
+        yPhaseMs: 200,
+        judgment: "grip",
+        sweepMs: 2200,
+      },
+    ],
+    config: {
+      sweepMs: 2200,
+      toleranceR: 15,
+      targetTrials: 1,
+      endless: true,
+      endlessProtocolVersion: "endless-v2",
+    },
+  };
+
+  const restored = sanitizeState({
+    sessions: [
+      { ...base, sessionId: "e-fail", endReason: "failure" },
+      { ...base, sessionId: "e-manual", endReason: "manual" },
+      { ...base, sessionId: "e-cap", endReason: "cap" },
+      // 理由の無い古い記録と、知らない値。どちらも null に倒す。
+      { ...base, sessionId: "e-old" },
+      { ...base, sessionId: "e-bogus", endReason: "gave-up" },
+    ],
+  }).sessions;
+
+  assert.deepEqual(
+    restored.map((session) => session.endReason),
+    ["failure", "manual", "cap", null, null]
+  );
+  assert.equal(restored[0].config.endlessProtocolVersion, "endless-v2");
+
+  // CSVと台帳へ出ること（保存されているだけの値は解析に使えない）。
+  const rows = buildTaskCsvRows(restored, "scan");
+  const endReasonColumn = rows[0].indexOf("endReason");
+  const versionColumn = rows[0].indexOf("endlessProtocolVersion");
+  assert.ok(endReasonColumn > 0 && versionColumn > 0, "走査CSVに終了理由と版の列が要る");
+  assert.equal(rows[1][endReasonColumn], "failure");
+  assert.equal(rows[1][versionColumn], "endless-v2");
+  // 理由の無い回は空欄（false や "planned" をでっち上げない）。
+  assert.equal(rows[4][endReasonColumn], "");
+
+  const ledger = buildSessionLedgerRows(restored);
+  assert.equal(ledger[1][ledger[0].indexOf("endReason")], "failure");
+  assert.equal(ledger[1][ledger[0].indexOf("endlessProtocolVersion")], "endless-v2");
+});
+
+test("a session remembers which input path it was measured through", () => {
+  // OS走査（iPad Switch Control）経由の入力は合成clickのみが届き、経路も
+  // 遅延も違う。反応時間にとっては一次の交絡なのに、他の測定条件を全部
+  // 記録しながらここだけ残していなかった（2026-08-29）。記録が無いと、
+  // あとから分離する手立てが無い。
+  const base = {
+    sessionId: "im-1",
+    taskType: "rt",
+    gameId: "fishing",
+    startedAtIso: "2026-08-29T00:00:00.000Z",
+    finished: true,
+    aborted: false,
+    config: { limitMs: 2000, targetTrials: 0 },
+    trials: [],
+  };
+  const restored = sanitizeState({
+    sessions: [
+      { ...base, sessionId: "im-os", device: { inputMethod: "ios-switch-control" } },
+      { ...base, sessionId: "im-direct", device: { inputMethod: "direct" } },
+      // 値を持たない古い記録と、知らない値。どちらも null に倒す——
+      // 「記録していない」と「direct だった」は違う。
+      { ...base, sessionId: "im-old", device: {} },
+      { ...base, sessionId: "im-bogus", device: { inputMethod: "bluetooth" } },
+    ],
+  }).sessions;
+  assert.equal(restored[0].device.inputMethod, "ios-switch-control");
+  assert.equal(restored[1].device.inputMethod, "direct");
+  assert.equal(restored[2].device.inputMethod, null);
+  assert.equal(restored[3].device.inputMethod, null);
+
+  // CSVへ出ること（保存されているだけの値は解析に使えない）。
+  const rows = buildTaskCsvRows(restored, "rt");
+  const column = rows[0].indexOf("deviceInputMethod");
+  assert.ok(column > 0, "反応CSVに入力経路の列が要る");
+  const ledger = buildSessionLedgerRows(restored);
+  assert.ok(ledger[0].includes("deviceInputMethod"), "台帳にも入力経路の列が要る");
+});
+
+test("the filename date follows the device clock, like the contents do", () => {
+  // 中身は端末のローカル時刻なのに、ファイル名だけ toISOString() 由来でUTC
+  // だった。UTCより東の時間帯では朝のうちに書き出すとファイル名が前日になり、
+  // 書き出したファイルを日付で並べると、その1本だけ前日の束に入る（2026-08-29）。
+  //
+  // 実行環境の時間帯に依存しない形で確かめる: ファイル名の日付は、同じ時刻を
+  // ローカル時刻へ直したものの先頭10文字と必ず一致する。
+  const samples = [
+    new Date("2026-08-28T18:00:00.000Z"),
+    new Date("2026-08-29T03:00:00.000Z"),
+    new Date("2026-01-01T15:30:00.000Z"),
+  ];
+  for (const sample of samples) {
+    assert.equal(localFileStamp(sample), toLocalIso(sample.toISOString()).slice(0, 10));
+  }
+});
+
+
+test("exported timestamps follow the device clock and keep the offset", () => {
+  // 記録はUTC。書き出しだけを端末のローカル時刻にする。固定の +09:00 では
+  // なく端末の時間帯を使う——支援者はその端末の時計で「今日の何時に測ったか」
+  // を認識するので、アプリだけ別の時間帯で書き出すと、別紙と突き合わせる側が
+  // 毎回ずらして考えることになる。
+  //
+  // 実行環境の時間帯に依存しないよう、性質で確かめる。
+
+  // 1. 同じ瞬間を指していること（ずらした値ではない）。
+  const utc = "2026-08-28T15:00:00.000Z";
+  const local = toLocalIso(utc);
+  assert.equal(new Date(local).getTime(), new Date(utc).getTime());
+
+  // 2. オフセットを必ず残すこと。落とすとどの時間帯の値か分からなくなる。
+  assert.ok(/[+-]\d{2}:\d{2}$/.test(local), `オフセットが無い: ${local}`);
+
+  // 3. 端末の時間帯と一致すること。
+  const expectedMinutes = -new Date(utc).getTimezoneOffset();
+  const sign = expectedMinutes < 0 ? "-" : "+";
+  const absolute = Math.abs(expectedMinutes);
+  const expected = `${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(
+    absolute % 60
+  ).padStart(2, "0")}`;
+  assert.equal(local.slice(-6), expected);
+
+  // 3.5 時間帯そのものの変換。実行環境の時間帯は選べない（この端末の Node は
+  //     TZ を無視する）ので、オフセットを渡して確かめる。30分刻みの時間帯
+  //     （インド +05:30、ニューファンドランド -03:30）で桁揃えが崩れないこと。
+  assert.equal(toLocalIso(utc, 540), "2026-08-29T00:00:00.000+09:00");
+  assert.equal(toLocalIso(utc, 480), "2026-08-28T23:00:00.000+08:00");
+  assert.equal(toLocalIso(utc, -240), "2026-08-28T11:00:00.000-04:00");
+  assert.equal(toLocalIso(utc, 330), "2026-08-28T20:30:00.000+05:30");
+  assert.equal(toLocalIso(utc, -210), "2026-08-28T11:30:00.000-03:30");
+  assert.equal(toLocalIso(utc, 0), "2026-08-28T15:00:00.000+00:00");
+
+  // 4. 読めない値・空値は空欄（0時や現在時刻をでっち上げない）。
+  assert.equal(toLocalIso(""), "");
+  assert.equal(toLocalIso("not a date"), "");
+  assert.equal(toLocalIso(undefined), "");
+  assert.equal(toLocalIso(null), "");
+
+  // 5. 各CSVが実際にローカル時刻で出ること。
+  const session = {
+    sessionId: "tz-1",
+    taskType: "scan",
+    gameId: "crane",
+    participantId: "P1",
+    startedAtIso: utc,
     aborted: false,
     finished: true,
     device: {},
@@ -1304,19 +1520,17 @@ test("exported timestamps are Japan time with the offset kept", () => {
     ],
   };
   const scanRows = buildTaskCsvRows([session], "scan");
-  assert.equal(scanRows[0][4], "startedAtJst");
-  assert.equal(scanRows[1][4], "2026-08-29T00:30:00.000+09:00");
+  assert.equal(scanRows[0][4], "startedAtLocal");
+  assert.equal(scanRows[1][4], local);
 
   const ledgerRows = buildSessionLedgerRows([session]);
-  assert.equal(
-    ledgerRows[1][ledgerRows[0].indexOf("startedAtJst")],
-    "2026-08-29T00:30:00.000+09:00"
-  );
+  assert.equal(ledgerRows[1][ledgerRows[0].indexOf("startedAtLocal")], local);
 
-  const logRows = buildLogCsvRows([{ time: "2026-08-28T15:30:00.000Z", view: "home", type: "x" }], "P1");
-  assert.equal(logRows[0][0], "time_jst");
-  assert.equal(logRows[1][0], "2026-08-29T00:30:00.000+09:00");
+  const logRows = buildLogCsvRows([{ time: utc, view: "home", type: "x" }], "P1");
+  assert.equal(logRows[0][0], "time_local");
+  assert.equal(logRows[1][0], local);
 });
+
 
 test("the log CSV exports the fields the log already stored", () => {
   // success / skipEvaluation / distance は sanitizeLogEntry がずっと保持して
@@ -1339,7 +1553,7 @@ test("the log CSV exports the fields the log already stored", () => {
     "P7"
   );
   const header = rows[0];
-  assert.deepEqual(header.slice(0, 5), ["time_jst", "view", "type", "label", "correct"]);
+  assert.deepEqual(header.slice(0, 5), ["time_local", "view", "type", "label", "correct"]);
   assert.deepEqual(header.slice(5), [
     "success",
     "skip_evaluation",
@@ -1631,9 +1845,9 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
   ]);
   // detailed-design.md §9.3「この18列は既存データ互換のため変更しない」。
   // 途中に挿すと、列位置で読んでいる解析側が黙って壊れる。
-  // 既存18列 ＋ visualGuidance ＋ 端末6列。順序を固定する。
-  // 既存18列 ＋ visualGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness。
-  assert.equal(rows[0].length, 20 + 6 + 1);
+  // 既存18列 ＋ visualGuidance ＋ difficultyMode ＋ 端末7列 ＋ readiness。
+  // 端末列は 2026-08-29 に deviceInputMethod を末尾へ足して7つになった。
+  assert.equal(rows[0].length, 20 + 7 + 1);
   assert.equal(rows[0][16], "judgment");
   assert.equal(rows[0][17], "excluded");
   assert.equal(rows[0][18], "visualGuidance");
@@ -1641,6 +1855,7 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
   // 端末6列は位置ごと動かない。新しい列を足すときに端末列の前へ挿すと、
   // 位置で読んでいる解析側が黙って壊れる。
   assert.equal(rows[0][25], "deviceUserAgent");
+  assert.equal(rows[0][26], "deviceInputMethod");
   assert.equal(rows[1][15], 50, "rawOffsetMs は生値のまま");
   assert.equal(rows[1][18], true);
 

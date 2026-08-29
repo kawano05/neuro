@@ -201,7 +201,7 @@ function renderGonogoResult(summary, context = {}) {
  *
  * 中断した回は試行数が足りず不利なので、完走した回だけを対象にする。
  */
-export function personalBest(sessions, { gameId, config, pick }) {
+export function personalBest(sessions, { gameId, config, pick, participantId = "" }) {
   // エンドレスは別の束。決まった回数の回とは、上限も終わり方も違う
   // （1回失敗で終わるので、取れた数はほぼ「続いた数 - 1」になる）。
   //
@@ -219,6 +219,10 @@ export function personalBest(sessions, { gameId, config, pick }) {
   const endless = config?.endless === true;
   const sameSetup = (sessions || []).filter((session) => {
     if (session.gameId !== gameId) return false;
+    // 別の参加者の記録を目標として出さない。共用端末では、他の子が出した
+    // 記録が「これまでの さいこう」として本人に提示されていた
+    // （2026-08-29に発見）。IDが空のときは絞らない（1人しか使わない端末）。
+    if (participantId && (session.participantId || "") !== participantId) return false;
     if (session.finished !== true || session.aborted !== false) return false;
     if ((session.config?.endless === true) !== endless) return false;
     if (endless) return true;
@@ -457,6 +461,15 @@ export function createGameHost(ctx) {
     if (!session.endedAtIso && (session.finished === true || session.aborted === true)) {
       session.endedAtIso = new Date().toISOString();
     }
+    // その回の入力経路。endedAtIso と同じ理由でここ1か所に置く
+    // （device を作るのは各ゲーム、保存を通すのはここだけ）。
+    // 途中で切り替わることは想定しないが、切り替わったら最後の値が残る
+    // ——回の途中で経路が変わった回は、そもそも測定として使えない。
+    if (session.device && typeof session.device === "object") {
+      session.device.inputMethod = state.settings.switchControlMode
+        ? "ios-switch-control"
+        : "direct";
+    }
     const sessions = state.sessions;
     const index = sessions.findIndex((existing) => existing.sessionId === session.sessionId);
     if (index >= 0) {
@@ -500,6 +513,7 @@ export function createGameHost(ctx) {
     return personalBest(craneSessions.slice(0, -1), {
       gameId: "crane",
       config: current.config,
+      participantId: current.participantId || "",
       pick: (session) => session.summary?.grips,
     });
   }
