@@ -202,15 +202,32 @@ function renderGonogoResult(summary, context = {}) {
  * 中断した回は試行数が足りず不利なので、完走した回だけを対象にする。
  */
 export function personalBest(sessions, { gameId, config, pick }) {
-  const sameSetup = (sessions || []).filter(
-    (session) =>
-      session.gameId === gameId &&
-      session.finished === true &&
-      session.aborted === false &&
+  // エンドレスは別の束。決まった回数の回とは、上限も終わり方も違う
+  // （1回失敗で終わるので、取れた数はほぼ「続いた数 - 1」になる）。
+  //
+  // 実測で2つ壊れていた（2026-08-28）:
+  //   1. 5回で終わったエンドレス（4こ）が、5回設定の通常回の最高として
+  //      出ていた。通常回で5こ取るのと、5回目で失敗するまでに4こ取るのは
+  //      別のことなので、越えられない目標が出つづける。
+  //   2. エンドレスどうしは、続いた回数（＝終了時に書き戻す targetTrials）が
+  //      違うだけで別の束になり、いつまでも比較対象なし（null）だった。
+  //      いちばん比べたい回どうしが比べられていない。
+  //
+  // エンドレスは難度の上がり方がコードに固定されていて回ごとに変わらないので、
+  // 続いた回数が違っても同じ物差しで比べられる——だから束ねる条件から
+  // targetTrials を外す。
+  const endless = config?.endless === true;
+  const sameSetup = (sessions || []).filter((session) => {
+    if (session.gameId !== gameId) return false;
+    if (session.finished !== true || session.aborted !== false) return false;
+    if ((session.config?.endless === true) !== endless) return false;
+    if (endless) return true;
+    return (
       session.config?.toleranceR === config?.toleranceR &&
       session.config?.sweepMs === config?.sweepMs &&
       session.config?.targetTrials === config?.targetTrials
-  );
+    );
+  });
   const values = sameSetup.map(pick).filter((value) => typeof value === "number");
   return values.length ? Math.max(...values) : null;
 }
@@ -401,6 +418,9 @@ export function createGameHost(ctx) {
   // レディ画面（「やりかた」）を表示中のモジュール。null でなければ、
   // 次のスイッチ入力はゲームへ渡さずセッション開始に使う。
   let pendingModule = null;
+  // 直近の launch() で選ばれた遊び方。レディ画面を挟む課題でも、
+  // 実際に create() するのは押されたあとなので、ここで持ち越す。
+  let requestedEndless = false;
   // P4-3: 今回のリザルトで既に候補値を保存したか（同一リザルト画面での
   // 二重保存を防ぎ、保存後は確認文言に切り替える。launch() のたびにリセット）。
   let calibrationOffsetSaved = false;
@@ -423,6 +443,20 @@ export function createGameHost(ctx) {
    */
   function persistSession(session) {
     if (!session || !session.sessionId) return;
+    // その回が終わった時刻。slot だけが自前で持っていたので、全課題へ広げる
+    // （2026-08-28）。開始時刻しか無いと、1回にどれだけ掛かったか、途中で
+    // 止まったのがいつかを、あとから言えない。
+    //
+    // ここで押すのは、finished / aborted を立てるのが各ゲーム、保存を通すのが
+    // この1か所だから。ゲームごとに押すと押し忘れが起きる（slot 以外の3本が
+    // 実際そうなっていた）。
+    //
+    // 既に値があれば上書きしない（slot が finalize で押した時刻を、あとの
+    // 保存で塗り替えない）。終端を立てないまま消えた回は空欄のまま——
+    // 「終わらなかった回」を、終わった回のように見せない。
+    if (!session.endedAtIso && (session.finished === true || session.aborted === true)) {
+      session.endedAtIso = new Date().toISOString();
+    }
     const sessions = state.sessions;
     const index = sessions.findIndex((existing) => existing.sessionId === session.sessionId);
     if (index >= 0) {
@@ -474,6 +508,10 @@ export function createGameHost(ctx) {
   function buildGameCtx() {
     return {
       settings: state.settings,
+      // あそびの入口が選んだ遊び方（ホームのコーナー）。ゲーム側は
+      // resolveEndlessMode(settings, ctx.endless) で最終判断する
+      // ——そくてい中は設定側が必ず打ち消す。
+      endless: requestedEndless,
       audio: ctx.audio,
       announce,
       voiceFeedback: ctx.voiceFeedback,
@@ -545,13 +583,29 @@ export function createGameHost(ctx) {
     return value === key ? module.title : value;
   }
 
+  /**
+   * エンドレスのときに差し替える「やりかた」の最後の行。
+   * gameId ごとに難しくなる中身が違うので、ゲーム別に持つ。
+   */
+  const ENDLESS_HOWTO_KEYS = {
+    fishing: "howto.endless.fishing",
+    "fishing-gonogo": "howto.endless.fishing",
+    crane: "howto.endless.crane",
+  };
+
   function renderReady(module, stepKeys) {
     // content.js の gameHowTo が持つのは並びだけで、中身は i18n のキー。
     // 表記（漢字／ひらがな／英語）は設定で変わるので、ここで引く。
     // 画面にはルビ付き、読み上げにはプレーン文を渡す。同じキーから両方を
     // 作るので、片方だけ直して食い違うことがない。
-    const steps = stepKeys.map((key) => ctx.tHtml(key));
-    const spokenSteps = stepKeys.map((key) => ctx.t(key));
+    // エンドレスは終わり方の約束が違う（「1分間」「5回」ではなく、やめるまで
+    // 続く／続けるほど難しくなる）。押し方の説明は同じなので、最後の1行だけを
+    // 差し替える。ここを直さないと、画面は「1分間」と言っているのに終わらない
+    // ——説明と挙動が食い違ったまま遊ばせることになる。
+    const endlessKey = requestedEndless ? ENDLESS_HOWTO_KEYS[activeGameId] : null;
+    const resolvedKeys = endlessKey ? [...stepKeys.slice(0, -1), endlessKey] : stepKeys;
+    const steps = resolvedKeys.map((key) => ctx.tHtml(key));
+    const spokenSteps = resolvedKeys.map((key) => ctx.t(key));
     const items = steps.map((line) => `<li>${line}</li>`).join("");
     const icon = module.iconClass
       ? `<span class="game-ready-icon" aria-hidden="true"><i class="${module.iconClass}"></i></span>`
@@ -587,9 +641,16 @@ export function createGameHost(ctx) {
   }
 
   /** ゲームを起動する（detailed-design.md §3.2）。 */
-  function launch(gameId) {
+  /**
+   * @param {string} gameId
+   * @param {{endless?: boolean}} [options] あそびの入口が決める遊び方。
+   *   エンドレスは支援者の設定ではなくホームのコーナーから選ぶので、
+   *   ここを通してゲームへ渡す（src/lib/difficultyMode.js）。
+   */
+  function launch(gameId, options = {}) {
     const module = findGameModule(gameId);
     if (!module || module.enabled === false) return;
+    requestedEndless = options.endless === true;
     destroyActive(); // 多重起動防止（MUST）: 前回 instance の destroy() を必ず呼ぶ
     scan.stop(true);
     activeGameId = gameId;

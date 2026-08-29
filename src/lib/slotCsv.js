@@ -1,12 +1,14 @@
 // slot-v1専用CSV（1停止1行）。旧リズムCSVとは意図的に分離する。
 
+import { toJstIso } from "./utils.js";
+
 export const SLOT_CSV_HEADERS = Object.freeze([
   "sessionId",
   "participantId",
   "gameId",
   "protocolVersion",
   "engineVersion",
-  "startedAtIso",
+  "startedAtJst",
   "aborted",
   "difficultyMode",
   "roundIndex",
@@ -29,6 +31,14 @@ export const SLOT_CSV_HEADERS = Object.freeze([
   "devicePixelRatio",
   "deviceUserAgent",
   "measurementReadiness",
+  // 音の出力遅延と基準遅延。sanitizeDevice は保存していたのに、リールCSVだけ
+  // 出していなかった（2026-08-28）。保存されているだけの値は解析に使えない。
+  //
+  // リールは見て止める課題だが、止めた合図には音も出る。端末をまたいで
+  // 混ぜてよいかを決めるのは解析側なので、材料は曇りなく出す。
+  // 列は末尾へ足す（既存28列の位置を動かさない）。
+  "deviceOutputLatencyS",
+  "deviceBaseLatencyS",
 ]);
 
 export function buildSlotCsvRows(sessions) {
@@ -45,7 +55,7 @@ export function buildSlotCsvRows(sessions) {
           session.gameId,
           session.protocolVersion,
           session.engineVersion,
-          session.startedAtIso,
+          toJstIso(session.startedAtIso),
           session.aborted,
           config.difficultyMode ?? "practice",
           trial.roundIndex,
@@ -68,6 +78,8 @@ export function buildSlotCsvRows(sessions) {
           device.devicePixelRatio ?? "",
           device.userAgent ?? "",
           config.measurementReadiness ?? "n/a",
+          device.outputLatencyS ?? "",
+          device.baseLatencyS ?? "",
         ]);
       });
     });

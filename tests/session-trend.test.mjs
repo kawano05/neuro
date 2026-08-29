@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import {
   MIN_SESSIONS_FOR_TREND,
+  groupTrendsByGame,
   summariseSessionTrends,
   trendDirection,
 } from "../src/lib/sessionTrend.js";
@@ -146,6 +147,122 @@ test("says nothing changed instead of inventing a direction", () => {
   ])[0];
   assert.equal(trendDirection(flat), "same");
   assert.equal(trendDirection(null), "same");
+});
+
+test("endless runs form their own trend instead of vanishing or mixing in", () => {
+  // エンドレスを入れた直後、この束ね方は静かに壊れていた（2026-08-28、実測）。
+  //   1. 束ねるキーに試行数が入るのに、エンドレスは実際にやった数を
+  //      targetTrials へ書き戻す。回ごとにキーが変わり、線は**1本も**
+  //      出なかった（点が1つずつに割れて MIN_SESSIONS_FOR_TREND に届かない）。
+  //   2. たまたま回数が一致すると、決まった回数の回と同じ線に載った。
+  // 線が引けないことも、間違った線が引けることも、画面を見ても気づけない。
+  const craneRun = (id, day, { targetTrials, grips, endless }) => ({
+    sessionId: id,
+    taskType: "scan",
+    gameId: "crane",
+    startedAtIso: `2026-08-${String(day).padStart(2, "0")}T00:00:00.000Z`,
+    finished: true,
+    aborted: false,
+    config: { sweepMs: 2200, toleranceR: 15, targetTrials, endless },
+    trials: Array.from({ length: targetTrials }, (_, index) => ({ index })),
+    summary: { trials: targetTrials, grips },
+  });
+
+  // 回数が毎回違っても1本にまとまる。
+  const endlessRuns = [
+    craneRun("e1", 1, { targetTrials: 7, grips: 6, endless: true }),
+    craneRun("e2", 2, { targetTrials: 13, grips: 12, endless: true }),
+    craneRun("e3", 3, { targetTrials: 22, grips: 21, endless: true }),
+  ];
+  const groups = summariseSessionTrends(endlessRuns);
+  assert.equal(groups.length, 1, "エンドレスの回が推移から消えてはいけない");
+  // キーの区切りは NUL（条件文字列に空白が入っても衝突しないため）なので、
+  // 文字列そのものではなく中身で見る。
+  assert.equal(groups[0].gameId, "crane");
+  assert.equal(groups[0].conditions, "エンドレス");
+  // 並べるのは「どこまで続いたか」。とれた数（scan の主要指標）は、1回失敗で
+  // 終わる遊びではほぼ「続いた数 - 1」になり、上限の違う数字を同じ線に
+  // 載せることになる。
+  assert.equal(groups[0].label, "つづいた かず");
+  assert.deepEqual(groups[0].points.map((point) => point.value), [7, 13, 22]);
+  assert.equal(groups[0].higherIsBetter, true);
+
+  // 決まった回数の回とは混ざらない（回数がたまたま一致しても）。
+  const mixed = summariseSessionTrends([
+    craneRun("m1", 1, { targetTrials: 7, grips: 6, endless: true }),
+    craneRun("m2", 2, { targetTrials: 7, grips: 3, endless: false }),
+  ]);
+  assert.equal(mixed.length, 0, "エンドレスと決まった回数の回を1本にしてはいけない");
+
+  // さかなつりでも同じ。平均反応時間で並べてはいけない——続くほど受付時間が
+  // 短くなり、遅い反応は時間切れで平均から外れるので、長く続いた回ほど
+  // 平均が良く見える（上達していなくても線が下がる）。
+  const fishingRun = (id, day, { targetTrials, meanRtMs }) => ({
+    sessionId: id,
+    taskType: "rt",
+    gameId: "fishing",
+    startedAtIso: `2026-08-${String(day).padStart(2, "0")}T01:00:00.000Z`,
+    finished: true,
+    aborted: false,
+    config: { targetTrials, limitMs: 2000, endless: true },
+    trials: Array.from({ length: targetTrials }, (_, index) => ({ index })),
+    summary: { trials: targetTrials, meanRtMs },
+  });
+  const fishingGroups = summariseSessionTrends([
+    fishingRun("f1", 1, { targetTrials: 9, meanRtMs: 620 }),
+    fishingRun("f2", 2, { targetTrials: 14, meanRtMs: 580 }),
+  ]);
+  assert.equal(fishingGroups.length, 1);
+  assert.equal(fishingGroups[0].gameId, "fishing");
+  assert.equal(fishingGroups[0].conditions, "エンドレス");
+  assert.equal(fishingGroups[0].label, "つづいた かず");
+  assert.deepEqual(fishingGroups[0].points.map((point) => point.value), [9, 14]);
+});
+
+test("trends are grouped by game, in the order the games are listed", () => {
+  // 束ねる単位は「課題 × 条件」なので、条件を変えた回があると同じあそびの線が
+  // 複数できる。一列に並べると別のあそびの線と交互に出て、「このあそびは
+  // どうなっているか」を読むのに画面を往復することになる。
+  const group = (gameId, conditions, lastIso) => ({
+    key: `${gameId}\u0000${conditions}`,
+    gameId,
+    conditions,
+    points: [
+      { value: 1, startedAtIso: "2026-08-01T00:00:00.000Z" },
+      { value: 2, startedAtIso: lastIso },
+    ],
+  });
+
+  const grouped = groupTrendsByGame(
+    [
+      group("fishing", "エンドレス", "2026-08-05T00:00:00.000Z"),
+      group("crane", "はやさ 2200ms / ひろさ 15 / 5かい", "2026-08-02T00:00:00.000Z"),
+      group("crane", "エンドレス", "2026-08-09T00:00:00.000Z"),
+    ],
+    ["crane", "fishing"]
+  );
+
+  assert.deepEqual(grouped.map((section) => section.gameId), ["crane", "fishing"]);
+  assert.equal(grouped[0].trends.length, 2, "同じあそびの条件は1つの節にまとまる");
+  // あそびの中は「最後に遊んだ回が新しい順」。いま使っている条件が上に来る。
+  assert.deepEqual(
+    grouped[0].trends.map((trend) => trend.conditions),
+    ["エンドレス", "はやさ 2200ms / ひろさ 15 / 5かい"]
+  );
+
+  // 並びに無いあそびは後ろへ回す（順番の正本は content.js。ここで決めない）。
+  const unknownLast = groupTrendsByGame(
+    [
+      group("mystery", "既定", "2026-08-20T00:00:00.000Z"),
+      group("crane", "既定", "2026-08-01T00:00:00.000Z"),
+    ],
+    ["crane", "fishing"]
+  );
+  assert.deepEqual(unknownLast.map((section) => section.gameId), ["crane", "mystery"]);
+
+  // 空でも落ちない。
+  assert.deepEqual(groupTrendsByGame([], ["crane"]), []);
+  assert.deepEqual(groupTrendsByGame(null), []);
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

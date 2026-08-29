@@ -250,9 +250,23 @@
           <button class="secondary" id="exportSlotCsv" data-scan>リールCSV</button>
           <button class="secondary" id="exportScanCsv" data-scan>走査CSV</button>
           <button class="secondary" id="exportRtCsv" data-scan>反応CSV</button>
+          <!--
+            セッション台帳（1セッション1行）と生データの控え。試行ロング形式の
+            5本だけでは、試行が0件で終わった回（中断・音が出なかった回）が
+            どのCSVにも現れず、欠測を数えられない。
+          -->
+          <button class="secondary" id="exportSessionLedgerCsv" data-scan>セッション台帳</button>
+          <button class="secondary" id="exportRawJson" data-scan>生データ(JSON)</button>
           <button class="danger" id="resetEvaluation" data-scan>測定リセット</button>
         </div>
       </div>
+
+      <!--
+        保存上限に達したことの警告。操作ログ（300件）には出していたのに、
+        研究データ本体であるセッション（50件）には何も出ていなかった。
+        古い回から黙って消えるので、気づけるのは書き出したあと。
+      -->
+      <p class="empty-state" id="sessionRetentionWarning" hidden></p>
 
       <div class="evaluation-grid">
         <section class="eval-panel">
@@ -511,6 +525,17 @@
         同じ あそび・同じ条件で完走した回だけを、古い順に並べています。
         条件を変えた回は別の線になります。中断した回は含みません。
       </p>
+      <!--
+        あそびごとのタブ。記録のあるあそびだけを出すと「無い」ことが見えず、
+        支援者は「まだ遊んでいない」のか「表示が壊れている」のか分からない。
+        全部のあそびを出し、記録が無い回は「データがありません」と言う。
+
+        data-scan は付けない。ここは支援者がタップ／キーボードで使う面で、
+        利用者が走査で操作するものではない（ホームの支援者メニュー入口と
+        同じ扱い）。走査の輪に入れると、押しても利用者に関係のない項目が
+        並ぶだけ増える。
+      -->
+      <div class="trend-tabs" id="trendTabs" role="tablist" aria-label="あそびを えらぶ"></div>
       <div id="sessionTrends" aria-label="セッションの推移"></div>
 
       <h3 class="settings-group-title">遊びの記録</h3>
@@ -879,6 +904,7 @@
           </span>
           <input id="craneAudioGuidance" type="checkbox" role="switch" data-scan />
         </label>
+
       </div>
       </div>
 

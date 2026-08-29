@@ -91,6 +91,8 @@ const checks = [
   ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
   ["keeps the hidden attribute effective against CSS display rules", checkHiddenAttributeIsRespected],
   ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
+  ["lets the supporter reach every game's trend through tabs", checkTrendTabsCoverEveryGame],
+  ["wires every export button to a real download", checkExportButtonsAreWired],
 ];
 
 const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
@@ -892,6 +894,127 @@ async function checkKeyboardAndSwitchInput(page) {
  *   2. 支援者編集ロックを廃止したあと、操作子がそのまま押せること。
  *      「無効化されているが輪には居る」状態を作り直さない。
  */
+/**
+ * 書き出しボタンが本当に書き出すこと。
+ *
+ * リールCSVのボタンは、押しても何も起きない状態で出荷されていた
+ * （2026-08-28に発見）。exportSlotCsv が exportRhythmCsv の内側に入り込んで
+ * いて、外側からは見えない——にもかかわらず例外は出なかった。`id` を持つ
+ * 要素は同名のグローバル変数になるので、`exportSlotCsv` はボタン要素自身に
+ * 解決され、addEventListener はそれを「handleEvent を持たないリスナ」として
+ * 黙って受け取っていた。エラーも警告も無く、押しても無反応になるだけ。
+ *
+ * 「押せる」「見える」を見ていたテストでは捕まらない。捕まえられるのは
+ * 「押した結果データが出てくるか」だけなので、Blob の生成を数える。
+ * ダウンロード自体はヘッドレスで止まるが、URL.createObjectURL まで届けば
+ * 行は組み上がっている。
+ */
+async function checkExportButtonsAreWired(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  // 効果測定タブは研究者モードでのみ出る。
+  await openSettingsTab(page, "measure");
+  await page.locator("#researcherMode").check();
+  await page.locator('.tab[data-view="evaluation"]').click();
+  await waitForClass(page, "#evaluation", "is-active");
+
+  // データが1件も無い状態では「ありません」を出して書き出さないのが正しい
+  // 挙動なので、押して数える前に1回ぶんの記録を差し込む。
+  await page.evaluate(() => {
+    window.__blobCount = 0;
+    const original = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (blob) => {
+      window.__blobCount += 1;
+      window.__lastBlobType = blob.type;
+      return original(blob);
+    };
+  });
+
+  const buttons = [
+    "#exportRhythmCsv",
+    "#exportSlotCsv",
+    "#exportScanCsv",
+    "#exportRtCsv",
+    "#exportSessionLedgerCsv",
+    "#exportRawJson",
+    "#exportEvaluationCsv",
+  ];
+  for (const selector of buttons) {
+    const count = await page.locator(selector).count();
+    assert(count === 1, `Export button ${selector} must exist exactly once, found ${count}`);
+    const before = await page.evaluate(() => window.__blobCount);
+    await page.locator(selector).click();
+    const after = await page.evaluate(() => window.__blobCount);
+    const explained = await page.evaluate(() =>
+      (document.querySelector("#supporterMessage")?.textContent || "").trim()
+    );
+    // 書き出したか、書き出せない理由を出したか。無反応だけを落とす。
+    assert(
+      after > before || explained.length > 0,
+      `${selector} produced neither a download nor a visible reason (silent no-op)`
+    );
+    await page.evaluate(() => {
+      const message = document.querySelector("#supporterMessage");
+      if (message) {
+        message.textContent = "";
+        message.hidden = true;
+      }
+    });
+  }
+}
+
+/**
+ * 回ごとの推移を、あそびごとのタブで全部たどれること。
+ *
+ * 記録のあるあそびだけをタブに出すと、支援者は「まだ遊んでいない」のか
+ * 「表示が壊れている」のかを区別できない。全部並べて、記録の無いものは
+ * 「データがありません」と言う。
+ *
+ * タブに data-scan は付けない。ここは支援者がタップ／キーボードで使う面で、
+ * 利用者が走査で操作するものではない（ホームの支援者メニュー入口と同じ扱い）。
+ */
+async function checkTrendTabsCoverEveryGame(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
+
+  const tabs = page.locator(".trend-tab");
+  const tabCount = await tabs.count();
+  // 記録が1件も無い状態でも、あそびのぶんだけタブが出る。
+  assert(tabCount >= 5, `Expected a tab per game, got ${tabCount}`);
+
+  // 走査の輪には入れない（利用者が押しても意味のない項目を増やさない）。
+  assert(
+    (await page.locator(".trend-tab[data-scan]").count()) === 0,
+    "Trend tabs are supporter-only and must stay out of the scan ring"
+  );
+
+  // どのタブを開いても、何かしら答えが出る（無反応の面を作らない）。
+  for (let index = 0; index < tabCount; index += 1) {
+    const tab = tabs.nth(index);
+    const name = ((await tab.textContent()) || "").replace(/\s+/g, " ").trim();
+    await tab.click();
+    await page.waitForTimeout(80);
+    assert(
+      (await tab.getAttribute("aria-selected")) === "true",
+      `Tab "${name}" did not become the selected one`
+    );
+    const panel = ((await page.locator("#sessionTrends").textContent()) || "").trim();
+    assert(panel.length > 0, `Tab "${name}" showed nothing at all`);
+    // 記録が無い回は、無いと言い切る（黙って空にしない）。
+    const hasCards = (await page.locator("#sessionTrends .trend-card").count()) > 0;
+    assert(
+      hasCards || panel.includes("データがありません"),
+      `Tab "${name}" is empty but does not say so: ${panel.slice(0, 60)}`
+    );
+  }
+}
+
 async function checkSettingsTabs(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");

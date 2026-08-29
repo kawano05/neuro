@@ -17,9 +17,9 @@
 // gating。研究計画セッション外の日常プレイまで taskMistakes に混ぜない）。
 // =====================================================================
 
-import { evaluationTasks, researchConditionProfiles } from "../content.js";
-import { cloneDefaultState, MAX_EVALUATION_SESSIONS } from "../state.js";
-import { escapeHtml, escapeCsv, formatDuration } from "../utils.js";
+import { evaluationTasks, researchConditionProfiles, storageKey } from "../content.js";
+import { cloneDefaultState, MAX_EVALUATION_SESSIONS, MAX_SESSIONS } from "../state.js";
+import { escapeHtml, escapeCsv, formatDuration, toJstIso } from "../utils.js";
 import { buildSlotCsvRows } from "../slotCsv.js";
 export { buildSlotCsvRows };
 
@@ -86,7 +86,9 @@ const COMMON_TASK_HEADERS = [
   "taskType",
   "participantId",
   "gameId",
-  "startedAtIso",
+  // 日本時間（+09:00付き）。名前も Jst にして、UTCだった頃の書き出しと
+  // 取り違えられないようにする。
+  "startedAtJst",
   "aborted",
   "trialIndex",
 ];
@@ -143,7 +145,11 @@ export function buildRhythmCsvRows(sessions) {
       "sessionId",
       "participantId",
       "gameId",
-      "startedAtIso",
+      // 日本時間（+09:00付き）。列名も Iso から Jst へ変える——中身の意味を
+      // 変えるのに名前を残すと、以前の書き出しをUTCとして読んでいる手元の
+      // 集計が、黙って9時間ずれた値を受け取る。名前を変えれば、そこで
+      // 止まって気づける。
+      "startedAtJst",
       "aborted",
       "mode",
       "bpm",
@@ -189,7 +195,7 @@ export function buildRhythmCsvRows(sessions) {
         session.sessionId,
         session.participantId || "",
         session.gameId,
-        session.startedAtIso,
+        toJstIso(session.startedAtIso),
         session.aborted,
         config.mode ?? "",
         config.bpm ?? "",
@@ -210,6 +216,74 @@ export function buildRhythmCsvRows(sessions) {
         config.measurementReadiness ?? "n/a",
       ]);
     });
+  });
+  return rows;
+}
+
+/**
+ * セッション台帳CSV（1セッション1行、全 taskType 横断）。
+ *
+ * これまでの5本のCSVはすべて「1試行1行」のロング形式で、セッションそのものを
+ * 数える手段が無かった。解析を始める前に必ず要るのは、試行の中身ではなく
+ * 台帳のほう——誰の回が何回あり、どれがそくていで、どれが中断で、どれが
+ * 成立確認を飛ばして測った回か。ロング形式から復元しようとすると、
+ * 「試行が0件で保存された回」（中断・音が出なかった回）が最初から見えない。
+ * 欠測を数えられないデータは、欠測が無いデータと区別がつかない。
+ *
+ * summary は課題ごとに形が違う。共通化して数個の指標に潰すと、潰した先が
+ * 課題ごとに違う意味になるので、そのままJSONで1列に入れる（summaryJson）。
+ * 解析側で必要な指標だけを開けばよく、アプリ側が意味を決めない。
+ */
+export const SESSION_LEDGER_HEADERS = Object.freeze([
+  "sessionId",
+  "participantId",
+  "taskType",
+  "gameId",
+  "startedAtJst",
+  "endedAtJst",
+  "finished",
+  "aborted",
+  "difficultyMode",
+  "measurementReadiness",
+  // 「ずっとあそぶ」の回か。trialCount が回ごとに変わる理由がこれ。
+  "endless",
+  "trialCount",
+  "excludedTrialCount",
+  "protocolVersion",
+  "engineVersion",
+  ...DEVICE_HEADERS,
+  "configJson",
+  "summaryJson",
+]);
+
+export function buildSessionLedgerRows(sessions) {
+  const rows = [[...SESSION_LEDGER_HEADERS]];
+  (Array.isArray(sessions) ? sessions : []).forEach((session) => {
+    if (!session || typeof session !== "object") return;
+    const trials = Array.isArray(session.trials) ? session.trials : [];
+    rows.push([
+      session.sessionId ?? "",
+      session.participantId || "",
+      session.taskType ?? "",
+      session.gameId ?? "",
+      toJstIso(session.startedAtIso),
+      // 終端を立てないまま消えた回は空欄。終わった回と見分けられるようにする。
+      toJstIso(session.endedAtIso),
+      session.finished === true,
+      session.aborted === true,
+      session.config?.difficultyMode ?? "practice",
+      session.config?.measurementReadiness ?? "n/a",
+      session.config?.endless === true,
+      trials.length,
+      // 除外した試行の数。excluded を持たない課題では常に0になる。
+      trials.filter((trial) => trial?.excluded === true).length,
+      // slot だけが持つ版。他の課題では空欄——「無い」ことを空欄で表す。
+      session.protocolVersion ?? "",
+      session.engineVersion ?? "",
+      ...deviceColumns(session),
+      JSON.stringify(session.config ?? {}),
+      JSON.stringify(session.summary ?? {}),
+    ]);
   });
   return rows;
 }
@@ -239,6 +313,16 @@ export function buildTaskCsvRows(sessions, taskType) {
         ...DEVICE_HEADERS,
         // 成立確認の状態（リズムCSVと同じ意味・同じ位置づけ）。
         "measurementReadiness",
+        // その回が「ずっとあそぶ」だったか。回数が回ごとに変わるので、決まった
+        // 回数の回と同じ分布に混ぜない（後半ほど疲れが乗る）。
+        //
+        // 末尾に足すこと。いちど audioGuidance と difficultyMode のあいだへ
+        // 挿してしまい、それ以降の列が1つずつずれた——列位置で読んでいる
+        // 解析側が黙って壊れる形（detailed-design.md §9.3）。テストが止めた。
+        "endless",
+        // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、
+        // toleranceR だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
+        "sweepMs",
       ],
     ];
     sessions
@@ -250,7 +334,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.taskType,
             session.participantId || "",
             session.gameId,
-            session.startedAtIso,
+            toJstIso(session.startedAtIso),
             session.aborted,
             trial.index,
             trial.targetX,
@@ -268,6 +352,8 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.config?.difficultyMode ?? "practice",
             ...deviceColumns(session),
             session.config?.measurementReadiness ?? "n/a",
+            session.config?.endless === true,
+            trial.sweepMs ?? session.config?.sweepMs ?? "",
           ]);
         });
       });
@@ -286,6 +372,12 @@ export function buildTaskCsvRows(sessions, taskType) {
         "judgment",
         "excluded",
         ...DEVICE_HEADERS,
+        // 末尾に足す（既存列の位置を動かさない）。リズム・走査CSVには
+        // 最初からあったのに、反応CSVだけ測定条件が1つも出ていなかった。
+        "difficultyMode",
+        "measurementReadiness",
+        // その回が「ずっとあそぶ」だったか（走査CSVと同じ意味）。
+        "endless",
       ],
     ];
     sessions
@@ -297,7 +389,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.taskType,
             session.participantId || "",
             session.gameId,
-            session.startedAtIso,
+            toJstIso(session.startedAtIso),
             session.aborted,
             trial.index,
             trial.kind,
@@ -308,6 +400,9 @@ export function buildTaskCsvRows(sessions, taskType) {
             trial.judgment,
             trial.excluded,
             ...deviceColumns(session),
+            session.config?.difficultyMode ?? "practice",
+            session.config?.measurementReadiness ?? "n/a",
+            session.config?.endless === true,
           ]);
         });
       });
@@ -642,10 +737,11 @@ export function initEvaluation(ctx) {
         "ease_rating",
         "engagement_rating",
         "observer_notes",
-        "task_started_at",
-        "task_ended_at",
-        "session_started_at",
-        "session_ended_at",
+        // すべて日本時間（+09:00付き）。
+        "task_started_at_jst",
+        "task_ended_at_jst",
+        "session_started_at_jst",
+        "session_ended_at_jst",
       ],
       ...results.map((result) => [
         result.participantId || "",
@@ -671,10 +767,10 @@ export function initEvaluation(ctx) {
         result.easeRating,
         result.engagementRating ?? "",
         result.observerNotes ?? "",
-        result.startedAt,
-        result.endedAt,
-        result.sessionStartedAt || state.evaluation.sessionStartedAt || "",
-        result.sessionEndedAt || state.evaluation.sessionEndedAt || "",
+        toJstIso(result.startedAt),
+        toJstIso(result.endedAt),
+        toJstIso(result.sessionStartedAt || state.evaluation.sessionStartedAt || ""),
+        toJstIso(result.sessionEndedAt || state.evaluation.sessionEndedAt || ""),
       ]),
     ];
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
@@ -700,6 +796,13 @@ export function initEvaluation(ctx) {
     );
     if (!sessions.length) {
       announce("書き出すリズム計測データがありません");
+      // announce の出力先 #liveRegion は .sr-only なので、読み上げを使わない
+      // 支援者には何も届かない——押しても無反応に見え、壊れていると受け取られる。
+      // 他の書き出しには notifySupporter を足してあったのに、ここだけ抜けていた
+      // （2026-08-28、tests/web-smoke.mjs の checkExportButtonsAreWired が検出）。
+      notifySupporter(
+        "書き出すリズム計測データがありません。リズムまたはGo/No-Goを1回終えると記録されます。"
+      );
       return;
     }
     const rows = buildRhythmCsvRows(sessions);
@@ -711,8 +814,18 @@ export function initEvaluation(ctx) {
     link.download = `neuronode-rhythm-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  }
 
-  /** slot-v1を旧リズムと混ぜず、1停止1行の専用CSVとして書き出す。 */
+  /**
+   * slot-v1を旧リズムと混ぜず、1停止1行の専用CSVとして書き出す。
+   *
+   * この関数は exportRhythmCsv の内側に入り込んでいた（2026-08-28に発見）。
+   * 外側の addEventListener からは見えないはずだが、`id` を持つ要素は同名の
+   * グローバル変数になるため、`exportSlotCsv` はボタン要素そのものに解決され、
+   * addEventListener はそれを「handleEvent を持たないリスナ」として黙って
+   * 受け取っていた——例外も警告も出ず、押しても何も起きないだけ。
+   * リールCSVが1件も書き出せない状態が、テストにも実機確認にも映らなかった。
+   */
   function exportSlotCsv() {
     const sessions = state.sessions.filter((session) => session.taskType === "slot");
     if (!sessions.length) {
@@ -729,7 +842,6 @@ export function initEvaluation(ctx) {
     link.download = `neuronode-slot-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-  }
   }
 
   function exportTaskCsv(taskType) {
@@ -753,9 +865,102 @@ export function initEvaluation(ctx) {
     URL.revokeObjectURL(url);
   }
 
+  /** BOM付きUTF-8で書き出す共通処理（Excelが素で開ける形）。 */
+  function downloadCsv(rows, filenameStem) {
+    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${filenameStem}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /** 全課題のセッション台帳（1セッション1行）を書き出す。 */
+  function exportSessionLedgerCsv() {
+    if (!state.sessions.length) {
+      announce("書き出すセッションがありません");
+      notifySupporter(
+        "書き出すセッションがありません。あそびを1回終えると1行ぶん記録されます。"
+      );
+      return;
+    }
+    downloadCsv(buildSessionLedgerRows(state.sessions), "neuronode-sessions");
+  }
+
+  /**
+   * 保存されている状態を丸ごとJSONで書き出す（生データの控え）。
+   *
+   * CSVは列を選んだ派生物で、選ばなかったものは出ない。正本はこの端末の
+   * localStorage だけにあり、端末を初期化すれば消える。研究データが
+   * 1台のiPadの中にしか無い状態を、支援者が自分で解消できるようにする。
+   *
+   * 再解析・監査のときは、CSVの列を後から足すよりこの控えを読み直すほうが
+   * 早い——書き出した時点でアプリが何を持っていたかがそのまま残る。
+   */
+  function exportRawJson() {
+    const payload = {
+      // 控えの中身は state そのまま（保存はUTC）。読む人のために、
+      // 書き出した時刻だけ日本時間も併記する。
+      exportedAtIso: new Date().toISOString(),
+      exportedAtJst: toJstIso(new Date().toISOString()),
+      storageKey,
+      // CSVの列は増えるが、この控えは state の形そのもの。読む側が形を
+      // 判別できるように、書き出し時のキー名を添える。
+      sessionCount: state.sessions.length,
+      logCount: state.logs.length,
+      state,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `neuronode-raw-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    notifySupporter(
+      `生データを書き出しました（セッション${state.sessions.length}件、ログ${state.logs.length}件）。`
+    );
+  }
+
+  /**
+   * セッションの保存上限に近づいたことを支援者へ知らせる。
+   *
+   * state.sessions は古い順に MAX_SESSIONS 件へ切り詰められる。研究データ
+   * 本体がここに入っているのに、これまで何の表示も無かった——50件を超えた
+   * 時点で最初の回から静かに消え、支援者が気づけるのは書き出したあと
+   * （そのときには既に消えている）。操作ログには同じ趣旨の警告を出して
+   * いたので、より重要なほうにだけ無かったことになる。
+   *
+   * 残り5件から出す。1回ぶんの測定を終える前に書き出せる猶予として。
+   */
+  function renderSessionRetention() {
+    const warning = elements.sessionRetentionWarning;
+    if (!warning) return;
+    const count = state.sessions.length;
+    const remaining = MAX_SESSIONS - count;
+    if (remaining > 5) {
+      warning.hidden = true;
+      warning.textContent = "";
+      return;
+    }
+    warning.hidden = false;
+    warning.textContent =
+      remaining > 0
+        ? `セッションの保存上限（${MAX_SESSIONS}件）まであと${remaining}件です。` +
+          "上限を超えると古い回から消えるので、先に「セッション台帳」と各CSV、" +
+          "または「生データ(JSON)」を書き出してください。"
+        : `セッションの保存上限（${MAX_SESSIONS}件）に達しています。` +
+          "次の回を記録すると最も古い回が消えます。今すぐ書き出してください。";
+  }
+
   /** 効果測定画面全体の描画 */
   function render() {
     if (!elements.evaluationStatus) return;
+    renderSessionRetention();
     const task = activeTask();
     const isRunningTask = Boolean(state.evaluation.taskStartedAt);
     const displayedResults =
@@ -880,6 +1085,8 @@ export function initEvaluation(ctx) {
   elements.exportSlotCsv.addEventListener("click", exportSlotCsv);
   elements.exportScanCsv.addEventListener("click", () => exportTaskCsv("scan"));
   elements.exportRtCsv.addEventListener("click", () => exportTaskCsv("rt"));
+  elements.exportSessionLedgerCsv.addEventListener("click", exportSessionLedgerCsv);
+  elements.exportRawJson.addEventListener("click", exportRawJson);
   elements.resetEvaluation.addEventListener("click", reset);
 
   return { render, countEntry, recordSessionOutcome };

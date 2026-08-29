@@ -633,6 +633,9 @@ function sanitizeRhythmSession(session, taskType) {
     gameId: enumOr(session.gameId, RHYTHM_GAME_IDS, "rhythm-l1"),
     participantId: stringOr(session.participantId),
     startedAtIso: isoStringOr(session.startedAtIso, ""),
+    // その回が終わった時刻（games/gameHost.js の persistSession が押す）。
+    // 終端を立てないまま消えた回は null のまま残す。
+    endedAtIso: isoStringOr(session.endedAtIso, "") || null,
     aborted: !completedNormally,
     finished: completedNormally,
     config: sanitizedConfig,
@@ -661,7 +664,7 @@ function sanitizeDevice(device) {
   };
 }
 
-function sanitizeScanTrial(trial, rowIndex) {
+function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs) {
   if (!isRecord(trial)) return null;
   const judgment = enumOr(trial.judgment, new Set(["grip", "slip", "miss"]), null);
   if (!judgment) return null;
@@ -702,6 +705,15 @@ function sanitizeScanTrial(trial, rowIndex) {
     targetX: trial.targetX,
     targetY: trial.targetY,
     toleranceR: trial.toleranceR,
+    // その試行のアームの速さ。エンドレスでは試行ごとに変わる
+    // （games/crane.js の endlessSweepMs）。要求された時間精度は
+    // 「grip圏の半径 × sweepMs/100」なので、落とすと、同じ距離の外れ方でも
+    // どれだけ難しい試行だったかを後から言えない。
+    // 持たない古い記録はセッションの値で補う。
+    sweepMs:
+      typeof trial.sweepMs === "number" && Number.isFinite(trial.sweepMs) && trial.sweepMs > 0
+        ? trial.sweepMs
+        : fallbackSweepMs,
     selectedX: trial.selectedX,
     selectedY: trial.selectedY,
     dx,
@@ -749,6 +761,9 @@ function sanitizeScanSession(session) {
     // 「支援者が意図してONにした回」と区別できなくなる。区別できないなら、
     // 意図の記録としては空（false）のほうが誤読を生まない。
     audioGuidance: config.audioGuidance === true,
+    // その回が「ずっとあそぶ」だったか。回数が回ごとに変わるので、決まった
+    // 回数の回と同じ分布に混ぜてはいけない（試行の後半ほど疲れが乗る）。
+    endless: config.endless === true,
     // そくてい／れんしゅうのどちらの回か（src/lib/difficultyMode.js）。
     difficultyMode: enumOr(config.difficultyMode, DIFFICULTY_MODES, "practice"),
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
@@ -776,7 +791,9 @@ function sanitizeScanSession(session) {
       : [],
   };
   const rawTrials = Array.isArray(session.trials) ? session.trials : null;
-  const slots = rawTrials?.map((trial, index) => sanitizeScanTrial(trial, index)) || [];
+  const slots =
+    rawTrials?.map((trial, index) => sanitizeScanTrial(trial, index, sanitizedConfig.sweepMs)) ||
+    [];
   const trials = slots.filter(Boolean).slice(0, MAX_TRIALS_PER_SESSION);
   const completedNormally =
     session.finished === true &&
@@ -791,6 +808,9 @@ function sanitizeScanSession(session) {
     gameId: session.gameId,
     participantId: stringOr(session.participantId),
     startedAtIso: isoStringOr(session.startedAtIso, ""),
+    // その回が終わった時刻（games/gameHost.js の persistSession が押す）。
+    // 終端を立てないまま消えた回は null のまま残す。
+    endedAtIso: isoStringOr(session.endedAtIso, "") || null,
     aborted: !completedNormally,
     finished: completedNormally,
     config: sanitizedConfig,
@@ -832,6 +852,9 @@ function sanitizeReactionTrial(trial, rowIndex) {
     kind,
     foreperiodMs: trial.foreperiodMs,
     cueMs: trial.cueMs,
+    // その試行に適用した受付時間。エンドレスでは試行ごとに変わるので、
+    // 落とすと「何段目の試行か」も「なぜ時間切れになったか」も復元できない。
+    limitMs: inferredLimitMs === Number.MAX_SAFE_INTEGER ? null : inferredLimitMs,
     inputMs,
     reactionTimeMs,
     judgment,
@@ -888,10 +911,30 @@ function sanitizeReactionSession(session) {
     kindSequence: Array.isArray(config.kindSequence)
       ? config.kindSequence.filter((kind) => kind === "real" || kind === "fake").slice(0, 200)
       : [],
+    // その回が「ずっとあそぶ」だったか（scan 側と同じ意味）。
+    endless: config.endless === true,
+    // そくてい／れんしゅうのどちらの回か（src/lib/difficultyMode.js）。
+    // sanitize が落とすと、再読み込みしただけで測定条件が消える——
+    // visualGuidance を落としていたときと同じ穴なので、ここで必ず保持する。
+    difficultyMode: enumOr(config.difficultyMode, DIFFICULTY_MODES, "practice"),
+    // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
+    measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
   };
   const rawTrials = Array.isArray(session.trials) ? session.trials : null;
+  // 受付時間は試行ごとに違いうる（エンドレスでは試行とともに短くなる。
+  // games/fishing.js の endlessLimitMs）。以前は config の値を全試行へ
+  // 上書きしていたので、試行ごとに変えた回は再判定が食い違い、行がまるごと
+  // 落ちていた（sanitizeReactionTrial は判定が合わない行を null にする）。
+  // 試行が自分の値を持っていればそれを使い、無い古い記録だけ config で補う。
   const withLimit =
-    rawTrials?.map((trial) => (isRecord(trial) ? { ...trial, limitMs } : trial)) || [];
+    rawTrials?.map((trial) => {
+      if (!isRecord(trial)) return trial;
+      const trialLimitMs =
+        typeof trial.limitMs === "number" && Number.isFinite(trial.limitMs) && trial.limitMs > 0
+          ? trial.limitMs
+          : limitMs;
+      return { ...trial, limitMs: trialLimitMs };
+    }) || [];
   const slots = withLimit.map((trial, index) => sanitizeReactionTrial(trial, index));
   const trials = slots.filter(Boolean).slice(0, MAX_TRIALS_PER_SESSION);
   const completedNormally =
@@ -907,6 +950,9 @@ function sanitizeReactionSession(session) {
     gameId: session.gameId,
     participantId: stringOr(session.participantId),
     startedAtIso: isoStringOr(session.startedAtIso, ""),
+    // その回が終わった時刻（games/gameHost.js の persistSession が押す）。
+    // 終端を立てないまま消えた回は null のまま残す。
+    endedAtIso: isoStringOr(session.endedAtIso, "") || null,
     aborted: !completedNormally,
     finished: completedNormally,
     config: sanitizedConfig,

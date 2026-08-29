@@ -115,6 +115,62 @@ test("never turns a worse session into a negative comparison", () => {
   assert.ok(!/すくない|へった|さがった/.test(line.text), "must not tell the user they did worse");
 });
 
+test("personal best keeps endless runs in their own pool", () => {
+  // エンドレスは1回失敗で終わるので、取れた数はほぼ「続いた数 - 1」。
+  // 決まった回数の回と同じ束にすると、越えられない目標が出つづける。
+  const run = ({ id, targetTrials, grips, endless }) => ({
+    sessionId: id,
+    gameId: "crane",
+    taskType: "scan",
+    finished: true,
+    aborted: false,
+    config: { sweepMs: 2200, toleranceR: 15, targetTrials, endless },
+    summary: { trials: targetTrials, grips },
+  });
+  const pick = (session) => session.summary?.grips;
+
+  // 5回で終わったエンドレス（4こ）が、5回設定の通常回の最高になってはいけない。
+  const mixedHistory = [
+    run({ id: "n1", targetTrials: 5, grips: 2, endless: false }),
+    run({ id: "e1", targetTrials: 5, grips: 4, endless: true }),
+  ];
+  assert.equal(
+    personalBest(mixedHistory, {
+      gameId: "crane",
+      config: { sweepMs: 2200, toleranceR: 15, targetTrials: 5, endless: false },
+      pick,
+    }),
+    2
+  );
+
+  // 逆向きも。通常回はエンドレスの最高に混ざらない。
+  assert.equal(
+    personalBest(mixedHistory, {
+      gameId: "crane",
+      config: { sweepMs: 2200, toleranceR: 15, targetTrials: 5, endless: true },
+      pick,
+    }),
+    4
+  );
+
+  // エンドレスどうしは、続いた回数が違っても比べる。難度の上がり方は
+  // コードに固定されていて回ごとに変わらないので、同じ物差しになる。
+  // （終了時に実際の回数を targetTrials へ書き戻すため、ここを束ねる条件に
+  //   入れると回ごとに束が割れ、いつまでも比較対象なしになる。）
+  const endlessHistory = [
+    run({ id: "x1", targetTrials: 7, grips: 6, endless: true }),
+    run({ id: "x2", targetTrials: 13, grips: 12, endless: true }),
+  ];
+  assert.equal(
+    personalBest(endlessHistory, {
+      gameId: "crane",
+      config: { sweepMs: 2200, toleranceR: 15, targetTrials: 22, endless: true },
+      pick,
+    }),
+    12
+  );
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);
 console.log("personal best tests passed");

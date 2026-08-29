@@ -104,6 +104,22 @@ export function describeSessionConditions(session) {
   const config = session?.config;
   if (!config) return "";
 
+  // エンドレスは、決まった回数の回とは別の束にする。
+  //
+  // 理由は2つ。
+  //   1. 難度が回の途中で動く。はやさ・ひろさ・受付時間を1つの値として
+  //      出すと嘘になる（crane なら 2200ms/15 で始まって 1100ms/6.66 まで
+  //      動く）。動く条件を固定値の顔で並べてはいけない。
+  //   2. 終わり方が違う。エンドレスは1回失敗したところで終わるので、
+  //      「5回中3回とれた」と「22回目で失敗した」を同じ線に載せられない。
+  //
+  // 束ねる名前は「エンドレス」だけでよい。難度の上がり方はコードに固定されて
+  // いて回ごとに変わらないので、エンドレスどうしは同じ条件で比べられる
+  // （games/crane.js の endlessToleranceR / endlessSweepMs）。試行数は
+  // 条件ではなく結果なので、ここには出さない——出すと回ごとにキーが変わり、
+  // 線が1点ずつに割れて推移が一度も出なくなる（実測で0本だった）。
+  if (config.endless === true) return "エンドレス";
+
   if (session.taskType === "scan") {
     const parts = [];
     if (typeof config.sweepMs === "number") parts.push(`はやさ ${config.sweepMs}ms`);

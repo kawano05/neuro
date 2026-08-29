@@ -4002,6 +4002,79 @@ body.high-contrast .spread-mark {
    記録しか出ていなかった。同じ課題・同じ条件の回を古い順に並べて、
    良くなっているかどうかを線で読めるようにする。
    --------------------------------------------------------------------- */
+/* あそびを選ぶタブ（views/log.js renderTrendTabs）。
+   記録が無いあそびも出す——無いことが見えないと、支援者は「まだ遊んで
+   いない」のか「表示が壊れている」のかを区別できない。 */
+.trend-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.trend-tab {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.trend-tab:hover {
+  border-color: var(--accent);
+}
+
+.trend-tab.is-active {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* 線の数。開く前に「どこに何があるか」が分かると、空のタブを順に開いて
+   確かめる手間が消える。 */
+.trend-tab-count {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.trend-tab.is-active .trend-tab-count {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* あそびごとの節。条件を変えた回があると同じあそびの線が複数できるので、
+   まずあそびで分けてから条件を並べる（views/log.js renderTrends）。 */
+.trend-game {
+  margin-bottom: 24px;
+}
+
+.trend-game-title {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  font-size: 1.05rem;
+}
+
+/* 条件がいくつあるかを添える。1つしか無いときに「なぜ節に分かれているのか」
+   が分からないと、支援者は別の意味を探してしまう。 */
+.trend-game-count {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
 .trend-grid {
   display: grid;
   gap: 14px;
@@ -4073,13 +4146,21 @@ body.high-contrast .spread-mark {
   font-weight: 600;
 }
 
+/* 縦横比を固定する（viewBox のまま伸縮させる）。引き伸ばすと、同じデータでも
+   カード幅によって傾きが変わって見える——支援者が線の急さで読み取る以上、
+   幅で傾きが変わる図は出せない。 */
 .trend-plot {
   width: 100%;
-  height: 72px;
+  /* 幅に合わせて高さも決まる（viewBox 320x150）。上限を置かないと、
+     デスクトップの広いカードで高さ330px近くまで伸び、1枚で画面が
+     埋まってしまう。支援者は複数の条件を見比べるので、1枚が大きすぎると
+     かえって読めない。 */
+  max-width: 360px;
+  height: auto;
   overflow: visible;
 }
 
-.trend-plot polyline {
+.trend-plot .trend-line {
   fill: none;
   stroke: var(--accent);
   stroke-linecap: round;
@@ -4087,8 +4168,45 @@ body.high-contrast .spread-mark {
   stroke-width: 2.5;
 }
 
-.trend-plot circle {
+/* 縦軸の上端・下端の目安線。線そのものより主張させない。 */
+.trend-plot .trend-axis {
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* 軸の数字（たての範囲・日付）。読むのは支援者なので、点の値より一段
+   落として、探したときに見つかる大きさにする。 */
+.trend-plot .trend-axis-label {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+/* 点の値。線から目で読ませない——縦軸を拡大している以上、形だけでは
+   どれだけ変わったか言えない。 */
+.trend-plot .trend-point-label {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* いちばん良かった回。色だけで語らせない（この図は白黒で印刷されることも
+   ある）ので、輪郭を付けて形でも分かるようにする。 */
+.trend-plot .trend-dot.is-best {
+  stroke: var(--accent-strong);
+  stroke-width: 2;
+  fill: var(--surface);
+}
+
+/* いまの回。いちばん知りたい点なので大きく置く。 */
+.trend-plot .trend-dot.is-last {
   fill: var(--accent-strong);
+}
+
+/* 通常の点。最後の回（.is-last）と最高の回（.is-best）は、クラスが1つ多い
+   ぶん詳細度が勝つので、この規則より前に書いてあっても上書きされる。 */
+.trend-plot .trend-dot {
+  fill: var(--accent);
 }
 
 .trend-values {

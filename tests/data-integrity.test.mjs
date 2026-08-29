@@ -11,13 +11,16 @@ import {
   sanitizeState,
   summarizeRhythmTrials,
 } from "../src/lib/state.js";
-import { escapeCsv, formatTime } from "../src/lib/utils.js";
+import { escapeCsv, formatTime, toJstIso } from "../src/lib/utils.js";
 import {
+  buildSessionLedgerRows,
   buildSlotCsvRows,
   buildRhythmCsvRows,
   buildTaskCsvRows,
   flattenEvaluationResults,
+  SESSION_LEDGER_HEADERS,
 } from "../src/lib/views/evaluation.js";
+import { buildLogCsvRows } from "../src/lib/views/log.js";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PRIZE_ART } from "../src/lib/games/craneArt.js";
@@ -869,7 +872,7 @@ test("game registry, presets and persisted task types stay aligned", () => {
 test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
   const expectedHeaders = [
     "sessionId", "participantId", "gameId", "protocolVersion", "engineVersion",
-    "startedAtIso", "aborted", "difficultyMode", "roundIndex", "reelIndex",
+    "startedAtJst", "aborted", "difficultyMode", "roundIndex", "reelIndex",
     "targetSymbol", "targetIndex", "stoppedSymbol", "cycleMs", "toleranceMs",
     "inputMs", "targetPassMs", "signedErrorMs", "absoluteErrorMs", "observedCycles",
     "judgment", "seed", "symbolOrder", "deviceViewportWidth", "deviceViewportHeight",
@@ -916,10 +919,17 @@ test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
       ],
     },
   ]);
-  assert.deepEqual(rows[0], expectedHeaders);
-  assert.equal(rows[0].length, 28);
-  assert.equal(rows[1].length, 28);
+  // 既存28列の**うしろ**に端末の遅延2列を足した（2026-08-28）。保存はして
+  // いたのにリールCSVだけ出していなかった。位置を動かさないことも固定する。
+  assert.deepEqual(rows[0].slice(0, 28), expectedHeaders);
+  assert.deepEqual(rows[0].slice(28), ["deviceOutputLatencyS", "deviceBaseLatencyS"]);
+  assert.equal(rows[0].length, 30);
+  assert.equal(rows[1].length, 30);
   assert.equal(rows[1][22], JSON.stringify(["circle", "fish", "star", "flower", "bird", "square"]));
+  // 遅延を持たない端末の記録は空欄（0にしない——測っていないことと、
+  // 遅延が0だったことは違う）。
+  assert.equal(rows[1][28], "");
+  assert.equal(rows[1][29], "");
   const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
   assert.ok(csv.includes("'=FORMULA()"), "participant IDs cannot become spreadsheet formulas");
   assert.ok(csv.includes("'@unsafe"), "device strings cannot become spreadsheet formulas");
@@ -965,9 +975,10 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // 列数だけでなく「末尾に足した」ことを固定する: 途中に挿すと既存列の位置が
   // ずれ、列位置で読んでいる解析側が黙って壊れる（detailed-design.md §9.3）。
   const DEVICE_COLUMNS = 6;
-  // 既存18列 ＋ audioGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness。
-  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 1);
-  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 1);
+  // 既存18列 ＋ audioGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness
+  // ＋ endless ＋ sweepMs。
+  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 3);
+  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 3);
   assert.equal(scanRows[0][17], "judgment");
   assert.equal(scanRows[1][17], "grip");
   assert.equal(scanRows[0][18], "audioGuidance");
@@ -986,9 +997,18 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
     "deviceBaseLatencyS",
     "deviceUserAgent",
   ]);
-  // 末尾に成立確認の状態（リズムCSVと同じ）。列を持たない古い記録は n/a。
-  assert.equal(scanRows[0].at(-1), "measurementReadiness");
-  assert.equal(scanRows[1].at(-1), "n/a");
+  // 成立確認の状態（リズムCSVと同じ）。列を持たない古い記録は n/a。
+  // 位置を固定する: endless を足したときに、ここへ挿し込んで既存列を
+  // 1つずつずらしかけた（このテストが止めた）。
+  assert.equal(scanRows[0][26], "measurementReadiness");
+  assert.equal(scanRows[1][26], "n/a");
+  // エンドレスの回か。config に無い古い記録は false。
+  assert.equal(scanRows[0][27], "endless");
+  assert.equal(scanRows[1][27], false);
+  // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、toleranceR
+  // だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
+  assert.equal(scanRows[0].at(-1), "sweepMs");
+  assert.equal(scanRows[1].at(-1), "");
 
   const rtRows = buildTaskCsvRows(
     [
@@ -1013,10 +1033,329 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
     ],
     "rt"
   );
-  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS);
-  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS);
+  // 反応課題だけ測定条件が1列も出ていなかった（2026-08-28）。リズム・走査と
+  // 同じ2列を、既存列の**うしろ**に足す。
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 3);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 3);
   assert.equal(rtRows[0][13], "excluded");
-  assert.equal(rtRows[0].at(-1), "deviceUserAgent");
+  assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceUserAgent");
+  assert.equal(rtRows[0][14 + DEVICE_COLUMNS], "difficultyMode");
+  assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 1], "measurementReadiness");
+  assert.equal(rtRows[0].at(-1), "endless");
+  // 列を持たない古い記録は practice / n/a / false に倒す（scan と同じ既定）。
+  assert.equal(rtRows[1][14 + DEVICE_COLUMNS], "practice");
+  assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 1], "n/a");
+  assert.equal(rtRows[1].at(-1), false);
+});
+
+test("a reaction session keeps difficultyMode and readiness across a reload", () => {
+  // config → sanitize → CSV の3経路すべてを通ること。さかなつりは成立確認の
+  // 「いしを もって おせる」の根拠にも使うので、そくてい／れんしゅうを
+  // 分けられないと成立確認の材料そのものが層別できない。
+  const sanitized = sanitizeState({
+    sessions: [
+      {
+        sessionId: "rt-mode",
+        taskType: "rt",
+        gameId: "fishing",
+        participantId: "P9",
+        startedAtIso: "2026-08-28T00:00:00.000Z",
+        aborted: false,
+        finished: true,
+        device: {},
+        config: {
+          foreperiodMinMs: 1500,
+          foreperiodMaxMs: 5000,
+          limitMs: 2000,
+          targetTrials: 1,
+          fakeRatio: 0.25,
+          difficultyMode: "measure",
+          measurementReadiness: "overridden",
+        },
+        trials: [
+          {
+            index: 0,
+            kind: "real",
+            foreperiodMs: 1500,
+            cueMs: 1800,
+            inputMs: 2100,
+            reactionTimeMs: 300,
+            limitMs: 2000,
+            judgment: "hit",
+            excluded: false,
+          },
+        ],
+      },
+    ],
+  });
+  const restored = sanitized.sessions[0];
+  assert.equal(restored.config.difficultyMode, "measure");
+  assert.equal(restored.config.measurementReadiness, "overridden");
+  const rows = buildTaskCsvRows(sanitized.sessions, "rt");
+  assert.equal(rows[1][rows[0].indexOf("difficultyMode")], "measure");
+  assert.equal(rows[1][rows[0].indexOf("measurementReadiness")], "overridden");
+  // 不正値は既定へ倒す（列が消えるのではなく、値が既定になる）。
+  const bogus = sanitizeState({
+    sessions: [
+      {
+        sessionId: "rt-bogus",
+        taskType: "rt",
+        gameId: "fishing",
+        startedAtIso: "2026-08-28T00:00:00.000Z",
+        aborted: true,
+        finished: false,
+        device: {},
+        config: { difficultyMode: "hard", measurementReadiness: "yes" },
+        trials: [],
+      },
+    ],
+  });
+  assert.equal(bogus.sessions[0].config.difficultyMode, "practice");
+  assert.equal(bogus.sessions[0].config.measurementReadiness, "n/a");
+});
+
+test("the session ledger lists one row per session, including runs with no trials", () => {
+  // ロング形式の5本は「1試行1行」なので、試行が0件で終わった回（中断、
+  // 音が出せなかった回）はどのCSVにも1行も現れない。欠測を数えられない
+  // データは、欠測が無いデータと区別がつかない。台帳はそこを埋める。
+  const sessions = [
+    {
+      sessionId: "led-1",
+      taskType: "slot",
+      gameId: "slot-l1",
+      participantId: "P1",
+      startedAtIso: "2026-08-28T00:00:00.000Z",
+      endedAtIso: "2026-08-28T00:04:10.000Z",
+      finished: true,
+      aborted: false,
+      protocolVersion: "slot-v1",
+      engineVersion: "slot-engine-1",
+      device: { viewportWidth: 820, viewportHeight: 1180 },
+      config: { difficultyMode: "measure", measurementReadiness: "met", cycleMs: 3200 },
+      trials: [{ roundIndex: 0, excluded: false }, { roundIndex: 1, excluded: true }],
+      summary: { rounds: 2 },
+    },
+    {
+      // 中断してtrialsが空のまま保存された回。
+      sessionId: "led-2",
+      taskType: "rt",
+      gameId: "fishing",
+      participantId: "P1",
+      startedAtIso: "2026-08-28T01:00:00.000Z",
+      finished: false,
+      aborted: true,
+      device: {},
+      config: {},
+      trials: [],
+      summary: {},
+    },
+  ];
+  const rows = buildSessionLedgerRows(sessions);
+  assert.deepEqual(rows[0], [...SESSION_LEDGER_HEADERS]);
+  assert.equal(rows.length, 3, "1セッション1行（見出しを除いて2行）");
+
+  const header = rows[0];
+  const first = rows[1];
+  assert.equal(first[header.indexOf("sessionId")], "led-1");
+  assert.equal(first[header.indexOf("difficultyMode")], "measure");
+  assert.equal(first[header.indexOf("measurementReadiness")], "met");
+  assert.equal(first[header.indexOf("trialCount")], 2);
+  assert.equal(first[header.indexOf("excludedTrialCount")], 1);
+  assert.equal(first[header.indexOf("protocolVersion")], "slot-v1");
+  // summary は課題ごとに形が違うのでJSONのまま1列に入れる。
+  assert.equal(first[header.indexOf("summaryJson")], JSON.stringify({ rounds: 2 }));
+
+  const aborted = rows[2];
+  assert.equal(aborted[header.indexOf("sessionId")], "led-2");
+  assert.equal(aborted[header.indexOf("aborted")], true);
+  assert.equal(aborted[header.indexOf("finished")], false);
+  assert.equal(aborted[header.indexOf("trialCount")], 0);
+  // 版を持たない課題は空欄。「無い」ことを空欄で表し、他課題の値を借りない。
+  assert.equal(aborted[header.indexOf("protocolVersion")], "");
+  // 記録が無い回も既定へ倒して必ず値を出す。
+  assert.equal(aborted[header.indexOf("difficultyMode")], "practice");
+  assert.equal(aborted[header.indexOf("measurementReadiness")], "n/a");
+  // 終端の時刻。押されている回は出し、押されないまま消えた回は空欄にする
+  // ——「終わらなかった回」を、終わった回のように見せない。
+  assert.equal(first[header.indexOf("endedAtJst")], "2026-08-28T09:04:10.000+09:00");
+  assert.equal(aborted[header.indexOf("endedAtJst")], "");
+
+  // ロング形式では消えていることの対比（この回はrt CSVに1行も出ない）。
+  const rtRows = buildTaskCsvRows(sessions, "rt");
+  assert.equal(rtRows.length, 1, "見出しだけで、中断した回の行は無い");
+});
+
+test("a reaction trial keeps the response window it was actually judged against", () => {
+  // エンドレスでは受付時間が試行ごとに短くなる（games/fishing.js の
+  // endlessLimitMs）。以前は sanitize が config の limitMs を全試行へ
+  // 上書きしていたので、短い窓で時間切れになった試行を「まだ間に合って
+  // いた」として再判定し、判定が食い違った行を**丸ごと捨てて**いた
+  // （sanitizeReactionTrial は合わない行を null にする）。難しくした回ほど
+  // データが消える、といういちばん困る壊れ方をする。
+  const session = {
+    sessionId: "rt-window",
+    taskType: "rt",
+    gameId: "fishing",
+    participantId: "P1",
+    startedAtIso: "2026-08-28T00:00:00.000Z",
+    finished: true,
+    aborted: false,
+    device: {},
+    config: {
+      foreperiodMinMs: 1800,
+      foreperiodMaxMs: 4200,
+      limitMs: 2000,
+      targetTrials: 2,
+      fakeRatio: 0,
+      endless: true,
+    },
+    trials: [
+      // 窓 2000ms、cue から 900ms で押した → hit。
+      {
+        index: 0,
+        kind: "real",
+        foreperiodMs: 1800,
+        cueMs: 1800,
+        limitMs: 2000,
+        inputMs: 2700,
+        reactionTimeMs: 900,
+        judgment: "hit",
+        excluded: false,
+      },
+      // 窓が 1250ms まで狭まった試行。cue から 1400ms は**時間切れ**。
+      // config の 2000ms で再判定すると hit になってしまい、行が落ちる。
+      {
+        index: 1,
+        kind: "real",
+        foreperiodMs: 2000,
+        cueMs: 6000,
+        limitMs: 1250,
+        inputMs: null,
+        reactionTimeMs: null,
+        judgment: "timeout",
+        excluded: false,
+      },
+    ],
+  };
+  const restored = sanitizeState({ sessions: [session] }).sessions[0];
+  assert.equal(restored.trials.length, 2, "狭い窓の試行が捨てられてはいけない");
+  assert.equal(restored.trials[0].limitMs, 2000);
+  assert.equal(restored.trials[1].limitMs, 1250);
+  assert.equal(restored.trials[1].judgment, "timeout");
+  // 完走扱いのまま残る（落ちると成立確認の材料からも外れる）。
+  assert.equal(restored.aborted, false);
+
+  // limitMs を持たない古い記録は、これまでどおり config の値で補う。
+  const legacy = sanitizeState({
+    sessions: [
+      {
+        ...session,
+        sessionId: "rt-legacy",
+        config: { ...session.config, targetTrials: 1, endless: false },
+        trials: [{ ...session.trials[0], limitMs: undefined }],
+      },
+    ],
+  }).sessions[0];
+  assert.equal(legacy.trials.length, 1);
+  assert.equal(legacy.trials[0].limitMs, 2000);
+});
+
+test("exported timestamps are Japan time with the offset kept", () => {
+  // 記録はUTC。書き出しだけを日本時間にする。
+  assert.equal(toJstIso("2026-08-28T15:00:00.000Z"), "2026-08-29T00:00:00.000+09:00");
+  // 日本時間の夕方はUTCでは同じ日の朝。日ごとの集計はここでずれる。
+  assert.equal(toJstIso("2026-08-28T09:30:00.000Z"), "2026-08-28T18:30:00.000+09:00");
+  // オフセットを必ず残す。落とすとUTCの値と見分けがつかなくなる。
+  assert.ok(toJstIso("2026-08-28T00:00:00.000Z").endsWith("+09:00"));
+  // 端末のタイムゾーン設定に依存させない（固定 +09:00）。
+  assert.equal(toJstIso("2026-01-15T12:00:00.000Z"), "2026-01-15T21:00:00.000+09:00");
+  // 読めない値・空値は空欄にする（0時や現在時刻をでっち上げない）。
+  assert.equal(toJstIso(""), "");
+  assert.equal(toJstIso("not a date"), "");
+  assert.equal(toJstIso(undefined), "");
+  assert.equal(toJstIso(null), "");
+
+  // 各CSVが実際に日本時間で出ること。
+  const session = {
+    sessionId: "jst-1",
+    taskType: "scan",
+    gameId: "crane",
+    participantId: "P1",
+    startedAtIso: "2026-08-28T15:30:00.000Z",
+    aborted: false,
+    finished: true,
+    device: {},
+    config: {},
+    trials: [
+      {
+        index: 0,
+        targetX: 1,
+        targetY: 1,
+        toleranceR: 10,
+        selectedX: 1,
+        selectedY: 1,
+        dx: 0,
+        dy: 0,
+        distance: 0,
+        xPhaseMs: 1,
+        yPhaseMs: 1,
+        judgment: "grip",
+      },
+    ],
+  };
+  const scanRows = buildTaskCsvRows([session], "scan");
+  assert.equal(scanRows[0][4], "startedAtJst");
+  assert.equal(scanRows[1][4], "2026-08-29T00:30:00.000+09:00");
+
+  const ledgerRows = buildSessionLedgerRows([session]);
+  assert.equal(
+    ledgerRows[1][ledgerRows[0].indexOf("startedAtJst")],
+    "2026-08-29T00:30:00.000+09:00"
+  );
+
+  const logRows = buildLogCsvRows([{ time: "2026-08-28T15:30:00.000Z", view: "home", type: "x" }], "P1");
+  assert.equal(logRows[0][0], "time_jst");
+  assert.equal(logRows[1][0], "2026-08-29T00:30:00.000+09:00");
+});
+
+test("the log CSV exports the fields the log already stored", () => {
+  // success / skipEvaluation / distance は sanitizeLogEntry がずっと保持して
+  // いたのに、どのCSVにも出していなかった。保存されているだけの値は解析に
+  // 使えない＝実質「記録していない」のと同じ。
+  const rows = buildLogCsvRows(
+    [
+      {
+        time: "2026-08-28T00:00:00.000Z",
+        view: "home",
+        type: "select",
+        label: "あか",
+        correct: true,
+        success: true,
+        skipEvaluation: false,
+        distance: 12.5,
+      },
+      { time: "2026-08-28T00:00:01.000Z", view: "home", type: "input", label: "" },
+    ],
+    "P7"
+  );
+  const header = rows[0];
+  assert.deepEqual(header.slice(0, 5), ["time_jst", "view", "type", "label", "correct"]);
+  assert.deepEqual(header.slice(5), [
+    "success",
+    "skip_evaluation",
+    "distance",
+    // 行ごとの帰属ではないことを名前で示す。ログは参加者をまたいでたまる。
+    "exported_participant_id",
+  ]);
+  assert.equal(rows[1][header.indexOf("success")], true);
+  assert.equal(rows[1][header.indexOf("skip_evaluation")], false);
+  assert.equal(rows[1][header.indexOf("distance")], 12.5);
+  // 参加者IDは書き出し全体に共通の値として全行に入る。
+  assert.equal(rows[1][header.indexOf("exported_participant_id")], "P7");
+  assert.equal(rows[2][header.indexOf("exported_participant_id")], "P7");
+  // 値を持たない古いエントリは空欄（false や 0 を作らない）。
+  assert.equal(rows[2][header.indexOf("success")], "");
+  assert.equal(rows[2][header.indexOf("distance")], "");
 });
 
 test("sanitizeState restores valid scan/rt sessions and rejects unknown task types", () => {
