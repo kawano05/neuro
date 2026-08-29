@@ -162,7 +162,19 @@ export function createScanEngine(ctx) {
     }
     const target = scanTargets[scanIndex];
     if (target === elements.toggleScan) {
-      toggle();
+      // 走査で「走査停止」を選んだときは、ハイライトを残したまま止める。
+      //
+      // 位置まで捨てると scanIndex が -1 になり、そのあとは何度押しても
+      // activate() の先頭で return するだけ——スイッチ1つの利用者が、
+      // 自分で唯一の操作経路を閉じて、支援者がタップするまで戻れない
+      // 状態になっていた（2026-08-29に発見。支援者メニューの輪を短く
+      // したぶん、走査停止に当たる確率が上がって顕在化しやすくなった）。
+      //
+      // 位置を残せば、次の一押しは同じ項目（いまは「走査開始」）に当たり、
+      // 自力で動き出せる。支援者がボタンを押して止める場合は従来どおり
+      // 位置を捨てる（そちらは戻す手がある）。
+      if (scanTimer) stop(false);
+      else start();
       return;
     }
     target.click();
