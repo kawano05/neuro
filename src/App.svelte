@@ -258,6 +258,13 @@
           <button class="secondary" id="exportSessionLedgerCsv" data-scan>セッション台帳</button>
           <button class="secondary" id="exportRawJson" data-scan>生データ(JSON)</button>
           <button class="danger" id="resetEvaluation" data-scan>測定リセット</button>
+          <!--
+            参加者ひとりぶんを終えて、端末を空にする導線。
+            測定リセットは evaluation だけ、ログ削除は logs だけを消す。
+            研究データ本体（state.sessions）を消す手段がこれまで無く、
+            共用端末では前の参加者の回が残りつづけていた。
+          -->
+          <button class="danger" id="handOverParticipant" data-scan>参加者を切り替える</button>
         </div>
       </div>
 

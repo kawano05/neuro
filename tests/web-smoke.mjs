@@ -94,6 +94,7 @@ const checks = [
   ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
   ["lets the supporter reach every game's trend through tabs", checkTrendTabsCoverEveryGame],
   ["wires every export button to a real download", checkExportButtonsAreWired],
+  ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
 ];
 
 const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
@@ -961,6 +962,76 @@ async function checkKeyboardAndSwitchInput(page) {
  * ダウンロード自体はヘッドレスで止まるが、URL.createObjectURL まで届けば
  * 行は組み上がっている。
  */
+/**
+ * 参加者ひとりぶんを終えるとき、書き出す前には消させない。
+ *
+ * 想定運用は「1人終わったら書き出して、端末を空にして次の人へ」。消すのは
+ * 取り返しがつかず、書き出しは取り返しがつく——順番を守らせる。
+ *
+ * これまでどのボタンも state.sessions を消さなかったので、共用端末では前の
+ * 参加者の回が残りつづけ、推移も自己最高も混ざっていた（2026-08-29）。
+ */
+async function checkHandOverNeedsAnExportFirst(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await openSettingsTab(page, "measure");
+  await page.locator("#researcherMode").check();
+  await page.locator('.tab[data-view="evaluation"]').click();
+  await waitForClass(page, "#evaluation", "is-active");
+
+  // 消す対象を作る（1件でも入っていれば導線は同じ）。
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    state.logs = [
+      { time: "2026-08-29T00:00:00.000Z", view: "home", type: "probe", label: "handover" },
+    ];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, storageKey);
+  await page.reload();
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator('.tab[data-view="evaluation"]').click();
+  await waitForClass(page, "#evaluation", "is-active");
+
+  // 確認ダイアログが出たら必ず承諾する。それでも書き出し前は消えないこと。
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await page.locator("#handOverParticipant").click();
+  await page.waitForTimeout(150);
+  const blocked = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return (state.logs || []).length;
+  }, storageKey);
+  // 画面を行き来するあいだにも操作ログは増えるので、件数ではなく
+  // 「消えていない」ことだけを見る。
+  assert(blocked >= 1, `書き出す前に消えてしまった（logs=${blocked}）`);
+  const reason = ((await page.locator("#supporterMessage").textContent()) || "").trim();
+  assert(
+    reason.includes("書き出"),
+    `止めた理由が画面に出ていない: ${reason.slice(0, 60)}`
+  );
+
+  // 書き出したあとなら消える。
+  await page.locator("#exportRawJson").click();
+  await page.waitForTimeout(200);
+  await page.locator("#handOverParticipant").click();
+  await page.waitForTimeout(300);
+  const cleared = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return {
+      logs: (state.logs || []).length,
+      sessions: (state.sessions || []).length,
+      participantId: state.evaluation?.participantId ?? null,
+    };
+  }, storageKey);
+  assert(cleared.logs === 0 && cleared.sessions === 0, `消えていない: ${JSON.stringify(cleared)}`);
+  // 次の人のIDを入れ直させる（前の人のIDが残っていると取り違える）。
+  assert(cleared.participantId === "", `参加者IDが残っている: ${cleared.participantId}`);
+}
+
 async function checkExportButtonsAreWired(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -2227,10 +2298,10 @@ async function checkEndlessEndsOnFailure(page) {
   // ので、grip 圏（半径 toleranceR/2 = 7.5）には決して入らない。
   const sweepMs = 2200;
   await waitForCraneStatus(page, "横に動きます");
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(sweepMs);
   await page.locator("#gameStage").click();
   await waitForCraneStatus(page, "奥に動きます");
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(sweepMs);
   await page.locator("#gameStage").click();
 
   // 1試行で結果画面へ抜けること。回数で終わるゲームなら5回続くので、

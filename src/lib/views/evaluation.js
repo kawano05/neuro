@@ -414,6 +414,11 @@ export function buildTaskCsvRows(sessions, taskType) {
 export function initEvaluation(ctx) {
   const { state, elements, save, announce, logEvent, switchView, notifySupporter } = ctx;
 
+  // この画面で書き出しを押したか。参加者の切り替え（handOverToNextParticipant）
+  // が、消す前に書き出しを求めるために使う。ファイルが保存されたかまでは
+  // アプリからは知れないので、「押した」までしか主張しない。
+  let exportedSinceLastReset = false;
+
   /** 現在実施中（または次に実施する）タスク */
   function activeTask() {
     return evaluationTasks[state.evaluation.activeTaskIndex] || null;
@@ -712,6 +717,7 @@ export function initEvaluation(ctx) {
       notifySupporter("書き出す測定結果がありません。効果測定のタスクを1つ終えると記録されます。");
       return;
     }
+    exportedSinceLastReset = true;
     const rows = [
       [
         "participant_id",
@@ -805,6 +811,7 @@ export function initEvaluation(ctx) {
       );
       return;
     }
+    exportedSinceLastReset = true;
     const rows = buildRhythmCsvRows(sessions);
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
@@ -833,6 +840,7 @@ export function initEvaluation(ctx) {
       notifySupporter("書き出すリール停止データがありません。L1またはL2を1回終えると記録されます。");
       return;
     }
+    exportedSinceLastReset = true;
     const rows = buildSlotCsvRows(sessions);
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
@@ -854,6 +862,7 @@ export function initEvaluation(ctx) {
       );
       return;
     }
+    exportedSinceLastReset = true;
     const rows = buildTaskCsvRows(sessions, taskType);
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
@@ -867,6 +876,7 @@ export function initEvaluation(ctx) {
 
   /** BOM付きUTF-8で書き出す共通処理（Excelが素で開ける形）。 */
   function downloadCsv(rows, filenameStem) {
+    exportedSinceLastReset = true;
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -900,6 +910,7 @@ export function initEvaluation(ctx) {
    * 早い——書き出した時点でアプリが何を持っていたかがそのまま残る。
    */
   function exportRawJson() {
+    exportedSinceLastReset = true;
     const payload = {
       // 控えの中身は state そのまま（保存はUTC）。読む人のために、
       // 書き出した時刻だけ日本時間も併記する。
@@ -955,6 +966,81 @@ export function initEvaluation(ctx) {
           "または「生データ(JSON)」を書き出してください。"
         : `セッションの保存上限（${MAX_SESSIONS}件）に達しています。` +
           "次の回を記録すると最も古い回が消えます。今すぐ書き出してください。";
+  }
+
+  /**
+   * この端末に、いま何人ぶんの記録が入っているか。
+   *
+   * 参加者IDは支援者が打つ1つの文字列で、セッションにはその時点の値が
+   * 焼き付く。切り替えを忘れたまま次の人を測ると、別人の回が同じIDで
+   * 混ざる——それは記録からは見分けられない。せめて「いま何人ぶん入って
+   * いるか」を出しておけば、切り替え忘れに気づく手がかりになる。
+   */
+  function recordedParticipants() {
+    const ids = new Set();
+    (state.sessions || []).forEach((session) => ids.add(session.participantId || ""));
+    return [...ids];
+  }
+
+  /**
+   * 参加者ひとりぶんを終える。
+   *
+   * 想定している運用は「1人終わったら書き出して、端末を空にして次の人へ」。
+   * ところが、これまでどのボタンも state.sessions（研究データ本体）を
+   * 消さなかった。測定リセットが消すのは evaluation だけ、ログ削除が消すのは
+   * logs だけで、セッションは端末に残りつづける。
+   *
+   * 残ると何が起きるか:
+   *   - 推移と自己最高が前の参加者の回と混ざる（誰の線か言えなくなる）
+   *   - 成立確認は participantId で絞るので、IDを変えた瞬間に材料が0に戻る
+   *     ——ここだけ挙動が違うので、支援者からは理由が見えない
+   *   - 保持上限50件を前の人の回が食う（3人共用なら1人あたり来所4回ぶん）
+   *
+   * 消す前に必ず書き出させる。書き出しは取り返しがつくが、消去はつかない。
+   * 「書き出した」の判定は、この画面で実際に書き出しを押したかで持つ
+   * （ファイルが保存されたかは、アプリからは知りようがない——ダウンロードの
+   * 成否はブラウザの外にある。だから「押した」までしか主張しない）。
+   */
+  function handOverToNextParticipant() {
+    const sessionCount = state.sessions.length;
+    const logCount = state.logs.length;
+    if (sessionCount === 0 && logCount === 0) {
+      notifySupporter("消すものがありません。この端末にはまだ記録が入っていません。");
+      announce("消すものがありません");
+      return;
+    }
+    if (!exportedSinceLastReset) {
+      notifySupporter(
+        `まだ書き出していません。セッション${sessionCount}件・ログ${logCount}件が消えます。` +
+          "先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。"
+      );
+      announce("先に書き出してください");
+      return;
+    }
+    if (!window.confirm(
+      `この端末の記録を消します。\n\n` +
+        `　セッション ${sessionCount}件\n` +
+        `　操作ログ ${logCount}件\n` +
+        `　測定結果と観察メモ\n\n` +
+        "書き出したファイルは消えません。消した記録は元に戻せません。"
+    )) {
+      announce("消すのをやめました");
+      return;
+    }
+
+    const fresh = cloneDefaultState();
+    state.sessions = [];
+    state.logs = [];
+    state.evaluation = { ...fresh.evaluation };
+    state.arcade = { ...fresh.arcade };
+    exportedSinceLastReset = false;
+    save();
+    ctx.renderAll();
+    notifySupporter(
+      `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。` +
+        "次の参加者IDを入れてから始めてください。"
+    );
+    announce("記録を消しました。次の参加者IDを入れてください");
   }
 
   /** 効果測定画面全体の描画 */
@@ -1088,6 +1174,7 @@ export function initEvaluation(ctx) {
   elements.exportSessionLedgerCsv.addEventListener("click", exportSessionLedgerCsv);
   elements.exportRawJson.addEventListener("click", exportRawJson);
   elements.resetEvaluation.addEventListener("click", reset);
+  elements.handOverParticipant?.addEventListener("click", handOverToNextParticipant);
 
   return { render, countEntry, recordSessionOutcome };
 }

@@ -483,10 +483,27 @@ export function initLog(ctx) {
 
   elements.exportCsv.addEventListener("click", exportCsv);
   elements.clearLog.addEventListener("click", () => {
+    // 消す前に一度だけ止める。
+    //
+    // この画面は走査の輪に入っている（支援者メニューと違い、利用者が
+    // タブバーから迷い込める）。輪は5〜6項目しかないので、迷い込んだ
+    // 一押しがそのまま全消去になりうる。支援者が意図して押す場合の
+    // 手間は1回だけ増え、事故は止まる。
+    const count = state.logs.length;
+    if (count === 0) {
+      announce("消すログがありません");
+      notifySupporter("消すログがありません。");
+      return;
+    }
+    if (!window.confirm(`操作ログ ${count}件を消します。元に戻せません。`)) {
+      announce("消すのをやめました");
+      return;
+    }
     state.logs = [];
     save();
     render();
     announce("ログを削除しました");
+    notifySupporter(`操作ログ ${count}件を消しました。`);
   });
 
   return { render };

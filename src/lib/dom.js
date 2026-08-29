@@ -91,6 +91,7 @@ export function collectElements() {
     exportScanCsv: document.querySelector("#exportScanCsv"),
     exportRtCsv: document.querySelector("#exportRtCsv"),
     resetEvaluation: document.querySelector("#resetEvaluation"),
+    handOverParticipant: document.querySelector("#handOverParticipant"),
     evaluationStatus: document.querySelector("#evaluationStatus"),
     currentTaskTitle: document.querySelector("#currentTaskTitle"),
     currentTaskGuide: document.querySelector("#currentTaskGuide"),
