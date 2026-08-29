@@ -1441,16 +1441,23 @@ async function checkSlotL1GameFlow(page) {
   );
   assert(imageReady, "Generated six-symbol guide PNG must load in the actual game");
 
+  // 「140ms待って比べる」は時間の仮定だった。回転は rAF で進むので、遅い機械
+  // では最初の1フレームがその窓に入らないことがある——CIの mobile-webkit-like
+  // （実機のWebKit＋iPhone 14 実寸）でだけ、同じ値が2回採れて落ちていた
+  // （手元の5実寸では再現しない。2026-08-30）。
+  //
+  // 確かめたいのは「動くこと」であって「140ms以内に動くこと」ではない。
+  // 待ち合わせにすれば、遅い機械でも意味を変えずに済む。
   const beforeOffset = await page.locator(".slot-reel-track").evaluate(
     (track) => track.style.getPropertyValue("--slot-track-offset")
   );
-  await page.waitForTimeout(140);
-  const afterOffset = await page.locator(".slot-reel-track").evaluate(
-    (track) => track.style.getPropertyValue("--slot-track-offset")
-  );
-  assert(
-    beforeOffset !== afterOffset,
-    "The reel must visibly move before stopping (" + beforeOffset + " -> " + afterOffset + ")"
+  await page.waitForFunction(
+    (previous) => {
+      const track = document.querySelector(".slot-reel-track");
+      return Boolean(track) && track.style.getPropertyValue("--slot-track-offset") !== previous;
+    },
+    beforeOffset,
+    { timeout: 5_000 }
   );
 
   const visibleCopy = await page.locator("#gameStageContent").innerText();
@@ -1516,10 +1523,21 @@ async function checkSlotSequentialFlow(page) {
     "slot-l2 must render exactly three reels"
   );
 
+  // slot-l1 と同じ理由で待ち合わせにする（時間の仮定を置かない）。
   const beforeOffsets = await page.locator(".slot-reel-track").evaluateAll((tracks) =>
     tracks.map((track) => track.style.getPropertyValue("--slot-track-offset"))
   );
-  await page.waitForTimeout(140);
+  await page.waitForFunction(
+    (previous) => {
+      const tracks = [...document.querySelectorAll(".slot-reel-track")];
+      if (tracks.length !== previous.length) return false;
+      return tracks.every(
+        (track, index) => track.style.getPropertyValue("--slot-track-offset") !== previous[index]
+      );
+    },
+    beforeOffsets,
+    { timeout: 5_000 }
+  );
   const afterOffsets = await page.locator(".slot-reel-track").evaluateAll((tracks) =>
     tracks.map((track) => track.style.getPropertyValue("--slot-track-offset"))
   );

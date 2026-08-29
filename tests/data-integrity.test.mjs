@@ -1152,7 +1152,14 @@ test("the session ledger lists one row per session, including runs with no trial
   assert.equal(aborted[header.indexOf("measurementReadiness")], "n/a");
   // 終端の時刻。押されている回は出し、押されないまま消えた回は空欄にする
   // ——「終わらなかった回」を、終わった回のように見せない。
-  assert.equal(first[header.indexOf("endedAtLocal")], "2026-08-28T09:04:10.000+09:00");
+  // 実行環境の時間帯を直書きしない。CIのランナーはUTCなので、"+09:00" と
+  // 書くと手元だけ通ってCIで落ちる（実際に落とした。2026-08-29）。
+  // 変換そのものは toLocalIso のテストで見ているので、ここは「その値を
+  // 通しているか」だけを見る。
+  assert.equal(
+    first[header.indexOf("endedAtLocal")],
+    toLocalIso("2026-08-28T00:04:10.000Z")
+  );
   assert.equal(aborted[header.indexOf("endedAtLocal")], "");
 
   // ロング形式では消えていることの対比（この回はrt CSVに1行も出ない）。
