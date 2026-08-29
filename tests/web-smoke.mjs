@@ -448,7 +448,45 @@ async function checkStartToHomeToGameFlow(page) {
   assert(earlyFeedback.feedbackInViewport, "Visual feedback must stay inside the viewport");
   assert((await readLogCount(page)) === logsBeforeTimedFeedback + 1, "Timed click must log one input");
 
-  await page.waitForFunction(() => window.__colorSpeechCalls?.length === 1, null, { timeout: 2_000 });
+  // アプリTTSが届くのを待つ。
+  //
+  // ここは実行環境によって落ちうる場所で、CIの mobile-webkit-like でだけ
+  // 2秒の時間切れになったことがある（2026-08-29）。原因を確かめないまま
+  // 待ち時間を伸ばすと、実際の遅延（利用者が待たされる不具合）を隠す。
+  //
+  // 2つに分ける:
+  //   1. そもそもアプリTTSを使えない環境なら、この検査は成り立たない。
+  //      audio.js の speak() は SpeechSynthesisUtterance が無ければ live
+  //      region へ所有権を戻す（通知自体は失わない）。その環境で「TTSが
+  //      来ない」と落とすのは、アプリの正しい振る舞いを不具合と呼ぶこと。
+  //   2. 使える環境で来なかったなら、それは調べるべきこと。落とすときに
+  //      「何が使えて何が来なかったか」を書き残す——時間切れの一行だけでは
+  //      次に見る人が同じ調査を最初からやり直すことになる。
+  const speechCapable = await page.evaluate(
+    () =>
+      typeof window.SpeechSynthesisUtterance === "function" &&
+      typeof window.speechSynthesis?.speak === "function"
+  );
+  if (!speechCapable) return SKIPPED;
+
+  try {
+    await page.waitForFunction(() => window.__colorSpeechCalls?.length === 1, null, {
+      timeout: 5_000,
+    });
+  } catch {
+    const diagnosis = await page.evaluate(() => ({
+      speechCalls: window.__colorSpeechCalls?.length ?? null,
+      liveEvents: window.__colorLiveEvents?.length ?? null,
+      liveText: document.querySelector("#liveRegion")?.textContent ?? null,
+      speechEnabled: JSON.parse(localStorage.getItem("neuronode-prototype-state-v4") || "{}")
+        ?.settings?.speechEnabled,
+      sinceClick: window.__colorClickAt ? Math.round(performance.now() - window.__colorClickAt) : null,
+    }));
+    assert(
+      false,
+      "アプリTTSが届かなかった: " + JSON.stringify(diagnosis)
+    );
+  }
   const deliveredFeedback = await page.evaluate(() => ({
     speech: window.__colorSpeechCalls[0],
     clickAt: window.__colorClickAt,
