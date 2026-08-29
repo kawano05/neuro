@@ -166,11 +166,37 @@ function hasEveryExpectedPosition(trials, config) {
 
 export function sanitizeSlotSession(session) {
   if (!isRecord(session) || !SLOT_GAME_IDS.has(session.gameId)) return null;
+  if (session.taskType !== "slot") return null;
+
+  // 版が違う回は「捨てる」のではなく「そのまま残す」。
+  //
+  // 以前はここで null を返していた。sanitize は読み込みのたびに走るので、
+  // SLOT_ENGINE_VERSION を上げたビルドを配ると、その端末に溜まっていた
+  // リールの回は次の起動で消えた——警告も、書き出しの猶予も無く。研究の
+  // データ収集期間中に更新を配ると、それまでの回が失われる（実測で確認、
+  // 2026-08-29）。
+  //
+  // 混ぜてはいけないのは確かだが、それは解析で分けるべきことで、削除で
+  // 果たすことではない。版は protocolVersion / engineVersion として台帳と
+  // CSVに出ているので、解析側は現行版だけを選べる。
+  //
+  // 古い版の回は中身を作り直さない（当時の判定規則で作られた値を、いまの
+  // 規則で検証し直すと、通らなかった行だけが消えて残りが残る——いちばん
+  // たちの悪い壊れ方になる）。保存された形のまま、読み取り専用で残す。
   if (
-    session.taskType !== "slot" ||
     session.protocolVersion !== SLOT_PROTOCOL_VERSION ||
     session.engineVersion !== SLOT_ENGINE_VERSION
-  ) return null;
+  ) {
+    return {
+      ...session,
+      taskType: "slot",
+      // いまの版で検証していないことを、記録自体に持たせる。これが true の
+      // 回を現行版の回と同じ分布に混ぜてはいけない。
+      legacyVersion: true,
+      trials: Array.isArray(session.trials) ? session.trials : [],
+      summary: isRecord(session.summary) ? session.summary : {},
+    };
+  }
 
   const config = sanitizeConfig(session.gameId, session.config);
   const rawTrials = Array.isArray(session.trials) ? session.trials.slice(0, 1_000) : [];
