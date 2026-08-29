@@ -2166,7 +2166,14 @@ async function checkEndlessEndsOnFailure(page) {
   await page.locator("#gameStage").click();
   await page.locator(".game-ready").waitFor({ state: "detached" });
 
-  // 端で止めて外す。ガードを抜ける最小限だけ待つ。
+  // わざと外す。ガードを抜けた直後（掃引の約18%）で止める作りにしていたが、
+  // 狙いは craneGeometry.pickTarget が x∈[20,80] / y∈[22,78] に置くので、
+  // 18%付近はたまたま掴める距離に入ることがある（ipad-portrait で実際に
+  // 掴めて回が終わらず、結果画面を待って時間切れになった）。
+  //
+  // 掃引の折り返し（sweepMs 経過＝100%地点）で止める。狙いの上限は80/78 な
+  // ので、grip 圏（半径 toleranceR/2 = 7.5）には決して入らない。
+  const sweepMs = 2200;
   await waitForCraneStatus(page, "横に動きます");
   await page.waitForTimeout(400);
   await page.locator("#gameStage").click();

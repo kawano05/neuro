@@ -226,6 +226,44 @@ test("endless narrows the grab zone first, then speeds the arm up", () => {
   }
 });
 
+test("endless never makes the run easier than the setting it started from", () => {
+  // 下限（ひろさ6 / はやさ1100ms）は既定の 15 / 2200 を前提にした安全弁。
+  // ところが支援者は state.js の範囲でひろさ4・はやさ800msまで詰められる。
+  // max だけで挟むと、そこから始めた回が1試行目に「広がって」「遅くなって」
+  // ——つまり易しくなって——しまい、「続けるほど難しくなる」の表示が嘘になる。
+  // 実測で見つけた（2026-08-29）。始めた条件を超えて易しくしないこと。
+  const settableTolerance = [4, 6, 10, 15, 40];
+  const settableSweep = [800, 1100, 1500, 2200, 6000];
+
+  for (const base of settableTolerance) {
+    for (let index = 0; index <= 60; index += 1) {
+      const value = endlessToleranceR(base, index);
+      assert.ok(
+        value <= base + 1e-9,
+        `ひろさ ${base} で始めた回が試行${index}で ${value} へ広がった（易化）`
+      );
+    }
+  }
+
+  for (const base of settableSweep) {
+    for (let index = 0; index <= 60; index += 1) {
+      const value = endlessSweepMs(base, index);
+      assert.ok(
+        value <= base + 1e-9,
+        `はやさ ${base}ms で始めた回が試行${index}で ${value}ms へ遅くなった（易化）`
+      );
+    }
+  }
+
+  // 既定から始めた回は、これまでどおり段階的に難しくなる。
+  assert.ok(endlessToleranceR(15, 15) < endlessToleranceR(15, 0));
+  assert.ok(endlessSweepMs(2200, 30) < endlessSweepMs(2200, 0));
+
+  // 下限より厳しい設定で始めた回は、そのまま据え置く（緩めない・締めない）。
+  assert.equal(endlessToleranceR(4, 30), 4);
+  assert.equal(endlessSweepMs(800, 30), 800);
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);
 console.log("crane geometry tests passed");

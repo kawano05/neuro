@@ -262,7 +262,12 @@ function endlessStepAt(trialIndex) {
  */
 export function endlessToleranceR(baseR, trialIndex) {
   const step = Math.min(endlessStepAt(trialIndex), ENDLESS_TOLERANCE_STEPS);
-  return Math.max(ENDLESS_MIN_TOLERANCE_R, baseR * ENDLESS_TOLERANCE_RATIO ** step);
+  // 下限（ENDLESS_MIN_TOLERANCE_R）は既定の 15 を前提にした安全弁だが、
+  // 支援者は 4 まで狭められる（state.js の craneToleranceR は 4〜40）。
+  // max だけで挟むと、4 で始めた回が1試行目に 6 へ**広がって易しくなり**、
+  // 以後ずっと 6 のまま動かない——「続けるほど難しくなる」の表示が嘘になる。
+  // 始めた条件より易しくしないことを Math.min で保証する（2026-08-29）。
+  return Math.min(baseR, Math.max(ENDLESS_MIN_TOLERANCE_R, baseR * ENDLESS_TOLERANCE_RATIO ** step));
 }
 
 /**
@@ -274,7 +279,12 @@ export function endlessToleranceR(baseR, trialIndex) {
 export function endlessSweepMs(baseSweepMs, trialIndex) {
   const speedStep = Math.max(0, endlessStepAt(trialIndex) - ENDLESS_TOLERANCE_STEPS);
   if (speedStep === 0) return baseSweepMs;
-  return Math.max(ENDLESS_MIN_SWEEP_MS, baseSweepMs * ENDLESS_SWEEP_RATIO ** speedStep);
+  // 許容半径と同じ理由（支援者は 800ms まで速められる）。max だけで挟むと、
+  // 800ms で始めた回が速度段階で 1100ms へ**遅くなって易しくなる**。
+  return Math.min(
+    baseSweepMs,
+    Math.max(ENDLESS_MIN_SWEEP_MS, baseSweepMs * ENDLESS_SWEEP_RATIO ** speedStep)
+  );
 }
 
 function resolveCraneConfig(settings, readiness, requestedEndless) {

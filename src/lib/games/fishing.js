@@ -219,7 +219,12 @@ const ENDLESS_MIN_LIMIT_MS = 1250;
 
 function endlessLimitMs(baseLimitMs, trialIndex) {
   const step = endlessDifficultyStep(trialIndex, ENDLESS_TRIALS_PER_STEP, ENDLESS_MAX_STEP);
-  return Math.max(ENDLESS_MIN_LIMIT_MS, baseLimitMs - ENDLESS_LIMIT_STEP_MS * step);
+  // 始めた条件より易しくしない（crane 側と同じ保証）。いまは limitMs を
+  // 支援者が触れないが、触れるようになった瞬間に下限が易化に化ける。
+  return Math.min(
+    baseLimitMs,
+    Math.max(ENDLESS_MIN_LIMIT_MS, baseLimitMs - ENDLESS_LIMIT_STEP_MS * step)
+  );
 }
 
 /**
