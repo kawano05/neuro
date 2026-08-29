@@ -71,3 +71,33 @@ export function createInputDeduper(thresholdMs) {
     return true;
   };
 }
+
+/**
+ * 保存されたISO時刻（UTC）を日本時間のISO文字列にする。
+ *
+ * なぜ要るか: 記録はUTCで持っている（`2026-08-28T12:00:00.000Z`）。日本時間の
+ * 夕方に測った回はUTCでは同じ日の朝、深夜に測った回は前日になる。CSVを
+ * 「日ごと」に集計すると、その境界がずれたまま数が出る——数字は出るので
+ * 気づかない。
+ *
+ * 固定で +09:00 を足す（`Asia/Tokyo` は夏時間を持たないので固定で厳密）。
+ * 端末のタイムゾーン設定には依存させない——iPadの設定が違っていても、
+ * 書き出したCSVは常に日本時間になる。
+ *
+ * オフセットを文字列に残す（`+09:00`）。落とすと、UTCの値と見分けが
+ * つかなくなる——「どちらの時刻か分からない列」は、間違った列より質が悪い。
+ *
+ * @param {string} isoString 保存されているISO時刻
+ * @returns {string} `YYYY-MM-DDTHH:mm:ss.sss+09:00`。読めない値は空文字。
+ */
+export const JST_OFFSET_MINUTES = 9 * 60;
+
+export function toJstIso(isoString) {
+  if (typeof isoString !== "string" || isoString === "") return "";
+  const time = new Date(isoString).getTime();
+  if (!Number.isFinite(time)) return "";
+  const shifted = new Date(time + JST_OFFSET_MINUTES * 60_000);
+  // toISOString() はUTCとして書き出すので、ずらしたあとの値の末尾 "Z" を
+  // 実際のオフセットへ置き換える。
+  return `${shifted.toISOString().slice(0, -1)}+09:00`;
+}
