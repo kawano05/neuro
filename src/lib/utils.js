@@ -73,31 +73,59 @@ export function createInputDeduper(thresholdMs) {
 }
 
 /**
- * 保存されたISO時刻（UTC）を日本時間のISO文字列にする。
+ * 保存されたISO時刻（UTC）を、端末のローカル時刻のISO文字列にする。
  *
- * なぜ要るか: 記録はUTCで持っている（`2026-08-28T12:00:00.000Z`）。日本時間の
- * 夕方に測った回はUTCでは同じ日の朝、深夜に測った回は前日になる。CSVを
- * 「日ごと」に集計すると、その境界がずれたまま数が出る——数字は出るので
- * 気づかない。
+ * なぜ要るか: 記録はUTCで持っている（`2026-08-28T12:00:00.000Z`）。使う人の
+ * 時間帯の夕方に測った回はUTCでは同じ日の朝、深夜の回は前日になる。CSVを
+ * 「日ごと」に集計すると境界がずれたまま数が出る——数字は出るので気づかない。
  *
- * 固定で +09:00 を足す（`Asia/Tokyo` は夏時間を持たないので固定で厳密）。
- * 端末のタイムゾーン設定には依存させない——iPadの設定が違っていても、
- * 書き出したCSVは常に日本時間になる。
+ * 端末の時間帯を使う（固定の +09:00 にしない）。この教材は使う場所ごとに
+ * 端末があり、支援者はその端末の時計で「今日の何時に測ったか」を認識する。
+ * アプリだけが別の時間帯で書き出すと、別紙の記録と突き合わせるときに、
+ * 突き合わせる側が毎回ずらして考えることになる。
  *
- * オフセットを文字列に残す（`+09:00`）。落とすと、UTCの値と見分けが
- * つかなくなる——「どちらの時刻か分からない列」は、間違った列より質が悪い。
+ * オフセットは必ず文字列に残す（`+09:00` / `+08:00` など）。落とすと、どの
+ * 時間帯の値なのか分からなくなる——「どちらの時刻か分からない列」は、
+ * 間違った列より質が悪い。オフセットが入っていれば、時間帯の違う端末で
+ * 取った回どうしでも、解析側で同じ時刻軸へ戻せる。
+ *
+ * 端末の時計や時間帯の設定が狂っていれば、その狂ったまま出る。防ぎようが
+ * ないので、生データJSONにはUTCのまま残してある（そちらが正本）。
  *
  * @param {string} isoString 保存されているISO時刻
- * @returns {string} `YYYY-MM-DDTHH:mm:ss.sss+09:00`。読めない値は空文字。
+ * @param {number} [offsetMinutes] UTCとの差（分、東が正）。既定は端末の設定。
+ *   引数にしてあるのはテストのため——実行環境の時間帯は選べないので、
+ *   これが無いと「+09:00 の端末で動かしたときだけ通るテスト」しか書けない。
+ * @returns {string} `YYYY-MM-DDTHH:mm:ss.sss+09:00` 形式。読めない値は空文字。
  */
-export const JST_OFFSET_MINUTES = 9 * 60;
-
-export function toJstIso(isoString) {
+export function toLocalIso(isoString, offsetMinutes) {
   if (typeof isoString !== "string" || isoString === "") return "";
   const time = new Date(isoString).getTime();
   if (!Number.isFinite(time)) return "";
-  const shifted = new Date(time + JST_OFFSET_MINUTES * 60_000);
+  // getTimezoneOffset() は「UTCより何分遅れているか」なので、東側は負。
+  const resolvedOffset =
+    typeof offsetMinutes === "number" && Number.isFinite(offsetMinutes)
+      ? offsetMinutes
+      : -new Date(time).getTimezoneOffset();
+  const shifted = new Date(time + resolvedOffset * 60_000);
+  const sign = resolvedOffset < 0 ? "-" : "+";
+  const absolute = Math.abs(resolvedOffset);
+  const hours = String(Math.floor(absolute / 60)).padStart(2, "0");
+  const minutes = String(absolute % 60).padStart(2, "0");
   // toISOString() はUTCとして書き出すので、ずらしたあとの値の末尾 "Z" を
   // 実際のオフセットへ置き換える。
-  return `${shifted.toISOString().slice(0, -1)}+09:00`;
+  return `${shifted.toISOString().slice(0, -1)}${sign}${hours}:${minutes}`;
+}
+
+/**
+ * 書き出しファイル名に使う日付（YYYY-MM-DD、端末のローカル時刻）。
+ *
+ * `new Date().toISOString().slice(0, 10)` を使っていたため、中身はローカル
+ * 時刻なのにファイル名の日付だけUTCだった。UTCより東の時間帯では、朝のうちに
+ * 書き出すとファイル名が前日になる——書き出したファイルを日付で並べる運用では、
+ * その1本だけ前日の束に入る（2026-08-29に発見）。
+ */
+export function localFileStamp(date = new Date()) {
+  const iso = toLocalIso(date instanceof Date ? date.toISOString() : String(date));
+  return iso ? iso.slice(0, 10) : "";
 }
