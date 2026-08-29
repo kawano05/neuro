@@ -70,13 +70,16 @@ const checks = [
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
+  ["counts up instead of counting down in endless fishing", checkEndlessFishingHasNoClock],
   ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
+  ["ends an endless crane run on the first failure", checkEndlessEndsOnFailure],
   ["keeps the result screen free of supporter chrome", checkResultScreenStaysInTheUserWorld],
   ["keeps every scan target visible above the input dock", checkScanFocusStaysVisible],
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
+  ["keeps the supporter menu itself out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
   ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
   ["moves between visible feature tabs", checkFeatureTabs],
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
@@ -934,6 +937,71 @@ async function checkSettingsTabs(page) {
   assert(
     (await page.locator("#supporterEditToggle").count()) === 0,
     "The supporter editing lock must be gone, not merely hidden"
+  );
+}
+
+/**
+ * 支援者メニュー（設定画面）の操作子は走査の輪に入らない。
+ *
+ * ここを触るのは支援者で、スイッチ走査では操作しない（2026-08-28 合意）。
+ * 輪に入れても利用者が選ぶ項目は1つもなく、待ち時間が延びるだけになる。
+ *
+ * 同時に守るのは逃げ道。面の中身は外すが #homeReturn とタブバーは輪に残す
+ * ——利用者が誤って支援者の世界へ入ったとき、走査だけで home へ戻れなく
+ * なると、実機確認2026-07-04の「強制終了以外に戻れない」欠落が戻る。
+ */
+async function checkSupporterMenuStaysOutOfTheScanRing(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+
+  // 走査間隔に依存しないよう、→ キーで輪を手で回して一周ぶん集める。
+  const walkRing = async (steps) => {
+    const seen = [];
+    for (let index = 0; index < steps; index += 1) {
+      await page.keyboard.press("ArrowRight");
+      const current = await page.evaluate(() => {
+        const focused = document.querySelector(".scan-focus");
+        if (!focused) return null;
+        return {
+          id: focused.id || null,
+          inSettings: Boolean(focused.closest("#settings")),
+          label: (focused.getAttribute("aria-label") || focused.textContent || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 20),
+        };
+      });
+      if (current) seen.push(current);
+    }
+    return seen;
+  };
+
+  const ring = await walkRing(45);
+  assert(ring.length > 0, "The scan ring must not be empty in the supporter menu");
+
+  const fromSettings = ring.filter((entry) => entry.inSettings);
+  assert(
+    fromSettings.length === 0,
+    `Supporter menu controls must stay out of the scan ring, found: ${fromSettings
+      .map((entry) => entry.label)
+      .join(", ")}`
+  );
+
+  // 逃げ道は残っていること。
+  assert(
+    ring.some((entry) => entry.id === "homeReturn"),
+    "The home-return button must remain reachable by scanning from the supporter menu"
+  );
+
+  // 他の支援者画面（評価ログ）では、その面の操作子はこれまでどおり輪に入る。
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
+  const logRing = await walkRing(45);
+  assert(
+    logRing.some((entry) => entry.id === "exportCsv"),
+    "Only the supporter menu is exempt; other views keep their own controls in the ring"
   );
 }
 

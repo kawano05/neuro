@@ -28,6 +28,23 @@ export function createScanEngine(ctx) {
     return Boolean(state.settings.switchControlMode);
   }
 
+  /**
+   * 支援者メニュー（設定画面）を開いているか。
+   *
+   * ここの操作子は支援者がタップ／キーボードで触るもので、スイッチ走査の
+   * 対象にしない。走査で回しても利用者が選ぶ項目は1つもなく、輪が23個
+   * 伸びるだけで、利用者が本当に押したいもの（ホームへもどる）に届くまでの
+   * 待ち時間が延びる。
+   *
+   * 面の中身だけを外し、タブバー（#homeReturn を含む）と #toggleScan は
+   * 輪に残す——ここまで断つと、利用者が誤って支援者の世界へ入ったときに
+   * 走査だけでは home へ戻れなくなり、実機確認2026-07-04で見つけた
+   * 「強制終了以外に戻れない」欠落が戻る（basic-design.md §3.2）。
+   */
+  function isSupporterMenu() {
+    return state.currentView === "settings";
+  }
+
   /** 残っている黄色い枠を消し、自前走査の位置を破棄する。 */
   function clearScanFocus() {
     scanIndex = -1;
@@ -44,7 +61,7 @@ export function createScanEngine(ctx) {
     const activeView = document.querySelector(".view.is-active");
     scanTargets = [
       ...document.querySelectorAll(".tabbar [data-scan]"),
-      ...(activeView ? [...activeView.querySelectorAll("[data-scan]")] : []),
+      ...(activeView && !isSupporterMenu() ? [...activeView.querySelectorAll("[data-scan]")] : []),
       elements.toggleScan,
     ].filter((target) => {
       const rect = target.getBoundingClientRect();
