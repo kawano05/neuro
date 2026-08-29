@@ -51,7 +51,7 @@ const state = sanitizeState({
     craneRun("s3", "P1", 12, 5),
   ],
 });
-const trends = summariseSessionTrends(state.sessions);
+const trends = summariseSessionTrends(state.sessions, "P1");
 console.log(`  推移の線: ${trends.length}本`);
 for (const group of trends) {
   console.log(
@@ -69,7 +69,7 @@ const mixed = sanitizeState({
     craneRun("m3", "P1", 12, 3),
   ],
 });
-const mixedTrends = summariseSessionTrends(mixed.sessions);
+const mixedTrends = summariseSessionTrends(mixed.sessions, "P1");
 console.log(`  推移の線: ${mixedTrends.length}本`);
 for (const group of mixedTrends) {
   console.log(

@@ -52,13 +52,26 @@ test("a rhythm session shows tempo and length", () => {
   assert.ok(!text.includes("600"), "must not list settings the supporter cannot change");
 });
 
-test("a fishing session shows only its trial count", () => {
+test("a fishing session lists no condition, because its trial count is not one", () => {
+  // 以前は実現試行数（「14かい」）を出していた。さかなつりは前刺激間隔が
+  // 乱数なので、同じ手続きで測っても回ごとに試行数が変わる——つまりこれは
+  // 支援者が決めた条件ではなく、その回の結果。
+  //
+  // 条件として出すと、推移を束ねるキー（sessionTrend.js の trendKey）に
+  // 入って回ごとに別の束になり、通常のさかなつりは推移が1本も出なかった
+  // （実測0本、2026-08-29）。
+  //
+  // 何試行だったかは台帳CSVの trialCount とセッション一覧（完走◯回）に出る。
   const session = {
     taskType: "rt",
     gameId: "fishing",
     config: { targetTrials: 14, foreperiodMinMs: 1800, limitMs: 2000 },
   };
-  assert.equal(describeSessionConditions(session), "14かい");
+  assert.equal(describeSessionConditions(session), "");
+
+  // 試行数が違っても同じ条件として束ねられること（推移が出る前提）。
+  const another = { ...session, config: { ...session.config, targetTrials: 11 } };
+  assert.equal(describeSessionConditions(session), describeSessionConditions(another));
 });
 
 test("a session without a config says nothing rather than guessing", () => {

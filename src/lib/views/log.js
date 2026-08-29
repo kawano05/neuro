@@ -2,7 +2,7 @@
 // views/log.js — 評価ログ画面（操作ログの集計・一覧・CSV書き出し）
 // =====================================================================
 
-import { escapeHtml, escapeCsv, formatTime, toJstIso } from "../utils.js";
+import { escapeHtml, escapeCsv, formatTime, localFileStamp, toLocalIso } from "../utils.js";
 import { MAX_LOG_ENTRIES } from "../state.js";
 import {
   describeSessionConditions,
@@ -25,9 +25,9 @@ function roundValue(value) {
   return Math.abs(value) >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
 }
 
-/** 日本時間の「8/28」。支援者が見るのは日付であって ISO ではない。 */
-function shortJstDate(isoString) {
-  const jst = toJstIso(isoString);
+/** 端末のローカル時刻の「8/28」。支援者が見るのは日付であって ISO ではない。 */
+function shortLocalDate(isoString) {
+  const jst = toLocalIso(isoString);
   if (!jst) return "";
   const [, month, day] = jst.slice(0, 10).split("-");
   return `${Number(month)}/${Number(day)}`;
@@ -120,8 +120,8 @@ function renderTrend(group, gameName) {
     })
     .join("");
 
-  const firstDate = shortJstDate(positions[0]?.startedAtIso);
-  const lastDate = shortJstDate(positions.at(-1)?.startedAtIso);
+  const firstDate = shortLocalDate(positions[0]?.startedAtIso);
+  const lastDate = shortLocalDate(positions.at(-1)?.startedAtIso);
   const sameDay = firstDate === lastDate;
 
   const axisTop = `${roundValue(max)}${unit}`;
@@ -196,8 +196,8 @@ function renderTrend(group, gameName) {
 export function buildLogCsvRows(logs, participantId) {
   const rows = [
     [
-      // 日本時間（+09:00付き）。名前も time から time_jst にする。
-      "time_jst",
+      // 端末のローカル時刻（オフセット付き）。名前も time から time_local にする。
+      "time_local",
       "view",
       "type",
       "label",
@@ -227,7 +227,7 @@ export function buildLogCsvRows(logs, participantId) {
   (Array.isArray(logs) ? logs : []).forEach((entry) => {
     if (!entry || typeof entry !== "object") return;
     rows.push([
-      toJstIso(entry.time),
+      toLocalIso(entry.time),
       entry.view,
       entry.type,
       entry.label || "",
@@ -351,7 +351,7 @@ export function initLog(ctx) {
    */
   function renderTrends() {
     if (!elements.sessionTrends) return;
-    const groups = summariseSessionTrends(state.sessions);
+    const groups = summariseSessionTrends(state.sessions, state.evaluation?.participantId);
     const byGame = groupTrendsByGame(
       groups,
       gameModules.map((game) => game.id)
@@ -467,7 +467,7 @@ export function initLog(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `neuronode-log-${localFileStamp()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }

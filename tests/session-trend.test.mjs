@@ -265,6 +265,65 @@ test("trends are grouped by game, in the order the games are listed", () => {
   assert.deepEqual(groupTrendsByGame(null), []);
 });
 
+test("trends are scoped to one participant on a shared device", () => {
+  // 端末は1台を複数の参加者で共用する。絞らないと別人の回が1本の線に載り、
+  // 支援者にも卒論の図にも「よくなっています」と嘘が伝わる。成立確認
+  // （readinessCheck）は最初から絞っていたのに、推移だけ絞っていなかった
+  // （2026-08-29に発見）。
+  const run = (id, participantId, day, grips) => ({
+    sessionId: id,
+    taskType: "scan",
+    gameId: "crane",
+    participantId,
+    startedAtIso: `2026-08-${String(day).padStart(2, "0")}T00:00:00.000Z`,
+    finished: true,
+    aborted: false,
+    config: { sweepMs: 2200, toleranceR: 15, targetTrials: 5, endless: false },
+    trials: Array.from({ length: 5 }, (_, index) => ({ index })),
+    summary: { trials: 5, grips },
+  });
+  const sessions = [run("a", "P1", 10, 1), run("b", "P2", 11, 5), run("c", "P1", 12, 3)];
+
+  const scoped = summariseSessionTrends(sessions, "P1");
+  assert.equal(scoped.length, 1);
+  assert.deepEqual(
+    scoped[0].points.map((point) => point.value),
+    [1, 3],
+    "P2 の回が混ざってはいけない"
+  );
+
+  // 参加者IDが空のときは絞らない（IDを使わない運用＝1人しか使わない端末）。
+  const all = summariseSessionTrends(sessions, "");
+  assert.equal(all[0].points.length, 3);
+});
+
+test("a normal fishing run forms a trend even though its trial count varies", () => {
+  // 前刺激間隔が乱数なので実現試行数は回ごとに変わる。それを条件キーに
+  // 入れていたため、通常のさかなつりは推移が1本も出なかった（実測0本、
+  // 2026-08-29）。試行数は条件ではなく結果。
+  const run = (id, day, trials, meanRtMs) => ({
+    sessionId: id,
+    taskType: "rt",
+    gameId: "fishing",
+    participantId: "P1",
+    startedAtIso: `2026-08-${String(day).padStart(2, "0")}T00:00:00.000Z`,
+    finished: true,
+    aborted: false,
+    config: { targetTrials: trials, limitMs: 2000, endless: false },
+    trials: Array.from({ length: trials }, (_, index) => ({ index })),
+    summary: { trials, meanRtMs },
+  });
+  const groups = summariseSessionTrends(
+    [run("f1", 10, 12, 620), run("f2", 11, 13, 590), run("f3", 12, 11, 570)],
+    "P1"
+  );
+  assert.equal(groups.length, 1, "試行数の違いで線が割れてはいけない");
+  assert.deepEqual(
+    groups[0].points.map((point) => point.value),
+    [620, 590, 570]
+  );
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);
 console.log("session trend tests passed");

@@ -171,6 +171,29 @@ test("personal best keeps endless runs in their own pool", () => {
   );
 });
 
+test("personal best is scoped to the participant in front of the device", () => {
+  // 共用端末では、他の子が出した記録が「これまでの さいこう」として本人に
+  // 提示されていた（2026-08-29に発見）。越えられない目標を出しつづける。
+  const run = (id, participantId, grips) => ({
+    sessionId: id,
+    gameId: "crane",
+    taskType: "scan",
+    participantId,
+    finished: true,
+    aborted: false,
+    config: { sweepMs: 2200, toleranceR: 15, targetTrials: 5, endless: false },
+    summary: { grips },
+  });
+  const pick = (session) => session.summary?.grips;
+  const history = [run("a", "P1", 5), run("b", "P2", 1)];
+  const config = { sweepMs: 2200, toleranceR: 15, targetTrials: 5, endless: false };
+
+  assert.equal(personalBest(history, { gameId: "crane", config, pick, participantId: "P2" }), 1);
+  assert.equal(personalBest(history, { gameId: "crane", config, pick, participantId: "P1" }), 5);
+  // IDが空のときは絞らない（1人しか使わない端末の運用を壊さない）。
+  assert.equal(personalBest(history, { gameId: "crane", config, pick }), 5);
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);
 console.log("personal best tests passed");

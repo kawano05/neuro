@@ -168,9 +168,15 @@ export function describeSessionConditions(session) {
   }
 
   if (session.taskType === "rt") {
-    // さかなつりは支援者が触れる設定を持たない。それでも試行数は回ごとに
-    // 変わる（前刺激間隔の乱数で決まる）ので、そこだけ出す。
-    return typeof config.targetTrials === "number" ? `${config.targetTrials}かい` : "";
+    // さかなつりは支援者が触れる設定を持たない。
+    //
+    // 試行数は出さない。前刺激間隔の乱数で回ごとに変わるので、条件キーに
+    // 入れると回ごとに別の束になり、推移が1本も出なくなる（実測で0本
+    // だった。2026-08-29）。試行数は条件ではなく結果——同じ手続きで測った
+    // 回が、たまたま何試行になったかの違いでしかない。
+    //
+    // 何試行だったかは台帳CSVの trialCount とセッション一覧に出る。
+    return "";
   }
 
   return "";
