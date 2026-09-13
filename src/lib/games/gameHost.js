@@ -781,9 +781,13 @@ export function createGameHost(ctx) {
     ctx.renderAll();
   }
 
+  // 「おわる」は #gameStage の兄弟なので、いまはバブリングでファネルへ
+  // 入ることはない（App.svelte のコメント参照）。それでも止めておくのは、
+  // 入れ子へ戻したときに黙って1入力が混ざるのを防ぐため——混ざっても
+  // 画面には何も出ず、記録の中でしか気づけない（detailed-design.md §3.3）。
   elements.gameExit.addEventListener("pointerdown", (event) => event.stopPropagation());
   elements.gameExit.addEventListener("click", (event) => {
-    event.stopPropagation(); // ファネルに入れない（detailed-design.md §3.3）
+    event.stopPropagation();
     returnHome();
   });
   elements.resultRetry.addEventListener("click", () => retry());

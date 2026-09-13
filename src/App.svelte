@@ -101,13 +101,26 @@
       <div class="activity-list" id="gameTileGrid" aria-label="アクティビティの一覧"></div>
     </section>
 
+    <!--
+      #gameProgress と #gameExit は #gameStage の**外**に置く。
+
+      ARIA では role="button" の子孫は presentational として扱われる。
+      入れ子にしていたころ、iOS Switch Control の項目走査からはゲーム画面が
+      「ゲームの入力エリア」1個にしか見えず、「おわる」へ到達できなかった
+      （2026-09-14の実機報告。WebKitのARIAスナップショットでも、拾える要素は
+      入力エリアとその内側の「おわる」だけだった）。aria-live も同じ理由で
+      押し込められる。兄弟に出せば、AXツリーは入力面と「おわる」の2要素になる。
+
+      見た目は変えない。包含ブロックを .game-stage から #gameView へ移し
+      （styles.css の position: relative）、同じ座標にオーバーレイし続ける。
+    -->
     <section class="view" id="gameView" aria-labelledby="game-title">
       <h2 id="game-title" class="sr-only">ゲーム画面</h2>
       <div class="game-stage" id="gameStage" role="button" tabindex="0" aria-label="ゲームの入力エリア">
         <div class="game-stage-content" id="gameStageContent" aria-hidden="true"></div>
-        <div class="game-progress" id="gameProgress" aria-live="polite"></div>
-        <button class="game-exit" id="gameExit" type="button">おわる</button>
       </div>
+      <div class="game-progress" id="gameProgress" aria-live="polite"></div>
+      <button class="game-exit" id="gameExit" type="button">おわる</button>
     </section>
 
     <section class="view" id="resultView" aria-labelledby="result-title">
