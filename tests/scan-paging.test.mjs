@@ -47,6 +47,30 @@ test("splits only when a short screen actually cannot hold the list", () => {
   assert.equal(shouldPaginate(Number.NaN, 5), false);
 });
 
+test("stops splitting once iPad Switch Control owns the scan", () => {
+  // ページ送りは「自前走査が画面を動かしてしまう」ことへの対処で、OSの
+  // 項目走査は自分で項目まで運ぶ。委譲中も分けたままだと、載っていない
+  // 項目はDOMに無く、OS走査からは初めから存在しないものになる
+  // （実測 390x812: 6つのうち常に2つしか居なかった）。
+  const delegated = { delegatedToOsScanning: true };
+  assert.equal(shouldPaginate(664, 5, SCAN_PAGE_SIZE, delegated), false);
+  assert.equal(shouldPaginate(390, 6, SCAN_PAGE_SIZE, delegated), false);
+  // 実測ではみ出していても、委譲中は分けない（そちらが優先する）。
+  assert.equal(
+    shouldPaginate(664, 5, SCAN_PAGE_SIZE, { ...delegated, forcedByOverflow: true }),
+    false
+  );
+  // 委譲していなければ従来どおり。
+  assert.equal(shouldPaginate(664, 5, SCAN_PAGE_SIZE, { delegatedToOsScanning: false }), true);
+});
+
+test("keeps splitting a list that was measured as overflowing", () => {
+  // 画面高さのしきい値は当てでしかないので、描いて溢れた一覧は高さに
+  // 関わらず分ける（views/home.js の overflowPaginate）。
+  assert.equal(shouldPaginate(1194, 5, SCAN_PAGE_SIZE, { forcedByOverflow: true }), true);
+  assert.equal(shouldPaginate(null, 5, SCAN_PAGE_SIZE, { forcedByOverflow: true }), true);
+});
+
 test("hands back one page at a time", () => {
   const first = pageSlice(items, 0, 3);
   assert.deepEqual(first.visible, ["a", "b", "c"]);
