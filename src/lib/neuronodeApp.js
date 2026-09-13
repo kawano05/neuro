@@ -240,6 +240,18 @@ export function initNeuroNodeApp() {
     // 「はじめる」への集中を保つ（styles.css の body.start-mode ルール参照）。
     // 支援者のタップ導線は #startSettingsLink（せってい）が残る。
     document.body.classList.toggle("start-mode", nextView === "start");
+    // 支援者メニューでは自前走査を動かさない（scan.js の isSupporterMenu()）。
+    // ドックの2つは、そこでは押しても何も起きない操作子になるので無効化する
+    // ——効かない操作子を黙って置いておくと、支援者は「押したのに動かない」を
+    // 不具合として報告するしかない。消さずに無効化するのは、下端の版面が
+    // 画面遷移のたびに伸び縮みするのを避けるため。
+    const supporterMenu = nextView === "settings";
+    document.body.classList.toggle("supporter-menu-mode", supporterMenu);
+    [elements.toggleScan, elements.primarySwitch].forEach((control) => {
+      if (!control) return;
+      control.disabled = supporterMenu;
+      control.setAttribute("aria-disabled", String(supporterMenu));
+    });
     elements.homeReturn.hidden = !TAB_WORLD_VIEWS.has(nextView);
     elements.homeSupporterMenu.hidden = nextView !== "home";
     elements.primarySwitchLabel.textContent = nextView === "home" ? "入力して決定" : "入力";
@@ -284,8 +296,10 @@ export function initNeuroNodeApp() {
   });
 
   // 「← ホームへ」: 支援者の世界（タブ群）から利用者の世界（home）へ戻る唯一の
-  // 導線。data-scan を付けているため、スイッチ利用者が誤ってタブ世界に入っても
+  // 導線。data-scan を付けているため、スイッチ利用者が誤って評価ログへ入っても
   // 走査で自力到達できる（実機確認2026-07-04で発覚した欠落の修正）。
+  // 設定画面だけは走査そのものを止めるので、そこからの復帰は支援者のタップに
+  // なる（理由と代償は scan.js の isSupporterMenu()）。
   elements.homeReturn.addEventListener("click", () => {
     ctx.views.home.showLobby();
     ctx.switchView("home");
