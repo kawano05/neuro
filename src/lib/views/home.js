@@ -194,13 +194,19 @@ export function initHome(ctx) {
    */
   function renderScanList(items, onSelect) {
     const pageSize = pageSizeOverride ?? SCAN_PAGE_SIZE;
-    const paginate =
-      overflowPaginate ||
-      shouldPaginate(
-        typeof window !== "undefined" ? window.innerHeight : null,
-        items.length,
-        pageSize
-      );
+    // iPad Switch Controlへ走査を委譲しているあいだは分けない。分ける理由も
+    // 分けた結果の害も scanPaging.js の shouldPaginate に書いた——要点は、
+    // ページに載っていない項目はDOMに存在せず、OSの項目走査からは初めから
+    // 無いものになること。実測した overflowPaginate もここでは効かせない。
+    const paginate = shouldPaginate(
+      typeof window !== "undefined" ? window.innerHeight : null,
+      items.length,
+      pageSize,
+      {
+        delegatedToOsScanning: Boolean(state.settings.switchControlMode),
+        forcedByOverflow: overflowPaginate,
+      }
+    );
     const slice = paginate
       ? pageSlice(items, pageIndex, pageSize)
       : { visible: items, pageIndex: 0, pageCount: 1, nextPageIndex: 0 };
@@ -262,6 +268,11 @@ export function initHome(ctx) {
    * @returns {boolean} 描き直したか
    */
   function refitIfOverflowing(paginate, itemCount, pageSize) {
+    // 委譲中は分け直さない。ここを通すと、renderScanList が分けないと決めた
+    // 一覧を実測が分け返してしまい（overflowPaginate を立てて再描画）、
+    // OS走査から項目が消える。ドックも消えているので、はみ出しは普通の
+    // スクロールとOS走査に任せる。
+    if (state.settings.switchControlMode) return false;
     // フォント差し替え前の値で決めない（上の layoutSettled のコメント参照）。
     if (!layoutSettled) return false;
     if (!listOverflowsDock()) {

@@ -76,7 +76,31 @@ export const SCAN_OVERLAP_TOLERANCE_PX = 24;
  * 隠れていた。最終的な判定は描いたあとの実測（views/home.js の
  * listOverflowsDock）で、ここは初回描画のちらつきを減らすためだけにある。
  */
-export function shouldPaginate(viewportHeight, itemCount, pageSize = SCAN_PAGE_SIZE) {
+/**
+ * @param {number|null} viewportHeight
+ * @param {number} itemCount
+ * @param {number} [pageSize]
+ * @param {object} [options]
+ * @param {boolean} [options.delegatedToOsScanning] iPad Switch Control へ
+ *   走査を委譲しているか（settings.switchControlMode）。
+ * @param {boolean} [options.forcedByOverflow] 描いた結果はみ出したことが
+ *   すでに分かっているか（views/home.js の overflowPaginate）。
+ */
+export function shouldPaginate(viewportHeight, itemCount, pageSize = SCAN_PAGE_SIZE, options = {}) {
+  // 走査をOS（iPad Switch Control）へ渡しているあいだは分けない。
+  //
+  // 分ける理由は「自前走査が scrollIntoView で画面を動かし、利用者が
+  // それを止められない」ことにあった。OSの項目走査は自分で項目まで運ぶので、
+  // その理由が消える。理由が消えても分けたままにすると、害だけが残る——
+  // ページに載っていない項目は**DOMに存在しない**ので、OS走査からは初めから
+  // 無いものになる。実測（390x812, 2026-09-14）では、6つのアクティビティの
+  // うち画面に居るのは常に2つと「次のページ」だけで、Switch Control の
+  // 利用者からは「それぞれのボタンが取得できない」状態に見えていた。
+  //
+  // ドックも body.switch-control-mode で消えているので、はみ出しは
+  // 普通のスクロールとOS走査に任せられる。
+  if (options.delegatedToOsScanning) return false;
+  if (options.forcedByOverflow) return true;
   if (typeof viewportHeight !== "number" || !Number.isFinite(viewportHeight)) return false;
   if (itemCount <= pageSize) return false;
   return viewportHeight <= 740;

@@ -1355,8 +1355,12 @@ async function checkIpadSwitchControlMode(page, project) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
   await waitForActivityChoices(page, 6);
-  const fullLayout = await collectActivityLayout(page, { checkViewport: true });
+  const fullLayout = await collectActivityLayout(page, { checkScrollReach: true });
   const fullWidthTitles = fullLayout.titles;
+  assert(
+    fullLayout.pages.length === 1,
+    `Delegated scanning must not hide choices behind a pager: ${JSON.stringify(fullLayout.pages)}`
+  );
   assert(
     fullWidthTitles.length === 6,
     "Expected all six home choices, got " + fullWidthTitles.join(", ")
@@ -1366,8 +1370,12 @@ async function checkIpadSwitchControlMode(page, project) {
   // Width breakpoints re-render the home list; wait until layout and bounding
   // boxes reflect the Split View dimensions before taking the snapshot.
   await page.waitForTimeout(200);
-  const splitLayout = await collectActivityLayout(page, { checkViewport: true });
+  const splitLayout = await collectActivityLayout(page, { checkScrollReach: true });
   const splitViewTitles = splitLayout.titles;
+  assert(
+    splitLayout.pages.length === 1,
+    `Split View must not re-introduce a pager while delegating: ${JSON.stringify(splitLayout.pages)}`
+  );
   assert(
     JSON.stringify(splitViewTitles) === JSON.stringify(fullWidthTitles),
     `Split View changed home order: ${splitViewTitles.join(", ")}`
@@ -3608,7 +3616,7 @@ async function openActivity(page, name) {
  * 「隠れている」と読んでしまう。数と中身は必ず一巡して確かめる。
  * 最後に先頭ページへ戻すので、呼んだ側の状態は変わらない。
  */
-async function collectActivityLayout(page, { checkViewport = false } = {}) {
+async function collectActivityLayout(page, { checkViewport = false, checkScrollReach = false } = {}) {
   const titles = [];
   const pages = [];
   const pager = page.locator(".game-tile.scan-pager");
@@ -3638,6 +3646,45 @@ async function collectActivityLayout(page, { checkViewport = false } = {}) {
       assert(
         snapshot.outside.length === 0,
         `Activity controls left the viewport: ${snapshot.outside.join(", ")}`
+      );
+    }
+    if (checkScrollReach) {
+      // iPad Switch Control へ委譲しているあいだは、一覧をページに分けない
+      // （src/lib/scanPaging.js）。分けると、載っていない項目がDOMから消えて
+      // OSの項目走査から初めから見えなくなるほうが重いため。そのぶん一覧は
+      // 画面より縦に長くなりうるので、ここで見る条件は「最初から画面内に
+      // 居る」ではなく「届く」になる:
+      //   - スクロールすれば全体が画面に入る（OS走査は自分で運ぶ）
+      //   - 運んだ先で何にも覆われていない（自前走査のときドックの裏へ
+      //     隠れていたのが、そもそもページ分割を入れた理由だった）
+      // 委譲していないときの条件は checkViewport のまま変えない。利用者は
+      // 自前走査のスクロールを止めることも戻すこともできない。
+      const unreachable = await page.evaluate(() => {
+        const startY = window.scrollY;
+        const bad = [];
+        for (const control of document.querySelectorAll("#gameTileGrid .game-tile")) {
+          control.scrollIntoView({ block: "nearest" });
+          const rect = control.getBoundingClientRect();
+          const name = control.getAttribute("aria-label") || control.textContent.trim();
+          if (rect.width <= 0 || rect.height <= 0) {
+            bad.push(`${name}: no box`);
+            continue;
+          }
+          if (rect.top < -1 || rect.bottom > window.innerHeight + 1) {
+            bad.push(`${name}: still off-screen after scrolling`);
+            continue;
+          }
+          const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          if (!hit || !(hit === control || control.contains(hit))) {
+            bad.push(`${name}: covered by ${hit ? hit.id || hit.className : "nothing hittable"}`);
+          }
+        }
+        window.scrollTo(0, startY);
+        return bad;
+      });
+      assert(
+        unreachable.length === 0,
+        `Delegated scanning cannot reach every activity: ${unreachable.join("; ")}`
       );
     }
     pages.push(snapshot.shown);
