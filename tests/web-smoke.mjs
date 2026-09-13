@@ -1257,30 +1257,54 @@ async function checkSupporterMenuStaysOutOfTheScanRing(page) {
     return seen;
   };
 
+  // 支援者メニューでは走査を一切動かさない（2026-09-14の指示。理由と代償は
+  // src/lib/scan.js の isSupporterMenu()）。面の中身だけでなく、タブバーも
+  // 走査ドックも輪から外れる。
   const ring = await walkRing(45);
-  assert(ring.length > 0, "The scan ring must not be empty in the supporter menu");
-
-  const fromSettings = ring.filter((entry) => entry.inSettings);
   assert(
-    fromSettings.length === 0,
-    `Supporter menu controls must stay out of the scan ring, found: ${fromSettings
-      .map((entry) => entry.label)
-      .join(", ")}`
+    ring.length === 0,
+    `Supporter menu must not scan at all, found: ${ring.map((entry) => entry.label).join(", ")}`
   );
+  await waitForText(page, "#scanState", "走査停止中");
 
-  // 逃げ道は残っていること。
+  // 自動走査のタイマーも復活しない。手動の「走査開始」も効かない。
+  await page.locator("#toggleScan").evaluate((target) => target.click());
+  await page.waitForTimeout(1_900);
   assert(
-    ring.some((entry) => entry.id === "homeReturn"),
-    "The home-return button must remain reachable by scanning from the supporter menu"
+    (await page.locator(".scan-focus").count()) === 0,
+    "No app scan focus may appear in the supporter menu"
   );
+  await waitForText(page, "#scanState", "走査停止中");
+
+  // 効かない操作子は無効として見せる（押しても動かない理由が支援者に分かる）。
+  assert(await page.locator("#toggleScan").isDisabled(), "The dock scan toggle is dead here, so it must be disabled");
+  assert(await page.locator("#primarySwitch").isDisabled(), "The dock switch surrogate is dead here, so it must be disabled");
+
+  // スイッチ入力（キーボード相当）も何も起こさない——画面は設定のまま。
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(200);
+  await waitForClass(page, "#settings", "is-active");
+
+  // 走査で戻れなくなった代わりに、支援者のタップで戻る導線は生きている
+  // ことを固定する。ここが壊れると、この画面は本当に行き止まりになる。
+  assert(!(await page.locator("#homeReturn").isHidden()), "The supporter must still see the way back");
+  await page.locator("#homeReturn").click();
+  await waitForClass(page, "#homeView", "is-active");
 
   // 他の支援者画面（評価ログ）では、その面の操作子はこれまでどおり輪に入る。
+  // 走査で行き止まりになるのは設定画面だけ。
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
   await page.locator('.tab[data-view="log"]').click();
   await waitForClass(page, "#log", "is-active");
   const logRing = await walkRing(45);
   assert(
     logRing.some((entry) => entry.id === "exportCsv"),
     "Only the supporter menu is exempt; other views keep their own controls in the ring"
+  );
+  assert(
+    logRing.some((entry) => entry.id === "homeReturn"),
+    "The home-return button must stay reachable by scanning from the evaluation log"
   );
 }
 
@@ -1296,7 +1320,9 @@ async function checkIpadSwitchControlMode(page, project) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await waitForText(page, "#scanState", "走査中");
+  // 支援者メニューへ入った時点で自前走査は止まる（scan.js の
+  // isSupporterMenu()）。委譲を用意する画面そのものが、もう走っていない。
+  await waitForText(page, "#scanState", "走査停止中");
 
   const mode = page.locator("#switchControlMode");
   assert(!(await mode.isChecked()), "Switch Control mode must be explicit and default off");
@@ -1434,17 +1460,36 @@ async function checkIpadSwitchControlMode(page, project) {
   assert(!(await page.locator("#autoScan").isDisabled()), "Auto scan control must unlock after delegation ends");
   assert(!(await page.locator("#autoScan").isChecked()), "Auto scan must remain stopped until explicitly enabled");
   await page.locator("#autoScan").click();
-  await waitForText(page, "#scanState", "走査中");
+  assert(await page.locator("#autoScan").isChecked(), "Explicit ON must take effect");
+  // 設定画面では走査しないので、ここではまだ止まったまま。
+  await waitForText(page, "#scanState", "走査停止中");
 
   // Safe operating instructions stop app scanning first, but the product
   // invariant must also survive an incorrect order. Exercise the actual UI
-  // transition from autoScan=true so the mode handler cannot become a no-op.
+  // transition from a really running scan so the mode handler cannot become
+  // a no-op. 走っている状態は支援者メニューでは作れないので、ホームで作る。
+  await page.locator("#homeReturn").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForText(page, "#scanState", "走査中");
   await page.waitForFunction(() => document.querySelectorAll(".scan-focus").length > 0);
+
+  // 支援者メニューへ入るだけで、走っていた自前走査は止まり枠も消える。
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await waitForText(page, "#scanState", "走査停止中");
+  assert(
+    (await page.locator(".scan-focus").count()) === 0,
+    "Entering the supporter menu must clear the yellow focus"
+  );
+
+  // autoScan=true を保ったまま委譲へ切り替えても、ハンドラは no-op にならない。
+  await openSettingsTab(page, "basic");
+  assert(await page.locator("#autoScan").isChecked(), "Auto scan must still be ON before forcing delegation");
   await mode.click();
   await page.waitForFunction(() => document.body.classList.contains("switch-control-mode"));
   assert(!(await page.locator("#autoScan").isChecked()), "Mode activation must force a running app scan off");
   assert(await page.locator("#autoScan").isDisabled(), "Forced delegation must lock the app scan control");
-  assert((await page.locator(".scan-focus").count()) === 0, "Forced delegation must clear the active yellow focus");
+  assert((await page.locator(".scan-focus").count()) === 0, "Forced delegation must leave no yellow focus");
   await waitForText(page, "#scanState", "iPad走査を使用");
   const forcedSaved = await page.evaluate(
     (key) => JSON.parse(localStorage.getItem(key)).settings,
