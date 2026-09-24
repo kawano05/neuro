@@ -45,7 +45,7 @@ body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.5 'BI
 .bar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .brand { font-family: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif; font-weight: 700; font-size: 20px; letter-spacing: 0.04em; margin: 0; }
 .brand small { font-family: 'BIZ UDPGothic', sans-serif; font-weight: 400; font-size: 13px; color: var(--muted); letter-spacing: 0; margin-left: 8px; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
 .seg button { border: 0; background: transparent; color: var(--ink); padding: 0 14px; min-height: 40px; font: inherit; font-weight: 700; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
@@ -57,6 +57,7 @@ body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.5 'BI
 .opts label { display: inline-flex; align-items: center; gap: 6px; }
 .opts select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 34px; padding: 0 8px; }
 .press { border: 0; border-radius: 10px; background: #FFC83D; color: #111111; font: inherit; font-weight: 700; min-height: 40px; padding: 0 16px; cursor: pointer; box-shadow: inset 0 0 0 2px #111111; }
+.press:disabled { opacity: 0.45; cursor: default; }
 .hint { margin: 0; font-size: 13px; color: var(--muted); }
 button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .stage-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; padding-block: 16px 28px; gap: 10px; }
@@ -76,7 +77,9 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
 .screen button, .thumb-inner button { font: inherit; }
 @keyframes nuro-pop { 0% { transform: scale(.35); opacity: 0; } 70% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 .nuro-pop { animation: nuro-pop .32s cubic-bezier(.34, 1.36, .64, 1) both; }
-@media (prefers-reduced-motion: reduce) { .nuro-pop { animation: none; } }
+@keyframes nuro-pulse { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(1.35); opacity: 0; } }
+.nuro-pulse { animation: nuro-pulse 1.8s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .nuro-pop, .nuro-pulse { animation: none; } }
 </style>
 
 <div class="app">
@@ -109,17 +112,18 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
 
 <script>
 (() => {
-  const META = {"U": {"ring": "0 0 0 5px #FFC83D, 0 0 0 8px #111111", "dotOn": "#FFC83D", "dotOff": "#333333", "selBg": "#111111", "selInk": "#FFFFFF", "selBorder": "#111111", "unsBg": "#FFFFFF", "unsInk": "#111111", "unsBorder": "#111111"}, "C": {"ring": "0 0 0 5px #F5AD19, 0 0 0 8px #263D40", "dotOn": "#8BDDC0", "dotOff": "#516078", "selBg": "#247D6C", "selInk": "#FFFFFF", "selBorder": "#247D6C", "unsBg": "#FFFFFF", "unsInk": "#263D40", "unsBorder": "#6E8A82"}, "V": {"ring": "0 0 0 5px #FFC83D, 0 0 0 8px #1A1A1A", "dotOn": "#FFC83D", "dotOff": "#3A4A66", "selBg": "#005AFF", "selInk": "#FFFFFF", "selBorder": "#005AFF", "unsBg": "#FFFFFF", "unsInk": "#1A1A1A", "unsBorder": "#1A1A1A"}, "N": {"ring": "none", "dotOn": "#000000", "dotOff": "#000000", "selBg": "#000000", "selInk": "#FFFFFF", "selBorder": "#000000", "unsBg": "#FFFFFF", "unsInk": "#000000", "unsBorder": "#000000"}};
+  const META = {"N": {"ring": "none", "dotOn": "#000000", "dotOff": "#000000", "selBg": "#000000", "selInk": "#FFFFFF", "selBorder": "#000000", "unsBg": "#FFFFFF", "unsInk": "#000000", "unsBorder": "#000000"}, "U": {"ring": "0 0 0 5px #FFC83D, 0 0 0 8px #111111", "dotOn": "#FFC83D", "dotOff": "#333333", "selBg": "#111111", "selInk": "#FFFFFF", "selBorder": "#111111", "unsBg": "#FFFFFF", "unsInk": "#111111", "unsBorder": "#111111"}, "C": {"ring": "0 0 0 5px #F5AD19, 0 0 0 8px #263D40", "dotOn": "#8BDDC0", "dotOff": "#516078", "selBg": "#247D6C", "selInk": "#FFFFFF", "selBorder": "#247D6C", "unsBg": "#FFFFFF", "unsInk": "#263D40", "unsBorder": "#6E8A82"}, "V": {"ring": "0 0 0 5px #FFC83D, 0 0 0 8px #1A1A1A", "dotOn": "#FFC83D", "dotOff": "#3A4A66", "selBg": "#005AFF", "selInk": "#FFFFFF", "selBorder": "#005AFF", "unsBg": "#FFFFFF", "unsInk": "#1A1A1A", "unsBorder": "#1A1A1A"}};
   const SCREENS = [{"id": "Start", "label": "はじめの画面"}, {"id": "Home", "label": "遊びの一覧"}, {"id": "Kind", "label": "遊び方をえらぶ"}, {"id": "Play", "label": "初級の遊び"}, {"id": "Result", "label": "結果"}, {"id": "Settings", "label": "この遊びの設定"}, {"id": "Resume", "label": "中断からの再開"}];
-  const VARIANTS = [{"id": "N", "label": "現状", "name": "現状（いまのアプリ）", "concept": "いまのアプリ（2026年8月28日の版）の画面です。3つの案と比べるための基準として載せています。", "notes": {"Start": "「はじめる」の下に、小さく「せってい」があります。", "Home": "1ページに2つずつ並び、「次のページ」で残りの遊びを見ます。", "Kind": "「リールを止める」の種類をえらぶ画面です。", "Play": "「色と音」。押すたびに色と音が変わり、5回で終わります。遊ぶ前に、説明の画面が1枚入ります。", "Result": "「色と音」の結果画面です。", "Settings": "いまはゲームの中に設定がありません。画像は、ホームの「支援者メニュー」から開く設定画面です。", "Resume": "いまのアプリには、この画面はありません。遊びの途中でアプリが裏に回ると、遊びは終わってホームに戻ります。"}}, {"id": "U", "label": "ウルトラシンプル", "name": "ウルトラシンプル案", "concept": "画面に出すものを最小限にした案です。白と黒を基本に、いま選べる場所だけを黄色の枠で示します。"}, {"id": "C", "label": "落ち着いた色", "name": "落ち着いた色の案", "concept": "やわらかい緑を基調にした、目にやさしい案です。遊ぶ画面は暗くして、出てくる絵を目立たせます。"}, {"id": "V", "label": "はっきりした色", "name": "はっきりした色の案", "concept": "遊びごとに色を分けた、見分けやすい案です。色の組み合わせは東京都のユニバーサルデザインガイドラインに沿っています。"}];
+  const VARIANTS = [{"id": "N", "label": "現状", "name": "現状（いまのアプリ）", "concept": "いまのアプリ（2026年8月28日の版）の画面です。案と比べるための基準として載せています。", "notes": {"Start": "「はじめる」の下に、小さく「せってい」があります。", "Home": "1ページに2つずつ並び、「次のページ」で残りの遊びを見ます。", "Kind": "「リールを止める」の種類をえらぶ画面です。", "Play": "「色と音」。押すたびに色と音が変わり、5回で終わります。遊ぶ前に、説明の画面が1枚入ります。", "Result": "「色と音」の結果画面です。", "Settings": "いまはゲームの中に設定がありません。画像は、ホームの「支援者メニュー」から開く設定画面です。", "Resume": "いまのアプリには、この画面はありません。遊びの途中でアプリが裏に回ると、遊びは終わってホームに戻ります。"}}, {"id": "U", "label": "ウルトラシンプル", "name": "ウルトラシンプル案", "concept": "画面に出すものを最小限にした案です。白と黒を基本に、いま選べる場所だけを黄色の枠で示します。"}, {"id": "C", "label": "落ち着いた色", "name": "落ち着いた色の案", "concept": "やわらかい緑を基調にした、目にやさしい案です。遊ぶ画面は暗くして、出てくる絵を目立たせます。"}, {"id": "V", "label": "はっきりした色", "name": "はっきりした色の案", "concept": "遊びごとに色を分けた、見分けやすい案です。色の組み合わせは東京都のユニバーサルデザインガイドラインに沿っています。"}];
   const SCAN_SCREENS = ['Start', 'Home', 'Kind', 'Result', 'Resume'];
-  const cur = { v: 'C', s: 'Home', overview: true };
+  const cur = { v: "C", s: 'Home', overview: true };
   let scanTimer = null, scanIdx = 0, scanMs = 1600, holdMode = '1200';
   const play = { count: 0, idx: -1, visible: false, done: false, timer: null };
 
   try {
     const h = (location.hash || '').slice(1);
-    const m = h.match(/^([NUCV])-([A-Za-z]+)$/);
+    const re = new RegExp('^(' + VARIANTS.map((v) => v.id).join('|') + ')-([A-Za-z]+)$');
+    const m = h.match(re);
     if (m && SCREENS.some((s) => s.id === m[2])) { cur.v = m[1]; cur.s = m[2]; cur.overview = false; }
     else if (h === 'all') { cur.overview = true; }
   } catch (e) {}
@@ -138,11 +142,13 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
     document.documentElement.style.setProperty('--s', s.toFixed(4));
   }
 
+  // 枠を描く。大きく見せる画面（data-spot）は、枠の当たっている遊びだけを出す
   function paintScan() {
     const sec = active();
     if (!sec) return;
     const ring = META[cur.v].ring;
     targets(sec).forEach((t, i) => { t.style.boxShadow = i === scanIdx ? ring : 'none'; });
+    $$('[data-spot]', sec).forEach((el) => { el.hidden = Number(el.dataset.spot) !== scanIdx; });
   }
 
   function restartScan() {
@@ -161,7 +167,11 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
     const sec = active();
     if (!sec || cur.s !== 'Play') return;
     const flags = { prompt: play.count === 0 && !play.visible, idle: play.count > 0 && !play.visible && !play.done, done: play.done };
-    for (let i = 0; i < 5; i++) flags['show' + i] = play.visible && play.idx === i;
+    for (let i = 0; i < 5; i++) {
+      flags['show' + i] = play.visible && play.idx === i;
+      flags['got' + i] = play.count > i;
+      flags['empty' + i] = play.count <= i;
+    }
     $$('[data-when]', sec).forEach((el) => { el.hidden = !flags[el.dataset.when]; });
     $$('[data-dot]', sec).forEach((el) => { el.style.background = Number(el.dataset.dot) < play.count ? META[cur.v].dotOn : META[cur.v].dotOff; });
     $$('[data-text="countText"]', sec).forEach((el) => { el.textContent = play.count + 'かい あそんだよ'; });
@@ -286,6 +296,13 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
         b.style.color = on ? m.selInk : m.unsInk;
         b.style.borderColor = on ? m.selBorder : m.unsBorder;
       });
+      return;
+    }
+    // 行き先のない選択肢をタップしたら、枠をそこへ移す（大きく見せる画面では中身も切り替わる）
+    const sc = t.closest('[data-scan]');
+    if (sc) {
+      const i = targets(active()).indexOf(sc);
+      if (i >= 0) { scanIdx = i; paintScan(); }
     }
   });
 
