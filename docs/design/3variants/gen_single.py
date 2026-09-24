@@ -5,11 +5,11 @@ import gen
 gen.MODE = "html"
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(gen.ROOT, "nuro-design-3variants.html")
 
-SHORT = {"U": "ウルトラシンプル", "C": "C案", "V": "はっきり版"}
+SHORT = {"U": "ウルトラシンプル", "C": "落ち着いた色", "V": "はっきりした色"}
 CONCEPT = {
-    "U": "1画面に1つの操作。白地に黒、差し色は走査枠の黄色だけ。説明文は出さない。",
-    "C": "v3.1の配色に、二重の走査枠と濃い境界線を反映。一覧は淡い緑、サムネイルは暗い地。",
-    "V": "白地に活動ごとの彩度の高い色帯。サムネイルは明るい地。東京都UDガイドラインが根拠。",
+    "U": "画面に出すものを最小限にした案です。白と黒を基本に、いま選べる場所だけを黄色の枠で示します。",
+    "C": "やわらかい緑を基調にした、目にやさしい案です。遊ぶ画面は暗くして、出てくる絵を目立たせます。",
+    "V": "遊びごとに色を分けた、見分けやすい案です。色の組み合わせは東京都のユニバーサルデザインガイドラインに沿っています。",
 }
 
 sections, meta = [], {}
@@ -114,21 +114,21 @@ button:focus-visible, select:focus-visible {{ outline: 3px solid var(--accent); 
 <div class="app">
   <div class="bar">
     <div class="bar-row">
-      <h1 class="brand">NURO デザイン3案<small>9/30 方向性の確認用・仮の絵</small></h1>
+      <h1 class="brand">NURO デザイン3案<small>画面デザイン案（絵は仮のものです）</small></h1>
       <div class="seg" role="group" aria-label="案">{variant_buttons}</div>
     </div>
     <div class="bar-row">
       <div class="tabs" role="group" aria-label="画面"><button type="button" class="all" data-overview-btn aria-pressed="false">3案を並べる</button>{screen_buttons}</div>
     </div>
     <div class="bar-row opts">
-      <label for="scanSpeed">走査の速さ
+      <label for="scanSpeed">枠が動く速さ
         <select id="scanSpeed"><option value="1000">1.0秒</option><option value="1600" selected>1.6秒</option><option value="2400">2.4秒</option></select>
       </label>
       <label for="holdMode">初級：絵が消えるまで
         <select id="holdMode"><option value="1200" selected>1.2秒</option><option value="3000">3秒</option><option value="keep">残す</option></select>
       </label>
       <button type="button" class="press" id="pressBtn">スイッチを押す（Space）</button>
-      <p class="hint">黄色い枠が動いたら、SpaceかEnter（またはこのボタン）で決定。画面の中は直接タップもできます。</p>
+      <p class="hint">黄色い枠は、スイッチで操作するときの「いま選べる場所」です。枠は自動で動くので、SpaceキーかEnterキー（またはこのボタン）で決定します。画面を直接タップしても操作できます。</p>
     </div>
   </div>
 

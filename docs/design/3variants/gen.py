@@ -15,7 +15,7 @@ ACTS = ["shokyu", "reel", "high", "learn", "arm", "fish"]
 
 V = {
     "U": dict(
-        name="ウルトラシンプル版", key="ultra",
+        name="ウルトラシンプル案", key="ultra",
         bg="#FFFFFF", surface="#FFFFFF", surface_alt="#F2F2F2", ink="#111111", muted="#444444",
         line="#111111", line_w=3, accent="#111111", accent_ink="#FFFFFF",
         focus="#FFC83D", focus_outer="#111111",
@@ -26,7 +26,7 @@ V = {
         band=None,
     ),
     "C": dict(
-        name="C案（落ち着いた版）", key="c",
+        name="落ち着いた色の案", key="c",
         bg="#F3FAF5", surface="#FFFFFF", surface_alt="#E8F1EC", ink="#263D40", muted="#486467",
         line="#6E8A82", line_w=2, accent="#247D6C", accent_ink="#FFFFFF",
         focus="#F5AD19", focus_outer="#263D40",
@@ -37,7 +37,7 @@ V = {
         band=None,
     ),
     "V": dict(
-        name="はっきり版", key="clear",
+        name="はっきりした色の案", key="clear",
         bg="#FFFFFF", surface="#FFFFFF", surface_alt="#FFFFFF", ink="#1A1A1A", muted="#3A3A3A",
         line="#1A1A1A", line_w=2, accent="#005AFF", accent_ink="#FFFFFF",
         focus="#FFC83D", focus_outer="#1A1A1A",
@@ -392,7 +392,7 @@ def home(T, pfx):
   }
 }""".replace("%RING%", ring(T))
     props = {"scanMs": {"editor": "int", "default": 1600, "min": 800, "max": 3200, "step": 100, "unit": "ms", "section": "走査"}}
-    return page(f"{T['name']}｜活動一覧", body, logic, props)
+    return page(f"{T['name']}｜遊びの一覧", body, logic, props)
 
 
 def start(T, pfx):
@@ -417,7 +417,7 @@ def start(T, pfx):
                   f'{art}<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {lead_size}px">おして、はじめよう。</span>'
                   f'<span style="font-size: 18px; color: {T["muted"]}; margin-top: -10px">あなたの ペースで、ひとつずつ。</span>{button}</div>')
         body = root_open(T) + light_header(T, "") + center + '</div>'
-    return page(f"{T['name']}｜開始", body, STATIC_LOGIC)
+    return page(f"{T['name']}｜はじめの画面", body, STATIC_LOGIC)
 
 
 def kind(T, pfx):
@@ -463,7 +463,7 @@ def kind(T, pfx):
   }
 }""".replace("%RING%", ring(T))
     props = {"scanMs": {"editor": "int", "default": 1600, "min": 800, "max": 3200, "step": 100, "unit": "ms", "section": "走査"}}
-    return page(f"{T['name']}｜種類選択（リール）", body, logic, props)
+    return page(f"{T['name']}｜遊び方をえらぶ（リール）", body, logic, props)
 
 
 def play_header(T, pfx, dots_live=True):
@@ -473,7 +473,7 @@ def play_header(T, pfx, dots_live=True):
                     for i in range(5))
     btn = (f'min-height: 48px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 8px; border: 2px solid {T["stage_line"]}; '
            f'border-radius: 12px; color: {T["stage_ink"]}; font-size: 16px; font-weight: 700; background: {T["stage_head"]}')
-    settings = f'<a {nav(pfx, "Settings")} aria-label="このあそびの設定" style="{btn}">{icon("sliders", T["stage_ink"])}' + ("" if ultra else '<span>このあそびの設定</span>') + '</a>'
+    settings = f'<a {nav(pfx, "Settings")} aria-label="この遊びの設定" style="{btn}">{icon("sliders", T["stage_ink"])}' + ("" if ultra else '<span>この遊びの設定</span>') + '</a>'
     end = f'<a {nav(pfx, "Result")} aria-label="このあそびを おわる" style="{btn}">{icon("close", T["stage_ink"])}' + ("" if ultra else '<span>このあそびを おわる</span>') + '</a>'
     name = "" if ultra else f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 24px; color: {T["stage_ink"]}">おすと でてくる</span>'
     return (f'<div style="height: 76px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; background: {T["stage_head"]}">'
@@ -550,7 +550,7 @@ def play(T, pfx):
         "holdMs": {"editor": "int", "default": 1200, "min": 600, "max": 5000, "step": 100, "unit": "ms", "section": "初級の見せ方"},
         "keepPicture": {"editor": "boolean", "default": False, "section": "初級の見せ方"},
     }
-    return page(f"{T['name']}｜初級「おすと でてくる」", body, logic, props)
+    return page(f"{T['name']}｜初級の遊び「おすと でてくる」", body, logic, props)
 
 
 def result(T, pfx):
@@ -587,9 +587,9 @@ def play_backdrop(T, pfx, count_idx=2):
 
 
 def settings(T, pfx):
-    groups = [("bg", "あそぶ 画面の 色", ["くらい（ひょうじゅん）", "あかるい"]),
-              ("snd", "おしたときの 音", ["がっきの 音", "あかるい 音", "なし"]),
-              ("voice", "できたときの 声（やったー）", ["あり", "なし"])]
+    groups = [("bg", "遊ぶ画面の背景", ["暗い（標準）", "明るい"]),
+              ("snd", "押したときの音", ["楽器の音", "明るい効果音", "なし"]),
+              ("voice", "できたときの声（「やったー」）", ["あり", "なし"])]
     sel = f"background: {T['accent']}; color: {T['accent_ink']}; border: 2px solid {T['accent']};"
     uns = f"background: {T['surface']}; color: {T['ink']}; border: 2px solid {T['line']};"
     rows = []
@@ -601,15 +601,15 @@ def settings(T, pfx):
             for i, o in enumerate(opts))
         rows.append(f'<div style="display: flex; flex-direction: column; gap: 10px"><span style="font-size: 18px; font-weight: 700">{label}</span><div style="display: flex; gap: 10px">{btns}</div></div>')
     note = (f'<div style="padding: 12px 16px; border-radius: 12px; background: {T["surface_alt"] if T["key"] != "clear" else "#EAF2FF"}; font-size: 16px; color: {T["ink"]}">'
-            f'せっていの あいだは、おしても すすみません。あそんだ 回数は のこります。</div>')
+            f'設定中は、スイッチを押しても遊びは進みません。ここまでの回数はそのまま残ります。</div>')
     foot = (f'<div style="display: flex; gap: 12px; margin-top: 4px">'
-            f'<a {nav(pfx, "Play")} style="flex-grow: 1; min-height: 60px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 14px; border: 2px solid {T["line"]}; background: {T["surface"]}; color: {T["ink"]}; font-size: 19px; font-weight: 700">かえないで もどる</a>'
-            f'<a {nav(pfx, "Play")} style="flex-grow: 1; min-height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: {T["accent"]}; color: {T["accent_ink"]}; font-size: 19px; font-weight: 700">この せっていで もどる</a></div>')
-    sheet = (f'<div role="dialog" aria-label="このあそびの せってい" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 600px; box-sizing: border-box; padding: 28px 32px; '
+            f'<a {nav(pfx, "Play")} style="flex-grow: 1; min-height: 60px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 14px; border: 2px solid {T["line"]}; background: {T["surface"]}; color: {T["ink"]}; font-size: 19px; font-weight: 700">変更せずに戻る</a>'
+            f'<a {nav(pfx, "Play")} style="flex-grow: 1; min-height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: {T["accent"]}; color: {T["accent_ink"]}; font-size: 19px; font-weight: 700">この設定で戻る</a></div>')
+    sheet = (f'<div role="dialog" aria-label="この遊びの設定" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 600px; box-sizing: border-box; padding: 28px 32px; '
              f'display: flex; flex-direction: column; gap: 20px; border-radius: 22px; background: {T["surface"]}; color: {T["ink"]}; font-family: {T["font_body"]}; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45)">'
              f'<div style="display: flex; align-items: flex-start; justify-content: space-between"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; color: {T["muted"]}">支援者の方へ</span>'
-             f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 28px">このあそびの せってい</span></div>'
-             f'<a {nav(pfx, "Play")} aria-label="とじる" style="width: 52px; height: 52px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 12px; border: 2px solid {T["line"]}">{icon("close", T["ink"], 24)}</a></div>'
+             f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 28px">この遊びの設定</span></div>'
+             f'<a {nav(pfx, "Play")} aria-label="閉じる" style="width: 52px; height: 52px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 12px; border: 2px solid {T["line"]}">{icon("close", T["ink"], 24)}</a></div>'
              f'{note}{"".join(rows)}{foot}</div>')
     body = (root_open(T, bg=T["stage_outer"]) + play_backdrop(T, pfx) +
             '<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.55)"></div>' + sheet + '</div>')
@@ -632,7 +632,7 @@ def settings(T, pfx):
     return v;
   }
 }""".replace("%SEL%", sel).replace("%UNS%", uns)
-    return page(f"{T['name']}｜このあそびの設定", body, logic)
+    return page(f"{T['name']}｜この遊びの設定", body, logic)
 
 
 def resume(T, pfx):
@@ -648,11 +648,11 @@ def resume(T, pfx):
              f'background: {T["surface"]}; color: {T["ink"]}; font-size: {28 if ultra else 24}px; font-weight: 700">おわる</a></div></div>')
     body = (root_open(T, bg=T["stage_outer"]) + play_backdrop(T, pfx) +
             '<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6)"></div>' + panel + '</div>')
-    return page(f"{T['name']}｜再開の確認（UI06）", body, STATIC_LOGIC)
+    return page(f"{T['name']}｜中断からの再開", body, STATIC_LOGIC)
 
 
-SCREENS = [("Start", "開始", start), ("Home", "活動一覧", home), ("Kind", "種類選択", kind), ("Play", "初級", play),
-           ("Result", "結果", result), ("Settings", "このあそびの設定", settings), ("Resume", "再開の確認", resume)]
+SCREENS = [("Start", "はじめの画面", start), ("Home", "遊びの一覧", home), ("Kind", "遊び方をえらぶ", kind), ("Play", "初級の遊び", play),
+           ("Result", "結果", result), ("Settings", "この遊びの設定", settings), ("Resume", "中断からの再開", resume)]
 
 
 def fname(row, scr):
@@ -685,9 +685,9 @@ if __name__ == "__main__":
     ROW_W = len(SCREENS) * W + (len(SCREENS) - 1) * GAP_X
     notes = {}
     concept = {
-        "U": "ウルトラシンプル版\n・1画面1つの操作。開始は「はじめる」だけ\n・白地に黒、差し色は走査枠の黄色だけ\n・文字は大きく、説明文は出さない\n・字体：BIZ UDPゴシック",
-        "C": "C案（落ち着いた版）\n・v3.1 §5.1の配色に、追記案の二重の走査枠と濃い境界線を反映\n・一覧は淡い緑、サムネイルは暗い地\n・字体：Zen Maru Gothic＋BIZ UDPゴシック",
-        "V": "はっきり版\n・白地に、活動ごとの彩度の高い色帯\n・サムネイルは明るい地。文字色は色帯ごとにコントラスト比4.5以上\n・東京都UDガイドラインと会議13:49「はっきりした色」が根拠",
+        "U": "ウルトラシンプル案\n・画面に出すものを最小限にした案\n・はじめの画面は「はじめる」ボタンだけ\n・白と黒が基本。いま選べる場所だけを黄色の枠で示す\n・文字は大きく、説明文は出さない",
+        "C": "落ち着いた色の案\n・やわらかい緑を基調にした、目にやさしい案\n・一覧の絵は暗い地にして、遊ぶ画面の雰囲気を伝える\n・遊ぶ画面は暗くして、出てくる絵を目立たせる",
+        "V": "はっきりした色の案\n・遊びごとに色を分けた、見分けやすい案\n・一覧は白地に、遊びごとのはっきりした色の帯\n・色の組み合わせは東京都のユニバーサルデザインガイドライン（視覚情報版）に沿う",
     }
     for r, row in enumerate(ROWS):
         y = r * ROW_H

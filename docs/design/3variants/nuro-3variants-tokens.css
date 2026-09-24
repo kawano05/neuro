@@ -1,6 +1,6 @@
 /* NURO デザイン3案の変数。styles.css の :root に対応する名前にしてある。 */
 
-/* ウルトラシンプル版 */
+/* ウルトラシンプル案 */
 [data-design="ultra"] {
   --bg: #FFFFFF;
   --surface: #FFFFFF;
@@ -26,7 +26,7 @@
   --thumb-fish: #000000;
 }
 
-/* C案（落ち着いた版） */
+/* 落ち着いた色の案 */
 [data-design="c"] {
   --bg: #F3FAF5;
   --surface: #FFFFFF;
@@ -52,7 +52,7 @@
   --thumb-fish: #16395A;
 }
 
-/* はっきり版 */
+/* はっきりした色の案 */
 [data-design="clear"] {
   --bg: #FFFFFF;
   --surface: #FFFFFF;
