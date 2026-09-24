@@ -1,5 +1,6 @@
 # デザイン3案を、1つのHTMLファイル（外部の実行環境なしで動く）として書き出す
-import json, os, sys
+# 比べる基準として、いまのアプリの画面（now/*.jpg、capture_now.mjs で撮影）も「現状」として入れる
+import base64, json, os, sys
 import gen
 
 gen.MODE = "html"
@@ -24,8 +25,39 @@ for row in gen.ROWS:
         body = fn(T, gen.pfx_for(row))
         sections.append(f'<section class="screen" data-variant="{row}" data-screen="{scr}" aria-label="{SHORT[row]}｜{label}" hidden>{body}</section>')
 
+# ---------------------------------------------------------------- 現状（いまのアプリ）
+NOW_DIR = os.path.join(gen.ROOT, "now")
+NOW_NAME = "現状（いまのアプリ）"
+NOW_CONCEPT = "いまのアプリ（2026年8月28日の版）の画面です。3つの案と比べるための基準として載せています。"
+NOW_NOTES = {
+    "Start": "「はじめる」の下に、小さく「せってい」があります。",
+    "Home": "1ページに2つずつ並び、「次のページ」で残りの遊びを見ます。",
+    "Kind": "「リールを止める」の種類をえらぶ画面です。",
+    "Play": "「色と音」。押すたびに色と音が変わり、5回で終わります。遊ぶ前に、説明の画面が1枚入ります。",
+    "Result": "「色と音」の結果画面です。",
+    "Settings": "いまはゲームの中に設定がありません。画像は、ホームの「支援者メニュー」から開く設定画面です。",
+    "Resume": "いまのアプリには、この画面はありません。遊びの途中でアプリが裏に回ると、遊びは終わってホームに戻ります。",
+}
+now_sections = []
+for scr, label, _ in gen.SCREENS:
+    path = os.path.join(NOW_DIR, f"{scr}.jpg")
+    if os.path.exists(path):
+        data = base64.b64encode(open(path, "rb").read()).decode("ascii")
+        body = (f'<div style="width: {gen.W}px; height: {gen.H}px; background: #FBFAF7">'
+                f'<img src="data:image/jpeg;base64,{data}" alt="いまのアプリの「{label}」" width="{gen.W}" height="{gen.H}" style="display: block; width: {gen.W}px; height: {gen.H}px"></div>')
+    else:
+        body = (f'<div style="width: {gen.W}px; height: {gen.H}px; box-sizing: border-box; padding: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; '
+                f'background: #FBFAF7; color: #102B2A; font-family: {gen.FONT_UD}; text-align: center">'
+                f'<span style="font-size: 36px; font-weight: 700">この画面は、いまのアプリにはありません</span>'
+                f'<span style="font-size: 22px; line-height: 1.7; color: #526966; max-width: 760px">{NOW_NOTES[scr]}</span></div>')
+    now_sections.append(f'<section class="screen" data-variant="N" data-screen="{scr}" aria-label="現状｜{label}" hidden>{body}</section>')
+sections = now_sections + sections
+meta["N"] = {"ring": "none", "dotOn": "#000000", "dotOff": "#000000", "selBg": "#000000", "selInk": "#FFFFFF",
+             "selBorder": "#000000", "unsBg": "#FFFFFF", "unsInk": "#000000", "unsBorder": "#000000"}
+
 screens = [{"id": s, "label": l} for s, l, _ in gen.SCREENS]
-variants = [{"id": r, "label": SHORT[r], "name": gen.V[r]["name"], "concept": CONCEPT[r]} for r in gen.ROWS]
+variants = ([{"id": "N", "label": "現状", "name": NOW_NAME, "concept": NOW_CONCEPT, "notes": NOW_NOTES}] +
+            [{"id": r, "label": SHORT[r], "name": gen.V[r]["name"], "concept": CONCEPT[r]} for r in gen.ROWS])
 
 variant_buttons = "".join(f'<button type="button" data-variant-btn="{v["id"]}" aria-pressed="false">{v["label"]}</button>' for v in variants)
 screen_buttons = "".join(f'<button type="button" data-screen-btn="{s["id"]}" aria-pressed="false">{s["label"]}</button>' for s in screens)
@@ -104,8 +136,8 @@ button:focus-visible, select:focus-visible {{ outline: 3px solid var(--accent); 
 .thumb-inner {{ position: absolute; left: 0; top: 0; width: 1180px; height: 820px; transform-origin: 0 0; pointer-events: none; }}
 .thumb:hover .thumb-box, .thumb:focus-visible .thumb-box {{ box-shadow: 0 0 0 3px var(--accent); }}
 .thumb span {{ font-size: 13px; }}
-.screen a {{ text-decoration: none; color: inherit; }}
-.screen button {{ font: inherit; }}
+.screen a, .thumb-inner a {{ text-decoration: none; color: inherit; }}
+.screen button, .thumb-inner button {{ font: inherit; }}
 @keyframes nuro-pop {{ 0% {{ transform: scale(.35); opacity: 0; }} 70% {{ transform: scale(1.06); opacity: 1; }} 100% {{ transform: scale(1); opacity: 1; }} }}
 .nuro-pop {{ animation: nuro-pop .32s cubic-bezier(.34, 1.36, .64, 1) both; }}
 @media (prefers-reduced-motion: reduce) {{ .nuro-pop {{ animation: none; }} }}
@@ -118,7 +150,7 @@ button:focus-visible, select:focus-visible {{ outline: 3px solid var(--accent); 
       <div class="seg" role="group" aria-label="案">{variant_buttons}</div>
     </div>
     <div class="bar-row">
-      <div class="tabs" role="group" aria-label="画面"><button type="button" class="all" data-overview-btn aria-pressed="false">3案を並べる</button>{screen_buttons}</div>
+      <div class="tabs" role="group" aria-label="画面"><button type="button" class="all" data-overview-btn aria-pressed="false">並べて比べる</button>{screen_buttons}</div>
     </div>
     <div class="bar-row opts">
       <label for="scanSpeed">枠が動く速さ
@@ -151,7 +183,7 @@ button:focus-visible, select:focus-visible {{ outline: 3px solid var(--accent); 
 
   try {{
     const h = (location.hash || '').slice(1);
-    const m = h.match(/^([UCV])-([A-Za-z]+)$/);
+    const m = h.match(/^([NUCV])-([A-Za-z]+)$/);
     if (m && SCREENS.some((s) => s.id === m[2])) {{ cur.v = m[1]; cur.s = m[2]; cur.overview = false; }}
     else if (h === 'all') {{ cur.overview = true; }}
   }} catch (e) {{}}
@@ -274,10 +306,10 @@ button:focus-visible, select:focus-visible {{ outline: 3px solid var(--accent); 
     $('[data-overview-btn]').setAttribute('aria-pressed', String(cur.overview));
     $('#stageWrap').hidden = cur.overview;
     $('#overview').hidden = !cur.overview;
-    $('#pressBtn').disabled = cur.overview;
+    $('#pressBtn').disabled = cur.overview || cur.v === 'N';
     const v = VARIANTS.find((x) => x.id === cur.v);
     const s = SCREENS.find((x) => x.id === cur.s);
-    $('#caption').textContent = `${{v.name}}｜${{s.label}}　—　${{v.concept}}`;
+    $('#caption').textContent = `${{v.name}}｜${{s.label}}　—　${{v.notes ? v.notes[s.id] : v.concept}}`;
     if (cur.overview) buildOverview();
     resetPlay();
     restartScan();
