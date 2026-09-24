@@ -133,10 +133,10 @@ button:focus-visible, select:focus-visible {{ outline: 3px solid var(--accent); 
     </div>
     <div class="bar-row opts">
       <label for="scanSpeed">枠が動く速さ
-        <select id="scanSpeed"><option value="1000">1.0秒</option><option value="1600" selected>1.6秒</option><option value="2400">2.4秒</option></select>
+        <select id="scanSpeed"><option value="1600">1.6秒</option><option value="2400" selected>2.4秒</option><option value="3000">3.0秒</option></select>
       </label>
       <label for="holdMode">初級：絵が消えるまで
-        <select id="holdMode"><option value="1200" selected>1.2秒</option><option value="3000">3秒</option><option value="keep">残す</option></select>
+        <select id="holdMode"><option value="1200">1.2秒</option><option value="3000" selected>3秒</option><option value="keep">残す</option></select>
       </label>
       <button type="button" class="press" id="pressBtn">スイッチを押す（Space）</button>
       <p class="hint">黄色い枠は、スイッチで操作するときの「いま選べる場所」です。枠は自動で動くので、SpaceキーかEnterキー（またはこのボタン）で決定します。画面を直接タップしても操作できます。</p>
@@ -157,7 +157,7 @@ button:focus-visible, select:focus-visible {{ outline: 3px solid var(--accent); 
   const VARIANTS = {json.dumps(variants, ensure_ascii=False)};
   const SCAN_SCREENS = ['Start', 'Home', 'Kind', 'Result', 'Resume'];
   const cur = {{ v: {json.dumps(default_v)}, s: 'Home', overview: {'true' if overview_first else 'false'} }};
-  let scanTimer = null, scanIdx = 0, scanMs = 1600, holdMode = '1200';
+  let scanTimer = null, scanIdx = 0, scanMs = 2400, holdMode = '3000';
   const play = {{ count: 0, idx: -1, visible: false, done: false, timer: null }};
 
   try {{

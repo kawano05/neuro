@@ -20,7 +20,7 @@ V = {
         line="#111111", line_w=3, accent="#111111", accent_ink="#FFFFFF",
         focus="#FFC83D", focus_outer="#111111",
         stage_outer="#000000", stage_head="#000000", stage="#000000", stage_ink="#FFFFFF",
-        stage_line="#333333", stage_accent="#FFC83D",
+        stage_line="#333333", stage_accent="#FFFFFF",
         radius=20, font_display=FONT_UD, font_body=FONT_UD, display_weight=700,
         thumb={a: "#000000" for a in ACTS},
         band=None,
@@ -42,11 +42,13 @@ V = {
         line="#1A1A1A", line_w=2, accent="#005AFF", accent_ink="#FFFFFF",
         focus="#FFC83D", focus_outer="#1A1A1A",
         stage_outer="#000814", stage_head="#000814", stage="#000000", stage_ink="#FFFFFF",
-        stage_line="#3A4A66", stage_accent="#FFC83D",
+        stage_line="#3A4A66", stage_accent="#4DC4FF",
         radius=18, font_display=FONT_MARU, font_body=FONT_UD, display_weight=900,
-        thumb={"shokyu": "#FFE5DA", "reel": "#DCE8FF", "high": "#F6DDF6", "learn": "#D6F5EA", "arm": "#F3E4D6", "fish": "#D9F3FF"},
-        # 活動ごとの色帯と、その上の文字色（コントラスト比4.5以上を確認済み）
-        band={"shokyu": ("#FF4B00", "#1A1A1A"), "reel": ("#005AFF", "#FFFFFF"), "high": ("#990099", "#FFFFFF"),
+        # 初級の見本は、遊ぶ画面と同じ暗い地にする（黒い画面に絵がポンと出る予告）
+        thumb={"shokyu": "#12305E", "reel": "#FFE5DA", "high": "#F6DDF6", "learn": "#D6F5EA", "arm": "#F3E4D6", "fish": "#D9F3FF"},
+        # 活動ごとの色帯と、その上の文字色（コントラスト比4.5以上を確認済み）。
+        # 走査の出発点になる初級は、黄色の走査枠と紛れない寒色（青）にする
+        band={"shokyu": ("#005AFF", "#FFFFFF"), "reel": ("#FF4B00", "#1A1A1A"), "high": ("#990099", "#FFFFFF"),
               "learn": ("#03AF7A", "#1A1A1A"), "arm": ("#804000", "#FFFFFF"), "fish": ("#4DC4FF", "#1A1A1A")},
     ),
 }
@@ -325,39 +327,54 @@ ACT_INFO = {
 
 
 def home(T, pfx):
+    # 配置：初級を左に大きく、残りの4つを右に2×2、まなぶ・つたえるは下の別枠。
+    # 見た目の順・DOMの順・走査の順を、やさしい順（①〜⑤）→ まなぶ でそろえる。
     href = {"shokyu": "Play", "reel": "Kind"}
     ultra = T["key"] == "ultra"
+    games = ["shokyu", "reel", "high", "arm", "fish"]
+    area = {"shokyu": "a", "reel": "b", "high": "c", "arm": "d", "fish": "e"}
     cards = []
-    for i, act in enumerate(ACTS):
+    for i, act in enumerate(games):
         name, chip, desc = ACT_INFO[act]
-        is_learn = act == "learn"
-        surface = T["surface_alt"] if is_learn else T["surface"]
-        border_style = "dashed" if is_learn else "solid"
-        # 名前の帯
-        if T["band"]:
-            bcol, bink = T["band"][act]
-            name_bar = (f'<div style="flex-grow: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: {bcol}; color: {bink}">'
-                        f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 26px">{name}</span>{icon("play", bink, 20)}</div>')
-        else:
-            size = 28 if ultra else 23
-            name_bar = (f'<div style="flex-grow: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: {surface}">'
-                        f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {size}px; color: {T["ink"]}">{name}</span>'
-                        + ("" if ultra else icon("play", T["accent"], 18)) + '</div>')
-        # 段階ラベル
+        big = act == "shokyu"
+        bcol, bink = T["band"][act] if T["band"] else (T["surface"], T["ink"])
+        name_size = 40 if big else (27 if ultra else 24)
+        desc_html = f'<span style="font-size: 18px; opacity: 0.9">{desc}</span>' if big and not ultra else ""
+        arrow = "" if ultra and not big else icon("play", bink if T["band"] else T["accent"], 26 if big else 18)
+        name_bar = (f'<div style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; box-sizing: border-box; '
+                    f'padding: {"14px 24px" if big else "0 18px"}; min-height: {108 if big else 62}px; background: {bcol}; color: {bink}">'
+                    f'<div style="display: flex; flex-direction: column; gap: 4px"><span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {name_size}px; line-height: 1.2">{name}</span>{desc_html}</div>'
+                    f'{arrow}</div>')
+        # 番号と段階ラベル
         if act == "shokyu" and not T["band"]:
             chip_style = f"background: {T['accent']}; color: {T['accent_ink']};"
         elif T["band"]:
-            chip_style = f"background: #FFFFFF; color: #1A1A1A; border: 2px solid #1A1A1A;"
+            chip_style = "background: #FFFFFF; color: #1A1A1A; border: 2px solid #1A1A1A;"
         else:
             chip_style = f"background: {T['surface']}; color: {T['ink']}; border: 2px solid {T['line']};"
-        chip_html = (f'<span style="position: absolute; left: 12px; top: 12px; padding: 5px 12px; border-radius: 999px; font-size: 15px; font-weight: 700; {chip_style}">{chip}</span>')
+        nsize = 40 if big else 34
+        badge = (f'<div style="position: absolute; left: 12px; top: 12px; display: flex; align-items: center; gap: 8px">'
+                 f'<span style="width: {nsize}px; height: {nsize}px; border-radius: 999px; background: {T["ink"]}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; '
+                 f'font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {22 if big else 19}px; box-shadow: 0 0 0 2px #FFFFFF">{i + 1}</span>'
+                 f'<span style="padding: 5px 12px; border-radius: 999px; font-size: {17 if big else 15}px; font-weight: 700; {chip_style}">{chip}</span></div>')
         cards.append(
-            f'<a {nav(pfx, href.get(act))} aria-label="{name}。{desc}" {scan(i)}style="display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; '
-            f'border-radius: {T["radius"]}px; overflow: hidden; background: {surface}; border: {T["line_w"]}px {border_style} {T["line"]}; box-shadow: {ring_hole(i)}">'
-            f'<div style="position: relative; height: {204 if ultra else 178}px; flex-shrink: 0; background: {T["thumb"][act]}">{thumb_art(act, T["thumb"][act])}{chip_html}</div>'
+            f'<a {nav(pfx, href.get(act))} aria-label="{i + 1}ばんめ。{name}。{desc}" {scan(i)}style="grid-area: {area[act]}; display: flex; flex-direction: column; min-width: 0; min-height: 0; box-sizing: border-box; '
+            f'border-radius: {T["radius"]}px; overflow: hidden; background: {T["surface"]}; border: {T["line_w"]}px solid {T["line"]}; box-shadow: {ring_hole(i)}">'
+            f'<div style="position: relative; flex-grow: 1; min-height: 0; background: {T["thumb"][act]}">{thumb_art(act, T["thumb"][act])}{badge}</div>'
             f'{name_bar}</a>')
-    grid = (f'<div style="flex-grow: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: {22 if ultra else 18}px; padding: 12px 8px 8px 8px">'
-            + "".join(cards) + '</div>')
+    lname, _, ldesc = ACT_INFO["learn"]
+    lb, li = T["band"]["learn"] if T["band"] else (T["surface_alt"], T["ink"])
+    learn = (f'<a href="#" aria-label="{lname}。べつの あそび。{ldesc}" {scan(5)}style="grid-area: f; display: flex; align-items: stretch; min-width: 0; box-sizing: border-box; '
+             f'border-radius: {T["radius"]}px; overflow: hidden; background: {T["surface_alt"]}; border: {T["line_w"]}px dashed {T["line"]}; box-shadow: {ring_hole(5)}">'
+             f'<div style="width: 190px; flex-shrink: 0; background: {T["thumb"]["learn"]}">{thumb_art("learn", T["thumb"]["learn"])}</div>'
+             f'<div style="flex-grow: 1; display: flex; align-items: center; gap: 16px; padding: 0 22px; background: {lb}; color: {li}">'
+             f'<span style="padding: 5px 12px; border-radius: 999px; font-size: 15px; font-weight: 700; background: #FFFFFF; color: #1A1A1A; border: 2px solid #1A1A1A">べつの あそび</span>'
+             f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 26px">{lname}</span>'
+             f'<span style="font-size: 17px; opacity: 0.9">{ldesc}</span></div></a>')
+    areas = "'a b c' 'a d e' 'f f f'"
+    grid = (f'<div style="flex-grow: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); '
+            f'grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) 100px; grid-template-areas: {areas}; gap: {20 if ultra else 16}px; padding: 12px 8px 8px 8px">'
+            + "".join(cards) + learn + '</div>')
     if ultra:
         top = (f'<div style="display: flex; align-items: center; justify-content: space-between; padding: 22px 8px 6px 8px">'
                f'<span style="font-family: {T["font_display"]}; font-weight: 700; font-size: 34px">あそびを えらぶ</span>'
@@ -368,7 +385,7 @@ def home(T, pfx):
         top = (f'<div style="display: flex; align-items: flex-end; justify-content: space-between; padding: 18px 8px 4px 8px">'
                f'<div style="display: flex; flex-direction: column; gap: 4px"><span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {title_size}px">あそびを えらぼう</span>'
                f'<span style="font-size: 16px; color: {T["muted"]}">あそびたい 絵を おしてね</span></div>'
-               f'<span style="font-size: 14px; color: {T["muted"]}">左上から 右下へ、だんだん むずかしく</span></div>')
+               f'<span style="font-size: 14px; color: {T["muted"]}">①から ⑤へ、だんだん むずかしく</span></div>')
         foot = (f'<div style="display: flex; align-items: center; gap: 8px; padding: 6px 8px 0 8px; font-size: 14px; color: {T["muted"]}">'
                 f'{icon("hand", T["muted"], 20)}<span>タップ または スイッチで えらぼう</span></div>')
         body = (root_open(T) + light_header(T, supporter_button(T)) +
@@ -473,8 +490,8 @@ def play_header(T, pfx, dots_live=True):
                     for i in range(5))
     btn = (f'min-height: 48px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 8px; border: 2px solid {T["stage_line"]}; '
            f'border-radius: 12px; color: {T["stage_ink"]}; font-size: 16px; font-weight: 700; background: {T["stage_head"]}')
-    settings = f'<a {nav(pfx, "Settings")} aria-label="この遊びの設定" style="{btn}">{icon("sliders", T["stage_ink"])}' + ("" if ultra else '<span>この遊びの設定</span>') + '</a>'
-    end = f'<a {nav(pfx, "Result")} aria-label="このあそびを おわる" style="{btn}">{icon("close", T["stage_ink"])}' + ("" if ultra else '<span>このあそびを おわる</span>') + '</a>'
+    settings = f'<a {nav(pfx, "Settings")} aria-label="この遊びの設定" style="{btn}">{icon("sliders", T["stage_ink"])}' + ('<span>設定</span>' if ultra else '<span>この遊びの設定</span>') + '</a>'
+    end = f'<a {nav(pfx, "Result")} aria-label="このあそびを おわる" style="{btn}">{icon("close", T["stage_ink"])}' + ('<span>おわる</span>' if ultra else '<span>このあそびを おわる</span>') + '</a>'
     name = "" if ultra else f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 24px; color: {T["stage_ink"]}">おすと でてくる</span>'
     return (f'<div style="height: 76px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; background: {T["stage_head"]}">'
             f'<div style="display: flex; align-items: center; gap: 22px">{name}<div role="img" aria-label="すすみぐあい" style="display: flex; gap: 10px">{dots}</div></div>'
@@ -497,7 +514,7 @@ def play(T, pfx):
                   f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 38px">おしてみよう</span></span>', True)
     idle = when("idle", f'<span style="font-size: 22px; color: {T["stage_line"]}">{hole_text("countText")}</span>')
     done = when("done", f'<div style="position: absolute; left: 0; right: 0; bottom: 28px; display: flex; justify-content: center; gap: 14px">'
-                f'<a {nav(pfx, "Result")} style="min-height: 64px; padding: 0 30px; display: flex; align-items: center; border-radius: 14px; background: {T["focus"]}; color: #111111; font-size: 22px; font-weight: 700">けっかを みる</a>'
+                f'<a {nav(pfx, "Result")} style="min-height: 64px; padding: 0 30px; display: flex; align-items: center; border-radius: 14px; background: #FFFFFF; color: #111111; font-size: 22px; font-weight: 700">けっかを みる</a>'
                 f'<button {on("reset")} style="min-height: 64px; padding: 0 26px; border-radius: 14px; border: 2px solid {T["stage_line"]}; background: transparent; color: {T["stage_ink"]}; font-size: 20px; font-weight: 700; cursor: pointer">さいしょから（見本用）</button></div>')
     stage = (f'<div style="position: relative; flex-grow: 1; display: flex; {stage_box_style(T)} overflow: hidden">'
              f'<button {on("tap")} aria-label="おして あそぶ" style="flex-grow: 1; border: 0; margin: 0; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; background: {T["stage"]}">'
@@ -555,20 +572,18 @@ def play(T, pfx):
 
 def result(T, pfx):
     ultra = T["key"] == "ultra"
-    art = creature_svg(4, 300 if ultra else 260, 240 if ultra else 208)
+    # 会えた生き物を、シールのように並べる（押したことが形になって残る）
+    stickers = "".join(
+        f'<span style="width: 118px; height: 118px; box-sizing: border-box; border-radius: 22px; background: #FFFFFF; border: 3px solid {T["line"]}; '
+        f'display: flex; align-items: center; justify-content: center">{creature_svg(i, 100, 80)}</span>' for i in range(5))
+    visual = f'<div style="display: flex; gap: 14px">{stickers}</div>'
     if T["key"] == "clear":
         medal = ('<svg viewBox="0 0 120 150" width="96" height="120" aria-hidden="true" style="display: block">'
                  '<path d="M36 0 L 60 50 L 84 0 Z" fill="#005AFF"></path><circle cx="60" cy="92" r="52" fill="#F6AA00"></circle><circle cx="60" cy="92" r="40" fill="#FFC83D"></circle>'
                  '<path d="M60 64 L 68 82 L 88 83 L 72 95 L 78 114 L 60 103 L 42 114 L 48 95 L 32 83 L 52 82 Z" fill="#FF4B00"></path></svg>')
-        visual = f'<div style="display: flex; align-items: flex-end; gap: 18px">{art}{medal}</div>'
-    elif ultra:
-        visual = art
-    else:
-        badge = (f'<span style="position: absolute; right: -6px; bottom: 6px; width: 54px; height: 54px; border-radius: 999px; background: {T["accent"]}; display: flex; align-items: center; justify-content: center">'
-                 f'{icon("check", "#FFFFFF", 32)}</span>')
-        visual = f'<div style="position: relative">{art}{badge}</div>'
+        visual = f'<div style="display: flex; align-items: center; gap: 24px">{medal}{visual}</div>'
     head = "できた！" if ultra else "できた！ たのしかったね"
-    sub = "" if ultra else f'<span style="font-size: 22px; color: {T["muted"]}">5かい あそべたよ</span>'
+    sub = "" if ultra else f'<span style="font-size: 22px; color: {T["muted"]}">5かい あそんで、5ひきに あえたよ</span>'
     b1 = (f'<a {nav(pfx, "Play")} aria-label="もういちど" {scan(0)}style="width: {420 if ultra else 360}px; height: {110 if ultra else 84}px; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: {T["radius"]}px; '
           f'background: {T["accent"]}; color: {T["accent_ink"]}; font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {36 if ultra else 28}px; box-shadow: {ring(T)}">{icon("retry", T["accent_ink"], 30)}もういちど</a>')
     b2 = (f'<a {nav(pfx, "Home")} aria-label="あそびを えらぶ" {scan(1)}style="width: {420 if ultra else 360}px; height: {110 if ultra else 84}px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: {T["radius"]}px; '

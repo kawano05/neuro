@@ -93,10 +93,10 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
     </div>
     <div class="bar-row opts">
       <label for="scanSpeed">枠が動く速さ
-        <select id="scanSpeed"><option value="1000">1.0秒</option><option value="1600" selected>1.6秒</option><option value="2400">2.4秒</option></select>
+        <select id="scanSpeed"><option value="1600">1.6秒</option><option value="2400" selected>2.4秒</option><option value="3000">3.0秒</option></select>
       </label>
       <label for="holdMode">初級：絵が消えるまで
-        <select id="holdMode"><option value="1200" selected>1.2秒</option><option value="3000">3秒</option><option value="keep">残す</option></select>
+        <select id="holdMode"><option value="1200">1.2秒</option><option value="3000" selected>3秒</option><option value="keep">残す</option></select>
       </label>
       <button type="button" class="press" id="pressBtn">スイッチを押す（Space）</button>
       <p class="hint">黄色い枠は、スイッチで操作するときの「いま選べる場所」です。枠は自動で動くので、SpaceキーかEnterキー（またはこのボタン）で決定します。画面を直接タップしても操作できます。</p>
@@ -117,7 +117,7 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
   const VARIANTS = [{"id": "N", "label": "現状", "name": "現状（いまのアプリ）", "concept": "いまのアプリ（2026年8月28日の版）の画面です。案と比べるための基準として載せています。", "notes": {"Start": "「はじめる」の下に、小さく「せってい」があります。", "Home": "1ページに2つずつ並び、「次のページ」で残りの遊びを見ます。", "Kind": "「リールを止める」の種類をえらぶ画面です。", "Play": "「色と音」。押すたびに色と音が変わり、5回で終わります。遊ぶ前に、説明の画面が1枚入ります。", "Result": "「色と音」の結果画面です。", "Settings": "いまはゲームの中に設定がありません。画像は、ホームの「支援者メニュー」から開く設定画面です。", "Resume": "いまのアプリには、この画面はありません。遊びの途中でアプリが裏に回ると、遊びは終わってホームに戻ります。"}}, {"id": "O", "label": "海の世界", "name": "海の世界の案", "concept": "海の深さで、遊びのむずかしさを表す案です。浅いところほどやさしく、深いところほどチャレンジ。すべての画面を海の世界でそろえます。"}, {"id": "F", "label": "大きく1つずつ", "name": "大きく1つずつの案", "concept": "いま選べる遊びを、画面いっぱいに大きく見せる案です。下の列で全部の遊びも見えます。スイッチで1つずつ選ぶ人に合わせた形です。"}, {"id": "M", "label": "すごろく", "name": "すごろくの案", "concept": "遊びを1本の道にならべた案です。やさしい遊びから順に進み、遊ぶとスタンプがたまります。初級では押すたびにシールが増え、やったことが目に見えて残ります。"}];
   const SCAN_SCREENS = ['Start', 'Home', 'Kind', 'Result', 'Resume'];
   const cur = { v: "O", s: 'Home', overview: true };
-  let scanTimer = null, scanIdx = 0, scanMs = 1600, holdMode = '1200';
+  let scanTimer = null, scanIdx = 0, scanMs = 2400, holdMode = '3000';
   const play = { count: 0, idx: -1, visible: false, done: false, timer: null };
 
   try {
