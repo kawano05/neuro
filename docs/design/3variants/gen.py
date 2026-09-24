@@ -57,6 +57,41 @@ def ring(T):
     return f"0 0 0 5px {T['focus']}, 0 0 0 8px {T['focus_outer']}"
 
 
+MODE = "dc"  # "dc"：デザインキャンバス用 / "html"：単一HTML用
+
+
+def nav(pfx, scr):
+    if not scr:
+        return 'href="#"'
+    if MODE == "dc":
+        return f'href="{pfx}{scr}.dc.html"'
+    return f'href="#" data-go="{scr}"'
+
+
+def scan(i):
+    return "" if MODE == "dc" else f'data-scan="{i}" '
+
+
+def ring_hole(i):
+    return f"{{{{ring{i}}}}}" if MODE == "dc" else "none"
+
+
+def when(name, inner, default=False):
+    if MODE == "dc":
+        val = "true" if default else "false"
+        return f'<sc-if value="{{{{{name}}}}}" hint-placeholder-val="{{{{ {val} }}}}">{inner}</sc-if>'
+    hid = "" if default else " hidden"
+    return f'<span data-when="{name}" style="display: contents"{hid}>{inner}</span>'
+
+
+def on(name):
+    return f'onClick="{{{{{name}}}}}"' if MODE == "dc" else f'data-action="{name}"'
+
+
+def hole_text(name):
+    return f"{{{{{name}}}}}" if MODE == "dc" else f'<span data-text="{name}"></span>'
+
+
 # ---------------------------------------------------------------- art (inline SVG)
 def creature(i):
     """5種の生き物。viewBox 0 0 300 240"""
@@ -224,6 +259,8 @@ button{font:inherit}
 
 
 def page(title, body, logic, props=None):
+    if MODE == "html":
+        return body
     props = props or {}
     props["$preview"] = {"width": W, "height": H}
     pj = json.dumps(props, ensure_ascii=False).replace("&", "&amp;").replace("'", "&#39;")
@@ -288,7 +325,7 @@ ACT_INFO = {
 
 
 def home(T, pfx):
-    href = {"shokyu": f"{pfx}Play.dc.html", "reel": f"{pfx}Kind.dc.html"}
+    href = {"shokyu": "Play", "reel": "Kind"}
     ultra = T["key"] == "ultra"
     cards = []
     for i, act in enumerate(ACTS):
@@ -315,8 +352,8 @@ def home(T, pfx):
             chip_style = f"background: {T['surface']}; color: {T['ink']}; border: 2px solid {T['line']};"
         chip_html = (f'<span style="position: absolute; left: 12px; top: 12px; padding: 5px 12px; border-radius: 999px; font-size: 15px; font-weight: 700; {chip_style}">{chip}</span>')
         cards.append(
-            f'<a href="{href.get(act, "#")}" aria-label="{name}。{desc}" style="display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; '
-            f'border-radius: {T["radius"]}px; overflow: hidden; background: {surface}; border: {T["line_w"]}px {border_style} {T["line"]}; box-shadow: {{{{ring{i}}}}}">'
+            f'<a {nav(pfx, href.get(act))} aria-label="{name}。{desc}" {scan(i)}style="display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; '
+            f'border-radius: {T["radius"]}px; overflow: hidden; background: {surface}; border: {T["line_w"]}px {border_style} {T["line"]}; box-shadow: {ring_hole(i)}">'
             f'<div style="position: relative; height: {204 if ultra else 178}px; flex-shrink: 0; background: {T["thumb"][act]}">{thumb_art(act, T["thumb"][act])}{chip_html}</div>'
             f'{name_bar}</a>')
     grid = (f'<div style="flex-grow: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: {22 if ultra else 18}px; padding: 12px 8px 8px 8px">'
@@ -361,7 +398,7 @@ def home(T, pfx):
 def start(T, pfx):
     ultra = T["key"] == "ultra"
     btn_bg, btn_ink = T["accent"], T["accent_ink"]
-    button = (f'<a href="{pfx}Home.dc.html" aria-label="はじめる" style="display: flex; align-items: center; justify-content: center; gap: 16px; '
+    button = (f'<a {nav(pfx, "Home")} aria-label="はじめる" {scan(0)}style="display: flex; align-items: center; justify-content: center; gap: 16px; '
               f'width: {620 if ultra else 470}px; height: {170 if ultra else 96}px; border-radius: {T["radius"] + 6}px; background: {btn_bg}; color: {btn_ink}; '
               f'font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {64 if ultra else 38}px; letter-spacing: 0.08em; box-shadow: {ring(T)}">'
               f'はじめる{icon("play", btn_ink, 40 if ultra else 26)}</a>')
@@ -394,15 +431,15 @@ def kind(T, pfx):
         chip_style = ("background: #FFFFFF; color: #1A1A1A; border: 2px solid #1A1A1A;" if band
                       else f"background: {T['surface']}; color: {T['ink']}; border: 2px solid {T['line']};")
         cards.append(
-            f'<a href="#" aria-label="{name}。{desc}" style="display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; border-radius: {T["radius"]}px; overflow: hidden; '
-            f'background: {T["surface"]}; border: {T["line_w"]}px solid {T["line"]}; box-shadow: {{{{ring{k}}}}}">'
+            f'<a href="#" aria-label="{name}。{desc}" {scan(k)}style="display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; border-radius: {T["radius"]}px; overflow: hidden; '
+            f'background: {T["surface"]}; border: {T["line_w"]}px solid {T["line"]}; box-shadow: {ring_hole(k)}">'
             f'<div style="position: relative; height: 330px; background: {T["thumb"]["reel"]}">{reel_art(n, T["thumb"]["reel"])}'
             f'<span style="position: absolute; left: 14px; top: 14px; padding: 6px 14px; border-radius: 999px; font-size: 16px; font-weight: 700; {chip_style}">{chip}</span></div>'
             f'<div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 24px; background: {bar_bg}; color: {bar_ink}">'
             f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {34 if ultra else 30}px">{name}</span>'
             + ("" if ultra else f'<span style="font-size: 17px">{desc}</span>') + '</div></a>')
-    back = (f'<a href="{pfx}Home.dc.html" aria-label="あそびを えらぶ に もどる" style="align-self: flex-start; min-height: 60px; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center; gap: 8px; '
-            f'border: {T["line_w"]}px solid {T["line"]}; border-radius: 14px; background: {T["surface"]}; color: {T["ink"]}; font-size: 20px; font-weight: 700; box-shadow: {{{{ring2}}}}">'
+    back = (f'<a {nav(pfx, "Home")} aria-label="あそびを えらぶ に もどる" {scan(2)}style="align-self: flex-start; min-height: 60px; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center; gap: 8px; '
+            f'border: {T["line_w"]}px solid {T["line"]}; border-radius: 14px; background: {T["surface"]}; color: {T["ink"]}; font-size: 20px; font-weight: 700; box-shadow: {ring_hole(2)}">'
             f'{icon("back", T["ink"], 24)}もどる</a>')
     title = (f'<div style="display: flex; flex-direction: column; gap: 4px"><span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {36 if ultra else 32}px">リールを とめる</span>'
              + ("" if ultra else f'<span style="font-size: 17px; color: {T["muted"]}">どちらで あそぶ？</span>') + '</div>')
@@ -431,13 +468,13 @@ def kind(T, pfx):
 
 def play_header(T, pfx, dots_live=True):
     ultra = T["key"] == "ultra"
-    dots = "".join(f'<span style="width: 18px; height: 18px; border-radius: 999px; background: {{{{dot{i}}}}}"></span>' if dots_live
+    dots = "".join((f'<span style="width: 18px; height: 18px; border-radius: 999px; background: {{{{dot{i}}}}}"></span>' if MODE == "dc" else f'<span data-dot="{i}" style="width: 18px; height: 18px; border-radius: 999px; background: {T["stage_line"]}"></span>') if dots_live
                     else f'<span style="width: 18px; height: 18px; border-radius: 999px; background: {T["stage_accent"] if i < 3 else T["stage_line"]}"></span>'
                     for i in range(5))
     btn = (f'min-height: 48px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 8px; border: 2px solid {T["stage_line"]}; '
            f'border-radius: 12px; color: {T["stage_ink"]}; font-size: 16px; font-weight: 700; background: {T["stage_head"]}')
-    settings = f'<a href="{pfx}Settings.dc.html" aria-label="このあそびの設定" style="{btn}">{icon("sliders", T["stage_ink"])}' + ("" if ultra else '<span>このあそびの設定</span>') + '</a>'
-    end = f'<a href="{pfx}Result.dc.html" aria-label="このあそびを おわる" style="{btn}">{icon("close", T["stage_ink"])}' + ("" if ultra else '<span>このあそびを おわる</span>') + '</a>'
+    settings = f'<a {nav(pfx, "Settings")} aria-label="このあそびの設定" style="{btn}">{icon("sliders", T["stage_ink"])}' + ("" if ultra else '<span>このあそびの設定</span>') + '</a>'
+    end = f'<a {nav(pfx, "Result")} aria-label="このあそびを おわる" style="{btn}">{icon("close", T["stage_ink"])}' + ("" if ultra else '<span>このあそびを おわる</span>') + '</a>'
     name = "" if ultra else f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 24px; color: {T["stage_ink"]}">おすと でてくる</span>'
     return (f'<div style="height: 76px; flex-shrink: 0; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; background: {T["stage_head"]}">'
             f'<div style="display: flex; align-items: center; gap: 22px">{name}<div role="img" aria-label="すすみぐあい" style="display: flex; gap: 10px">{dots}</div></div>'
@@ -452,18 +489,18 @@ def stage_box_style(T):
 
 def play(T, pfx):
     creatures = "".join(
-        f'<sc-if value="{{{{show{i}}}}}" hint-placeholder-val="{{{{ false }}}}"><span class="nuro-pop" style="display: flex; flex-direction: column; align-items: center; gap: 18px">'
-        f'{creature_svg(i, 440, 352)}<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 40px; color: {T["stage_ink"]}">{["でてきた！", "かわった！", "いいね！", "もう いっかい！", "できた！"][i]}</span></span></sc-if>'
+        when(f"show{i}", f'<span class="nuro-pop" style="display: flex; flex-direction: column; align-items: center; gap: 18px">'
+             f'{creature_svg(i, 440, 352)}<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 40px; color: {T["stage_ink"]}">{["でてきた！", "かわった！", "いいね！", "もう いっかい！", "できた！"][i]}</span></span>')
         for i in range(5))
-    prompt = (f'<sc-if value="{{{{prompt}}}}" hint-placeholder-val="{{{{ true }}}}"><span style="display: flex; flex-direction: column; align-items: center; gap: 16px; color: {T["stage_ink"]}">'
-              f'<span style="width: 120px; height: 120px; border-radius: 999px; border: 4px dashed {T["stage_line"]}; display: flex; align-items: center; justify-content: center">{icon("hand", T["stage_ink"], 56)}</span>'
-              f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 38px">おしてみよう</span></span></sc-if>')
-    idle = (f'<sc-if value="{{{{idle}}}}" hint-placeholder-val="{{{{ false }}}}"><span style="font-size: 22px; color: {T["stage_line"]}">{{{{countText}}}}</span></sc-if>')
-    done = (f'<sc-if value="{{{{done}}}}" hint-placeholder-val="{{{{ false }}}}"><div style="position: absolute; left: 0; right: 0; bottom: 28px; display: flex; justify-content: center; gap: 14px">'
-            f'<a href="{pfx}Result.dc.html" style="min-height: 64px; padding: 0 30px; display: flex; align-items: center; border-radius: 14px; background: {T["focus"]}; color: #111111; font-size: 22px; font-weight: 700">けっかを みる</a>'
-            f'<button onClick="{{{{reset}}}}" style="min-height: 64px; padding: 0 26px; border-radius: 14px; border: 2px solid {T["stage_line"]}; background: transparent; color: {T["stage_ink"]}; font-size: 20px; font-weight: 700; cursor: pointer">さいしょから（見本用）</button></div></sc-if>')
+    prompt = when("prompt", f'<span style="display: flex; flex-direction: column; align-items: center; gap: 16px; color: {T["stage_ink"]}">'
+                  f'<span style="width: 120px; height: 120px; border-radius: 999px; border: 4px dashed {T["stage_line"]}; display: flex; align-items: center; justify-content: center">{icon("hand", T["stage_ink"], 56)}</span>'
+                  f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 38px">おしてみよう</span></span>', True)
+    idle = when("idle", f'<span style="font-size: 22px; color: {T["stage_line"]}">{hole_text("countText")}</span>')
+    done = when("done", f'<div style="position: absolute; left: 0; right: 0; bottom: 28px; display: flex; justify-content: center; gap: 14px">'
+                f'<a {nav(pfx, "Result")} style="min-height: 64px; padding: 0 30px; display: flex; align-items: center; border-radius: 14px; background: {T["focus"]}; color: #111111; font-size: 22px; font-weight: 700">けっかを みる</a>'
+                f'<button {on("reset")} style="min-height: 64px; padding: 0 26px; border-radius: 14px; border: 2px solid {T["stage_line"]}; background: transparent; color: {T["stage_ink"]}; font-size: 20px; font-weight: 700; cursor: pointer">さいしょから（見本用）</button></div>')
     stage = (f'<div style="position: relative; flex-grow: 1; display: flex; {stage_box_style(T)} overflow: hidden">'
-             f'<button onClick="{{{{tap}}}}" aria-label="おして あそぶ" style="flex-grow: 1; border: 0; margin: 0; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; background: {T["stage"]}">'
+             f'<button {on("tap")} aria-label="おして あそぶ" style="flex-grow: 1; border: 0; margin: 0; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; background: {T["stage"]}">'
              f'{prompt}{creatures}{idle}</button>{done}</div>')
     body = root_open(T, bg=T["stage_outer"]) + play_header(T, pfx) + stage + '</div>'
     logic = """class Component extends DCLogic {
@@ -532,9 +569,9 @@ def result(T, pfx):
         visual = f'<div style="position: relative">{art}{badge}</div>'
     head = "できた！" if ultra else "できた！ たのしかったね"
     sub = "" if ultra else f'<span style="font-size: 22px; color: {T["muted"]}">5かい あそべたよ</span>'
-    b1 = (f'<a href="{pfx}Play.dc.html" aria-label="もういちど" style="width: {420 if ultra else 360}px; height: {110 if ultra else 84}px; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: {T["radius"]}px; '
+    b1 = (f'<a {nav(pfx, "Play")} aria-label="もういちど" {scan(0)}style="width: {420 if ultra else 360}px; height: {110 if ultra else 84}px; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: {T["radius"]}px; '
           f'background: {T["accent"]}; color: {T["accent_ink"]}; font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {36 if ultra else 28}px; box-shadow: {ring(T)}">{icon("retry", T["accent_ink"], 30)}もういちど</a>')
-    b2 = (f'<a href="{pfx}Home.dc.html" aria-label="あそびを えらぶ" style="width: {420 if ultra else 360}px; height: {110 if ultra else 84}px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: {T["radius"]}px; '
+    b2 = (f'<a {nav(pfx, "Home")} aria-label="あそびを えらぶ" {scan(1)}style="width: {420 if ultra else 360}px; height: {110 if ultra else 84}px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: {T["radius"]}px; '
           f'background: {T["surface"]}; color: {T["ink"]}; border: {T["line_w"]}px solid {T["line"]}; font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {36 if ultra else 28}px">{icon("grid", T["ink"], 28)}あそびを えらぶ</a>')
     center = (f'<div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px">{visual}'
               f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {72 if ultra else 46}px">{head}</span>{sub}'
@@ -553,27 +590,29 @@ def settings(T, pfx):
     groups = [("bg", "あそぶ 画面の 色", ["くらい（ひょうじゅん）", "あかるい"]),
               ("snd", "おしたときの 音", ["がっきの 音", "あかるい 音", "なし"]),
               ("voice", "できたときの 声（やったー）", ["あり", "なし"])]
+    sel = f"background: {T['accent']}; color: {T['accent_ink']}; border: 2px solid {T['accent']};"
+    uns = f"background: {T['surface']}; color: {T['ink']}; border: 2px solid {T['line']};"
     rows = []
     for g, label, opts in groups:
         btns = "".join(
-            f'<button onClick="{{{{{g}{i}Pick}}}}" aria-pressed="{{{{{g}{i}Pressed}}}}" style="flex-grow: 1; min-height: 54px; border-radius: 12px; font-size: 18px; font-weight: 700; cursor: pointer; {{{{{g}{i}St}}}}">{o}</button>'
+            (f'<button onClick="{{{{{g}{i}Pick}}}}" aria-pressed="{{{{{g}{i}Pressed}}}}" style="flex-grow: 1; min-height: 54px; border-radius: 12px; font-size: 18px; font-weight: 700; cursor: pointer; {{{{{g}{i}St}}}}">{o}</button>'
+             if MODE == "dc" else
+             f'<button data-group="{g}" data-idx="{i}" aria-pressed="{"true" if i == 0 else "false"}" style="flex-grow: 1; min-height: 54px; border-radius: 12px; font-size: 18px; font-weight: 700; cursor: pointer; {sel if i == 0 else uns}">{o}</button>')
             for i, o in enumerate(opts))
         rows.append(f'<div style="display: flex; flex-direction: column; gap: 10px"><span style="font-size: 18px; font-weight: 700">{label}</span><div style="display: flex; gap: 10px">{btns}</div></div>')
     note = (f'<div style="padding: 12px 16px; border-radius: 12px; background: {T["surface_alt"] if T["key"] != "clear" else "#EAF2FF"}; font-size: 16px; color: {T["ink"]}">'
             f'せっていの あいだは、おしても すすみません。あそんだ 回数は のこります。</div>')
     foot = (f'<div style="display: flex; gap: 12px; margin-top: 4px">'
-            f'<a href="{pfx}Play.dc.html" style="flex-grow: 1; min-height: 60px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 14px; border: 2px solid {T["line"]}; background: {T["surface"]}; color: {T["ink"]}; font-size: 19px; font-weight: 700">かえないで もどる</a>'
-            f'<a href="{pfx}Play.dc.html" style="flex-grow: 1; min-height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: {T["accent"]}; color: {T["accent_ink"]}; font-size: 19px; font-weight: 700">この せっていで もどる</a></div>')
+            f'<a {nav(pfx, "Play")} style="flex-grow: 1; min-height: 60px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 14px; border: 2px solid {T["line"]}; background: {T["surface"]}; color: {T["ink"]}; font-size: 19px; font-weight: 700">かえないで もどる</a>'
+            f'<a {nav(pfx, "Play")} style="flex-grow: 1; min-height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: {T["accent"]}; color: {T["accent_ink"]}; font-size: 19px; font-weight: 700">この せっていで もどる</a></div>')
     sheet = (f'<div role="dialog" aria-label="このあそびの せってい" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 600px; box-sizing: border-box; padding: 28px 32px; '
              f'display: flex; flex-direction: column; gap: 20px; border-radius: 22px; background: {T["surface"]}; color: {T["ink"]}; font-family: {T["font_body"]}; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45)">'
              f'<div style="display: flex; align-items: flex-start; justify-content: space-between"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; color: {T["muted"]}">支援者の方へ</span>'
              f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: 28px">このあそびの せってい</span></div>'
-             f'<a href="{pfx}Play.dc.html" aria-label="とじる" style="width: 52px; height: 52px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 12px; border: 2px solid {T["line"]}">{icon("close", T["ink"], 24)}</a></div>'
+             f'<a {nav(pfx, "Play")} aria-label="とじる" style="width: 52px; height: 52px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 12px; border: 2px solid {T["line"]}">{icon("close", T["ink"], 24)}</a></div>'
              f'{note}{"".join(rows)}{foot}</div>')
     body = (root_open(T, bg=T["stage_outer"]) + play_backdrop(T, pfx) +
             '<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.55)"></div>' + sheet + '</div>')
-    sel = f"background: {T['accent']}; color: {T['accent_ink']}; border: 2px solid {T['accent']};"
-    uns = f"background: {T['surface']}; color: {T['ink']}; border: 2px solid {T['line']};"
     logic = """class Component extends DCLogic {
   constructor(props) {
     super(props);
@@ -603,9 +642,9 @@ def resume(T, pfx):
              f'<span style="font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {44 if ultra else 36}px">とまって います</span>'
              + ("" if ultra else f'<span style="font-size: 20px; color: {T["muted"]}">3かい あそんだよ。つづきから あそべるよ。</span>') +
              f'<div style="display: flex; flex-direction: column; gap: 14px; width: 100%">'
-             f'<a href="{pfx}Play.dc.html" aria-label="つづける" style="height: {100 if ultra else 84}px; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: {T["radius"]}px; background: {T["accent"]}; color: {T["accent_ink"]}; '
+             f'<a {nav(pfx, "Play")} aria-label="つづける" {scan(0)}style="height: {100 if ultra else 84}px; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: {T["radius"]}px; background: {T["accent"]}; color: {T["accent_ink"]}; '
              f'font-family: {T["font_display"]}; font-weight: {T["display_weight"]}; font-size: {36 if ultra else 30}px; box-shadow: {ring(T)}">{icon("play", T["accent_ink"], 28)}つづける</a>'
-             f'<a href="{pfx}Result.dc.html" aria-label="おわる" style="height: {84 if ultra else 72}px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: {T["radius"]}px; border: {T["line_w"]}px solid {T["line"]}; '
+             f'<a {nav(pfx, "Result")} aria-label="おわる" {scan(1)}style="height: {84 if ultra else 72}px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: {T["radius"]}px; border: {T["line_w"]}px solid {T["line"]}; '
              f'background: {T["surface"]}; color: {T["ink"]}; font-size: {28 if ultra else 24}px; font-weight: 700">おわる</a></div></div>')
     body = (root_open(T, bg=T["stage_outer"]) + play_backdrop(T, pfx) +
             '<div style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6)"></div>' + panel + '</div>')
@@ -627,66 +666,67 @@ def pfx_for(row):
     return f"{row}-"
 
 
-boards, order = {}, []
-files = []
-GAP_X, ROW_H = 80, H + 120 + 300
-for r, row in enumerate(ROWS):
-    T = V[row]
-    for c, (scr, label, fn) in enumerate(SCREENS):
-        html = fn(T, pfx_for(row))
-        # U-Start は Main.dc.html として書くため、U行の「開始へ」リンクはない（開始へ戻る導線は作らない）
-        name = fname(row, scr)
-        with open(os.path.join(PROJ, name), "w", encoding="utf-8", newline="\n") as f:
-            f.write(html)
-        boards[name] = {"x": c * (W + GAP_X), "y": r * ROW_H, "w": W, "h": H, "title": f"{T['name']}｜{label}", "is_interactive": True}
-        order.append(name)
-        files.append(name)
+if __name__ == "__main__":
+    boards, order = {}, []
+    files = []
+    GAP_X, ROW_H = 80, H + 120 + 300
+    for r, row in enumerate(ROWS):
+        T = V[row]
+        for c, (scr, label, fn) in enumerate(SCREENS):
+            html = fn(T, pfx_for(row))
+            # U-Start は Main.dc.html として書くため、U行の「開始へ」リンクはない（開始へ戻る導線は作らない）
+            name = fname(row, scr)
+            with open(os.path.join(PROJ, name), "w", encoding="utf-8", newline="\n") as f:
+                f.write(html)
+            boards[name] = {"x": c * (W + GAP_X), "y": r * ROW_H, "w": W, "h": H, "title": f"{T['name']}｜{label}", "is_interactive": True}
+            order.append(name)
+            files.append(name)
 
-ROW_W = len(SCREENS) * W + (len(SCREENS) - 1) * GAP_X
-notes = {}
-concept = {
-    "U": "ウルトラシンプル版\n・1画面1つの操作。開始は「はじめる」だけ\n・白地に黒、差し色は走査枠の黄色だけ\n・文字は大きく、説明文は出さない\n・字体：BIZ UDPゴシック",
-    "C": "C案（落ち着いた版）\n・v3.1 §5.1の配色に、追記案の二重の走査枠と濃い境界線を反映\n・一覧は淡い緑、サムネイルは暗い地\n・字体：Zen Maru Gothic＋BIZ UDPゴシック",
-    "V": "はっきり版\n・白地に、活動ごとの彩度の高い色帯\n・サムネイルは明るい地。文字色は色帯ごとにコントラスト比4.5以上\n・東京都UDガイドラインと会議13:49「はっきりした色」が根拠",
-}
-for r, row in enumerate(ROWS):
-    y = r * ROW_H
-    notes[f"t{row}"] = {"x": 0, "y": y - 260, "text": V[row]["name"], "kind": "title1", "maxW": ROW_W}
-    notes[f"s{row}"] = {"x": -760, "y": y, "text": concept[row], "w": 620, "size": "m", "fill": "yellow" if False else "orange"}
+    ROW_W = len(SCREENS) * W + (len(SCREENS) - 1) * GAP_X
+    notes = {}
+    concept = {
+        "U": "ウルトラシンプル版\n・1画面1つの操作。開始は「はじめる」だけ\n・白地に黒、差し色は走査枠の黄色だけ\n・文字は大きく、説明文は出さない\n・字体：BIZ UDPゴシック",
+        "C": "C案（落ち着いた版）\n・v3.1 §5.1の配色に、追記案の二重の走査枠と濃い境界線を反映\n・一覧は淡い緑、サムネイルは暗い地\n・字体：Zen Maru Gothic＋BIZ UDPゴシック",
+        "V": "はっきり版\n・白地に、活動ごとの彩度の高い色帯\n・サムネイルは明るい地。文字色は色帯ごとにコントラスト比4.5以上\n・東京都UDガイドラインと会議13:49「はっきりした色」が根拠",
+    }
+    for r, row in enumerate(ROWS):
+        y = r * ROW_H
+        notes[f"t{row}"] = {"x": 0, "y": y - 260, "text": V[row]["name"], "kind": "title1", "maxW": ROW_W}
+        notes[f"s{row}"] = {"x": -760, "y": y, "text": concept[row], "w": 620, "size": "m", "fill": "yellow" if False else "orange"}
 
-canvas = {
-    "v": 3,
-    "createdOnFiles": {"v": 1, "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
-    "title": "NURO デザイン3案",
-    "launch": {"view": "canvas"},
-    "pages": [],
-    "boards": boards,
-    "order": order,
-    "notes": notes,
-    "designSystems": [],
-}
-with open(os.path.join(PROJ, "canvas.json"), "w", encoding="utf-8", newline="\n") as f:
-    json.dump(canvas, f, ensure_ascii=False, indent=1)
+    canvas = {
+        "v": 3,
+        "createdOnFiles": {"v": 1, "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
+        "title": "NURO デザイン3案",
+        "launch": {"view": "canvas"},
+        "pages": [],
+        "boards": boards,
+        "order": order,
+        "notes": notes,
+        "designSystems": [],
+    }
+    with open(os.path.join(PROJ, "canvas.json"), "w", encoding="utf-8", newline="\n") as f:
+        json.dump(canvas, f, ensure_ascii=False, indent=1)
 
-# アプリへ移すときの変数（styles.css の名前に対応）
-css = ["/* NURO デザイン3案の変数。styles.css の :root に対応する名前にしてある。 */"]
-for row in ROWS:
-    T = V[row]
-    css.append(f"\n/* {T['name']} */\n[data-design=\"{T['key']}\"] {{")
-    for k, var in [("bg", "--bg"), ("surface", "--surface"), ("surface_alt", "--surface-soft"), ("ink", "--ink"), ("muted", "--muted"),
-                   ("line", "--line-strong"), ("accent", "--accent"), ("accent_ink", "--accent-ink"), ("focus", "--focus"),
-                   ("focus_outer", "--focus-outer"), ("stage", "--stage-deeper"), ("stage_outer", "--stage-deep"), ("stage_ink", "--stage-ink")]:
-        css.append(f"  {var}: {T[k]};")
-    css.append(f"  --radius: {T['radius']}px;\n  --line-width: {T['line_w']}px;")
-    css.append(f"  --font-round: {T['font_display']};")
-    for a in ACTS:
-        css.append(f"  --thumb-{a}: {T['thumb'][a]};")
-    if T["band"]:
+    # アプリへ移すときの変数（styles.css の名前に対応）
+    css = ["/* NURO デザイン3案の変数。styles.css の :root に対応する名前にしてある。 */"]
+    for row in ROWS:
+        T = V[row]
+        css.append(f"\n/* {T['name']} */\n[data-design=\"{T['key']}\"] {{")
+        for k, var in [("bg", "--bg"), ("surface", "--surface"), ("surface_alt", "--surface-soft"), ("ink", "--ink"), ("muted", "--muted"),
+                       ("line", "--line-strong"), ("accent", "--accent"), ("accent_ink", "--accent-ink"), ("focus", "--focus"),
+                       ("focus_outer", "--focus-outer"), ("stage", "--stage-deeper"), ("stage_outer", "--stage-deep"), ("stage_ink", "--stage-ink")]:
+            css.append(f"  {var}: {T[k]};")
+        css.append(f"  --radius: {T['radius']}px;\n  --line-width: {T['line_w']}px;")
+        css.append(f"  --font-round: {T['font_display']};")
         for a in ACTS:
-            css.append(f"  --band-{a}: {T['band'][a][0]};\n  --band-{a}-ink: {T['band'][a][1]};")
-    css.append("}")
-css.append("\n/* 走査枠（二重枠）。明るい面では外側の濃い枠、暗い面では内側の黄色が見える */\n.scan-focus { box-shadow: 0 0 0 5px var(--focus), 0 0 0 8px var(--focus-outer); }")
-with open(os.path.join(ROOT, "nuro-3variants-tokens.css"), "w", encoding="utf-8", newline="\n") as f:
-    f.write("\n".join(css) + "\n")
+            css.append(f"  --thumb-{a}: {T['thumb'][a]};")
+        if T["band"]:
+            for a in ACTS:
+                css.append(f"  --band-{a}: {T['band'][a][0]};\n  --band-{a}-ink: {T['band'][a][1]};")
+        css.append("}")
+    css.append("\n/* 走査枠（二重枠）。明るい面では外側の濃い枠、暗い面では内側の黄色が見える */\n.scan-focus { box-shadow: 0 0 0 5px var(--focus), 0 0 0 8px var(--focus-outer); }")
+    with open(os.path.join(ROOT, "nuro-3variants-tokens.css"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(css) + "\n")
 
-print(json.dumps({"files": files, "count": len(files)}, ensure_ascii=False))
+    print(json.dumps({"files": files, "count": len(files)}, ensure_ascii=False))
