@@ -1,0 +1,253 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-09-24T04:14:00Z"
+ },
+ "title": "NURO デザイン3案",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1180,
+   "h": 820,
+   "title": "ウルトラシンプル版｜開始",
+   "is_interactive": true
+  },
+  "U-Home.dc.html": {
+   "x": 1260,
+   "y": 0,
+   "w": 1180,
+   "h": 820,
+   "title": "ウルトラシンプル版｜活動一覧",
+   "is_interactive": true
+  },
+  "U-Kind.dc.html": {
+   "x": 2520,
+   "y": 0,
+   "w": 1180,
+   "h": 820,
+   "title": "ウルトラシンプル版｜種類選択",
+   "is_interactive": true
+  },
+  "U-Play.dc.html": {
+   "x": 3780,
+   "y": 0,
+   "w": 1180,
+   "h": 820,
+   "title": "ウルトラシンプル版｜初級",
+   "is_interactive": true
+  },
+  "U-Result.dc.html": {
+   "x": 5040,
+   "y": 0,
+   "w": 1180,
+   "h": 820,
+   "title": "ウルトラシンプル版｜結果",
+   "is_interactive": true
+  },
+  "U-Settings.dc.html": {
+   "x": 6300,
+   "y": 0,
+   "w": 1180,
+   "h": 820,
+   "title": "ウルトラシンプル版｜このあそびの設定",
+   "is_interactive": true
+  },
+  "U-Resume.dc.html": {
+   "x": 7560,
+   "y": 0,
+   "w": 1180,
+   "h": 820,
+   "title": "ウルトラシンプル版｜再開の確認",
+   "is_interactive": true
+  },
+  "C-Start.dc.html": {
+   "x": 0,
+   "y": 1240,
+   "w": 1180,
+   "h": 820,
+   "title": "C案（落ち着いた版）｜開始",
+   "is_interactive": true
+  },
+  "C-Home.dc.html": {
+   "x": 1260,
+   "y": 1240,
+   "w": 1180,
+   "h": 820,
+   "title": "C案（落ち着いた版）｜活動一覧",
+   "is_interactive": true
+  },
+  "C-Kind.dc.html": {
+   "x": 2520,
+   "y": 1240,
+   "w": 1180,
+   "h": 820,
+   "title": "C案（落ち着いた版）｜種類選択",
+   "is_interactive": true
+  },
+  "C-Play.dc.html": {
+   "x": 3780,
+   "y": 1240,
+   "w": 1180,
+   "h": 820,
+   "title": "C案（落ち着いた版）｜初級",
+   "is_interactive": true
+  },
+  "C-Result.dc.html": {
+   "x": 5040,
+   "y": 1240,
+   "w": 1180,
+   "h": 820,
+   "title": "C案（落ち着いた版）｜結果",
+   "is_interactive": true
+  },
+  "C-Settings.dc.html": {
+   "x": 6300,
+   "y": 1240,
+   "w": 1180,
+   "h": 820,
+   "title": "C案（落ち着いた版）｜このあそびの設定",
+   "is_interactive": true
+  },
+  "C-Resume.dc.html": {
+   "x": 7560,
+   "y": 1240,
+   "w": 1180,
+   "h": 820,
+   "title": "C案（落ち着いた版）｜再開の確認",
+   "is_interactive": true
+  },
+  "V-Start.dc.html": {
+   "x": 0,
+   "y": 2480,
+   "w": 1180,
+   "h": 820,
+   "title": "はっきり版｜開始",
+   "is_interactive": true
+  },
+  "V-Home.dc.html": {
+   "x": 1260,
+   "y": 2480,
+   "w": 1180,
+   "h": 820,
+   "title": "はっきり版｜活動一覧",
+   "is_interactive": true
+  },
+  "V-Kind.dc.html": {
+   "x": 2520,
+   "y": 2480,
+   "w": 1180,
+   "h": 820,
+   "title": "はっきり版｜種類選択",
+   "is_interactive": true
+  },
+  "V-Play.dc.html": {
+   "x": 3780,
+   "y": 2480,
+   "w": 1180,
+   "h": 820,
+   "title": "はっきり版｜初級",
+   "is_interactive": true
+  },
+  "V-Result.dc.html": {
+   "x": 5040,
+   "y": 2480,
+   "w": 1180,
+   "h": 820,
+   "title": "はっきり版｜結果",
+   "is_interactive": true
+  },
+  "V-Settings.dc.html": {
+   "x": 6300,
+   "y": 2480,
+   "w": 1180,
+   "h": 820,
+   "title": "はっきり版｜このあそびの設定",
+   "is_interactive": true
+  },
+  "V-Resume.dc.html": {
+   "x": 7560,
+   "y": 2480,
+   "w": 1180,
+   "h": 820,
+   "title": "はっきり版｜再開の確認",
+   "is_interactive": true
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "U-Home.dc.html",
+  "U-Kind.dc.html",
+  "U-Play.dc.html",
+  "U-Result.dc.html",
+  "U-Settings.dc.html",
+  "U-Resume.dc.html",
+  "C-Start.dc.html",
+  "C-Home.dc.html",
+  "C-Kind.dc.html",
+  "C-Play.dc.html",
+  "C-Result.dc.html",
+  "C-Settings.dc.html",
+  "C-Resume.dc.html",
+  "V-Start.dc.html",
+  "V-Home.dc.html",
+  "V-Kind.dc.html",
+  "V-Play.dc.html",
+  "V-Result.dc.html",
+  "V-Settings.dc.html",
+  "V-Resume.dc.html"
+ ],
+ "notes": {
+  "tU": {
+   "x": 0,
+   "y": -260,
+   "text": "ウルトラシンプル版",
+   "kind": "title1",
+   "maxW": 8740
+  },
+  "sU": {
+   "x": -760,
+   "y": 0,
+   "text": "ウルトラシンプル版\n・1画面1つの操作。開始は「はじめる」だけ\n・白地に黒、差し色は走査枠の黄色だけ\n・文字は大きく、説明文は出さない\n・字体：BIZ UDPゴシック",
+   "w": 620,
+   "size": "m",
+   "fill": "orange"
+  },
+  "tC": {
+   "x": 0,
+   "y": 980,
+   "text": "C案（落ち着いた版）",
+   "kind": "title1",
+   "maxW": 8740
+  },
+  "sC": {
+   "x": -760,
+   "y": 1240,
+   "text": "C案（落ち着いた版）\n・v3.1 §5.1の配色に、追記案の二重の走査枠と濃い境界線を反映\n・一覧は淡い緑、サムネイルは暗い地\n・字体：Zen Maru Gothic＋BIZ UDPゴシック",
+   "w": 620,
+   "size": "m",
+   "fill": "orange"
+  },
+  "tV": {
+   "x": 0,
+   "y": 2220,
+   "text": "はっきり版",
+   "kind": "title1",
+   "maxW": 8740
+  },
+  "sV": {
+   "x": -760,
+   "y": 2480,
+   "text": "はっきり版\n・白地に、活動ごとの彩度の高い色帯\n・サムネイルは明るい地。文字色は色帯ごとにコントラスト比4.5以上\n・東京都UDガイドラインと会議13:49「はっきりした色」が根拠",
+   "w": 620,
+   "size": "m",
+   "fill": "orange"
+  }
+ },
+ "designSystems": []
+}

@@ -1,0 +1,94 @@
+/* NURO デザイン3案の変数。styles.css の :root に対応する名前にしてある。 */
+
+/* ウルトラシンプル版 */
+[data-design="ultra"] {
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-soft: #F2F2F2;
+  --ink: #111111;
+  --muted: #444444;
+  --line-strong: #111111;
+  --accent: #111111;
+  --accent-ink: #FFFFFF;
+  --focus: #FFC83D;
+  --focus-outer: #111111;
+  --stage-deeper: #000000;
+  --stage-deep: #000000;
+  --stage-ink: #FFFFFF;
+  --radius: 20px;
+  --line-width: 3px;
+  --font-round: 'BIZ UDPGothic', 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+  --thumb-shokyu: #000000;
+  --thumb-reel: #000000;
+  --thumb-high: #000000;
+  --thumb-learn: #000000;
+  --thumb-arm: #000000;
+  --thumb-fish: #000000;
+}
+
+/* C案（落ち着いた版） */
+[data-design="c"] {
+  --bg: #F3FAF5;
+  --surface: #FFFFFF;
+  --surface-soft: #E8F1EC;
+  --ink: #263D40;
+  --muted: #486467;
+  --line-strong: #6E8A82;
+  --accent: #247D6C;
+  --accent-ink: #FFFFFF;
+  --focus: #F5AD19;
+  --focus-outer: #263D40;
+  --stage-deeper: #030609;
+  --stage-deep: #0C1320;
+  --stage-ink: #F6F8FC;
+  --radius: 15px;
+  --line-width: 2px;
+  --font-round: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', 'BIZ UDPGothic', sans-serif;
+  --thumb-shokyu: #0D1B22;
+  --thumb-reel: #2A2344;
+  --thumb-high: #25203B;
+  --thumb-learn: #2B3046;
+  --thumb-arm: #123C38;
+  --thumb-fish: #16395A;
+}
+
+/* はっきり版 */
+[data-design="clear"] {
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-soft: #FFFFFF;
+  --ink: #1A1A1A;
+  --muted: #3A3A3A;
+  --line-strong: #1A1A1A;
+  --accent: #005AFF;
+  --accent-ink: #FFFFFF;
+  --focus: #FFC83D;
+  --focus-outer: #1A1A1A;
+  --stage-deeper: #000000;
+  --stage-deep: #000814;
+  --stage-ink: #FFFFFF;
+  --radius: 18px;
+  --line-width: 2px;
+  --font-round: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', 'BIZ UDPGothic', sans-serif;
+  --thumb-shokyu: #FFE5DA;
+  --thumb-reel: #DCE8FF;
+  --thumb-high: #F6DDF6;
+  --thumb-learn: #D6F5EA;
+  --thumb-arm: #F3E4D6;
+  --thumb-fish: #D9F3FF;
+  --band-shokyu: #FF4B00;
+  --band-shokyu-ink: #1A1A1A;
+  --band-reel: #005AFF;
+  --band-reel-ink: #FFFFFF;
+  --band-high: #990099;
+  --band-high-ink: #FFFFFF;
+  --band-learn: #03AF7A;
+  --band-learn-ink: #1A1A1A;
+  --band-arm: #804000;
+  --band-arm-ink: #FFFFFF;
+  --band-fish: #4DC4FF;
+  --band-fish-ink: #1A1A1A;
+}
+
+/* 走査枠（二重枠）。明るい面では外側の濃い枠、暗い面では内側の黄色が見える */
+.scan-focus { box-shadow: 0 0 0 5px var(--focus), 0 0 0 8px var(--focus-outer); }

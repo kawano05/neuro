@@ -20,3 +20,6 @@ artifacts/
 # Local presentation/video production intermediates
 _deck_build/
 _video_build/
+
+# 会議の録画・文字起こし・先方の資料など。公開リポジトリなので入れない（共有は非公開の場所で）
+output/
