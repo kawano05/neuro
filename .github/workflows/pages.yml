@@ -4,7 +4,14 @@ on:
   push:
     branches:
       - main
+  # プレビューのブランチへの push でも、そちらの preview-pages.yml がここを
+  # 起動する（公開は main からしか許していないため、組み立てはここで行う）。
   workflow_dispatch:
+    inputs:
+      preview_branch:
+        description: "/preview/ に同居させるブランチ"
+        required: false
+        default: design/hakkiri
 
 permissions:
   contents: read
@@ -14,6 +21,11 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: false
+
+env:
+  # 本番（main）と同じサイトの /preview/ に出す、デザイン改修中のブランチ。
+  # ブランチが無くなれば、本番だけを出す（下の Preview の段）。
+  PREVIEW_BRANCH: ${{ github.event.inputs.preview_branch || 'design/hakkiri' }}
 
 jobs:
   build:
@@ -50,6 +62,57 @@ jobs:
       # そこを外したぶんを明示する（外し忘れると空の dist を公開する）。
       - name: Build web app
         run: npm run build
+
+      # --- Preview: デザイン改修中のブランチを /preview/ に同居させる -----
+      #
+      # https://kawano05.github.io/neuro/preview/ 。GitHub Pages は1リポジトリに
+      # 1サイトなので、本番の dist の下に置く。
+      #
+      # 本番の公開は、プレビューの成否に左右させない。プレビューのビルドや
+      # テストが落ちたら、プレビューを出さずに本番だけを出す。
+      #
+      # 置くのは本番の Service Worker を作ったあと（npm run build の中の
+      # generate-sw）。先に置くと、本番の SW がプレビューのファイルまで
+      # 事前キャッシュする。プレビューは自分の SW を /preview/ の範囲で持つ。
+      #
+      # VITE_PREVIEW=1 はプレビューの保存キーを分ける（src/lib/content.js）。
+      # 本番とプレビューは同じオリジンに載るので、分けないと記録が混ざる。
+      - name: Check preview branch
+        id: preview
+        run: |
+          if git ls-remote --exit-code --heads origin "$PREVIEW_BRANCH" > /dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Preview branch $PREVIEW_BRANCH not found; publishing main only."
+          fi
+
+      - name: Checkout preview branch
+        if: steps.preview.outputs.exists == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PREVIEW_BRANCH }}
+          path: preview-src
+
+      - name: Build preview
+        id: preview_build
+        if: steps.preview.outputs.exists == 'true'
+        continue-on-error: true
+        working-directory: preview-src
+        env:
+          VITE_PREVIEW: "1"
+        run: |
+          npm ci
+          npm run test:unit
+          npm run build
+
+      - name: Place preview under /preview/
+        if: steps.preview_build.outcome == 'success'
+        run: cp -r preview-src/dist dist/preview
+
+      - name: Report a skipped preview
+        if: steps.preview.outputs.exists == 'true' && steps.preview_build.outcome != 'success'
+        run: echo "::warning::Preview build of $PREVIEW_BRANCH failed; publishing main only."
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
