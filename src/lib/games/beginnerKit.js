@@ -13,10 +13,22 @@
 // 集計に使われる logEvent({type:"switch"}) だけ。
 // =====================================================================
 
+import { joinSpeech, resolveTextMode } from "../i18n.js";
 import { DEFAULT_PLAY_PREFS } from "../state.js";
 
 /** はじめの遊びは5回で終わる（colorLegacyPreset と同じ長さ）。 */
 export const BEGINNER_TARGET_PRESSES = 5;
+
+// 「明るい効果音」の持ち上げ（dB）。短い音なので、楽器の音と同じ大きさに
+// 聞こえるように足す（src/lib/audio.js の effectOutputGain。合図の無い場面だけ）。
+const POP_MAKEUP_DB = 5;
+
+// できたときの順番（docs/design-renewal-2026-09-25.md §3.17）。
+// 歓声と拍手 → 笑い声 → 「やったー できた！」の声。同時に鳴らすと、声に隠れて
+// おいわいの音がほとんど聞こえなかった。
+const LAUGH_AFTER_CHEER_S = 0.8;
+const VOICE_AFTER_CHEER_MS = 1200;
+const VOICE_AFTER_CHEER_AND_LAUGH_MS = 1900;
 
 // 楽器の音: ペンタトニック（ドレミソラ）。どの順で鳴っても濁らない。
 const INSTRUMENT_NOTES = [523.25, 587.33, 659.25, 783.99, 880.0];
@@ -45,8 +57,8 @@ export function playPressSound(audio, style, pressIndex, { creature = null } = {
   }
   if (style === "pop" || style === "creature") {
     // 明るい効果音: 上がる「ポン」と、はじける音を少し。
-    audio.playSweep({ fromHz: 300, toHz: 1100, durationS: 0.14, gain: 0.04 });
-    audio.playNoise({ durationS: 0.08, gain: 0.018, filter: "bandpass", frequency: 2600, q: 1.4 });
+    audio.playSweep({ fromHz: 300, toHz: 1100, durationS: 0.14, gain: 0.04, makeupDb: POP_MAKEUP_DB });
+    audio.playNoise({ durationS: 0.08, gain: 0.018, filter: "bandpass", frequency: 2600, q: 1.4, makeupDb: POP_MAKEUP_DB });
     return;
   }
   if (style === "boom") {
@@ -78,13 +90,16 @@ export function playFinishSound(audio, style) {
 }
 
 /**
- * できたときのおいわい。拍手（audio.playApplause）・笑い声（audio.playLaugh）と
- * 「やったー」。
+ * できたときのおいわい。歓声と拍手（audio.playApplause。録音があれば子どもの
+ * 「イエーイ」と拍手）・笑い声（audio.playLaugh）と「やったー」の声。
  *
  * どれを出すかは、この遊びの設定の「できたときのおいわい」で選ぶ（state.js の
  * PLAY_CHEERS）。「なし」以外なら「やったー」の声も出す。読み上げの声は、支援者の
  * 設定で読み上げが入っているときだけ（切ってあるときは、この遊びの設定の画面に
  * そう書いてある。gameSettings.js）。
+ *
+ * 順番: 歓声と拍手 → 笑い声 → 声。声（読み上げ）は効果音より大きいので、同時に
+ * 鳴らすと、おいわいの音が声に隠れる。効果音を切ってあるときは待たない。
  *
  * @param {object} ctx ゲームの ctx（audio / voiceFeedback / t / settings）
  * @param {{cheer: string}} prefs この遊びの設定
@@ -92,12 +107,21 @@ export function playFinishSound(audio, style) {
  */
 export function celebrate(ctx, prefs, doneText) {
   const cheer = prefs.cheer;
-  if (cheer === "both" || cheer === "applause") ctx.audio.playApplause();
-  if (cheer === "both" || cheer === "laugh") ctx.audio.playLaugh();
+  const withCheer = cheer === "both" || cheer === "applause";
+  const withLaugh = cheer === "both" || cheer === "laugh";
+  if (withCheer) ctx.audio.playApplause({ sample: "cheer" });
+  if (withLaugh) ctx.audio.playLaugh({ delayS: withCheer ? LAUGH_AFTER_CHEER_S : 0 });
   if (!ctx.settings.speechEnabled) return;
   const parts = [doneText];
   if (cheer !== "none") parts.unshift(ctx.t("color.voice.cheer"));
-  ctx.voiceFeedback(parts.join(" "));
+  const text = joinSpeech(parts, resolveTextMode(ctx.settings));
+  const sounding = ctx.settings.soundEnabled !== false && cheer !== "none";
+  const delayMs = !sounding ? 0 : withCheer && withLaugh ? VOICE_AFTER_CHEER_AND_LAUGH_MS : VOICE_AFTER_CHEER_MS;
+  if (delayMs > 0 && typeof ctx.audio.speakOrAnnounceLater === "function") {
+    ctx.audio.speakOrAnnounceLater(text, delayMs);
+    return;
+  }
+  ctx.voiceFeedback(text);
 }
 
 /** 進みぐあいの点（押した数だけ色がつく）。 */

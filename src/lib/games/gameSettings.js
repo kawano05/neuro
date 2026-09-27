@@ -42,15 +42,15 @@ const SOUND_LABELS = {
   none: "なし",
 };
 
-/** できたときのおいわい（拍手・笑い声。「なし」以外なら「やったー」の声つき）。 */
+/** できたときのおいわい（歓声と拍手・笑い声。「なし」以外なら「やったー」の声つき）。 */
 function cheerGroup(gameId) {
   return {
     key: `playPrefs.${gameId}.cheer`,
     kind: "cheer",
     label: "できたときのおいわい（「やったー」の声つき）",
     options: [
-      ["both", "拍手と笑い声"],
-      ["applause", "拍手"],
+      ["both", "歓声と拍手、笑い声"],
+      ["applause", "歓声と拍手"],
       ["laugh", "笑い声"],
       ["none", "なし"],
     ],
@@ -286,7 +286,7 @@ export function createGameSettings(ctx, host) {
     if (definition.groups.some((group) => group.kind === "cheer") && !state.settings.speechEnabled) {
       notes.push({
         lock: true,
-        text: "支援者の設定で「読み上げ」が切ってあるので、「やったー」の声は出ません（拍手と笑い声は出ます）。",
+        text: "支援者の設定で「読み上げ」が切ってあるので、「やったー」の声は出ません（歓声と拍手、笑い声は出ます）。",
       });
     }
     return notes;

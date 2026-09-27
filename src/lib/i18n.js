@@ -163,8 +163,13 @@ const STRINGS = {
   "balloon.pop": { ruby: "パン！", kanji: "パン！", kana: "パン！", en: "Pop!" },
   "balloon.complete": { ruby: "ぜんぶ われた！", kanji: "ぜんぶ われた！", kana: "ぜんぶ われた！", en: "All popped!" },
   "balloon.voice.progress": { ruby: "パン！ あと {n}こ", kanji: "パン！ あと {n}こ", kana: "パン！ あと {n}こ", en: "Pop! {n} left" },
-  "balloon.voice.finish": { ruby: "{n}こ われたよ", kanji: "{n}こ われたよ", kana: "{n}こ われたよ", en: "You popped {n} balloons" },
-  "coloring.word.0": { ruby: "色[いろ]が ついた！", kanji: "色が ついた！", kana: "いろが ついた！", en: "Colour!" },
+  "balloon.voice.finish": {
+    ruby: "ふうせんが {n}こ われたよ",
+    kanji: "ふうせんが {n}こ われたよ",
+    kana: "ふうせんが {n}こ われたよ",
+    en: "You popped {n} {n:balloon|balloons}!",
+  },
+  "coloring.word.0": { ruby: "色[いろ]が ついた！", kanji: "色が ついた！", kana: "いろが ついた！", en: "Colorful!" },
   "coloring.word.1": { ruby: "いいね！", kanji: "いいね！", kana: "いいね！", en: "Nice!" },
   "coloring.word.2": { ruby: "きれい！", kanji: "きれい！", kana: "きれい！", en: "Pretty!" },
   "coloring.word.3": { ruby: "もう すこし！", kanji: "もう すこし！", kana: "もう すこし！", en: "Almost!" },
@@ -173,9 +178,9 @@ const STRINGS = {
     ruby: "色[いろ]が ついたよ。あと {n}回[かい]",
     kanji: "色が ついたよ。あと {n}回",
     kana: "いろが ついたよ。あと {n}かい",
-    en: "Coloured! {n} left",
+    en: "Nice color! {n} more to go.",
   },
-  "coloring.voice.finish": { ruby: "{name}が できたよ", kanji: "{name}が できたよ", kana: "{name}が できたよ", en: "You made a {name}" },
+  "coloring.voice.finish": { ruby: "{name}が できたよ", kanji: "{name}が できたよ", kana: "{name}が できたよ", en: "Your {name} is all done!" },
   "baseball.word.ready": { ruby: "くるよ…", kanji: "くるよ…", kana: "くるよ…", en: "Here it comes..." },
   "baseball.word.again": { ruby: "もう いっかい なげるよ", kanji: "もう いっかい なげるよ", kana: "もう いっかい なげるよ", en: "Here comes another one" },
   "baseball.word.homerun": { ruby: "ホームラン！", kanji: "ホームラン！", kana: "ホームラン！", en: "Home run!" },
@@ -186,15 +191,21 @@ const STRINGS = {
     ruby: "5回[かい] 打[う]てたよ。ホームランは {h}かい！",
     kanji: "5回 打てたよ。ホームランは {h}かい！",
     kana: "5かい うてたよ。ホームランは {h}かい！",
-    en: "You hit it five times, with {h} home runs!",
+    en: "You hit the ball five times, with {h} {h:home run|home runs}!",
+  },
+  "baseball.voice.finishNoHomerun": {
+    ruby: "5回[かい] 打[う]てたよ！",
+    kanji: "5回 打てたよ！",
+    kana: "5かい うてたよ！",
+    en: "You hit the ball five times!",
   },
   "result.baseball.summary": {
     ruby: "ホームラン {h}かい・ヒット {k}かい",
     kanji: "ホームラン {h}かい・ヒット {k}かい",
     kana: "ホームラン {h}かい・ヒット {k}かい",
-    en: "{h} home runs, {k} hits",
+    en: "{h} {h:home run|home runs}, {k} {k:hit|hits}",
   },
-  "result.balloon.summary": { ruby: "ふうせんが {n}こ われたよ", kanji: "ふうせんが {n}こ われたよ", kana: "ふうせんが {n}こ われたよ", en: "You popped {n} balloons" },
+  "result.balloon.summary": { ruby: "ふうせんが {n}こ われたよ", kanji: "ふうせんが {n}こ われたよ", kana: "ふうせんが {n}こ われたよ", en: "You popped {n} {n:balloon|balloons}" },
   "result.coloring.summary": { ruby: "{name}の ぬりえが できたよ", kanji: "{name}の ぬりえが できたよ", kana: "{name}の ぬりえが できたよ", en: "Your {name} picture is done" },
 
   // 押す前の1行だけ。言葉の説明は要らない、絵と音で分かるように、と
@@ -218,13 +229,13 @@ const STRINGS = {
     ruby: "{name}！ あと {n}回[かい]",
     kanji: "{name}！ あと {n}回",
     kana: "{name}！ あと {n}かい",
-    en: "{name}! {n} left",
+    en: "{name}! {n} more to go.",
   },
   "color.voice.finish": {
     ruby: "{n}回[かい]できたよ",
     kanji: "{n}回できたよ",
     kana: "{n}かい できたよ",
-    en: "You did it {n} times",
+    en: "You did it {n} times!",
   },
   // 「できたときの声」がありのときだけ言う（この遊びの設定）。
   // 周りが家族だけでも盛り上がるように、と頼まれている（同 §1.7）。
@@ -608,40 +619,40 @@ const STRINGS = {
 
   // --- UFOキャッチャーの音声（成功・失敗をその場で返す） ---
   "crane.voice.grip": {
-    ruby: "{name}を つかみました",
-    kanji: "{name}を つかみました",
-    kana: "{name}を つかみました",
-    en: "You got {name}",
+    ruby: "{name}を つかんだ！",
+    kanji: "{name}を つかんだ！",
+    kana: "{name}を つかんだ！",
+    en: "You grabbed {name}!",
   },
   "crane.voice.gripAnnounce": {
     ruby: "{name}を しっかり つかみました",
     kanji: "{name}を しっかり つかみました",
     kana: "{name}を しっかり つかみました",
-    en: "You got {name} firmly",
+    en: "You have a firm grip on {name}.",
   },
   "crane.voice.slip": {
-    ruby: "惜[お]しい。つかんだけど すべりました",
-    kanji: "惜しい。つかんだけど すべりました",
-    kana: "おしい。つかんだけど すべりました",
-    en: "So close. You had it but it slipped",
+    ruby: "惜[お]しい！ つかんだけど すべっちゃった",
+    kanji: "惜しい！ つかんだけど すべっちゃった",
+    kana: "おしい！ つかんだけど すべっちゃった",
+    en: "So close! You had it, but it slipped.",
   },
   "crane.voice.slipAnnounce": {
     ruby: "つかみましたが すべりました",
     kanji: "つかみましたが すべりました",
     kana: "つかみましたが すべりました",
-    en: "Gripped it, but it slipped",
+    en: "You grabbed it, but it slipped.",
   },
   "crane.voice.miss": {
-    ruby: "つぎは だいじょうぶ",
-    kanji: "つぎは だいじょうぶ",
-    kana: "つぎは だいじょうぶ",
-    en: "Next one will be fine",
+    ruby: "おしい！ つぎは とれるよ",
+    kanji: "おしい！ つぎは とれるよ",
+    kana: "おしい！ つぎは とれるよ",
+    en: "So close! You'll get it next time.",
   },
   "crane.voice.missAnnounce": {
     ruby: "おしい。アームは 景品[けいひん]の そばに おりました",
     kanji: "おしい。アームは 景品の そばに おりました",
     kana: "おしい。アームは けいひんの そばに おりました",
-    en: "So close. The claw came down next to the prize",
+    en: "So close. The claw came down next to the prize.",
   },
   // 終わったときの声は「おわりました」ではなく「できた！」（打ち合わせで「終わりました
   // は ちょっと硬い。できた、でいい」と言われた。docs/design-renewal-2026-09-25.md §1.6）。
@@ -649,51 +660,57 @@ const STRINGS = {
     ruby: "できた！ {n}こ とれたよ",
     kanji: "できた！ {n}こ とれたよ",
     kana: "できた！ {n}こ とれたよ",
-    en: "Done! You caught {n}",
+    en: "You did it! You won {n} {n:prize|prizes}!",
+  },
+  "crane.voice.finishNone": {
+    ruby: "できた！ つぎは とれるよ",
+    kanji: "できた！ つぎは とれるよ",
+    kana: "できた！ つぎは とれるよ",
+    en: "You did it! You'll win one next time!",
   },
   "crane.voice.finishAnnounce": {
-    ruby: "アームで つかむ、できました。{n}こ とれました",
-    kanji: "アームで つかむ、できました。{n}こ とれました",
-    kana: "アームで つかむ、できました。{n}こ とれました",
-    en: "Claw grab is done. You caught {n}",
+    ruby: "アームで つかむ、おしまい。{n}こ とれました",
+    kanji: "アームで つかむ、おしまい。{n}こ とれました",
+    kana: "アームで つかむ、おしまい。{n}こ とれました",
+    en: "The claw game is over. You won {n} {n:prize|prizes}.",
   },
   "crane.voice.wait": {
     ruby: "待[ま]ってね",
     kanji: "待ってね",
     kana: "まってね",
-    en: "Wait a moment",
+    en: "Wait a moment.",
   },
 
   // --- さかなつりの音声 ---
   "fishing.voice.caught": {
-    ruby: "{n}センチの 魚[さかな]が つれました",
-    kanji: "{n}センチの 魚が つれました",
-    kana: "{n}センチの さかなが つれました",
-    en: "You caught a {n} centimetre fish",
+    ruby: "{n}センチの 魚[さかな]が つれたよ",
+    kanji: "{n}センチの 魚が つれたよ",
+    kana: "{n}センチの さかなが つれたよ",
+    en: "You caught a {n} centimeter fish!",
   },
   "fishing.voice.caughtFast": {
-    ruby: "すばやい。{n}センチの 魚[さかな]が つれました",
-    kanji: "すばやい。{n}センチの 魚が つれました",
-    kana: "すばやい。{n}センチの さかなが つれました",
-    en: "Quick! You caught a {n} centimetre fish",
+    ruby: "すばやい！ {n}センチの 魚[さかな]が つれたよ",
+    kanji: "すばやい！ {n}センチの 魚が つれたよ",
+    kana: "すばやい！ {n}センチの さかなが つれたよ",
+    en: "Super quick! You caught a {n} centimeter fish!",
   },
   "fishing.voice.goodWait": {
-    ruby: "にせアタリを 見分[みわ]けました",
-    kanji: "にせアタリを 見分けました",
-    kana: "にせアタリを みわけました",
-    en: "You spotted the false bite",
+    ruby: "にせアタリ、よく 見分[みわ]けたね",
+    kanji: "にせアタリ、よく 見分けたね",
+    kana: "にせアタリ、よく みわけたね",
+    en: "Good job spotting the fake bite!",
   },
   "fishing.voice.tooEarly": {
     ruby: "まだだよ。アタリを 待[ま]とう",
     kanji: "まだだよ。アタリを 待とう",
     kana: "まだだよ。アタリを まとう",
-    en: "Not yet. Wait for the bite",
+    en: "Not yet. Wait for the bite.",
   },
   "fishing.voice.boot": {
-    ruby: "長靴[ながぐつ]が かかりました",
-    kanji: "長靴が かかりました",
-    kana: "ながぐつが かかりました",
-    en: "You hooked a boot",
+    ruby: "長靴[ながぐつ]が かかったよ",
+    kanji: "長靴が かかったよ",
+    kana: "ながぐつが かかったよ",
+    en: "Oops! You hooked a boot.",
   },
   // 逃げたときも へこませない（打ち合わせで「逃げられた、みたいな失敗」を減らしたいと
   // 言われた。§1.4）。
@@ -701,19 +718,25 @@ const STRINGS = {
     ruby: "おしい！ つぎは つれるよ",
     kanji: "おしい！ つぎは つれるよ",
     kana: "おしい！ つぎは つれるよ",
-    en: "So close! You'll get the next one",
+    en: "So close! You'll catch the next one.",
   },
   "fishing.voice.finish": {
     ruby: "できた！ {n}ひき つれたよ。あわせて {cm}センチ",
     kanji: "できた！ {n}ひき つれたよ。あわせて {cm}センチ",
     kana: "できた！ {n}ひき つれたよ。あわせて {cm}センチ",
-    en: "Done! {n} fish, {cm} centimetres in total",
+    en: "You did it! You caught {n} fish, {cm} centimeters in all!",
+  },
+  "fishing.voice.finishNone": {
+    ruby: "できた！ つぎは つれるよ",
+    kanji: "できた！ つぎは つれるよ",
+    kana: "できた！ つぎは つれるよ",
+    en: "You did it! You'll catch one next time!",
   },
   "fishing.voice.finishAnnounce": {
-    ruby: "さかなつり、できました。{n}ひき、あわせて {cm}センチ",
-    kanji: "さかなつり、できました。{n}ひき、あわせて {cm}センチ",
-    kana: "さかなつり、できました。{n}ひき、あわせて {cm}センチ",
-    en: "Fishing is done. {n} fish, {cm} centimetres",
+    ruby: "さかなつり、おしまい。{n}ひき、あわせて {cm}センチ",
+    kanji: "さかなつり、おしまい。{n}ひき、あわせて {cm}センチ",
+    kana: "さかなつり、おしまい。{n}ひき、あわせて {cm}センチ",
+    en: "Fishing is over. {n} fish, {cm} centimeters in all.",
   },
 
   // --- リズム系のゲーム表示と音声 ---
@@ -790,16 +813,16 @@ const STRINGS = {
     en: "Try the next one",
   },
   "rhythm.voice.start": {
-    ruby: "リズムの 練習[れんしゅう]を はじめます",
-    kanji: "リズムの 練習を はじめます",
-    kana: "リズムの れんしゅうを はじめます",
-    en: "Starting the rhythm practice",
+    ruby: "リズムの 練習[れんしゅう]を はじめるよ",
+    kanji: "リズムの 練習を はじめるよ",
+    kana: "リズムの れんしゅうを はじめるよ",
+    en: "Let's start the rhythm practice.",
   },
   "rhythm.voice.finish": {
-    ruby: "できた！ {n}パーセント できたよ",
-    kanji: "できた！ {n}パーセント できたよ",
-    kana: "できた！ {n}パーセント できたよ",
-    en: "Done! {n} percent right",
+    ruby: "できた！ {n}パーセント 合[あ]ったよ",
+    kanji: "できた！ {n}パーセント 合ったよ",
+    kana: "できた！ {n}パーセント あったよ",
+    en: "You did it! {n} percent on the beat!",
   },
 
 
@@ -813,7 +836,7 @@ const STRINGS = {
     ruby: "{n}回[かい]遊[あそ]んで、{m}ひきに会[あ]えたよ",
     kanji: "{n}回遊んで、{m}ひきに会えたよ",
     kana: "{n}かい あそんで、{m}ひきに あえたよ",
-    en: "You played {n} times and met {m} friends",
+    en: "You played {n} times and met {m} {m:friend|friends}",
   },
   // 点のある遊びのけっか。一言は前向きなものだけにする——「つぎは もうちょっと」
   // のような言い方も、へこませない、という要望に合わない（同 §1.5, §1.6）。
@@ -844,7 +867,7 @@ const STRINGS = {
   "result.scan.outOf": { ruby: "{n}かい ちゅう", kanji: "{n}かい ちゅう", kana: "{n}かい ちゅう", en: "out of {n}" },
   "result.scan.slips": { ruby: "おしかった（すべった）", kanji: "おしかった（すべった）", kana: "おしかった（すべった）", en: "So close (slipped)" },
   "result.scan.distance": { ruby: "ねらいの ずれ", kanji: "ねらいの ずれ", kana: "ねらいの ずれ", en: "Aim error" },
-  "result.scan.prizes": { ruby: "とれた けいひん {n}こ", kanji: "とれた けいひん {n}こ", kana: "とれた けいひん {n}こ", en: "{n} prizes won" },
+  "result.scan.prizes": { ruby: "とれた けいひん {n}こ", kanji: "とれた けいひん {n}こ", kana: "とれた けいひん {n}こ", en: "{n} {n:prize|prizes} won" },
 
   "result.rt.score": { ruby: "スコア", kanji: "スコア", kana: "スコア", en: "Score" },
   "result.rt.longest": { ruby: "いちばん おおきい", kanji: "いちばん おおきい", kana: "いちばん おおきい", en: "Biggest" },
@@ -895,10 +918,25 @@ const STRINGS = {
   "learn.tryNext": { ruby: "おしい！ つぎも やってみよう", kanji: "おしい！ つぎも やってみよう", kana: "おしい！ つぎも やってみよう", en: "So close! Try the next one" },
 
   // --- 画面の切り替えを伝える読み上げ ---
-  "voice.start": { ruby: "はじめます", kanji: "はじめます", kana: "はじめます", en: "Starting" },
-  "voice.enterCorner": { ruby: "{name}を えらびます", kanji: "{name}を えらびます", kana: "{name}を えらびます", en: "Choosing {name}" },
-  "voice.pageOf": { ruby: "{n}ページ目[め]です", kanji: "{n}ページ目です", kana: "{n}ページ目です", en: "Page {n}" },
-  "voice.gameStart": { ruby: "{name}を はじめます", kanji: "{name}を はじめます", kana: "{name}を はじめます", en: "Starting {name}" },
+  "voice.start": {
+    ruby: "はじめるよ",
+    kanji: "はじめるよ",
+    kana: "はじめるよ",
+    en: "Let's start!",
+  },
+  "voice.enterCorner": {
+    ruby: "{name}を えらんだよ",
+    kanji: "{name}を えらんだよ",
+    kana: "{name}を えらんだよ",
+    en: "You picked {name}.",
+  },
+  "voice.pageOf": { ruby: "{n}ページ目[め]です", kanji: "{n}ページ目です", kana: "{n}ページ目です", en: "Page {n}." },
+  "voice.gameStart": {
+    ruby: "{name}を はじめるよ",
+    kanji: "{name}を はじめるよ",
+    kana: "{name}を はじめるよ",
+    en: "Let's play {name}!",
+  },
   "voice.pressed": { ruby: "{name}に入力[にゅうりょく]しました", kanji: "{name}に入力しました", kana: "{name}に入力しました", en: "Pressed {name}" },
 
 
@@ -1033,9 +1071,15 @@ const STRINGS = {
   // 外したときの一言（れんしゅうの回だけ。slot.js の nudgeReel）。
   "slot.nudge": { ruby: "おしい！", kanji: "おしい！", kana: "おしい！", en: "So close!" },
   "slot.progress.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
-  "slot.voice.round": { ruby: "{total}回[かい]のうち {current}回目[かいめ]です", kanji: "{total}回のうち {current}回目です", kana: "{total}かいの うち {current}かいめです", en: "Round {current} of {total}" },
-  "slot.voice.nextReel": { ruby: "次[つぎ]は {current}ばんめ", kanji: "次は {current}ばんめ", kana: "つぎは {current}ばんめ", en: "Next is reel {current}" },
-  "slot.voice.finish": { ruby: "できた！ {total}回[かい]のうち {hits}回[かい] ぴったり！", kanji: "できた！ {total}回のうち {hits}回 ぴったり！", kana: "できた！ {total}かいの うち {hits}かい ぴったり！", en: "Done! {hits} of {total} right on" },
+  "slot.voice.round": { ruby: "{total}回[かい]のうち {current}回目[かいめ]です", kanji: "{total}回のうち {current}回目です", kana: "{total}かいの うち {current}かいめです", en: "Round {current} of {total}." },
+  "slot.voice.nextReel": { ruby: "次[つぎ]は {current}ばんめ", kanji: "次は {current}ばんめ", kana: "つぎは {current}ばんめ", en: "Now reel number {current}." },
+  "slot.voice.finish": { ruby: "できた！ {total}回[かい]のうち {hits}回[かい] ぴったり！", kanji: "できた！ {total}回のうち {hits}回 ぴったり！", kana: "できた！ {total}かいの うち {hits}かい ぴったり！", en: "You did it! {hits} out of {total} were right on!" },
+  "slot.voice.finishNone": {
+    ruby: "できた！ 最後[さいご]まで 止[と]められたね",
+    kanji: "できた！ 最後まで 止められたね",
+    kana: "できた！ さいごまで とめられたね",
+    en: "You did it! You made it all the way to the end!",
+  },
 
   "result.slot.title": { ruby: "ぜんぶ 止[と]められました", kanji: "ぜんぶ 止められました", kana: "ぜんぶ とめられました", en: "All reels stopped" },
   "result.slot.hitRate": { ruby: "合[あ]った割合[わりあい]", kanji: "合った割合", kana: "あった わりあい", en: "Matched" },
@@ -1085,7 +1129,15 @@ export function resolveTextMode(settings) {
 function fill(text, values, transform = (value) => String(value)) {
   if (!values) return text;
   return Object.entries(values).reduce(
-    (out, [name, value]) => out.replaceAll(`{${name}}`, () => transform(value)),
+    (out, [name, value]) =>
+      out
+        // 数で変わる言い方: `{n:prize|prizes}` は n が 1 のとき前、ほかは後ろ。
+        // 英語の単数・複数のため（読み上げで「1 prizes」と言わせない）。
+        // 選ぶ言葉は辞書の一部なので、値のようにエスケープはしない。
+        .replace(new RegExp(`\\{${name}:([^{}|]*)\\|([^{}]*)\\}`, "g"), (_, one, other) =>
+          Number(value) === 1 ? one : other
+        )
+        .replaceAll(`{${name}}`, () => transform(value)),
     text
   );
 }
@@ -1130,6 +1182,77 @@ export function translateHtml(key, mode, values) {
 /** 読み上げに渡す言語コード。 */
 export function speechLangFor(mode) {
   return SPEECH_LANG[mode] ?? SPEECH_LANG[DEFAULT_TEXT_MODE];
+}
+
+const JAPANESE_TEXT = /[ぁ-ゖァ-ヺー一-龠々]/;
+
+/**
+ * その文を読む言語。英語表記でも、文が日本語なら日本語の声で読む
+ * （「ことばで伝える」の元の文字や、学ぶ画面の答えの言葉など）。英語の声に
+ * 日本語を読ませると、意味の通らない音になる。
+ */
+export function speechLangForText(text, mode) {
+  const lang = speechLangFor(mode);
+  if (!lang.startsWith("ja") && JAPANESE_TEXT.test(String(text ?? ""))) return SPEECH_LANG.ruby;
+  return lang;
+}
+
+// 数のあとの助数詞（かな → 漢字）。画面では、読みが数で変わる字（1本＝いっぽん、
+// 3匹＝さんびき）に一つのふりがなを付けられないので、かなで書いている。
+// 読み上げはかなのままだと「1かい」を「いちかい」、「3ひき」を「さんひき」と
+// 読んでしまうので、声に渡すときだけ漢字へ戻す（漢字なら正しく読む）。
+const SPOKEN_COUNTERS = [
+  [/(\d+)[ \u3000]*ばんめ/g, "$1番目"],
+  [/(\d+)[ \u3000]*かい(?![ぁ-ゖ])/g, "$1回"],
+  [/(\d+)[ \u3000]*[ひびぴ]き(?![ぁ-ゖ])/g, "$1匹"],
+  [/(\d+)[ \u3000]*[ほぼぽ]ん(?![ぁ-ゖ])/g, "$1本"],
+  [/(\d+)[ \u3000]*こ(?![ぁ-ゖ])/g, "$1個"],
+  [/(\d+)[ \u3000]*にん(?![ぁ-ゖ])/g, "$1人"],
+  [/(\d+)[ \u3000]*まい(?![ぁ-ゖ])/g, "$1枚"],
+];
+
+// 分かち書きの空白を外す範囲（日本語の字・数字・日本語の句読点のあいだ）。
+const JA_JOIN = "ぁ-ゖァ-ヺー一-龠々〆ヵヶ0-9０-９、。！？「」『』（）・";
+// 後読み（(?<=…)）は古い iPad（iOS 16.3 まで）で読み込みごと失敗するので使わない。
+const WAKACHI_SPACE = new RegExp(`([${JA_JOIN}])[ \u3000]+(?=[${JA_JOIN}])`, "g");
+
+/**
+ * 画面の文を、声で読む文に整える（audio.js の speak）。
+ *
+ * 画面の日本語は、子どもが読みやすいように語のあいだを空けて書いてある
+ * （分かち書き）。そのまま読み上げに渡すと、空白のたびに声が切れて、
+ * たどたどしく聞こえる（2026-09-27 に指摘された）。声に渡すときだけ:
+ *   - 分かち書きの空白を外す（日本語の字どうしのあいだだけ。英字の前後は残す）
+ *   - 数のあとの助数詞を漢字にする（上の SPOKEN_COUNTERS）
+ *   - 「…」は読点にする（「てんてんてん」と読まれないように）
+ * 英語は、空白をまとめるだけ。
+ *
+ * @param {string} text
+ * @param {string} lang "ja-JP" | "en-US"（speechLangForText）
+ */
+export function toSpeechText(text, lang) {
+  let out = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!String(lang).startsWith("ja")) return out;
+  for (const [pattern, replacement] of SPOKEN_COUNTERS) out = out.replace(pattern, replacement);
+  out = out.replace(/(…+|\.{3,})(?=\s*\S)/g, "、").replace(/(…+|\.{3,})$/g, "");
+  return out.replace(WAKACHI_SPACE, "$1").trim();
+}
+
+/**
+ * いくつかの文を、ひと続きの読み上げにする（題名と説明など）。
+ * 文の終わりに句点が無ければ足す——無いまま空白でつなぐと、分かち書きを
+ * 外したときに「アームでつかむアームが横に動きます」と1語のように読まれる。
+ *
+ * @param {string[]} parts
+ * @param {string} mode 表記（"ruby" / "en" など）
+ */
+export function joinSpeech(parts, mode) {
+  const ja = speechLangFor(mode).startsWith("ja");
+  return parts
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .map((part) => (/[。．.!！?？…」]$/.test(part) ? part : `${part}${ja ? "。" : "."}`))
+    .join(ja ? "" : " ");
 }
 
 /** テストと点検のために、表の中身を読めるようにしておく。 */

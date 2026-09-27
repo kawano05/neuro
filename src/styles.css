@@ -480,6 +480,30 @@ body.high-contrast .settings-guide {
   color: #000000;
 }
 
+/* 音の素材のクレジット（App.svelte の #soundCredits）。見た目は「つかいかた」と同じ。 */
+.settings-credits {
+  margin: 18px 0 0;
+}
+
+.settings-credits-note {
+  margin: 0;
+  padding: 0 20px 8px 44px;
+  line-height: 1.6;
+}
+
+.settings-credits-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 20px 18px 44px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.settings-credits-list strong {
+  display: block;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .settings-guide > summary::before {
     transition: none;

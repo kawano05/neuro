@@ -489,6 +489,13 @@ export function initNeuroNodeApp() {
     }
   });
 
+  // 音が止まったまま残っていたら、次の操作で戻す（iOS のスリープ・ほかのアプリ
+  // のあと。src/lib/audio.js の resumeIfSuspended）。戻せるのは操作の中だけなので、
+  // どの操作でも確かめる。鳴っているあいだは何もしない。
+  ["pointerup", "touchend", "keydown"].forEach((type) => {
+    document.addEventListener(type, () => audio.resumeIfSuspended(), { capture: true, passive: true });
+  });
+
   window.addEventListener("resize", () => ctx.scan.refresh());
 
   /**

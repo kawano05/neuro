@@ -542,6 +542,44 @@ export const PHRASE_RUBY = {
   気持ち: "気持[きも]ち",
 };
 
+/**
+ * 定型句と分類の英語（表記が English のとき、画面と読み上げに使う）。
+ *
+ * 以前は英語表記でも日本語の文をそのまま英語の声に読ませていて、意味の通らない
+ * 音になっていた（2026-09-27）。記録（logEvent の label）は、ここでも元の
+ * 日本語のまま（効果測定の手順がその名前で数えるため）。
+ */
+export const PHRASE_EN = {
+  基本: "Basics",
+  体調: "How I feel",
+  介助: "Help",
+  気持ち: "Feelings",
+  はい: "Yes",
+  いいえ: "No",
+  もう一度: "Once more, please",
+  わかりません: "I don't understand",
+  ありがとう: "Thank you",
+  大丈夫です: "I'm okay",
+  痛いです: "It hurts",
+  寒いです: "I'm cold",
+  暑いです: "I'm hot",
+  眠いです: "I'm sleepy",
+  休みたいです: "I want to rest",
+  水がほしいです: "I'd like some water",
+  姿勢を変えてください: "Please change my position",
+  トイレに行きたいです: "I need the bathroom",
+  吸引してください: "Please suction me",
+  家族に連絡してください: "Please call my family",
+  ナースコール: "Call the nurse",
+  待ってください: "Please wait",
+  うれしいです: "I'm happy",
+  不安です: "I'm worried",
+  楽しいです: "I'm having fun",
+  静かにしたいです: "I'd like some quiet",
+  外に出たいです: "I want to go outside",
+  話したいです: "I want to talk",
+};
+
 export const phraseCategories = {
   基本: ["はい", "いいえ", "もう一度", "わかりません", "ありがとう", "大丈夫です"],
   体調: ["痛いです", "寒いです", "暑いです", "眠いです", "休みたいです", "水がほしいです"],

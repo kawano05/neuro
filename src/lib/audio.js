@@ -7,9 +7,10 @@
 // 将来的には Web Audio によるサンプル再生）。
 //
 // iOS化の注意:
-//   - AudioContext はユーザー操作後に初期化する必要がある（現状クリック
-//     起点なのでOK。サイレントスイッチONだと WKWebView では音が出ない
-//     場合があるので実機確認すること）。
+//   - AudioContext はユーザー操作後に初期化する必要がある（スタート画面の
+//     ひと押し。止まったまま残ったときは、操作のたびに resumeIfSuspended で
+//     戻す）。消音（マナーモード）で効果音だけ鳴らなくならないよう、
+//     Audio Session を「再生」にする（preferPlaybackSession。実機で確認すること）。
 //   - speechSynthesis は iOS では日本語ボイスの取得タイミングに癖がある。
 //
 // P2-1（detailed-design.md §6.2）: createBeatScheduler を追加。Chris Wilson
@@ -19,7 +20,8 @@
 // 時刻に使うのは MUST NOT）。
 // =====================================================================
 
-import { resolveTextMode, speechLangFor } from "./i18n.js";
+import { resolveTextMode, speechLangForText, toSpeechText } from "./i18n.js";
+import { pickVoice } from "./speechVoice.js";
 
 /** ビート予約の既定包絡（sine, gain 0.05, 約0.18秒で減衰）。detailed-design.md §6.2。 */
 export const DEFAULT_TONE_GAIN = 0.05;
@@ -198,6 +200,61 @@ const LAUGH_OUTPUT_GAIN = 0.12;
 /** 拍手の出口の大きさ（LAUGH_OUTPUT_GAIN と同じ決め方）。 */
 const APPLAUSE_OUTPUT_GAIN = 2.6;
 
+/**
+ * 測定の課題ではない場面（はじめの遊び・ボールを打つ・ホームや学ぶ画面）で、
+ * 効果音を持ち上げる大きさ（dB）。
+ *
+ * 2026-09-27 に、iPad の内蔵スピーカー相当（300Hz より下がほとんど出ない）で
+ * 測ると、効果音は読み上げの声より 17〜41dB 小さかった（楽器の音 −19、拍手 −26、
+ * 笑い声 −31、ボールを投げた音 −41。test-results/probe-loudness.mjs）。
+ * 「できた！」で拍手・笑い声と「やったー」が同時に鳴ると、声に隠れてほとんど
+ * 聞こえない。打ち合わせでは「読み上げより効果音のほうが反応がよい」と
+ * 言われている（docs/design-renewal-2026-09-25.md §1.7, §3.17）。
+ *
+ * 効果音の上限（EFFECT_GAIN_CEILING）は「測定の合図を覆わない」ための決まりで、
+ * 合図のある遊び（profile "task"）では今までどおり守る。合図の無い場面
+ * （profile "play"）だけ、1音ごとの出口で持ち上げる。声より 6〜8dB 小さいくらい
+ * （楽器の音で）を目安にした。
+ */
+export const PLAY_EFFECT_BOOST_DB = 12;
+
+/**
+ * 効果音の出口の倍率。"task"（合図のある遊び）は常に 1 で、音ごとの持ち上げ
+ * （makeupDb）も効かない——測定の遊びの音は、この仕組みを入れる前と同じ。
+ */
+export function effectOutputGain(profile, makeupDb = 0) {
+  if (profile !== "play") return 1;
+  const extra =
+    typeof makeupDb === "number" && Number.isFinite(makeupDb)
+      ? Math.min(Math.max(makeupDb, -24), 24)
+      : 0;
+  return Math.pow(10, (PLAY_EFFECT_BOOST_DB + extra) / 20);
+}
+
+/**
+ * 音ごとの持ち上げ（dB、"play" のときだけ効く）。どれも、楽器の音（playChime）と
+ * 同じくらいに聞こえるように、iPad のスピーカー相当で測って決めた。短い音や
+ * 帯の狭い音は、山の高さが同じでも小さく聞こえる。
+ */
+const APPLAUSE_MAKEUP_DB = 8;
+const LAUGH_MAKEUP_DB = 12;
+const CRAB_MAKEUP_DB = 13;
+const THROW_MAKEUP_DB = 14;
+const SWING_MAKEUP_DB = 13;
+const SCAN_TICK_MAKEUP_DB = 13;
+const BOOM_MAKEUP_DB = 5;
+const BUNT_MAKEUP_DB = 2;
+
+/**
+ * 録音（src/assets/sounds/）の大きさ。ファイルは scripts/prepare-sounds.mjs で、
+ * iPad のスピーカー相当の「いちばん大きい 100ms」が −18dBFS になるように
+ * そろえてある。ここで合成の効果音（楽器の音）と同じ大きさへ下げる。
+ * おいわいの音（歓声・拍手・笑い声）だけ 2dB 大きく。
+ */
+const SAMPLE_LEVEL = 0.158; // −16dB
+const CELEBRATION_SAMPLE_LEVEL = 0.2; // −14dB
+const CELEBRATION_SAMPLES = new Set(["laugh", "applause", "cheer", "homerun-cheer"]);
+
 /** ノイズ音源の長さ（秒）。使い回すので、いちばん長い効果音より長くする。 */
 const NOISE_BUFFER_S = 2;
 
@@ -216,6 +273,26 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   // 録音の差し替え。名前 → 読み込み済みの AudioBuffer（読み込み中は Promise）。
   const samples = new Map();
+  // いまの場面。"play"（合図の無い場面）か "task"（合図のある遊び）。
+  // gameHost が遊びの開始・終了で切り替える。
+  let profile = "play";
+  // 少し遅らせて読み上げる文（おいわいの音のあと）。stopSpeech で取り消す。
+  let pendingSpeech = null;
+
+  function setProfile(next) {
+    profile = next === "task" ? "task" : "play";
+  }
+
+  /**
+   * 効果音の出口。1音ごとに作る——場面が切り替わった瞬間に、鳴り終わりかけの
+   * 音の大きさが跳ねないように。合図の音（scheduleOscillatorTone）は通さない。
+   */
+  function effectOut(ctx, makeupDb = 0) {
+    const node = ctx.createGain();
+    node.gain.value = effectOutputGain(profile, makeupDb);
+    node.connect(ctx.destination);
+    return node;
+  }
 
   /** AudioContext を（未生成なら）生成し、対応する BeatScheduler も用意する。 */
   function ensureContext() {
@@ -253,29 +330,31 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
 
   /**
    * 録音があれば鳴らす。無ければ false（呼び出し側が合成で鳴らす）。
-   * 録音の音量も効果音の上限の中に置く（録音は大きめに作られていることが多い）。
+   *
+   * 大きさは、ファイルがそろえてある前提（scripts/prepare-sounds.mjs）で決まった
+   * 値にする。以前は圧縮器（DynamicsCompressor）で頭を押さえていたが、圧縮器は
+   * 自動で持ち上げ（makeup）も掛けるので、出てくる大きさが読めなかった。
+   *
+   * @param {string} name
+   * @param {{delayS?: number}} [options] delayS … 今からの遅れ（秒、音の時計で予約）
    */
-  function trySample(name) {
+  function trySample(name, { delayS = 0 } = {}) {
     if (!sampleUrls[name]) return false;
     const ctx = ensureContext();
     if (!ctx) return false;
+    const level = CELEBRATION_SAMPLES.has(name) ? CELEBRATION_SAMPLE_LEVEL : SAMPLE_LEVEL;
+    const requestedAt = ctx.currentTime + Math.max(0, delayS);
     const play = (buffer) => {
       if (!buffer) return;
       try {
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         const gain = ctx.createGain();
-        gain.gain.value = EFFECT_GAIN_CEILING * 10;
-        const limiter = ctx.createDynamicsCompressor();
-        limiter.threshold.value = -20;
-        limiter.ratio.value = 20;
-        const out = ctx.createGain();
-        out.gain.value = EFFECT_GAIN_CEILING * 2.5;
+        gain.gain.value = level;
         source.connect(gain);
-        gain.connect(limiter);
-        limiter.connect(out);
-        out.connect(ctx.destination);
-        source.start();
+        gain.connect(effectOut(ctx));
+        // 読み込みを待ったぶん遅れたときは、すぐ鳴らす（予約が過去になる）。
+        source.start(Math.max(ctx.currentTime, requestedAt));
       } catch {
         // 鳴らせなくても遊びは止めない。
       }
@@ -286,7 +365,18 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
     return true;
   }
 
-  /** 日本語で読み上げる（speechEnabled が ON のときのみ） */
+  /** 端末にある声の一覧（まだ読み込まれていなければ空）。 */
+  function availableVoices(synth) {
+    try {
+      return typeof synth?.getVoices === "function" ? synth.getVoices() || [] : [];
+    } catch {
+      return [];
+    }
+  }
+  // 声の一覧は、最初に尋ねたときに読み込みが始まる端末がある。先に一度尋ねておく。
+  if (typeof window !== "undefined") availableVoices(window.speechSynthesis);
+
+  /** 読み上げる（speechEnabled が ON のときのみ） */
   function speak(text) {
     const speechSettings = getSettings();
     const synth = window.speechSynthesis;
@@ -300,10 +390,17 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
     }
     try {
       if (typeof synth.cancel === "function") synth.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
       // 表記に合わせて読み上げの言語も変える。英語表記のまま日本語音声で
-      // 読ませると、意味の通らない発音になる（src/lib/i18n.js）。
-      utterance.lang = speechLangFor(resolveTextMode(speechSettings));
+      // 読ませると、意味の通らない発音になる（src/lib/i18n.js）。英語表記でも
+      // 文が日本語なら日本語の声で読む（speechLangForText）。
+      const lang = speechLangForText(text, resolveTextMode(speechSettings));
+      // 画面の文（分かち書き・かなの助数詞）を、声で読む文に整える（toSpeechText）。
+      const utterance = new SpeechSynthesisUtterance(toSpeechText(text, lang));
+      // 声を選ぶ（src/lib/speechVoice.js）。選ばないと、iPhone / iPad では機械的な
+      // 声になることがあった。合う声が無ければ端末の既定に任せる。
+      const voice = pickVoice(availableVoices(synth), lang);
+      if (voice) utterance.voice = voice;
+      utterance.lang = voice?.lang || lang;
       utterance.rate = 0.92;
       // 合図音・効果音を増量せず、相対的に大きかったTTS側を先に調整する。
       utterance.volume = clampSpeechVolume(speechSettings.speechVolume);
@@ -323,6 +420,31 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
     return "live-region";
   }
 
+  function cancelPendingSpeech() {
+    if (pendingSpeech !== null) {
+      window.clearTimeout(pendingSpeech);
+      pendingSpeech = null;
+    }
+  }
+
+  /**
+   * 少し間をおいて読み上げる（speakOrAnnounce と同じ振り分け）。
+   *
+   * できたときに、歓声・拍手・笑い声と「やったー」を同時に鳴らすと、声に
+   * 隠れておいわいの音がほとんど聞こえなかった。音を先に聞かせてから声にする
+   * （games/beginnerKit.js の celebrate）。遊びが終わってリザルトへ移っても
+   * 取り消さない。ホームへ戻る・次の遊びが始まる（stopSpeech）と取り消す。
+   */
+  function speakOrAnnounceLater(spokenText, delayMs, announcementText = spokenText) {
+    cancelPendingSpeech();
+    if (!(delayMs > 0)) return speakOrAnnounce(spokenText, announcementText);
+    pendingSpeech = window.setTimeout(() => {
+      pendingSpeech = null;
+      speakOrAnnounce(spokenText, announcementText);
+    }, delayMs);
+    return "scheduled";
+  }
+
   /**
    * 読み上げ中の発話を打ち切る。
    *
@@ -336,6 +458,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
    * 場合も含め、「止める」は常に効くべきなので。
    */
   function stopSpeech() {
+    cancelPendingSpeech();
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
   }
@@ -381,6 +504,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
    * @param {number} [options.q] バンドパスの鋭さ
    * @param {number} [options.sweepTo] 指定すると frequency からここへ滑らす
    * @param {number} [options.delayS] 今からの遅れ（続けて鳴らすとき用）
+   * @param {number} [options.makeupDb] 合図の無い場面だけの持ち上げ（effectOutputGain）
    */
   function playNoise({
     durationS = 0.2,
@@ -390,6 +514,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
     q = 1,
     sweepTo = null,
     delayS = 0,
+    makeupDb = 0,
   } = {}) {
     if (!getSettings().soundEnabled) return null;
     const ctx = ensureContext();
@@ -413,7 +538,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       }
       source.connect(band);
       band.connect(envelope);
-      envelope.connect(ctx.destination);
+      envelope.connect(effectOut(ctx, makeupDb));
       source.start(at);
       source.stop(at + durationS + 0.02);
       return { source, envelope };
@@ -429,7 +554,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
    * 合図音と同じ純音（sine）は使わない。合図と紛れると、聴覚キューへの
    * 反応という測定の前提が濁る——三角波にして倍音の出かたを変えてある。
    */
-  function playSweep({ fromHz = 220, toHz = 660, durationS = 0.25, gain = 0.03 } = {}) {
+  function playSweep({ fromHz = 220, toHz = 660, durationS = 0.25, gain = 0.03, makeupDb = 0 } = {}) {
     if (!getSettings().soundEnabled) return null;
     const ctx = ensureContext();
     if (!ctx) return null;
@@ -445,7 +570,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       envelope.gain.exponentialRampToValueAtTime(peak, at + Math.min(0.03, durationS / 3));
       envelope.gain.exponentialRampToValueAtTime(0.0001, at + durationS);
       oscillator.connect(envelope);
-      envelope.connect(ctx.destination);
+      envelope.connect(effectOut(ctx, makeupDb));
       oscillator.start(at);
       oscillator.stop(at + durationS + 0.02);
       return { oscillator, envelope };
@@ -478,7 +603,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       out.gain.setValueAtTime(0.0001, at);
       out.gain.exponentialRampToValueAtTime(DEFAULT_TONE_GAIN, at + 0.012);
       out.gain.exponentialRampToValueAtTime(0.0001, at + durationS);
-      out.connect(ctx.destination);
+      out.connect(effectOut(ctx));
       [
         { ratio: 1, level: 1, decayS: durationS },
         { ratio: 4, level: 0.28, decayS: 0.18 },
@@ -501,11 +626,17 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
   }
 
   /**
-   * びっくりする音（ドカーン）。落ちていく低い「ボン」に、こもった破裂音を重ねる。
+   * びっくりする音（ボカーン）。落ちていく「ボ」に、はじける「カーン」を重ねる。
    *
    * 強い音なので、はじめの遊びの設定で選んだときだけ鳴らす（既定にはしない）。
    * 打ち合わせで「爆発音ばかりだと発作を起こす人もいる」と言われている
-   * （docs/design-renewal-2026-09-25.md §1.7）。大きさは効果音の上限の中。
+   * （docs/design-renewal-2026-09-25.md §1.7）。大きさはほかの効果音と同じで、
+   * 驚かせるのは音色。
+   *
+   * 以前は 150→42Hz のサイン波と、こもった雑音だけだった。音の大半が 300Hz より
+   * 下にあり、iPad の内蔵スピーカーでは 11dB 落ちて、ほとんど鳴らなかった
+   * （2026-09-27 に測った）。「ボ」は三角波にして倍音を持たせ、耳にいちばん
+   * 届く帯（1〜2kHz）の「カーン」を足した。
    */
   function playBoom() {
     if (!getSettings().soundEnabled) return null;
@@ -515,17 +646,18 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       const at = ctx.currentTime;
       const oscillator = ctx.createOscillator();
       const body = ctx.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(150, at);
-      oscillator.frequency.exponentialRampToValueAtTime(42, at + 0.45);
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(220, at);
+      oscillator.frequency.exponentialRampToValueAtTime(55, at + 0.5);
       body.gain.setValueAtTime(0.0001, at);
       body.gain.exponentialRampToValueAtTime(EFFECT_GAIN_CEILING, at + 0.01);
-      body.gain.exponentialRampToValueAtTime(0.0001, at + 0.55);
+      body.gain.exponentialRampToValueAtTime(0.0001, at + 0.6);
       oscillator.connect(body);
-      body.connect(ctx.destination);
+      body.connect(effectOut(ctx, BOOM_MAKEUP_DB));
       oscillator.start(at);
-      oscillator.stop(at + 0.6);
-      playNoise({ durationS: 0.35, gain: EFFECT_GAIN_CEILING, filter: "lowpass", frequency: 900, sweepTo: 120 });
+      oscillator.stop(at + 0.65);
+      playNoise({ durationS: 0.45, gain: EFFECT_GAIN_CEILING, filter: "bandpass", frequency: 1600, q: 0.7, sweepTo: 280, makeupDb: BOOM_MAKEUP_DB });
+      playNoise({ durationS: 0.35, gain: EFFECT_GAIN_CEILING, filter: "lowpass", frequency: 900, sweepTo: 120, makeupDb: BOOM_MAKEUP_DB });
       return body;
     } catch {
       return null;
@@ -543,9 +675,15 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
    *
    * 1つ1つの「パチ」は効果音の上限の半分ほどにして、重なっても上限を大きく
    * 超えないようにしてある。
+   *
+   * 録音があればそちら（sample: できたときは "cheer"＝子どもの「イエーイ」と拍手、
+   * ホームランは "homerun-cheer"）。
+   *
+   * @param {{durationS?: number, sample?: string}} [options]
    */
-  function playApplause({ durationS = 1.8 } = {}) {
+  function playApplause({ durationS = 1.8, sample = "applause" } = {}) {
     if (!getSettings().soundEnabled) return null;
+    if (trySample(sample)) return true;
     const ctx = ensureContext();
     if (!ctx) return null;
     try {
@@ -556,7 +694,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       // 帯で削られるぶん持ち上げる。山が効果音の上限に収まる値を測って決めた
       // （test-results/probe-sounds.mjs。0.8 のときは他の効果音より約19dB小さかった）。
       out.gain.value = APPLAUSE_OUTPUT_GAIN;
-      out.connect(ctx.destination);
+      out.connect(effectOut(ctx, APPLAUSE_MAKEUP_DB));
 
       const crowd = ctx.createBufferSource();
       crowd.buffer = buffer;
@@ -629,7 +767,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       out.gain.setValueAtTime(EFFECT_GAIN_CEILING, at + 0.22);
       out.gain.exponentialRampToValueAtTime(0.0001, at + 0.75);
       oscillator.connect(out);
-      out.connect(ctx.destination);
+      out.connect(effectOut(ctx));
       oscillator.start(at);
       wobble.start(at);
       oscillator.stop(at + 0.8);
@@ -697,9 +835,9 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
    * 録音（sampleUrls の laugh）があればそれを鳴らす。無ければ合成する: 高さと
    * 間の違う3人ぶんの「はは…」を、少しずつ低く・弱くしながら重ねる。
    */
-  function playLaugh() {
+  function playLaugh({ delayS = 0 } = {}) {
     if (!getSettings().soundEnabled) return null;
-    if (trySample("laugh")) return true;
+    if (trySample("laugh", { delayS })) return true;
     const ctx = ensureContext();
     if (!ctx) return null;
     try {
@@ -711,8 +849,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       soften.type = "lowpass";
       soften.frequency.value = 3800;
       out.connect(soften);
-      soften.connect(ctx.destination);
-      const start = ctx.currentTime + 0.04;
+      soften.connect(effectOut(ctx, LAUGH_MAKEUP_DB));
+      const start = ctx.currentTime + 0.04 + Math.max(0, delayS);
       // 主に笑う人1人と、少し遅れてつられる人1人。重ねすぎると「は」の区切りが
       // 埋もれて、ざわざわした音になる（描いた波形で見た）。
       [
@@ -733,7 +871,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
   }
 
   /** 短い上がる口笛（イルカの「キュイ」）。 */
-  function whistle(ctx, at, fromHz, toHz, durationS, gain) {
+  function whistle(ctx, at, fromHz, toHz, durationS, gain, makeupDb = 0) {
     const oscillator = ctx.createOscillator();
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(fromHz, at);
@@ -744,7 +882,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
     envelope.gain.setValueAtTime(gain, at + durationS * 0.7);
     envelope.gain.exponentialRampToValueAtTime(0.0001, at + durationS);
     oscillator.connect(envelope);
-    envelope.connect(ctx.destination);
+    envelope.connect(effectOut(ctx, makeupDb));
     oscillator.start(at);
     oscillator.stop(at + durationS + 0.02);
   }
@@ -795,7 +933,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
         hum.frequency.value = 1400;
         oscillator.connect(envelope);
         envelope.connect(hum);
-        hum.connect(ctx.destination);
+        hum.connect(effectOut(ctx));
         oscillator.start(at);
         sway.start(at);
         oscillator.stop(at + 1.2);
@@ -820,15 +958,15 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
         envelope.gain.exponentialRampToValueAtTime(peak, at + 0.02);
         envelope.gain.exponentialRampToValueAtTime(0.0001, at + 0.5);
         oscillator.connect(envelope);
-        envelope.connect(ctx.destination);
+        envelope.connect(effectOut(ctx));
         oscillator.start(at);
         wobble.start(at);
         oscillator.stop(at + 0.52);
         wobble.stop(at + 0.52);
       } else if (id === "crab") {
         [0, 0.07, 0.24, 0.31].forEach((delay) => {
-          playNoise({ durationS: 0.035, gain: peak * 0.35, filter: "bandpass", frequency: 2800, q: 2, delayS: delay });
-          whistle(ctx, at + delay, 1500, 1100, 0.03, peak * 0.3);
+          playNoise({ durationS: 0.035, gain: peak * 0.35, filter: "bandpass", frequency: 2800, q: 2, delayS: delay, makeupDb: CRAB_MAKEUP_DB });
+          whistle(ctx, at + delay, 1500, 1100, 0.03, peak * 0.3, CRAB_MAKEUP_DB);
         });
       } else {
         return playChime(660);
@@ -841,10 +979,13 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
 
   /**
    * ボールを投げた音（「シュッ」）。ボールを打つ遊び（games/baseball.js）。
-   * 合図ではなく、投げた出来事を伝えるだけの小さい音。
+   *
+   * 画面を見られない人には、これが「ボールが来るよ」の知らせになる。以前は
+   * 帯の狭い雑音で、読み上げより 41dB 小さく、ほとんど聞こえなかった
+   * （2026-09-27 に測った）。帯を広げ、少し長くした。
    */
   function playThrow() {
-    return playNoise({ durationS: 0.16, gain: EFFECT_GAIN_CEILING * 0.6, filter: "bandpass", frequency: 900, q: 1.2, sweepTo: 2600 });
+    return playNoise({ durationS: 0.24, gain: EFFECT_GAIN_CEILING, filter: "bandpass", frequency: 700, q: 0.8, sweepTo: 3200, makeupDb: THROW_MAKEUP_DB });
   }
 
   /** 枠が次へ動いたときの小さな音（設定の「枠が動いたときの音」）。 */
@@ -862,7 +1003,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       envelope.gain.exponentialRampToValueAtTime(EFFECT_GAIN_CEILING * 0.5, at + 0.005);
       envelope.gain.exponentialRampToValueAtTime(0.0001, at + 0.06);
       oscillator.connect(envelope);
-      envelope.connect(ctx.destination);
+      envelope.connect(effectOut(ctx, SCAN_TICK_MAKEUP_DB));
       oscillator.start(at);
       oscillator.stop(at + 0.08);
       return envelope;
@@ -873,7 +1014,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
 
   /** 素振りの音（「ブン」）。ボールが来ていないときに振った。 */
   function playSwing() {
-    return playNoise({ durationS: 0.12, gain: EFFECT_GAIN_CEILING * 0.5, filter: "bandpass", frequency: 500, q: 1, sweepTo: 180 });
+    return playNoise({ durationS: 0.16, gain: EFFECT_GAIN_CEILING, filter: "bandpass", frequency: 1200, q: 0.7, sweepTo: 400, makeupDb: SWING_MAKEUP_DB });
   }
 
   /**
@@ -901,8 +1042,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       const at = ctx.currentTime;
       if (quality === "bunt") {
         // コツン: こもった短い音。
-        playNoise({ durationS: 0.05, gain: EFFECT_GAIN_CEILING * 0.8, filter: "lowpass", frequency: 900 });
-        whistle(ctx, at, 720, 560, 0.08, EFFECT_GAIN_CEILING * 0.6);
+        playNoise({ durationS: 0.05, gain: EFFECT_GAIN_CEILING * 0.8, filter: "lowpass", frequency: 900, makeupDb: BUNT_MAKEUP_DB });
+        whistle(ctx, at, 720, 560, 0.08, EFFECT_GAIN_CEILING * 0.6, BUNT_MAKEUP_DB);
         return true;
       }
       // カキーン: 金属の高い響き2つ（倍音が整数倍でないので「金属」に聞こえる）と、
@@ -922,7 +1063,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
         envelope.gain.exponentialRampToValueAtTime(EFFECT_GAIN_CEILING * level, at + 0.004);
         envelope.gain.exponentialRampToValueAtTime(0.0001, at + ring);
         oscillator.connect(envelope);
-        envelope.connect(ctx.destination);
+        envelope.connect(effectOut(ctx));
         oscillator.start(at);
         oscillator.stop(at + ring + 0.02);
       });
@@ -946,10 +1087,48 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
    * resume() のみ行う。
    */
   function unlock() {
+    preferPlaybackSession();
     const ctx = ensureContext();
     if (!ctx) return;
     if (ctx.state === "suspended") {
       ctx.resume().catch(() => {});
+    }
+  }
+
+  /**
+   * 音が止まったままなら戻す（ユーザー操作の中で呼ぶ。neuronodeApp.js）。
+   *
+   * iOS では、スリープ・ほかのアプリ・着信のあと、AudioContext が "suspended" や
+   * "interrupted" のまま残ることがある。戻せるのはユーザー操作の中だけで、以前は
+   * スタート画面の最初のひと押し（unlock）でしか戻していなかった——ホームへ戻った
+   * あとは、効果音が鳴らないままになりえた。まだ作っていない（スタート前）なら
+   * 何もしない。
+   */
+  function resumeIfSuspended() {
+    if (!audioContext) return;
+    preferPlaybackSession();
+    if (audioContext.state !== "running" && audioContext.state !== "closed") {
+      audioContext.resume().catch(() => {});
+    }
+  }
+
+  /**
+   * 消音（マナーモード）でも効果音を鳴らす（Audio Session API。iOS 17 以降の Safari
+   * と WKWebView）。
+   *
+   * Web Audio は既定で「まわりの音」の扱いになり、iPhone の消音スイッチや iPad の
+   * 消音で鳴らなくなる。読み上げは聞こえるのに効果音だけ鳴らない、ということが
+   * 起きうる。このアプリでは音が「押した手応え」そのもの（§1.7）なので、動画や
+   * 音楽と同じ「再生」の扱いにする。対応していない環境では何もしない。
+   * アプリ版（Capacitor）は、ネイティブ側の AVAudioSession も .playback にする
+   * （docs/design-renewal-2026-09-25.md §3.17）。
+   */
+  function preferPlaybackSession() {
+    try {
+      const session = typeof navigator !== "undefined" ? navigator.audioSession : null;
+      if (session && session.type !== "playback") session.type = "playback";
+    } catch {
+      // 変えられなくても、音そのものは止めない。
     }
   }
 
@@ -984,7 +1163,12 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
   return {
     speak,
     speakOrAnnounce,
+    speakOrAnnounceLater,
     stopSpeech,
+    setProfile,
+    /** いまの場面（テスト・記録用）。 */
+    profile: () => profile,
+    resumeIfSuspended,
     playTone,
     playToneAt,
     playChime,

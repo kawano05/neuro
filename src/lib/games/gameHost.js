@@ -42,7 +42,7 @@ import { PRIZE_ART } from "./craneArt.js";
 import { slotSymbolHtml } from "./slotArt.js";
 import { MAX_SESSIONS } from "../state.js";
 import { gameHowTo } from "../content.js";
-import { entryFor } from "../i18n.js";
+import { entryFor, joinSpeech, resolveTextMode } from "../i18n.js";
 import { isMeasurementMode } from "../difficultyMode.js";
 import { POP_ANIMALS, SCENE_ART, artSvg, burstSvg } from "../art/hakkiriArt.js";
 import { tileThemeFor } from "../homeTheme.js";
@@ -764,7 +764,9 @@ export function createGameHost(ctx) {
 
     // #gameStageContent は aria-hidden なので、説明は読み上げ経路で伝える。
     // 画面注視が困難な利用者にも届かせる必要がある（basic-design.md §1.2）。
-    const spoken = [moduleTitle(module), ...spokenSteps].join(" ");
+    // 題名と手順は文として区切って読む（句点が無いと、分かち書きを外したときに
+    // 題名と1行目が1語のようにつながる。i18n.js の joinSpeech）。
+    const spoken = joinSpeech([moduleTitle(module), ...spokenSteps], resolveTextMode(state.settings));
     ctx.voiceFeedback(spoken);
   }
 
@@ -792,6 +794,9 @@ export function createGameHost(ctx) {
   function launch(gameId, options = {}) {
     const module = findGameModule(gameId);
     if (!module || module.enabled === false) return;
+    // 効果音の場面（src/lib/audio.js の effectOutputGain）。合図のある遊び
+    // （taskType あり）は今までどおりの大きさ、測定の課題でない遊びは持ち上げる。
+    ctx.audio.setProfile?.(module.taskType ? "task" : "play");
     requestedEndless = options.endless === true;
     destroyActive(); // 多重起動防止（MUST）: 前回 instance の destroy() を必ず呼ぶ
     scan.stop(true);
@@ -842,6 +847,7 @@ export function createGameHost(ctx) {
       });
     }
     destroyActive();
+    ctx.audio.setProfile?.("play");
     state.currentView = "result";
     save();
     ctx.renderAll();
@@ -862,6 +868,7 @@ export function createGameHost(ctx) {
     ctx.audio.stopSpeech();
     elements.gameStageContent.classList.remove("is-ready");
     destroyActive();
+    ctx.audio.setProfile?.("play");
     ctx.views.home?.showLobby();
     state.currentView = "home";
     save();

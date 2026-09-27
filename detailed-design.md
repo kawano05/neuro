@@ -454,6 +454,9 @@ settings.js は本リファクタでは原則変更しない。
   開いているあいだのスイッチ入力は遊びへ渡さない。
 - 時間で進む遊び（リール・アーム・高い音だけ）は、開いた時点でその回を中断として
   記録し、閉じたら はじめから（1回の記録は1つの条件で行われた、を守るため）。
+- 5巡目: 効果音の大きさの場面（`audio.js` の `setProfile`）。taskType のある遊びは
+  "task"（今までどおり、合図より小さい）、それ以外は "play"（12dB 持ち上げる）。
+  測定の条件（合図の音・効果音の大きさ）は変わらない。
 - 4巡目: さかなつり（2種）に「アタリが続く長さ」（limitMs。restart、measured）。
   れんしゅうの回だけ効き、そくていでは protocol の 2000ms（difficultyMode.js の
   resolveFishingDifficulty / MEASUREMENT_PROTOCOL.fishing）。

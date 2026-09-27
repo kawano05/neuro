@@ -4,14 +4,16 @@
 // src/assets/sounds/ に音のファイルを置くと、合成の代わりにその録音が鳴る
 // （audio.js の trySample）。名前はファイル名から拡張子を除いたもの:
 //
-//   laugh.mp3             … できたときの笑い声（playLaugh）
-//   boing.mp3             … ボヨーン（playBoing）
-//   creature-dolphin.mp3  … イルカの声（playCreature("dolphin")）
-//   creature-whale.mp3 / creature-turtle.mp3 / creature-octopus.mp3 / creature-crab.mp3
+//   cheer          … できたときの歓声と拍手（playApplause({ sample: "cheer" })）
+//   laugh          … できたときの笑い声（playLaugh）
+//   boing          … ボヨーン（playBoing）
+//   creature-<id>  … 生きものの声（playCreature(id)。dolphin / whale / turtle / octopus / crab）
+//   bat-<quality>  … バットの音（playBatHit。homerun / hit / bunt）
+//   homerun-cheer  … ホームランの歓声
 //
 // 打ち合わせで「笑い声」「動物の鳴き声」と言われた音は、合成ではそれらしさに
-// 限りがある。App Store に出す前に録音（使ってよい権利のもの）へ替えられるよう、
-// 置くだけで効く形にしてある。置かなければ合成のまま。
+// 限りがある。置けば効く形にしてあり、置かなければ合成のまま。置く前に
+// scripts/prepare-sounds.mjs で大きさをそろえる（src/assets/sounds/README.md）。
 //
 // import.meta.glob は Vite の機能なので、node で動く単体テストからは読まない
 // （audio.js には neuronodeApp.js が URL の表だけを渡す）。

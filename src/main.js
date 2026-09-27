@@ -1,7 +1,11 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
 import { isPreviewBuild } from "./lib/content.js";
-import "@fortawesome/fontawesome-free/css/all.min.css";
+// アイコンの書体は、使っている2種（solid・regular）だけ読む。all.min.css にすると
+// 使わないブランドのロゴ用の書体（約100KB）も配布物と事前キャッシュに入る。
+import "@fortawesome/fontawesome-free/css/fontawesome.min.css";
+import "@fortawesome/fontawesome-free/css/solid.min.css";
+import "@fortawesome/fontawesome-free/css/regular.min.css";
 import "./styles.css";
 // 利用者の世界のデザイン（はっきりした色）。styles.css より後に読む。
 import "./theme-hakkiri.css";

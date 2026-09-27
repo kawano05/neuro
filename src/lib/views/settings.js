@@ -6,6 +6,7 @@ import { cranePresets, slotPresets } from "../content.js";
 import { isMeasurementMode, resolveDifficultyMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
 import { evaluateReadiness } from "../readinessCheck.js";
+import { SOUND_CREDITS } from "../soundCredits.js";
 
 /**
  * ミリ秒を「秒」で見せる（1600 → 1.6秒、220 → 0.22秒）。打ち合わせで設定の言葉を
@@ -16,6 +17,39 @@ export function formatSeconds(ms) {
   return `${Number((ms / 1000).toFixed(2))}秒`;
 }
 
+/** 音の素材のクレジットを描く。中身は固定の表なので、字はそのまま入れる。 */
+export function renderSoundCredits(listEl, { links = true } = {}) {
+  if (!listEl) return;
+  listEl.replaceChildren(
+    ...SOUND_CREDITS.map((credit) => {
+      const item = document.createElement("li");
+      const use = document.createElement("strong");
+      use.textContent = credit.use;
+      const line = document.createElement("span");
+      line.textContent = `「${credit.title}」 ${credit.author}。${credit.changes}。 `;
+      // CC BY はライセンスの場所（URL）も示すのが条件。
+      const address = (text, href) => {
+        const node = links ? document.createElement("a") : document.createElement("span");
+        node.textContent = text;
+        if (links) {
+          node.href = href;
+          node.target = "_blank";
+          node.rel = "noopener";
+        }
+        return node;
+      };
+      item.append(
+        use,
+        line,
+        address(credit.source, credit.source),
+        document.createTextNode(" ／ "),
+        address(links ? credit.license : `${credit.license} ${credit.licenseUrl}`, credit.licenseUrl)
+      );
+      return item;
+    })
+  );
+}
+
 export function initSettings(ctx) {
   const { state, elements, save, scan, announce, logEvent, audio } = ctx;
 
@@ -23,6 +57,12 @@ export function initSettings(ctx) {
   // アプリの中から別の画面を開けず、開けても戻る手段が無いため。ウェブ版だけ。
   const guidePrint = document.querySelector("#settingsGuidePrint");
   if (guidePrint && globalThis.Capacitor?.isNativePlatform?.()) guidePrint.hidden = true;
+
+  // 音の素材のクレジット（src/lib/soundCredits.js）。アプリ版では、上の説明書と
+  // 同じ理由でリンクにしない（アドレスは字で出す）。
+  renderSoundCredits(document.querySelector("#soundCreditsList"), {
+    links: !globalThis.Capacitor?.isNativePlatform?.(),
+  });
 
   // UFOキャッチャーの難易度。設定側が null のあいだは cranePresets の値を
   // 使うので、スライダーにもその既定値を映す（games/crane.js の

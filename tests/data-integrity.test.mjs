@@ -32,9 +32,13 @@ import {
   fishingPresets,
   fishingSpecies,
   gameTiles,
+  PHRASE_EN,
+  phraseCategories,
   rhythmPresets,
   slotPresets,
 } from "../src/lib/content.js";
+import { SOUND_CREDITS } from "../src/lib/soundCredits.js";
+import { readdirSync, readFileSync } from "node:fs";
 import { gameCreators, gameModules } from "../src/lib/games/registry.js";
 import { slotSymbolStripUrl } from "../src/lib/games/slotArt.js";
 import { coloringMarkup } from "../src/lib/games/coloring.js";
@@ -1972,6 +1976,37 @@ test("the rhythm CSV carries the readiness state of a measurement run", () => {
   // 成立確認を通さずに測った回。測定は止めない代わりに、必ずそう書き出す
   // ——保存されているだけで書き出されない値は、実質「記録していない」のと同じ。
   assert.equal(rows[1].at(-1), "overridden");
+});
+
+test("the phrase board has English for every phrase and group", () => {
+  // 英語表記のとき、日本語の文を英語の声に読ませない（views/voca.js）。
+  const japanese = /[ぁ-んァ-ヶ一-龠]/;
+  const missing = [];
+  Object.entries(phraseCategories).forEach(([category, phrases]) => {
+    [category, ...phrases].forEach((text) => {
+      const en = PHRASE_EN[text];
+      if (typeof en !== "string" || !en.trim() || japanese.test(en)) missing.push(text);
+    });
+  });
+  assert.deepEqual(missing, [], `英語の無い定型句: ${missing.join(", ")}`);
+});
+
+test("every recorded sound has a credit, and every credit is complete", () => {
+  // CC BY の素材は、作者・出典・ライセンスをアプリの中に出すのが使う条件
+  // （src/lib/soundCredits.js、設定「見え方・音」）。
+  SOUND_CREDITS.forEach((credit) => {
+    ["use", "title", "author", "source", "license", "licenseUrl", "changes"].forEach((field) => {
+      assert.ok(typeof credit[field] === "string" && credit[field].trim(), `${credit.title}: ${field} が空`);
+    });
+    assert.match(credit.source, /^https:\/\//);
+    assert.match(credit.licenseUrl, /^https:\/\/creativecommons\.org\//);
+  });
+  // 置いてある録音は、どれも README の表に載っている（出典が追える）。
+  const dir = fileURLToPath(new URL("../src/assets/sounds/", import.meta.url));
+  const readme = readFileSync(`${dir}README.md`, "utf8");
+  const files = readdirSync(dir).filter((file) => /\.(mp3|m4a|aac|wav|ogg)$/.test(file));
+  assert.ok(files.length > 0, "録音が1つも無い");
+  files.forEach((file) => assert.ok(readme.includes(file), `${file} が README の表に無い`));
 });
 
 for (const { name, fn } of tests) {

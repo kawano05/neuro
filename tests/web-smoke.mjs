@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { createServer as createNetServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { colorLegacyPreset, rhythmPresets, storageKey } from "../src/lib/content.js";
-import { resolveTextMode, translate } from "../src/lib/i18n.js";
+import { resolveTextMode, toSpeechText, translate } from "../src/lib/i18n.js";
 import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
 import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLegacy.js";
 import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
@@ -13,6 +13,9 @@ import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
 // 持つと、辞書を直したときにテストだけが古い文言を主張して落ちる——あるいは
 // 辞書の抜けを見逃す。既定の表記で辞書から引く。
 const t = (key, values) => translate(key, resolveTextMode({}), values);
+// 声に渡る形（分かち書きの空白を外し、かなの助数詞を漢字へ。src/lib/i18n.js の toSpeechText）。
+// 画面の文と読み上げの文は、2026-09-27 から意図して違う。
+const spokenJa = (text) => toSpeechText(text, "ja-JP");
 
 const port = await findAvailablePort();
 const basePath = "/neuro-smoke/";
@@ -525,8 +528,8 @@ async function checkStartToHomeToGameFlow(page) {
   }));
   assert(
     deliveredFeedback.speech.text ===
-      t("color.voice.progress", { name: t(`animal.${popAnimalFor(0).id}`), n: 4 }),
-    "App TTS must name the animal and report the remaining presses"
+      spokenJa(t("color.voice.progress", { name: t(`animal.${popAnimalFor(0).id}`), n: 4 })),
+    `App TTS must name the animal and report the remaining presses, got ${JSON.stringify(deliveredFeedback.speech.text)}`
   );
   assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt >= 220, "App TTS started before the tone ended");
   assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt <= 600, "App TTS arrived too late for a short response");
@@ -565,8 +568,8 @@ async function checkStartToHomeToGameFlow(page) {
   assert(nextSpeech.at - nextInputCancellation.clickAt >= 220, "Replacement TTS started before its tone ended");
   assert(nextSpeech.at - nextInputCancellation.clickAt <= 600, "Replacement TTS arrived too late");
   assert(
-    nextSpeech.text === t("color.voice.progress", { name: t(`animal.${popAnimalFor(1).id}`), n: 3 }),
-    "Replacement TTS must name the new animal and report the new remaining count"
+    nextSpeech.text === spokenJa(t("color.voice.progress", { name: t(`animal.${popAnimalFor(1).id}`), n: 3 })),
+    `Replacement TTS must name the new animal and report the new remaining count, got ${JSON.stringify(nextSpeech.text)}`
   );
 
   // 出た動物はしばらく見せて、消えて真っ暗に戻る（「出て、消えて、次」）。
@@ -1188,7 +1191,7 @@ async function checkScanFeedbackSpeaksNames(page) {
     const heard = await stepAndHear();
     assert(heard.focused, "Stepping the scan must focus a home item");
     assert(
-      heard.said.at(-1) === heard.focused,
+      heard.said.at(-1) === spokenJa(heard.focused),
       `Moving the scan frame must speak the focused item's name ("${heard.focused}"), got ${JSON.stringify(heard.said)}`
     );
   }

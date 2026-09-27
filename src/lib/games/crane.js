@@ -759,7 +759,8 @@ export function createCraneGame(ctx) {
     audio.scheduler.stop();
     const grips = session.summary.grips ?? 0;
     voiceFeedback(
-      t("crane.voice.finish", { n: grips }),
+      // 1こも取れなかった回に「0こ とれたよ」と言わない。
+      t(grips > 0 ? "crane.voice.finish" : "crane.voice.finishNone", { n: grips }),
       t("crane.voice.finishAnnounce", { n: grips })
     );
     finish(session.summary);

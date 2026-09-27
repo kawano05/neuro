@@ -9,14 +9,21 @@
 // （西村さんの強い要望）はこのビューの発展形として実装候補。
 // =====================================================================
 
-import { PHRASE_RUBY, phraseCategories } from "../content.js";
+import { PHRASE_EN, PHRASE_RUBY, phraseCategories } from "../content.js";
 import { rubyToHtml } from "../i18n.js";
-
-/** 画面に出す形（ふりがな付き）。無いものはそのまま。 */
-const shown = (text) => rubyToHtml(PHRASE_RUBY[text] || text);
+import { escapeHtml } from "../utils.js";
 
 export function initVoca(ctx) {
   const { state, elements, save, logEvent, speak, voiceFeedback, playTone, scan } = ctx;
+  // 表記が English のときは、画面も声も英語（content.js の PHRASE_EN）。
+  const english = () => ctx.textMode?.() === "en";
+
+  /** 画面に出す形（ふりがな付き、または英語）。無いものはそのまま。 */
+  const shown = (text) =>
+    english() && PHRASE_EN[text] ? escapeHtml(PHRASE_EN[text]) : rubyToHtml(PHRASE_RUBY[text] || text);
+
+  /** 声で読む形。記録（logEvent）は元の日本語のまま。 */
+  const spoken = (text) => (english() && PHRASE_EN[text]) || text;
 
   /** カテゴリ行の描画 */
   function renderCategories() {
@@ -59,14 +66,14 @@ export function initVoca(ctx) {
   function selectPhrase(phrase) {
     state.currentPhrase = phrase;
     playTone(560);
-    voiceFeedback(phrase);
+    voiceFeedback(spoken(phrase));
     logEvent({ type: "phrase", label: phrase });
     save();
     renderPhrases();
   }
 
   elements.repeatPhrase.addEventListener("click", () => {
-    if (state.currentPhrase) speak(state.currentPhrase);
+    if (state.currentPhrase) speak(spoken(state.currentPhrase));
   });
 
   return {

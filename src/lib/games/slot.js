@@ -329,7 +329,8 @@ export function createSlotGame(gameId) {
       finishTimer = window.setTimeout(() => {
         finishTimer = null;
         if (destroyed) return;
-        voiceFeedback(t("slot.voice.finish", {
+        // ぴったりが0回のときに「0回 ぴったり」と言わない。
+        voiceFeedback(t(session.summary.hits > 0 ? "slot.voice.finish" : "slot.voice.finishNone", {
           hits: session.summary.hits,
           total: session.summary.trials,
         }));

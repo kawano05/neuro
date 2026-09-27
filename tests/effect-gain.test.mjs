@@ -17,9 +17,11 @@ import {
   DEFAULT_TONE_GAIN,
   DEFAULT_SPEECH_VOLUME,
   EFFECT_GAIN_CEILING,
+  PLAY_EFFECT_BOOST_DB,
   clampEffectGain,
   clampSpeechVolume,
   createAudio,
+  effectOutputGain,
 } from "../src/lib/audio.js";
 
 let passed = 0;
@@ -146,6 +148,37 @@ test("applies TTS volume and gives each message one speech owner", () => {
     else delete globalThis.window;
     if (oldUtterance) Object.defineProperty(globalThis, "SpeechSynthesisUtterance", oldUtterance);
     else delete globalThis.SpeechSynthesisUtterance;
+  }
+});
+
+test("only scenes without a cue get louder effects", () => {
+  // 合図のある遊び（"task"）の効果音は、この仕組みを入れる前と同じ大きさ。
+  // 音ごとの持ち上げ（makeupDb）も効かない——測定の遊びの音を変えないため。
+  assert.equal(effectOutputGain("task"), 1);
+  assert.equal(effectOutputGain("task", 14), 1);
+  assert.equal(effectOutputGain("anything-else", 14), 1, "知らない場面は安全側（持ち上げない）");
+  // 合図の無い場面（はじめの遊び・ホームなど）は持ち上げる（声より少し小さいくらい）。
+  const boost = Math.pow(10, PLAY_EFFECT_BOOST_DB / 20);
+  assert.ok(Math.abs(effectOutputGain("play") - boost) < 1e-9);
+  assert.ok(effectOutputGain("play", 6) > effectOutputGain("play"));
+  // 持ち上げすぎない（呼び出し側が大きな値を書いても ±24dB で止める）。
+  assert.equal(effectOutputGain("play", 99), effectOutputGain("play", 24));
+  assert.equal(effectOutputGain("play", Number.NaN), effectOutputGain("play"));
+});
+
+test("the audio module starts in the play scene and switches on request", () => {
+  const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  try {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: {} });
+    const audio = createAudio(() => ({ soundEnabled: true, speechEnabled: false }));
+    assert.equal(audio.profile(), "play");
+    audio.setProfile("task");
+    assert.equal(audio.profile(), "task");
+    audio.setProfile("nonsense");
+    assert.equal(audio.profile(), "play");
+  } finally {
+    if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow);
+    else delete globalThis.window;
   }
 });
 

@@ -592,6 +592,16 @@
         </label>
       </div>
 
+      <!-- 録音の素材のクレジット（src/lib/soundCredits.js。views/settings.js が中を描く）。
+           CC BY の素材は、アプリの中で見られるところに作者と出典を出すのが使う条件。 -->
+      <details class="settings-guide settings-credits" id="soundCredits">
+        <summary>このアプリで使っている音の素材</summary>
+        <p class="settings-credits-note">
+          ほかの効果音は、このアプリの中で作っています（録音ではありません）。
+        </p>
+        <ul class="settings-credits-list" id="soundCreditsList"></ul>
+      </details>
+
       </div>
 
       <div class="settings-panel" data-settings-panel="play" hidden>

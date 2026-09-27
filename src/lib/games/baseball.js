@@ -208,7 +208,7 @@ export function createBaseballGame(ctx) {
     setWord(`baseball.word.${result}`);
     if (result === "homerun") {
       stageEl.classList.add("is-homerun");
-      audio.playApplause?.({ durationS: 1.4 });
+      audio.playApplause?.({ durationS: 1.4, sample: "homerun-cheer" });
     }
     voiceFeedback(t(`baseball.word.${result}`));
     startLoop();
@@ -226,7 +226,8 @@ export function createBaseballGame(ctx) {
         celebrate(
           ctx,
           prefs(),
-          t("baseball.voice.finish", { h: homeruns, k: hits })
+          // ホームランが0回のときに「ホームランは 0かい」と言わない。
+          t(homeruns > 0 ? "baseball.voice.finish" : "baseball.voice.finishNoHomerun", { h: homeruns, k: hits })
         );
         finish({ presses: results.length, baseball: { results: [...results], homeruns, hits } });
       }, FINISH_DELAY_MS);

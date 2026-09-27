@@ -685,7 +685,8 @@ export function createFishingGame(gameId) {
     const total = session.summary.totalLengthCm ?? 0;
     const catches = session.summary.catches ?? 0;
     voiceFeedback(
-      t("fishing.voice.finish", { n: catches, cm: total }),
+      // 1ぴきも釣れなかった回に「0ひき つれたよ」と言わない。
+      t(catches > 0 ? "fishing.voice.finish" : "fishing.voice.finishNone", { n: catches, cm: total }),
       t("fishing.voice.finishAnnounce", { n: catches, cm: total })
     );
     finish(session.summary);
