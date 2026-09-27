@@ -3082,7 +3082,9 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
     await page.waitForFunction(
       () => {
         const status = document.querySelector(".crane-status")?.textContent?.trim() ?? "";
-        return /つかんだ|すべった|とどかなかった|とれた/.test(status);
+        // 結果の4通り: つかんだ／おしい！すべった／もう すこし！（外れ。以前は
+        // 「届かなかった」）／取れた。ふりがなも textContent に入るので、かなで見る。
+        return /つかんだ|すべった|すこし|とれた/.test(status);
       },
       undefined,
       { timeout: 15_000 }

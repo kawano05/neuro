@@ -638,22 +638,24 @@ const STRINGS = {
     en: "Next one will be fine",
   },
   "crane.voice.missAnnounce": {
-    ruby: "アームが 景品[けいひん]から はずれました",
-    kanji: "アームが 景品から はずれました",
-    kana: "アームが けいひんから はずれました",
-    en: "The claw missed the prize",
+    ruby: "おしい。アームは 景品[けいひん]の そばに おりました",
+    kanji: "おしい。アームは 景品の そばに おりました",
+    kana: "おしい。アームは けいひんの そばに おりました",
+    en: "So close. The claw came down next to the prize",
   },
+  // 終わったときの声は「おわりました」ではなく「できた！」（打ち合わせで「終わりました
+  // は ちょっと硬い。できた、でいい」と言われた。docs/design-renewal-2026-09-25.md §1.6）。
   "crane.voice.finish": {
-    ruby: "おわりました。{n}こ とれました",
-    kanji: "おわりました。{n}こ とれました",
-    kana: "おわりました。{n}こ とれました",
-    en: "Finished. You caught {n}",
+    ruby: "できた！ {n}こ とれたよ",
+    kanji: "できた！ {n}こ とれたよ",
+    kana: "できた！ {n}こ とれたよ",
+    en: "Done! You caught {n}",
   },
   "crane.voice.finishAnnounce": {
-    ruby: "アームを 止[と]めるが おわりました。{n}こ とれました",
-    kanji: "アームを 止めるが おわりました。{n}こ とれました",
-    kana: "アームを とめるが おわりました。{n}こ とれました",
-    en: "Stop the claw is finished. You caught {n}",
+    ruby: "アームで つかむ、できました。{n}こ とれました",
+    kanji: "アームで つかむ、できました。{n}こ とれました",
+    kana: "アームで つかむ、できました。{n}こ とれました",
+    en: "Claw grab is done. You caught {n}",
   },
   "crane.voice.wait": {
     ruby: "待[ま]ってね",
@@ -682,10 +684,10 @@ const STRINGS = {
     en: "You spotted the false bite",
   },
   "fishing.voice.tooEarly": {
-    ruby: "まだ アタリではありません",
-    kanji: "まだ アタリではありません",
-    kana: "まだ アタリではありません",
-    en: "Not a bite yet",
+    ruby: "まだだよ。アタリを 待[ま]とう",
+    kanji: "まだだよ。アタリを 待とう",
+    kana: "まだだよ。アタリを まとう",
+    en: "Not yet. Wait for the bite",
   },
   "fishing.voice.boot": {
     ruby: "長靴[ながぐつ]が かかりました",
@@ -693,23 +695,25 @@ const STRINGS = {
     kana: "ながぐつが かかりました",
     en: "You hooked a boot",
   },
+  // 逃げたときも へこませない（打ち合わせで「逃げられた、みたいな失敗」を減らしたいと
+  // 言われた。§1.4）。
   "fishing.voice.lost": {
-    ruby: "魚[さかな]に にげられました",
-    kanji: "魚に にげられました",
-    kana: "さかなに にげられました",
-    en: "The fish got away",
+    ruby: "おしい！ つぎは つれるよ",
+    kanji: "おしい！ つぎは つれるよ",
+    kana: "おしい！ つぎは つれるよ",
+    en: "So close! You'll get the next one",
   },
   "fishing.voice.finish": {
-    ruby: "おわりました。{n}ひき、あわせて {cm}センチでした",
-    kanji: "おわりました。{n}ひき、あわせて {cm}センチでした",
-    kana: "おわりました。{n}ひき、あわせて {cm}センチでした",
-    en: "Finished. {n} fish, {cm} centimetres in total",
+    ruby: "できた！ {n}ひき つれたよ。あわせて {cm}センチ",
+    kanji: "できた！ {n}ひき つれたよ。あわせて {cm}センチ",
+    kana: "できた！ {n}ひき つれたよ。あわせて {cm}センチ",
+    en: "Done! {n} fish, {cm} centimetres in total",
   },
   "fishing.voice.finishAnnounce": {
-    ruby: "さかなつりが おわりました。{n}ひき、あわせて {cm}センチ",
-    kanji: "さかなつりが おわりました。{n}ひき、あわせて {cm}センチ",
-    kana: "さかなつりが おわりました。{n}ひき、あわせて {cm}センチ",
-    en: "Fishing is finished. {n} fish, {cm} centimetres",
+    ruby: "さかなつり、できました。{n}ひき、あわせて {cm}センチ",
+    kanji: "さかなつり、できました。{n}ひき、あわせて {cm}センチ",
+    kana: "さかなつり、できました。{n}ひき、あわせて {cm}センチ",
+    en: "Fishing is done. {n} fish, {cm} centimetres",
   },
 
   // --- リズム系のゲーム表示と音声 ---
@@ -792,10 +796,10 @@ const STRINGS = {
     en: "Starting the rhythm practice",
   },
   "rhythm.voice.finish": {
-    ruby: "おわりました。達成率[たっせいりつ] {n}パーセント",
-    kanji: "おわりました。達成率 {n}パーセント",
-    kana: "おわりました。たっせいりつ {n}パーセント",
-    en: "Finished. {n} percent",
+    ruby: "できた！ {n}パーセント できたよ",
+    kanji: "できた！ {n}パーセント できたよ",
+    kana: "できた！ {n}パーセント できたよ",
+    en: "Done! {n} percent right",
   },
 
 
@@ -940,7 +944,8 @@ const STRINGS = {
   "crane.movingY": { ruby: "奥[おく]に動[うご]きます", kanji: "奥に動きます", kana: "おくに うごきます", en: "Moving back" },
   "crane.dropping": { ruby: "アームが下[お]りるよ", kanji: "アームが下りるよ", kana: "アームが おりるよ", en: "The claw is coming down" },
   "crane.slip": { ruby: "惜[お]しい！ すべった", kanji: "惜しい！ すべった", kana: "おしい！ すべった", en: "So close — it slipped" },
-  "crane.miss": { ruby: "届[とど]かなかった", kanji: "届かなかった", kana: "とどかなかった", en: "Just missed" },
+  // 外れたときも へこませない（打ち合わせ §1.5「あっさり次へ」「前向きな言葉」）。
+  "crane.miss": { ruby: "もう すこし！", kanji: "もう すこし！", kana: "もう すこし！", en: "Almost!" },
   "crane.lifted": { ruby: "持[も]ち上[あ]げた", kanji: "持ち上げた", kana: "もちあげた", en: "Lifted it" },
   "crane.carrying": { ruby: "景品口[けいひんぐち]へ", kanji: "景品口へ", kana: "けいひんぐちへ", en: "To the chute" },
   "crane.got": { ruby: "取[と]れた！", kanji: "取れた！", kana: "とれた！", en: "Got it!" },
@@ -962,7 +967,7 @@ const STRINGS = {
   "fishing.tooEarly": { ruby: "まだ待[ま]とう", kanji: "まだ待とう", kana: "まだ まとう", en: "Not yet" },
   "fishing.goodWait": { ruby: "よく待[ま]てたね", kanji: "よく待てたね", kana: "よく まてたね", en: "Well held" },
   "fishing.boot": { ruby: "長靴[ながぐつ]だった", kanji: "長靴だった", kana: "ながぐつ だった", en: "It was a boot" },
-  "fishing.lost": { ruby: "逃[に]げられた", kanji: "逃げられた", kana: "にげられた", en: "It got away" },
+  "fishing.lost": { ruby: "おしい！", kanji: "おしい！", kana: "おしい！", en: "So close!" },
   // 釣れたときの表示。長さ（cm）を差し込む。
   "fishing.caught": { ruby: "{n}cm 釣[つ]れた！", kanji: "{n}cm 釣れた！", kana: "{n}cm つれた！", en: "Caught {n}cm!" },
   "fishing.fast": { ruby: "すばやい！ {n}cm", kanji: "すばやい！ {n}cm", kana: "すばやい！ {n}cm", en: "Quick! {n}cm" },
@@ -1012,20 +1017,25 @@ const STRINGS = {
   "slot.symbol.square": { ruby: "四角[しかく]", kanji: "四角", kana: "しかく", en: "square" },
   "slot.symbolGuide.alt": { ruby: "丸[まる]、魚[さかな]、星[ほし]、花[はな]、鳥[とり]、四角[しかく]の絵[え]", kanji: "丸、魚、星、花、鳥、四角の絵", kana: "まる、さかな、ほし、はな、とり、しかくの え", en: "Circle, fish, star, flower, bird and square shapes" },
   "slot.symbolGuide.caption": { ruby: "この6つの絵[え]が動[うご]きます", kanji: "この6つの絵が動きます", kana: "この6つの えが うごきます", en: "These six shapes move on each reel" },
-  "slot.reel.label": { ruby: "{n}本目[ほんめ]のリール", kanji: "{n}本目のリール", kana: "{n}ほんめの リール", en: "Reel {n}" },
+  "slot.reel.label": { ruby: "{n}ばんめの リール", kanji: "{n}ばんめの リール", kana: "{n}ばんめの リール", en: "Reel {n}" },
   "slot.reel.active": { ruby: "いま 止[と]める", kanji: "いま 止める", kana: "いま とめる", en: "Stop this one" },
   "slot.reel.waiting": { ruby: "待[ま]っています", kanji: "待っています", kana: "まっています", en: "Waiting" },
   "slot.reel.stopped": { ruby: "止[と]まりました", kanji: "止まりました", kana: "とまりました", en: "Stopped" },
   // れんしゅうの回で、目標の絵で止めたときに出る一言（slot.js の cheerReel）。
   "slot.cheer": { ruby: "ぴったり！", kanji: "ぴったり！", kana: "ぴったり！", en: "Right on!" },
-  "slot.status.stopReel": { ruby: "{total}本[ほん]のうち {current}本目[ほんめ]を止[と]めよう", kanji: "{total}本のうち {current}本目を止めよう", kana: "{total}ほんの うち {current}ほんめを とめよう", en: "Stop reel {current} of {total}" },
+  // 「本」「本目」は数で読みが変わる（1本＝いっぽん、3本＝さんぼん）ので、ふりがな
+  // 「ほん」が合わない。「ばんめ」「かい」は数で変わらない。
+  "slot.status.stopReel": { ruby: "{current}ばんめを 止[と]めよう", kanji: "{current}ばんめを 止めよう", kana: "{current}ばんめを とめよう", en: "Stop reel {current}" },
+  "slot.status.stopOne": { ruby: "目標[もくひょう]の 絵[え]で 止[と]めよう", kanji: "目標の 絵で 止めよう", kana: "もくひょうの えで とめよう", en: "Stop on the target picture" },
   "slot.status.roundComplete": { ruby: "ぜんぶ 止[と]まりました", kanji: "ぜんぶ 止まりました", kana: "ぜんぶ とまりました", en: "All reels stopped" },
   "slot.status.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
-  "slot.progress": { ruby: "{current} / {total}本目[ほんめ]", kanji: "{current} / {total}本目", kana: "{current} / {total}ほんめ", en: "Stop {current} of {total}" },
+  "slot.progress": { ruby: "のこり {n}かい", kanji: "のこり {n}かい", kana: "のこり {n}かい", en: "{n} to go" },
+  // 外したときの一言（れんしゅうの回だけ。slot.js の nudgeReel）。
+  "slot.nudge": { ruby: "おしい！", kanji: "おしい！", kana: "おしい！", en: "So close!" },
   "slot.progress.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
   "slot.voice.round": { ruby: "{total}回[かい]のうち {current}回目[かいめ]です", kanji: "{total}回のうち {current}回目です", kana: "{total}かいの うち {current}かいめです", en: "Round {current} of {total}" },
-  "slot.voice.nextReel": { ruby: "次[つぎ]は {current}本目[ほんめ]です", kanji: "次は {current}本目です", kana: "つぎは {current}ほんめです", en: "Next is reel {current}" },
-  "slot.voice.finish": { ruby: "終[お]わりました。{total}本[ほん]のうち {hits}本[ほん]合[あ]いました", kanji: "終わりました。{total}本のうち {hits}本合いました", kana: "おわりました。{total}ほんの うち {hits}ほん あいました", en: "Finished. {hits} of {total} stops matched" },
+  "slot.voice.nextReel": { ruby: "次[つぎ]は {current}ばんめ", kanji: "次は {current}ばんめ", kana: "つぎは {current}ばんめ", en: "Next is reel {current}" },
+  "slot.voice.finish": { ruby: "できた！ {total}回[かい]のうち {hits}回[かい] ぴったり！", kanji: "できた！ {total}回のうち {hits}回 ぴったり！", kana: "できた！ {total}かいの うち {hits}かい ぴったり！", en: "Done! {hits} of {total} right on" },
 
   "result.slot.title": { ruby: "ぜんぶ 止[と]められました", kanji: "ぜんぶ 止められました", kana: "ぜんぶ とめられました", en: "All reels stopped" },
   "result.slot.hitRate": { ruby: "合[あ]った割合[わりあい]", kanji: "合った割合", kana: "あった わりあい", en: "Matched" },

@@ -32,6 +32,7 @@ import {
   endlessDifficultyStep,
   resolveDifficultyMode,
   resolveEndlessMode,
+  resolveFishingDifficulty,
 } from "../difficultyMode.js";
 import { generateGoNoGoSequence } from "./judge.js";
 import { generateForeperiods, judgeReaction } from "./reaction.js";
@@ -249,7 +250,8 @@ export function createFishingGame(gameId) {
   return function create(ctx) {
   const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml } = ctx;
 
-  const config = { ...fishingPresets[gameId] };
+  // れんしゅうの回は、支援者が選んだアタリの長さ（difficultyMode.js）。
+  const config = resolveFishingDifficulty(gameId, ctx.settings, fishingPresets[gameId]);
   // アタリのときに大きな「！」を出すか（docs/design-renewal-2026-09-25.md §1.5, §3.3）。
   //
   // 打ち合わせで「アタリのとき、でっかいビックリマークがバーンと出たら、押すときだと

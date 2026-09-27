@@ -14,13 +14,14 @@ import {
   isMeasurementMode,
   resolveCraneDifficulty,
   resolveDifficultyMode,
+  resolveFishingDifficulty,
   endlessDifficultyStep,
   resolveEndlessMode,
   resolveRhythmDifficulty,
   resolveSlotDifficulty,
 } from "../src/lib/difficultyMode.js";
 import { resolveParams } from "../src/lib/games/rhythm.js";
-import { cranePresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
+import { cranePresets, fishingPresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
 import { sanitizeState } from "../src/lib/state.js";
 
 let passed = 0;
@@ -165,6 +166,25 @@ test("practice runs keep the assist and the supporter's crane settings", () => {
   assert.equal(crane.audioGuidance, true);
   // アシストはプリセットのまま残る（切らない）。
   assert.equal(crane.assistMaxSteps, cranePresets.assistMaxSteps);
+});
+
+test("fishing lets a practice run choose how long a bite lasts, never a measurement run", () => {
+  // 練習では支援者が選んだ長さ。測定では、選んであっても protocol の 2000ms。
+  const practice = resolveFishingDifficulty("fishing", { difficultyMode: "practice", fishingLimitMs: 3000 }, fishingPresets.fishing);
+  assert.equal(practice.limitMs, 3000);
+  assert.equal(practice.foreperiodMinMs, fishingPresets.fishing.foreperiodMinMs, "ほかの値はプリセットのまま");
+  const fallback = resolveFishingDifficulty("fishing-gonogo", { difficultyMode: "practice", fishingLimitMs: null }, fishingPresets["fishing-gonogo"]);
+  assert.equal(fallback.limitMs, fishingPresets["fishing-gonogo"].limitMs);
+  for (const gameId of ["fishing", "fishing-gonogo"]) {
+    const measured = resolveFishingDifficulty(gameId, { difficultyMode: "measure", fishingLimitMs: 3000 }, fishingPresets[gameId]);
+    assert.equal(measured.limitMs, MEASUREMENT_PROTOCOL.fishing[gameId].limitMs);
+    assert.equal(measured.fakeRatio, fishingPresets[gameId].fakeRatio);
+  }
+  // 保存: 範囲の中は残り、外れた値は端へ寄せ（ほかの難しさの設定と同じ）、数でなければ既定（null）。
+  assert.equal(sanitizeState({ settings: { fishingLimitMs: 3000 } }).settings.fishingLimitMs, 3000);
+  assert.equal(sanitizeState({ settings: { fishingLimitMs: 50 } }).settings.fishingLimitMs, 800);
+  assert.equal(sanitizeState({ settings: { fishingLimitMs: "long" } }).settings.fishingLimitMs, null);
+  assert.equal(sanitizeState({}).settings.fishingLimitMs, null);
 });
 
 test("the protocol is held separately from the play presets", () => {

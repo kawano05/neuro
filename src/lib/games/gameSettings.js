@@ -158,6 +158,19 @@ const CRANE_SPEED = {
   ],
 };
 
+// さかなつりの、アタリが続く長さ（食いついてから逃げるまで。ミリ秒）。null は
+// content.js の fishingPresets（2000）。長いほど、ゆっくり押しても釣れる。
+const FISHING_LIMIT = {
+  key: "fishingLimitMs",
+  label: "アタリが続く長さ",
+  measured: true,
+  options: [
+    [3000, "ながい"],
+    [null, "ふつう"],
+    [1400, "みじかい"],
+  ],
+};
+
 // 「高い音だけ」の音の速さ（1分あたりの拍数）。null は content.js の rhythmPresets
 // （50）。設定画面の「テンポ」と同じ値で、あちらの選択肢（30〜80）の中から選ぶ。
 const GONOGO_TEMPO = {
@@ -181,6 +194,8 @@ export const GAME_SETTINGS = {
   "slot-l2": { mode: "restart", groups: [SLOT_SPEED, SLOT_TOLERANCE] },
   gonogo: { mode: "restart", groups: [GONOGO_TEMPO] },
   crane: { mode: "restart", groups: [CRANE_SPEED, CRANE_TOLERANCE] },
+  fishing: { mode: "restart", groups: [FISHING_LIMIT] },
+  "fishing-gonogo": { mode: "restart", groups: [FISHING_LIMIT] },
 };
 
 /** settings の中の値を、点つなぎの場所で読む（"playPrefs.balloon.sound"）。 */
@@ -250,7 +265,7 @@ export function createGameSettings(ctx, host) {
     if (measuring && definition.groups.some((group) => group.measured)) {
       notes.push({
         lock: true,
-        text: "いまは「そくてい」の回なので、速さや広さは変えられません。記録の条件をそろえるためです。",
+        text: "いまは「そくてい」の回なので、速さや広さ・長さは変えられません。記録の条件をそろえるためです。",
       });
     }
     const soundGroup = definition.groups.find((group) => group.kind === "sound");

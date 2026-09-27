@@ -88,7 +88,9 @@ export function initSettings(ctx) {
   const rhythmChoices = [
     { key: "rhythmBpm", select: elements.rhythmBpm },
     { key: "targetBeats", select: elements.rhythmTargetBeats },
-  ];
+    // さかなつりの、アタリが続く長さ（空文字は既定の2秒）。
+    { key: "fishingLimitMs", select: elements.fishingLimitMs },
+  ].filter(({ select }) => select);
 
   /** 設定UIへ現在値を反映する */
   function render() {
@@ -169,6 +171,7 @@ export function initSettings(ctx) {
       elements.craneToleranceR,
       elements.craneTargetTrials,
       elements.craneAudioGuidance,
+      elements.fishingLimitMs,
     ];
     locked.forEach((control) => {
       if (!control) return;

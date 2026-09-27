@@ -134,6 +134,7 @@ export function collectElements() {
     craneTargetTrials: document.querySelector("#craneTargetTrials"),
     craneTargetTrialsValue: document.querySelector("#craneTargetTrialsValue"),
     craneAudioGuidance: document.querySelector("#craneAudioGuidance"),
+    fishingLimitMs: document.querySelector("#fishingLimitMs"),
     hideVisualTasks: document.querySelector("#hideVisualTasks"),
     researcherMode: document.querySelector("#researcherMode"),
     startCalibration: document.querySelector("#startCalibration"),

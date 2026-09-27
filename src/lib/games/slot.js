@@ -162,12 +162,13 @@ export function createSlotGame(gameId) {
       if (!session || finishing) return;
       const completed = session.trials.length;
       const total = config.rounds * config.reelCount;
-      setProgress(t("slot.progress", { current: Math.min(completed + 1, total), total }));
+      // ほかの遊びと同じ「のこり ○かい」（さかなつり・アーム）。
+      setProgress(t("slot.progress", { n: Math.max(0, total - completed) }));
       if (statusEl && activeReelIndex !== null) {
-        statusEl.textContent = t("slot.status.stopReel", {
-          current: activeReelIndex + 1,
-          total: config.reelCount,
-        });
+        statusEl.textContent =
+          config.reelCount === 1
+            ? t("slot.status.stopOne")
+            : t("slot.status.stopReel", { current: activeReelIndex + 1, total: config.reelCount });
       }
     }
 
@@ -218,6 +219,25 @@ export function createSlotGame(gameId) {
       burst.innerHTML = `${stars}<span class="slot-cheer-word">${tHtml("slot.cheer")}</span>`;
       view.root.append(burst);
       window.setTimeout(() => burst.remove(), 1100);
+    }
+
+    /**
+     * 外したときの一言（れんしゅうの回だけ）。「おしい！」とだけ出して、すぐ次へ。
+     * 打ち合わせで「間違っているときも、へこませずに、あっさり次のチャレンジが
+     * できるように」「もう一回頑張ろう、のような前向きな言葉がいい」と言われた
+     * （docs/design-renewal-2026-09-25.md §1.5）。押さずに止まったとき（時間切れ）は
+     * 出さない——押していないのに「おしい」は合わない。
+     */
+    function nudgeReel(reelIndex) {
+      if (config.difficultyMode === "measure") return;
+      const view = reelViews[reelIndex];
+      if (!view) return;
+      const nudge = document.createElement("span");
+      nudge.className = "slot-cheer is-nudge";
+      nudge.setAttribute("aria-hidden", "true");
+      nudge.innerHTML = `<span class="slot-cheer-word">${tHtml("slot.nudge")}</span>`;
+      view.root.append(nudge);
+      window.setTimeout(() => nudge.remove(), 1000);
     }
 
     /** 止めたときの音。れんしゅうで当たったときは、明るい和音（ソ・シ・レ）。 */
@@ -276,6 +296,7 @@ export function createSlotGame(gameId) {
       paintReel(reelIndex, stoppedAtMs);
       playStopSound(result.judgment);
       if (result.judgment === "hit") cheerReel(reelIndex);
+      else if (source !== "timeout") nudgeReel(reelIndex);
       persist();
       return row;
     }
@@ -398,6 +419,8 @@ export function createSlotGame(gameId) {
       });
 
       stageEl.classList.add("slot-stage");
+      // れんしゅうの回だけの見た目（明るい色の台。theme-hakkiri.css）。
+      stageEl.classList.toggle("is-practice", config.difficultyMode !== "measure");
       stageEl.innerHTML = `
         <section class="slot-task" data-game-id="${gameId}" data-difficulty-mode="${config.difficultyMode}">
           <div class="slot-target" data-slot-target></div>
@@ -506,7 +529,7 @@ export function createSlotGame(gameId) {
         logTrial(session);
       }
       if (stageEl) {
-        stageEl.classList.remove("slot-stage");
+        stageEl.classList.remove("slot-stage", "is-practice");
         stageEl.innerHTML = "";
       }
       reelViews = [];

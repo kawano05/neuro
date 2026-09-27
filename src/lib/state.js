@@ -188,6 +188,9 @@ export const defaultState = {
     // 記録されるので、どの難度で測ったかは走査CSVから追える。
     craneSweepMs: null,
     craneToleranceR: null,
+    // さかなつりの、アタリが続く長さ（ミリ秒）。null のとき content.js の
+    // fishingPresets（2000）。れんしゅうの回だけ効く（difficultyMode.js）。
+    fishingLimitMs: null,
     craneTargetTrials: null,
     // UFOキャッチャーで、走査カーソルが目標を通過したとき音を鳴らすか
     // （games/crane.js の maybePassTone）。
@@ -1305,6 +1308,7 @@ export function sanitizeState(candidate) {
       // セッションが保存時に別の値へ丸められて記録と食い違う。
       craneSweepMs: nullableNumberInRange(settings.craneSweepMs, null, 800, 6000, true),
       craneToleranceR: nullableNumberInRange(settings.craneToleranceR, null, 4, 40, true),
+      fishingLimitMs: nullableNumberInRange(settings.fishingLimitMs, null, 800, 6000, true),
       craneTargetTrials: nullableNumberInRange(settings.craneTargetTrials, null, 3, 15, true),
       visualGuidance: booleanOr(settings.visualGuidance, fallback.settings.visualGuidance),
       difficultyMode: enumOr(

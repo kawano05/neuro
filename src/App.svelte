@@ -766,7 +766,26 @@
           </span>
           <input id="craneAudioGuidance" type="checkbox" role="switch" data-scan />
         </label>
+      </div>
 
+      <h3 class="settings-group-title">さかなつり</h3>
+      <p class="settings-group-note">
+        練習の回にだけ効きます。測定の回は決まった条件です。
+      </p>
+
+      <div class="settings-grid">
+        <label class="setting-row">
+          <span>
+            <strong>アタリが続く長さ</strong>
+            <small>魚が食いついてから逃げるまでの時間。長いほど、ゆっくり押しても釣れます</small>
+          </span>
+          <select id="fishingLimitMs" data-scan>
+            <option value="">ふつう（2秒）</option>
+            <option value="3000">ながい（3秒）</option>
+            <option value="4000">とても ながい（4秒）</option>
+            <option value="1400">みじかい（1.4秒）</option>
+          </select>
+        </label>
       </div>
       </div>
 

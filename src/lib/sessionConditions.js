@@ -12,6 +12,8 @@
 // 出さないか）をテストで固定するため。DOM には触れない。
 // =====================================================================
 
+import { fishingPresets } from "./content.js";
+
 /** 完走したか、途中で終わったか。中断した回は数字の意味が変わる。 */
 export function describeSessionOutcome(session) {
   if (!session) return "";
@@ -168,7 +170,15 @@ export function describeSessionConditions(session) {
   }
 
   if (session.taskType === "rt") {
-    // さかなつりは支援者が触れる設定を持たない。
+    // 支援者が変えられるのは、アタリが続く長さ（受付時間 limitMs）だけ（練習の回、
+    // 2026-09-27 から。difficultyMode.js の resolveFishingDifficulty）。
+    //
+    // 既定のままの回には何も出さない。既定の回どうし・測定の回（同じ 2000ms）と
+    // 同じ束に入り、これまでの推移がそのまま続く。変えた回だけを別の束にする。
+    const defaultLimitMs = fishingPresets[session.gameId]?.limitMs;
+    if (typeof config.limitMs === "number" && typeof defaultLimitMs === "number" && config.limitMs !== defaultLimitMs) {
+      return `アタリ ${config.limitMs}ms`;
+    }
     //
     // 試行数は出さない。前刺激間隔の乱数で回ごとに変わるので、条件キーに
     // 入れると回ごとに別の束になり、推移が1本も出なくなる（実測で0本

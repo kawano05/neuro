@@ -986,6 +986,9 @@ export function createCraneGame(ctx) {
   function mount(el) {
     stageEl = el;
     stageEl.classList.add("module-crane");
+    // れんしゅうの回だけの見た目（明るい色の筐体。theme-hakkiri.css）。ガラスの箱
+    // （床と景品・狙い）は、そくていの回と同じ。
+    stageEl.classList.toggle("is-practice", config.difficultyMode !== "measure");
     renderMarkup();
     railEl.dataset.top = "8";
 
@@ -1072,7 +1075,7 @@ export function createCraneGame(ctx) {
       logTrial(session);
     }
     if (stageEl) {
-      stageEl.classList.remove("module-crane");
+      stageEl.classList.remove("module-crane", "is-practice");
       stageEl.innerHTML = "";
     }
     stageEl = null;
