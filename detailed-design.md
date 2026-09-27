@@ -22,10 +22,17 @@
 | gameId | `slot-l1` | `slot-l2` |
 | taskType | `slot` | `slot` |
 | protocolVersion | `slot-v1` | `slot-v1` |
-| engineVersion | `1` | `1` |
+| engineVersion | `2`（下の注） | `2`（下の注） |
 | reelCount | 1 | 3 |
 | rounds | 8 | 4 |
 | 総停止数 | 8 | 12 |
+
+**engineVersion 2（2026-09-27）**: リールの帯の描き方を直した。並びの先頭の絵が
+停止線へ近づくあいだ（1周の12分の1）、帯が窓の外へ出てリールに絵が1つも
+描かれていなかった（`slotJudge.js` の `reelTrackOffset`、テストは
+`tests/slot-judge.test.mjs`）。判定は時刻で行うので記録の値は正しいが、参加者が
+見ていた刺激が違うので版を上げた。1 の回は `legacyVersion` として読み取り専用で
+残り、台帳には出るがリールCSVと推移からは外れる（解析で版を分ける）。
 
 利用者ホームのカテゴリーは「リールを 止める」。`rhythm-l1` /
 `rhythm-l2` のIDを新課題へ再利用せず、旧SMSデータをslotへ変換しない。

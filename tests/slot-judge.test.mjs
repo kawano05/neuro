@@ -5,7 +5,9 @@ import {
   createSeededSlotPlan,
   judgeSlotStop,
   nearestTargetPassMs,
+  positiveModulo,
   reelPhaseAt,
+  reelTrackOffset,
   summarizeSlotTrials,
 } from "../src/lib/games/slotJudge.js";
 
@@ -89,6 +91,22 @@ test("the closest target pass is reproducible without animation frames", () => {
   const at30Fps = judgeSlotStop({ ...base, targetSymbol: "circle", inputMs });
   const at120Fps = judgeSlotStop({ ...base, targetSymbol: "circle", inputMs });
   assert.deepEqual(at30Fps, at120Fps);
+});
+
+test("the painted reel never slides out of its window near the wrap-around", () => {
+  // 位相が symbolCount - 0.5 を超えたところで、帯が約 -6 コマずれて窓の外へ
+  // 出ていた（リールが空に見えた。2026-09-27）。ずれは必ず ±0.5 コマの中、
+  // 真ん中の絵は判定と同じ、真ん中の番号とずれから位相が戻ること。
+  for (let step = 0; step < 6 * 50; step += 1) {
+    const phase = step / 50;
+    const { centeredIndex, offsetCells } = reelTrackOffset(phase, 6);
+    assert.ok(offsetCells > -0.5 - 1e-9 && offsetCells <= 0.5 + 1e-9, `phase ${phase}: offset ${offsetCells}`);
+    assert.equal(centeredIndex, centeredSymbolIndex(phase, 6), `phase ${phase}`);
+    assert.ok(
+      Math.abs(positiveModulo(centeredIndex - offsetCells, 6) - phase) < 1e-9,
+      `phase ${phase} must be recoverable from what is drawn`
+    );
+  }
 });
 
 test("the same seed reproduces every target, order and initial phase", () => {

@@ -1800,7 +1800,11 @@ async function checkSlotL1GameFlow(page) {
 
   assert(session?.taskType === "slot", "slot-l1 must persist taskType=slot");
   assert(session?.protocolVersion === "slot-v1", "slot-l1 must persist protocolVersion=slot-v1");
-  assert(session?.engineVersion === 1, "slot-l1 must persist engineVersion=1");
+  const { SLOT_ENGINE_VERSION } = await import("../src/lib/games/slotJudge.js");
+  assert(
+    session?.engineVersion === SLOT_ENGINE_VERSION,
+    `slot-l1 must persist the current engineVersion (${SLOT_ENGINE_VERSION})`
+  );
   assert(session?.aborted === true && session?.finished === false, "Esc must persist an aborted partial slot session");
   assert(session?.trials?.length === 1, "One accepted L1 input must produce exactly one stop row");
   assert(session?.config?.reelCount === 1, "slot-l1 must persist reelCount=1");

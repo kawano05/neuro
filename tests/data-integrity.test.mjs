@@ -37,6 +37,7 @@ import {
 } from "../src/lib/content.js";
 import { gameCreators, gameModules } from "../src/lib/games/registry.js";
 import { slotSymbolStripUrl } from "../src/lib/games/slotArt.js";
+import { SLOT_ENGINE_VERSION } from "../src/lib/games/slotJudge.js";
 
 class MemoryStorage {
   constructor() {
@@ -1325,7 +1326,7 @@ test("bumping the slot engine version keeps old runs instead of deleting them", 
     summary: { hits: 1 },
   });
 
-  const restored = sanitizeState({ sessions: [run("cur", 1), run("old", 0)] }).sessions;
+  const restored = sanitizeState({ sessions: [run("cur", SLOT_ENGINE_VERSION), run("old", 0)] }).sessions;
   assert.equal(restored.length, 2, "版が違うだけの回を消してはいけない");
   const legacy = restored.find((session) => session.sessionId === "old");
   assert.equal(legacy.legacyVersion, true, "いまの版で検証していないことを記録に持たせる");

@@ -7334,14 +7334,15 @@ body.high-contrast .fishing-water {
 }
 
 .slot-reel-track {
-  --slot-track-offset: 0px;
+  /* コマ数（games/slot.js の paintReel）。1コマの高さを掛けて px にする。 */
+  --slot-track-offset: 0;
   position: absolute;
   top: 50%;
   left: 0;
   width: 100%;
   display: grid;
   grid-auto-rows: var(--slot-cell-size);
-  transform: translateY(calc(-50% + var(--slot-track-offset)));
+  transform: translateY(calc(-50% + var(--slot-track-offset) * var(--slot-cell-size)));
   will-change: transform;
 }
 

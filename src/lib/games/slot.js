@@ -15,6 +15,7 @@ import {
   judgeSlotStop,
   positiveModulo,
   reelPhaseAt,
+  reelTrackOffset,
   summarizeSlotTrials,
 } from "./slotJudge.js";
 import { slotSymbolHtml, slotSymbolStripUrl } from "./slotArt.js";
@@ -119,14 +120,15 @@ export function createSlotGame(gameId) {
         symbolCount: config.symbolCount,
         initialPhase: reelPlan.initialPhase,
       });
-      const centeredIndex = positiveModulo(Math.floor(phase + 0.5), config.symbolCount);
+      const { centeredIndex, offsetCells } = reelTrackOffset(phase, config.symbolCount);
       if (view.centeredIndex !== centeredIndex || view.orderKey !== reelPlan.symbolOrder.join("|")) {
         view.track.innerHTML = buildTrackSymbols(reelPlan.symbolOrder, centeredIndex);
         view.centeredIndex = centeredIndex;
         view.orderKey = reelPlan.symbolOrder.join("|");
       }
-      const fractionalOffset = centeredIndex - phase;
-      view.track.style.setProperty("--slot-track-offset", `${(fractionalOffset * 94).toFixed(2)}px`);
+      // ずれはコマ数で渡し、1コマの高さは CSS の --slot-cell-size が決める
+      // （以前は 94px 決め打ちで、スマホの 82px のコマとずれていた）。
+      view.track.style.setProperty("--slot-track-offset", offsetCells.toFixed(4));
     }
 
     function updateReelClasses() {
