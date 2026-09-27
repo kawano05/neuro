@@ -518,6 +518,19 @@ body.user-world .game-tile.scan-focus {
     grid-row: 1 / span 2;
   }
 
+  /* 9つ並ぶとき（はじめの遊び3つ＋ボールを打つ＋…）: 4列×3段にして、1番を
+     左上に 2×2 で大きく置く。1番（4マス）＋8つ＝12マスでちょうど埋まり、
+     簡単→難しいが左上→右下に並ぶことは変わらない。 */
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="9"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="9"] .hk-tile[data-hk-slot="hero"] {
+    grid-column: 1 / span 2;
+    grid-row: 1 / span 2;
+  }
+
   /* 縦向きのタブレット（iPad 縦 834x1194 など）: 3列だと1枚が細長くなり、
      名前が1文字だけ次の行へ落ちる（「止め／る」）。2列にして、1番を上に横長で置く。
      簡単→難しいが左上→右下に並ぶことは変わらない。 */
@@ -530,6 +543,16 @@ body.user-world .game-tile.scan-focus {
        低く、1番の段は少し高く。data-count は views/home.js が入れる。 */
     body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="8"] {
       grid-template-rows: minmax(0, 1.3fr) repeat(3, minmax(0, 1fr)) auto;
+    }
+
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="9"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: minmax(0, 1.3fr) repeat(4, minmax(0, 1fr)) auto;
+    }
+
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="9"] .hk-tile[data-hk-slot="hero"] {
+      grid-column: 1 / -1;
+      grid-row: auto;
     }
 
     body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="6"] {
@@ -699,6 +722,37 @@ body.user-world .game-tile.scan-focus {
     padding: 6px 12px;
   }
 
+  /* ロビーは画面の残りの高さいっぱいに広げ、行を割り振る。余る縦長の画面では絵が
+     大きく、詰まる画面（iPhone SE、ツールバーの出た Safari）では小さくなる。
+     最小の高さでも入らないときだけ、描いたあとの実測でページに分かれる
+     （views/home.js）。打ち合わせ「1画面にすべて並べる」（§1.3）。 */
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="8"] {
+    grid-template-rows: minmax(86px, 1.3fr) repeat(3, minmax(74px, 1fr)) auto;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="9"] {
+    grid-template-rows: minmax(80px, 1.3fr) repeat(4, minmax(68px, 1fr)) auto;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="6"] {
+    grid-template-rows: minmax(86px, 1.3fr) repeat(2, minmax(74px, 1fr)) auto;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile,
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="hero"] {
+    min-height: 0;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile:not([data-hk-kind]) .hk-tile-art {
+    min-height: 0;
+    flex: 1 1 0;
+  }
+
   /* 2列の小さいタイルでは、名前の幅を取る（実測 108px で「リールを 止め／る」と
      折り返していた）。矢印は飾りなので外す——タイル全体がボタン。 */
   body.user-world #gameTileGrid[data-paged="false"] .hk-tile:not([data-hk-slot]):not([data-hk-kind]) .hk-tile-go {
@@ -715,6 +769,48 @@ body.user-world .game-tile.scan-focus {
   body.user-world .activity-list {
     padding-right: 0;
     padding-left: 0;
+  }
+}
+
+/* 背の低いスマホ（高さ 740px 以下: iPhone SE、ツールバーの出た Safari の iPhone など）
+   では、ロビーを1画面に収めるために、案内の一言（「遊びたい絵を押してね」）を外し、
+   見出しと余白を詰める。番号と「①から⑦へ」は残す。 */
+@media (max-width: 699px) and (max-height: 740px) {
+  body.user-world .home-guide {
+    display: none;
+  }
+
+  body.user-world .home-intro {
+    margin: 2px 4px 2px;
+  }
+
+  body.user-world .home-intro h2 {
+    font-size: 1.35rem;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] {
+    gap: 8px;
+    padding-top: 6px;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile .hk-tile-band {
+    min-height: 44px;
+    padding: 5px 10px;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="hero"] .hk-tile-band {
+    min-height: 52px;
+    padding: 6px 14px;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-kind="other"] {
+    min-height: 48px;
+  }
+
+  /* 1番の説明文は外す（名前の帯が高くなり、絵が細い帯になっていた）。説明は
+     aria-describedby で読み上げには乗ったまま。 */
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="hero"] .tile-description {
+    display: none;
   }
 }
 
@@ -832,6 +928,12 @@ body.game-mode .game-actions .game-exit {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* さかなつりの点数（「0 cm」）が、上の帯の「のこり」とぶつかっていた（390px）。
+     帯の下へ下げる。 */
+  body.game-mode.user-world .fishing-score {
+    top: 76px;
   }
 
   /* リールの目標の札が、上の帯（進みぐあい・設定・おわる）の裏に隠れていた
@@ -1342,6 +1444,371 @@ body.user-world .game-stage-content.is-ready {
 }
 
 /* ---------------------------------------------------------------------
+   「学ぶ・伝える」の中の画面（どれかな？・ことばで 伝える・文字を えらぶ）
+   docs/design-renewal-2026-09-25.md §3.14。遊びと同じ「はっきりした色」にそろえる。
+   --------------------------------------------------------------------- */
+
+/* 英語の小見出し（Scan matching など）は出さない。 */
+body.user-world :is(#matching, #voca, #letters) .eyebrow {
+  display: none;
+}
+
+body.user-world :is(#matching, #voca, #letters) .section-head h2 {
+  font-family: var(--font-round);
+  font-size: clamp(1.6rem, 3.6vw, 2.2rem);
+  font-weight: 800;
+}
+
+body.user-world :is(#nextMatching, #nextLetter, #repeatPhrase) {
+  min-height: 56px;
+  padding: 0 24px;
+  border: 3px solid var(--hk-ink);
+  border-radius: 16px;
+  background: var(--hk-blue);
+  color: #ffffff;
+  font-family: var(--font-round);
+  font-size: 1.2rem;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+body.user-world :is(#nextMatching, #nextLetter, #repeatPhrase) rt {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* 問い・伝えたいことばの札 */
+body.user-world :is(#matching, #letters) .question-board,
+body.user-world #voca .message-board {
+  min-height: 0;
+  padding: 16px 22px 18px;
+  border: 3px solid var(--hk-ink);
+  border-radius: 20px;
+  background: #fff6d6;
+  box-shadow: none;
+}
+
+body.user-world #voca .message-board {
+  background: #e6f4ff;
+}
+
+body.user-world :is(#matching, #voca, #letters) .metric-label {
+  color: var(--hk-ink);
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+body.user-world :is(#matching, #letters) .question-board strong,
+body.user-world #voca .message-board strong {
+  font-family: var(--font-round);
+  font-size: clamp(1.7rem, 4.2vw, 2.8rem);
+  line-height: 1.6;
+}
+
+/* 選ぶカード（絵・文字・ことば） */
+body.user-world :is(.match-card, .letter-button, .phrase-button) {
+  border: 3px solid var(--hk-ink);
+  border-radius: 20px;
+  background: #ffffff;
+  color: var(--hk-ink);
+  font-family: var(--font-round);
+  box-shadow: none;
+}
+
+body.user-world .match-card {
+  min-height: 190px;
+  gap: 8px;
+}
+
+body.user-world .match-picture {
+  display: block;
+  width: min(120px, 70%);
+  height: auto;
+}
+
+body.user-world .match-card strong {
+  font-size: clamp(1.3rem, 2.8vw, 1.7rem);
+}
+
+body.user-world .letter-button {
+  min-height: 170px;
+  font-size: clamp(3.4rem, 9vw, 5.2rem);
+  font-weight: 800;
+}
+
+body.user-world .phrase-button {
+  min-height: 96px;
+  font-size: clamp(1.25rem, 2.6vw, 1.65rem);
+  font-weight: 800;
+  line-height: 1.7;
+}
+
+/* 分類（きほん・たいちょう…）: 選んでいるものを青で塗る */
+body.user-world .category-button {
+  min-height: 52px;
+  padding: 0 18px;
+  border: 3px solid var(--hk-ink);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--hk-ink);
+  font-family: var(--font-round);
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.7;
+  box-shadow: none;
+}
+
+body.user-world .category-button.is-active {
+  border-color: var(--hk-blue);
+  background: var(--hk-blue);
+  color: #ffffff;
+}
+
+body.user-world .category-button.is-active rt {
+  color: inherit;
+  opacity: 0.85;
+}
+
+@media (max-width: 699px) {
+  body.user-world #matching .card-grid,
+  body.user-world #letters .letter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.user-world #voca .phrase-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* スマホ: 見出しと「つぎ」を1行に、問いの字と選ぶカードを詰めて、4つの答えが
+     1画面に入るようにする（走査で選ぶ画面は、なるべくスクロールさせない）。 */
+  body.user-world :is(#matching, #voca, #letters) .section-head {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  body.user-world :is(#matching, #voca, #letters) .section-head h2 {
+    font-size: 1.3rem;
+    white-space: nowrap;
+  }
+
+  body.user-world :is(#nextMatching, #nextLetter, #repeatPhrase) {
+    flex: 0 0 auto;
+    min-height: 48px;
+    padding: 0 16px;
+    font-size: 1.05rem;
+  }
+
+  body.user-world :is(#matching, #letters) .question-board,
+  body.user-world #voca .message-board {
+    margin-bottom: 10px;
+    padding: 10px 16px 12px;
+  }
+
+  body.user-world :is(#matching, #letters) .question-board strong,
+  body.user-world #voca .message-board strong {
+    font-size: clamp(1.3rem, 6vw, 1.9rem);
+  }
+
+  body.user-world .match-card {
+    min-height: 118px;
+    padding: 10px;
+  }
+
+  body.user-world .match-picture {
+    width: min(84px, 60%);
+  }
+
+  body.user-world .letter-button {
+    min-height: 104px;
+  }
+
+  body.user-world .phrase-button {
+    min-height: 72px;
+  }
+}
+
+/* 「← ホームへ」の帯は、この3画面では上に貼りつけない。貼りつけると、スクロール
+   したときに見出しのボタンの上に重なっていた（スマホで実測）。 */
+body.user-world.user-activity-mode .tabbar {
+  position: static;
+}
+
+/* ---------------------------------------------------------------------
+   ボールを打つ遊び（games/baseball.js）
+   --------------------------------------------------------------------- */
+
+.game-stage-content.module-baseball {
+  display: block;
+  padding: 0;
+  /* 盤の芝と同じ色で、盤のまわりの余白をなじませる。 */
+  background: #3fae5a;
+  color: #1a1a1a;
+}
+
+/* 盤は、上の帯（進みぐあい・設定・おわる）と下の5つの印のあいだに、縦横比を
+   保ったまま収める。grid の中で高さを%で渡すと、横幅いっぱいの正方形になって
+   手前のバットが画面の下へはみ出していた。 */
+.bb-stage {
+  position: absolute;
+  inset: 76px 12px 0;
+}
+
+.bb-field {
+  position: absolute;
+  inset: 0 0 48px;
+  width: 100%;
+  height: calc(100% - 48px);
+  /* 盤のまわり（スタンドと芝）は viewBox の外まで描いてあるので、余白にも出す。 */
+  overflow: visible;
+}
+
+.bb-word {
+  position: absolute;
+  top: 6%;
+  left: 50%;
+  z-index: 2;
+  padding: 4px 22px;
+  border: 3px solid #1a1a1a;
+  border-radius: 999px;
+  background: #ffffff;
+  font-family: var(--font-round);
+  font-size: clamp(1.6rem, 4.6vw, 2.6rem);
+  font-weight: 900;
+  line-height: 1.3;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.bb-word:empty {
+  display: none;
+}
+
+.bb-word[data-word="baseball.word.homerun"] {
+  background: #ffc83d;
+  animation: bb-word-pop 0.45s cubic-bezier(0.34, 1.36, 0.64, 1) both;
+}
+
+.bb-word[data-word="baseball.word.hit"] {
+  animation: bb-word-pop 0.35s ease-out both;
+}
+
+@keyframes bb-word-pop {
+  from {
+    transform: translateX(-50%) scale(0.5);
+  }
+
+  to {
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* バット: 手元（左下）を軸に、休みは手前（下）へ、振ると上（投げた人のほう）へ。 */
+.bb-bat {
+  transform-box: view-box;
+  transform-origin: 262px 560px;
+  transform: rotate(20deg);
+  transition: transform 0.14s ease-out;
+}
+
+.bb-bat.is-swinging {
+  transform: rotate(-64deg);
+  transition-duration: 0.09s;
+}
+
+/* ホームランのはなび（スタンドの上で3つはじける）。 */
+.bb-fireworks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.bb-firework {
+  position: absolute;
+  top: calc(4% + var(--f) * 3%);
+  left: calc(22% + var(--f) * 24%);
+  width: clamp(60px, 10vmin, 110px);
+  opacity: 0;
+}
+
+.bb-firework svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.module-baseball.is-homerun .bb-firework {
+  animation: bb-firework 1s ease-out both;
+  animation-delay: calc(0.35s + var(--f) * 0.18s);
+}
+
+@keyframes bb-firework {
+  0% {
+    opacity: 0;
+    transform: scale(0.2) rotate(0deg);
+  }
+
+  30% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.4) rotate(40deg);
+  }
+}
+
+/* 打った5本（下の列）。ホームランは金、ヒットは白、ころころは小さく。 */
+.bb-slots {
+  position: absolute;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  left: 50%;
+  display: flex;
+  gap: 12px;
+  transform: translateX(-50%);
+}
+
+.bb-slot {
+  width: 26px;
+  height: 26px;
+  border: 3px dashed rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+}
+
+.bb-slot.is-homerun,
+.bb-slot.is-hit,
+.bb-slot.is-bunt {
+  border: 3px solid #1a1a1a;
+  background: #ffffff;
+}
+
+.bb-slot.is-homerun {
+  background: #ffc83d;
+  box-shadow: 0 0 0 3px rgba(255, 200, 61, 0.45);
+}
+
+.bb-slot.is-bunt {
+  transform: scale(0.75);
+}
+
+/* けっか: 打った球 */
+.hk-result-item.is-ball {
+  display: grid;
+  place-items: center;
+}
+
+.hk-ball {
+  display: block;
+  width: 62%;
+  height: auto;
+}
+
+.hk-result-item.is-bunt .hk-ball {
+  width: 44%;
+}
+
+/* ---------------------------------------------------------------------
    はじめの遊び「ぬりえ」（games/coloring.js）
    --------------------------------------------------------------------- */
 
@@ -1662,21 +2129,86 @@ body.result-mode.user-world #resultHome::before {
 .slot-cheer-star {
   position: absolute;
   color: #ffc83d;
-  font-size: clamp(1.4rem, 3.4vmin, 2.2rem);
+  font-size: clamp(1.6rem, 4vmin, 2.6rem);
   text-shadow: 0 0 0 #1a1a1a, 0 2px 0 rgba(0, 0, 0, 0.35);
-  animation: slot-cheer 0.8s ease-out both;
+  animation: slot-cheer 0.95s ease-out both;
 }
 
 @keyframes slot-cheer {
   from {
     opacity: 1;
-    transform: rotate(calc(var(--i) * 45deg)) translateY(0) scale(0.4);
+    transform: rotate(var(--a)) translateY(0) scale(0.4);
   }
 
   to {
     opacity: 0;
-    transform: rotate(calc(var(--i) * 45deg)) translateY(-110px) scale(1.1);
+    transform: rotate(var(--a)) translateY(-150px) scale(1.2);
   }
+}
+
+/* 「ぴったり！」。リールの上の縁に、はずむように出て消える（真ん中に出すと、
+   止めた絵そのものを隠してしまう）。星は真ん中の絵のまわりにはじける。 */
+.slot-cheer-word {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  margin-top: -0.8em;
+  padding: 4px 16px;
+  border: 3px solid #1a1a1a;
+  border-radius: 999px;
+  background: #ffc83d;
+  color: #1a1a1a;
+  font-family: var(--font-round, system-ui, sans-serif);
+  font-size: clamp(1.3rem, 3.4vmin, 2.1rem);
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+  animation: slot-cheer-word 1.05s ease-out both;
+}
+
+@keyframes slot-cheer-word {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  18% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(1);
+  }
+}
+
+/* リール（れんしゅうの回）: 枠を大きく。打ち合わせで「この枠が大きいといい」
+   「でかくバーンって流れていくような感じ」と言われた（§1.5）。1コマの高さを
+   画面の高さに合わせて広げ、絵も同じ割合で大きくする。1本だけのときは①の
+   番号も要らない（周りの余計なもの）。そくていの回は変えない（刺激の条件、
+   §3.3）。engineVersion 3 の回から（slotJudge.js）。 */
+.slot-task[data-difficulty-mode="practice"] .slot-reel-window {
+  --slot-cell-size: clamp(94px, 15vh, 136px);
+}
+
+.slot-task[data-difficulty-mode="practice"] .slot-reels.is-1-reel {
+  width: min(100%, 400px);
+}
+
+.slot-task[data-difficulty-mode="practice"] .slot-reel .slot-symbol {
+  width: calc(var(--slot-cell-size) * 0.68);
+  height: calc(var(--slot-cell-size) * 0.68);
+  font-size: calc(var(--slot-cell-size) * 0.4);
+}
+
+.slot-task[data-difficulty-mode="practice"] .slot-reels.is-1-reel .slot-reel-number {
+  display: none;
 }
 
 /* リール: 下の「この6つの絵が動きます」を、れんしゅうの回では出さない。
@@ -1767,8 +2299,25 @@ body.result-mode.user-world #resultHome::before {
     transform: none;
   }
 
-  .slot-cheer {
+  /* ボールを打つ遊び: ボールは動かす（遊びそのもの）。バットは振りを一瞬で、
+     はなびと言葉のはずみは出さない。 */
+  .bb-bat,
+  .bb-bat.is-swinging {
+    transition: none;
+  }
+
+  .module-baseball.is-homerun .bb-firework,
+  .bb-word[data-word] {
+    animation: none;
+  }
+
+  /* 星は飛ばさず、「ぴったり！」だけを動かさずに出す。 */
+  .slot-cheer-star {
     display: none;
+  }
+
+  .slot-cheer-word {
+    animation: none;
   }
 
   /* ふうせんは浮かばせず、割れたら動かずに消える。ぬりえは色がすぐ変わる。 */

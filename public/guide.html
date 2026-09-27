@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>かんたん説明書（ご家族・先生・支援者の方へ）</title>
+<!--
+  印刷して渡すための説明書（A4 で2枚）。打ち合わせで「お母さんに渡す簡単な
+  説明書がほしい」「最初の画面だけでも、どのボタンが何をするのか支援者向けに
+  書いてあれば解決しそう」と言われた（docs/design-renewal-2026-09-25.md §1.8）。
+  アプリの中の「はじめての方へ：つかいかた」（設定画面）と同じ内容を、絵つきで。
+  オフラインでも読めるよう、字体・絵はすべてこのファイルの中に持つ。
+-->
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #4e5d78;
+    --line: #1a1a1a;
+    --blue: #005aff;
+    --yellow: #ffc83d;
+    --paper: #ffffff;
+    --soft: #f2f7ff;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: #e9eef5;
+    color: var(--ink);
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+
+  .sheet {
+    width: min(210mm, 100%);
+    margin: 16px auto;
+    padding: 14mm 14mm 12mm;
+    background: var(--paper);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .toolbar {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 16px auto 0;
+  }
+
+  .toolbar button {
+    min-height: 44px;
+    padding: 0 22px;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    background: var(--blue);
+    color: #ffffff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  h1 {
+    margin: 0 0 4px;
+    font-size: 24px;
+    line-height: 1.4;
+  }
+
+  .lead {
+    margin: 0 0 14px;
+    color: var(--muted);
+  }
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 3px solid var(--line);
+    font-size: 18px;
+  }
+
+  h2 .num {
+    display: inline-grid;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: #ffffff;
+    place-items: center;
+    font-size: 15px;
+  }
+
+  section {
+    break-inside: avoid;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .step {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    break-inside: avoid;
+  }
+
+  .step strong {
+    font-size: 16px;
+  }
+
+  .step p {
+    margin: 0;
+  }
+
+  /* 画面の見本（アプリの画面を簡単にした絵） */
+  .screen {
+    position: relative;
+    height: 120px;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    background: #0b1a33;
+    overflow: hidden;
+  }
+
+  .screen.light {
+    background: #ffffff;
+  }
+
+  .screen .big-button {
+    position: absolute;
+    inset: 32px 22%;
+    display: grid;
+    border: 3px solid var(--line);
+    border-radius: 999px;
+    background: var(--blue);
+    color: #ffffff;
+    place-items: center;
+    font-size: 18px;
+    font-weight: 800;
+  }
+
+  .screen .tiles {
+    position: absolute;
+    inset: 22px 10px 8px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 5px;
+  }
+
+  .screen .tiles span {
+    display: flex;
+    align-items: flex-start;
+    padding: 2px 4px;
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .screen .tiles span:first-child {
+    grid-column: 1 / span 2;
+    grid-row: 1 / span 2;
+    outline: 3px solid var(--yellow);
+    outline-offset: 1px;
+  }
+
+  .screen .corner {
+    position: absolute;
+    top: 3px;
+    right: 8px;
+    padding: 0 6px;
+    border: 1.5px solid var(--line);
+    border-radius: 6px;
+    background: #ffffff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+
+  .screen .bar {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    display: flex;
+    gap: 5px;
+  }
+
+  .screen .bar span {
+    padding: 1px 6px;
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    background: rgba(0, 8, 20, 0.8);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .screen .animal {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    width: 110px;
+    transform: translate(-50%, -50%);
+  }
+
+  .screen .buttons {
+    position: absolute;
+    inset: auto 12px 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .screen .buttons span {
+    flex: 1;
+    padding: 6px 0;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .screen .buttons span:first-child {
+    background: var(--blue);
+    color: #ffffff;
+    outline: 3px solid var(--yellow);
+  }
+
+  .screen .done {
+    position: absolute;
+    top: 18px;
+    left: 0;
+    right: 0;
+    font-size: 20px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 6px 8px;
+    border: 1.5px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--soft);
+  }
+
+  td.no {
+    width: 36px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0 8px;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .note {
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    border-left: 6px solid var(--yellow);
+    background: #fff8e0;
+  }
+
+  dl {
+    margin: 0;
+  }
+
+  dt {
+    margin-top: 8px;
+    font-weight: 800;
+  }
+
+  dt::before {
+    content: "Q. ";
+    color: var(--blue);
+  }
+
+  dd {
+    margin: 0 0 0 1.4em;
+  }
+
+  .foot {
+    margin-top: 16px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  @media (max-width: 640px) {
+    .sheet {
+      margin: 0;
+      padding: 16px;
+      box-shadow: none;
+    }
+
+    .steps {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  @media print {
+    body {
+      background: #ffffff;
+      font-size: 10.5pt;
+    }
+
+    .sheet {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+
+    .toolbar {
+      display: none;
+    }
+
+    .page-break {
+      break-before: page;
+    }
+
+    .screen,
+    h2 .num,
+    .screen .big-button,
+    .screen .bar span,
+    .screen .buttons span:first-child,
+    th,
+    .note {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button type="button" onclick="window.print()">印刷する（A4）</button>
+</div>
+
+<main class="sheet">
+  <h1>かんたん説明書</h1>
+  <p class="lead">
+    ご家族・先生・支援者の方へ。NeuroNode（ニューロノード）のスイッチで「押す」練習を、遊びながらするアプリです。
+    はじめは、いつ押しても必ず何かが起きる遊びから始めます。
+  </p>
+
+  <section>
+    <h2><span class="num">1</span>はじめる前に（1回だけ）</h2>
+    <ul>
+      <li>NeuroNode を iPad に<strong>キーボードとしてつなぎます</strong>。スイッチを押すと、アプリの遊びが進みます。</li>
+      <li>iPad の「設定」→「アクセシビリティ」→「<strong>スイッチコントロール」はオフのまま</strong>にします。
+        アプリの黄色い枠で選びます（アプリの中の設定を変える必要はありません）。</li>
+      <li>音が大事な遊びです。iPad の<strong>音量</strong>を上げ、<strong>消音（マナーモード）</strong>を切っておきます。</li>
+    </ul>
+    <p class="note">
+      iPad 本体のスイッチコントロールで操作したいときだけ、iPad とアプリ（支援者の設定の
+      「iPad のスイッチコントロールを使う」）の<strong>両方をオン</strong>にします。
+      iPad だけをオンにすると、黄色い枠（アプリ）と iPad の枠が両方出て、うまく選べません。
+    </p>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span>つかいかた</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="screen light" aria-hidden="true">
+          <div class="big-button">はじめる</div>
+        </div>
+        <p><strong>① はじめる</strong><br />最初の画面は「はじめる」だけです。スイッチを1回押すと、遊びを選ぶ画面になります。</p>
+      </div>
+      <div class="step">
+        <div class="screen light" aria-hidden="true">
+          <span class="corner">支援者の設定</span>
+          <div class="tiles">
+            <span>①</span><span>②</span><span>③</span><span>④</span><span>⑤</span><span>⑥</span><span>⑦</span><span>⑧</span><span>…</span>
+          </div>
+        </div>
+        <p><strong>② 遊びを選ぶ</strong><br />黄色い枠が順番に動きます。遊びたい絵に枠が来たら押します。
+          ①がいちばんかんたんで、番号が大きいほどむずかしくなります。画面を指でさわっても選べます。</p>
+      </div>
+      <div class="step">
+        <div class="screen" aria-hidden="true">
+          <div class="bar"><span>この遊びの設定</span><span>× おわる</span></div>
+          <svg class="animal" viewBox="0 0 300 240"><path d="M40 150 C 60 80, 150 50, 225 85 C 250 97, 268 112, 282 124 C 262 124, 250 126, 240 132 C 234 162, 200 186, 150 188 C 110 190, 80 182, 60 172 C 45 190, 30 204, 16 210 C 22 190, 28 172, 40 150 Z" fill="#4DC4FF"></path><path d="M138 72 C 148 46, 168 36, 186 32 C 178 50, 176 66, 180 82 Z" fill="#1FA2E0"></path><circle cx="222" cy="104" r="8" fill="#10222E"></circle></svg>
+        </div>
+        <p><strong>③ 遊ぶ</strong><br />押すと絵や音が出ます。右上の「この遊びの設定」で、音や速さをその場で変えられます
+          （支援者がさわるボタンです）。やめるときは「おわる」です。</p>
+      </div>
+      <div class="step">
+        <div class="screen light" aria-hidden="true">
+          <div class="done">できた！</div>
+          <div class="buttons"><span>もういちど</span><span>遊びを選ぶ</span></div>
+        </div>
+        <p><strong>④ できた！</strong><br />終わると「できた！」の画面になります。「もういちど」か「遊びを選ぶ」を選びます。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="page-break">
+    <h2><span class="num">3</span>遊びの順番（おすすめ）</h2>
+    <table>
+      <thead>
+        <tr><th>番号</th><th>遊び</th><th>どんな遊び？</th><th>むずかしさ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="no">①</td><td>押すと 出てくる</td><td>押すたびに、真っ暗な画面から生きものが出てきます。いつ押しても大丈夫。</td><td><span class="badge">はじめは ここから</span></td></tr>
+        <tr><td class="no">②</td><td>ふうせん わり</td><td>押すたびに、ふうせんが1つずつ割れます。5回で全部割れます。</td><td><span class="badge">かんたん</span></td></tr>
+        <tr><td class="no">③</td><td>ぬりえ</td><td>押すたびに、絵に色がついていきます。5回でできあがり。</td><td><span class="badge">かんたん</span></td></tr>
+        <tr><td class="no">④</td><td>ボールを 打つ</td><td>転がってくるボールを、押してバットで打ちます。振れば必ず当たり、ぴったりだとホームラン。</td><td><span class="badge">なれたら</span></td></tr>
+        <tr><td class="no">⑤</td><td>リールを 止める</td><td>回る絵が、目標の絵になったときに押します（タイミングの練習）。</td><td><span class="badge">なれたら</span></td></tr>
+        <tr><td class="no">⑥</td><td>高い音だけ</td><td>高い音のときだけ押し、低い音では待ちます。</td><td><span class="badge">なれたら</span></td></tr>
+        <tr><td class="no">⑦</td><td>アームで つかむ</td><td>動くアームが景品の上に来たときに押します。</td><td><span class="badge">チャレンジ</span></td></tr>
+        <tr><td class="no">⑧</td><td>さかなつり</td><td>「アタリ」の音（練習では大きな「！」も）が出たら、すぐ押します。</td><td><span class="badge">チャレンジ</span></td></tr>
+      </tbody>
+    </table>
+    <p class="note">①〜③は失敗がありません。「押したら何かが起きる」ことが分かったら、④（振れば必ず当たる、タイミングの入り口）へ。そのあと⑤からのタイミングの遊びへ進みます。</p>
+  </section>
+
+  <section>
+    <h2><span class="num">4</span>支援者の設定</h2>
+    <p>
+      遊びを選ぶ画面の右上「<strong>支援者の設定</strong>」を、指でさわると開きます（スイッチでは開きません。
+      ご本人が誤って開かないようにしてあります）。戻るときは「← ホームへ」です。
+    </p>
+    <ul>
+      <li><strong>スイッチ</strong> … 黄色い枠が動く速さ、枠が動いたときの音（名前を読む など）、ホームに出す遊び。</li>
+      <li><strong>見え方・音</strong> … 効果音、声の読み上げ、文字の大きさ、くっきり表示。</li>
+      <li><strong>むずかしさ</strong> … 遊びごとの速さ・回数など（遊びの中の「この遊びの設定」からも変えられます）。</li>
+      <li><strong>そくてい（研究）</strong> … 研究で測るときだけ使います。ふだんはさわりません。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="num">5</span>こまったとき</h2>
+    <dl>
+      <dt>黄色い枠と、iPad の枠が両方出る</dt>
+      <dd>iPad の「スイッチコントロール」をオフにしてください（1 を見てください）。</dd>
+      <dt>枠が動かない</dt>
+      <dd>支援者の設定の「スイッチ」→「枠を自動で動かす」をオンにします。</dd>
+      <dt>枠が速すぎる・遅すぎる</dt>
+      <dd>支援者の設定の「スイッチ」→「枠が動く速さ」で変えます。</dd>
+      <dt>画面を見続けるのが難しい</dt>
+      <dd>支援者の設定の「スイッチ」→「枠が動いたときの音」を「名前を読む」にすると、枠が動くたびに遊びの名前を読みます（「小さな音」は音だけ）。</dd>
+      <dt>音が出ない</dt>
+      <dd>iPad の音量と消音（マナーモード）を確かめます。支援者の設定の「見え方・音」→「効果音」もオンにします。</dd>
+      <dt>声が出ない</dt>
+      <dd>支援者の設定の「見え方・音」→「声で読み上げる」をオンにします。</dd>
+      <dt>押しても何も起きない</dt>
+      <dd>NeuroNode が iPad につながっているか（キーボードとして）を確かめます。画面を指でさわって動くなら、アプリは動いています。</dd>
+    </dl>
+  </section>
+
+  <p class="foot">この説明書は、アプリの設定画面の「はじめての方へ：つかいかた」と同じ内容です。</p>
+</main>
+</body>
+</html>

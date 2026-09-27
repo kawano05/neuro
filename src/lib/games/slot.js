@@ -197,7 +197,9 @@ export function createSlotGame(gameId) {
      * 言われた（docs/design-renewal-2026-09-25.md §1.5）。例に出たのは
      * 「メダルがパーンと出る」だったが、リールの遊びでメダルを出すと
      * スロットの払い出しに見える——この遊びは賭博の表現を使わない
-     * （detailed-design.md §0A.5）。星がはじけるだけにした（同 §3.4）。
+     * （detailed-design.md §0A.5）。App Store の年齢区分でも「ギャンブルを
+     * 模した表現」に数えられうる。星がはじけて「ぴったり！」と出し、明るい
+     * 和音を鳴らす（同 §3.4, §3.10）。
      *
      * そくていの回は出さない。止めたあとの演出でも、次のリールを止める
      * ときに目に入る（L2 は3本を続けて止める）。刺激の見え方は測定の条件。
@@ -209,12 +211,24 @@ export function createSlotGame(gameId) {
       const burst = document.createElement("span");
       burst.className = "slot-cheer";
       burst.setAttribute("aria-hidden", "true");
-      burst.innerHTML = Array.from(
-        { length: 8 },
-        (_, index) => `<i class="fa-solid fa-star slot-cheer-star" style="--i:${index}"></i>`
+      const stars = Array.from(
+        { length: 12 },
+        (_, index) => `<i class="fa-solid fa-star slot-cheer-star" style="--a:${index * 30}deg"></i>`
       ).join("");
+      burst.innerHTML = `${stars}<span class="slot-cheer-word">${tHtml("slot.cheer")}</span>`;
       view.root.append(burst);
-      window.setTimeout(() => burst.remove(), 900);
+      window.setTimeout(() => burst.remove(), 1100);
+    }
+
+    /** 止めたときの音。れんしゅうで当たったときは、明るい和音（ソ・シ・レ）。 */
+    function playStopSound(judgment) {
+      if (judgment === "hit" && config.difficultyMode !== "measure") {
+        [784, 987.77, 1174.66].forEach((frequency, index) => {
+          audio.playChime(frequency, { delayS: index * 0.07, durationS: 0.8 });
+        });
+        return;
+      }
+      audio.playTone(judgment === "hit" ? 660 : 440);
     }
 
     function recordStop({ inputMs, timeoutAtMs = null, source = "timeout" }) {
@@ -260,7 +274,7 @@ export function createSlotGame(gameId) {
       session.trials.push(row);
       reelViews[reelIndex].stoppedPhase = result.stoppedPhase;
       paintReel(reelIndex, stoppedAtMs);
-      audio.playTone(result.judgment === "hit" ? 660 : 440);
+      playStopSound(result.judgment);
       if (result.judgment === "hit") cheerReel(reelIndex);
       persist();
       return row;

@@ -407,7 +407,7 @@ export function createCraneGame(ctx) {
     stageEl.innerHTML = `
       <div class="crane-cabinet" aria-hidden="true">
         <div class="crane-marquee">
-          <span class="crane-marquee-title">UFO CATCHER</span>
+          <span class="crane-marquee-title">${tHtml("tile.crane-corner.title")}</span>
           <div class="crane-score">${tHtml("crane.score", { n: 0 })}</div>
         </div>
         <div class="crane-stage">

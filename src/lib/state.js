@@ -33,21 +33,47 @@ import { sanitizeSlotSession } from "./games/slotState.js";
  * はじめの遊び（失敗の無い遊び）の、遊びごとの見え方と音（settings.playPrefs）。
  *
  *   background … "dark"（真っ暗な画面から出てくる）| "light"
- *   sound      … "instrument"（楽器の音）| "pop"（明るい効果音）
+ *   sound      … "instrument"（楽器の音）| "pop"（明るい効果音）| "boing"（ボヨーン）
+ *                | "creature"（生きものの声。生きものが出る遊びだけ）
  *                | "boom"（びっくりする音。強いので既定にはしない）| "none"
- *   cheer      … できたときに拍手と「やったー」を出すか
+ *   cheer      … できたときのおいわい。"both"（拍手と笑い声）| "applause" | "laugh"
+ *                | "none"。"none" 以外なら「やったー」の声も出す（読み上げが入っているとき）
  *
  * 音は遊びごとに選べるようにする。打ち合わせで「強すぎる音ばかりだと発作を
  * 起こす人もいる。楽器の音からびっくりする音まで、ゲームによって選べると
- * いい」と言われた（docs/design-renewal-2026-09-25.md §1.7）。
+ * いい」「動物の鳴き声とか」「笑い声があるとすごくいい」と言われた
+ * （docs/design-renewal-2026-09-25.md §1.7）。
  * これらの遊びは測定の課題ではない（taskType なし）ので、記録の条件には入れない。
  */
+/**
+ * 枠（走査）が動いたときの音（settings.scanFeedback）。画面を見続けるのが難しい
+ * 利用者のため。打ち合わせで「画面を見なくても、音なら届く」と言われた
+ * （docs/design-renewal-2026-09-25.md §1.7）。
+ *   none  … 鳴らさない（既定。今までと同じ）
+ *   tick  … 小さな音
+ *   speak … その項目の名前を読む（読み上げを切っているときは小さな音）
+ */
+export const SCAN_FEEDBACKS = new Set(["none", "tick", "speak"]);
+
 export const PLAY_BACKGROUNDS = new Set(["dark", "light"]);
-export const PLAY_SOUNDS = new Set(["instrument", "pop", "boom", "none"]);
+export const PLAY_CHEERS = new Set(["both", "applause", "laugh", "none"]);
+/** ボールを打つ遊びの、ボールの速さ（games/baseball.js の PITCH_MS）。 */
+export const PLAY_SPEEDS = new Set(["slow", "normal", "fast"]);
+/**
+ * 遊びごとに選べる音（並びは設定の画面に出す順）。「生きものの声」は生きものの
+ * 絵が出る遊びだけ、「カキーン」はボールを打つ遊びだけ。
+ */
+export const PLAY_SOUNDS_BY_GAME = {
+  "color-legacy": ["instrument", "pop", "boing", "creature", "boom", "none"],
+  balloon: ["instrument", "pop", "boing", "boom", "none"],
+  coloring: ["instrument", "pop", "boing", "creature", "boom", "none"],
+  baseball: ["bat", "instrument", "boing", "none"],
+};
 export const DEFAULT_PLAY_PREFS = {
-  "color-legacy": { background: "dark", sound: "instrument", cheer: true },
-  balloon: { background: "light", sound: "pop", cheer: true },
-  coloring: { background: "light", sound: "instrument", cheer: true },
+  "color-legacy": { background: "dark", sound: "instrument", cheer: "both" },
+  balloon: { background: "light", sound: "pop", cheer: "both" },
+  coloring: { background: "light", sound: "instrument", cheer: "both" },
+  baseball: { speed: "normal", sound: "bat", cheer: "both" },
 };
 
 /** 遊びごとの設定を、知っている遊び・知っている値だけに正規化する。 */
@@ -56,13 +82,19 @@ function sanitizePlayPrefs(candidate) {
   return Object.fromEntries(
     Object.entries(DEFAULT_PLAY_PREFS).map(([gameId, defaults]) => {
       const entry = source[gameId] && typeof source[gameId] === "object" ? source[gameId] : {};
+      // 2巡目の保存は あり／なし（true / false）だった。ありは今の既定へ読み替える。
+      const cheer =
+        entry.cheer === true ? defaults.cheer : entry.cheer === false ? "none" : entry.cheer;
+      const validators = {
+        background: (value) => enumOr(value, PLAY_BACKGROUNDS, defaults.background),
+        sound: (value) => enumOr(value, new Set(PLAY_SOUNDS_BY_GAME[gameId]), defaults.sound),
+        cheer: () => enumOr(cheer, PLAY_CHEERS, defaults.cheer),
+        speed: (value) => enumOr(value, PLAY_SPEEDS, defaults.speed),
+      };
+      // 既定に無い項目は持ち込まない（遊びごとに持つ項目が違う）。
       return [
         gameId,
-        {
-          background: enumOr(entry.background, PLAY_BACKGROUNDS, defaults.background),
-          sound: enumOr(entry.sound, PLAY_SOUNDS, defaults.sound),
-          cheer: booleanOr(entry.cheer, defaults.cheer),
-        },
+        Object.fromEntries(Object.keys(defaults).map((key) => [key, validators[key](entry[key])])),
       ];
     })
   );
@@ -126,6 +158,8 @@ export const defaultState = {
     // 分からない言葉・余計なボタンだった（docs/design-renewal-2026-09-25.md §3.5）。
     // NeuroNode やキーボードのスイッチは、これが無くても使える。
     showScreenSwitch: false,
+    // 枠が動いたときの音（SCAN_FEEDBACKS）。
+    scanFeedback: "none",
     // はじめの遊びの、遊びごとの見え方と音（ゲームの中の「この遊びの設定」で
     // 変える）。中身と理由は上の DEFAULT_PLAY_PREFS。
     playPrefs: JSON.parse(JSON.stringify(DEFAULT_PLAY_PREFS)),
@@ -1230,6 +1264,7 @@ export function sanitizeState(candidate) {
         fallback.settings.hideVisualTasks
       ),
       showScreenSwitch: booleanOr(settings.showScreenSwitch, fallback.settings.showScreenSwitch),
+      scanFeedback: enumOr(settings.scanFeedback, SCAN_FEEDBACKS, fallback.settings.scanFeedback),
       playPrefs: sanitizePlayPrefs(settings.playPrefs),
       researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),
       judgmentWindowMs: numberInRange(

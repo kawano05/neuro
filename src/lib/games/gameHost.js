@@ -42,6 +42,8 @@ import { PRIZE_ART } from "./craneArt.js";
 import { slotSymbolHtml } from "./slotArt.js";
 import { MAX_SESSIONS } from "../state.js";
 import { gameHowTo } from "../content.js";
+import { entryFor } from "../i18n.js";
+import { isMeasurementMode } from "../difficultyMode.js";
 import { POP_ANIMALS, SCENE_ART, artSvg, burstSvg } from "../art/hakkiriArt.js";
 import { tileThemeFor } from "../homeTheme.js";
 import { createGameSettings } from "./gameSettings.js";
@@ -358,6 +360,10 @@ function renderReactionResult(summary, context = {}) {
  * もう一度やる理由になる（docs/design-renewal-2026-09-25.md §1.6）。
  * デザイン案ではメダルを置いていたが、星にした（同 §3.4）。
  */
+/** けっかに並べる野球のボール（ボールを打つ遊び）。 */
+const BALL_ICON_SVG =
+  '<svg class="hk-ball" viewBox="0 0 40 40" aria-hidden="true" focusable="false"><circle cx="20" cy="20" r="17" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="3"></circle><path d="M12 7 Q 21 20 12 33 M28 7 Q 19 20 28 33" fill="none" stroke="#E0302D" stroke-width="2.6"></path></svg>';
+
 function renderCompletionResult(summary, context = {}) {
   const t = context.t;
   const presses = Number.isFinite(summary?.presses) ? Math.max(0, Math.round(summary.presses)) : 0;
@@ -366,7 +372,17 @@ function renderCompletionResult(summary, context = {}) {
   //   ぬりえ … できあがった絵を大きく1枚
   let items = "";
   let summaryText = "";
-  if (Array.isArray(summary?.balloons)) {
+  if (Array.isArray(summary?.baseball?.results)) {
+    // ボールを打つ遊び: 打った5本を並べる。ホームランは星、ヒットは白い球、
+    // ころころは小さい球。
+    items = summary.baseball.results
+      .map((result) => `<span class="hk-result-item is-ball is-${result}">${result === "homerun" ? burstSvg("#FFC83D") : BALL_ICON_SVG}</span>`)
+      .join("");
+    summaryText = t("result.baseball.summary", {
+      h: summary.baseball.homeruns ?? 0,
+      k: summary.baseball.hits ?? 0,
+    });
+  } else if (Array.isArray(summary?.balloons)) {
     items = summary.balloons
       .map((color) => `<span class="hk-result-item is-burst">${burstSvg(color)}</span>`)
       .join("");
@@ -716,10 +732,18 @@ export function createGameHost(ctx) {
     // 差し替える。ここを直さないと、画面は「1分間」と言っているのに終わらない
     // ——説明と挙動が食い違ったまま遊ばせることになる。
     const endlessKey = requestedEndless ? ENDLESS_HOWTO_KEYS[activeGameId] : null;
-    const resolvedKeys = endlessKey ? [...stepKeys.slice(0, -1), endlessKey] : stepKeys;
+    // れんしゅうの回だけの見え方（さかなつりの大きな「！」など）がある行は、
+    // れんしゅうでは説明もそれに合わせる（キー + ".practice"）。そくていは元の行。
+    const practice = !isMeasurementMode(state.settings);
+    const resolvedKeys = (endlessKey ? [...stepKeys.slice(0, -1), endlessKey] : stepKeys).map((key) =>
+      practice && entryFor(`${key}.practice`) ? `${key}.practice` : key
+    );
     const steps = resolvedKeys.map((key) => ctx.tHtml(key));
     const spokenSteps = resolvedKeys.map((key) => ctx.t(key));
-    const items = steps.map((line) => `<li>${line}</li>`).join("");
+    // 行は「番号の丸（::before）＋文」を flex で並べる。文を1つの箱にまとめないと、
+    // ふりがなと字が1つずつ別の箱になり「上 の 目標 の 絵 を 見 ます」と
+    // 字のあいだが空き、行の途中でも折り返していた。
+    const items = steps.map((line) => `<li><span class="game-ready-step">${line}</span></li>`).join("");
     // ホームで押したタイルと同じ絵を出す（docs/design-renewal-2026-09-25.md）。
     // 絵の無い遊びは、これまでどおりアイコン。
     const theme = tileThemeFor(module.id);

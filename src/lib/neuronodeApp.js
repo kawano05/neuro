@@ -27,6 +27,7 @@ import { resolveTextMode, translate, translateHtml } from "./i18n.js";
 import { loadState, createStateSaver, MAX_LOG_ENTRIES } from "./state.js";
 import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
+import { SOUND_SAMPLE_URLS } from "./soundAssets.js";
 import { createScanEngine } from "./scan.js";
 import { createInputDeduper } from "./utils.js";
 import { createGameHost } from "./games/gameHost.js";
@@ -144,7 +145,7 @@ export function initNeuroNodeApp() {
     ctx.announce("データの保存に失敗しました。端末の空き容量を確認してください。")
   );
 
-  const audio = createAudio(() => state.settings, ctx.announce);
+  const audio = createAudio(() => state.settings, ctx.announce, { sampleUrls: SOUND_SAMPLE_URLS });
   ctx.audio = audio;
   ctx.speak = audio.speak;
   ctx.voiceFeedback = audio.speakOrAnnounce;
@@ -212,6 +213,13 @@ export function initNeuroNodeApp() {
       if (html) el.innerHTML = ctx.tHtml(key);
       else el.textContent = ctx.t(key);
     };
+    // 絵（::before）と字を flex で並べるボタンは、字を1つの箱にまとめる。
+    // ふりがなと字がじかに並ぶと1つずつが別の箱になり、gap のぶん
+    // 「遊 びを 選 ぶ」と字のあいだが空いていた。
+    const setLabel = (el, key) => {
+      if (!el) return;
+      el.innerHTML = `<span class="btn-label">${ctx.tHtml(key)}</span>`;
+    };
     set(elements.startTitle, "start.srTitle", false);
     set(elements.startStageLabel, "start.begin");
     set(elements.startLead, "start.lead");
@@ -219,8 +227,19 @@ export function initNeuroNodeApp() {
     set(elements.gameExit, "game.exit");
     set(elements.gameSettings, "game.settings");
     set(elements.resultTitle, "result.title");
-    set(elements.resultRetry, "result.retry");
-    set(elements.resultHome, "result.home");
+    setLabel(elements.resultRetry, "result.retry");
+    setLabel(elements.resultHome, "result.home");
+    // 「学ぶ・伝える」の中の画面（見出しは、ホームのタイルと同じ名前）。
+    const setIn = (selector, key) => set(document.querySelector(selector), key);
+    setIn("#matching-title", "tile.matching.title");
+    setIn("#voca-title", "tile.voca.title");
+    setIn("#letters-title", "tile.letters.title");
+    setIn("#nextMatching", "learn.next");
+    setIn("#nextLetter", "learn.next");
+    setIn("#repeatPhrase", "learn.again");
+    setIn("#matchingLabel", "learn.question");
+    setIn("#letterLabel", "learn.question");
+    setIn("#vocaLabel", "learn.saying");
   }
 
   ctx.renderAll = function renderAll() {

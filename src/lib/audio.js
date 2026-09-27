@@ -188,18 +188,34 @@ export function clampEffectGain(gain) {
   if (typeof gain !== "number" || !Number.isFinite(gain)) return 0;
   return Math.min(Math.max(gain, 0), EFFECT_GAIN_CEILING);
 }
+/**
+ * 合成した笑い声の出口の大きさ。「は」の声はフォルマントの帯で大半が削られる
+ * ので、ここで持ち上げる。値は、描いた波形の山が効果音の上限（EFFECT_GAIN_CEILING）
+ * に収まるように測って決めた（test-results/probe-sounds.mjs）。
+ */
+const LAUGH_OUTPUT_GAIN = 0.12;
+
+/** 拍手の出口の大きさ（LAUGH_OUTPUT_GAIN と同じ決め方）。 */
+const APPLAUSE_OUTPUT_GAIN = 2.6;
+
 /** ノイズ音源の長さ（秒）。使い回すので、いちばん長い効果音より長くする。 */
 const NOISE_BUFFER_S = 2;
 
 /**
  * @param {() => {speechEnabled: boolean, soundEnabled: boolean}} getSettings
  *   設定の現在値を返す関数（state.settings への遅延参照）
+ * @param {(message: string) => void} [announce]
+ * @param {{sampleUrls?: Record<string, string>}} [options]
+ *   sampleUrls … 録音の差し替え（名前 → URL、soundAssets.js）。ある名前は
+ *   合成の代わりに録音を鳴らす（laugh・boing・creature-dolphin など）。
  */
-export function createAudio(getSettings, announce = () => {}) {
+export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} } = {}) {
   let audioContext;
   let scheduler;
   let noiseBuffer = null;
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  // 録音の差し替え。名前 → 読み込み済みの AudioBuffer（読み込み中は Promise）。
+  const samples = new Map();
 
   /** AudioContext を（未生成なら）生成し、対応する BeatScheduler も用意する。 */
   function ensureContext() {
@@ -208,11 +224,66 @@ export function createAudio(getSettings, announce = () => {}) {
       try {
         audioContext = new AudioContextClass();
         scheduler = createBeatScheduler(audioContext);
+        preloadSamples(audioContext);
       } catch {
         audioContext = null;
       }
     }
     return audioContext;
+  }
+
+  /** 録音を先に読み込んでおく（最初のひと押しで鳴らすときに待たせない）。 */
+  function preloadSamples(ctx) {
+    Object.entries(sampleUrls).forEach(([name, url]) => {
+      if (samples.has(name) || typeof fetch !== "function") return;
+      const loading = fetch(url)
+        .then((response) => response.arrayBuffer())
+        .then((data) => ctx.decodeAudioData(data))
+        .then((buffer) => {
+          samples.set(name, buffer);
+          return buffer;
+        })
+        .catch(() => {
+          samples.delete(name);
+          return null;
+        });
+      samples.set(name, loading);
+    });
+  }
+
+  /**
+   * 録音があれば鳴らす。無ければ false（呼び出し側が合成で鳴らす）。
+   * 録音の音量も効果音の上限の中に置く（録音は大きめに作られていることが多い）。
+   */
+  function trySample(name) {
+    if (!sampleUrls[name]) return false;
+    const ctx = ensureContext();
+    if (!ctx) return false;
+    const play = (buffer) => {
+      if (!buffer) return;
+      try {
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        const gain = ctx.createGain();
+        gain.gain.value = EFFECT_GAIN_CEILING * 10;
+        const limiter = ctx.createDynamicsCompressor();
+        limiter.threshold.value = -20;
+        limiter.ratio.value = 20;
+        const out = ctx.createGain();
+        out.gain.value = EFFECT_GAIN_CEILING * 2.5;
+        source.connect(gain);
+        gain.connect(limiter);
+        limiter.connect(out);
+        out.connect(ctx.destination);
+        source.start();
+      } catch {
+        // 鳴らせなくても遊びは止めない。
+      }
+    };
+    const entry = samples.get(name);
+    if (entry instanceof Promise) entry.then(play);
+    else play(entry);
+    return true;
   }
 
   /** 日本語で読み上げる（speechEnabled が ON のときのみ） */
@@ -309,6 +380,7 @@ export function createAudio(getSettings, announce = () => {}) {
    * @param {number} [options.frequency] フィルタの中心/カットオフ
    * @param {number} [options.q] バンドパスの鋭さ
    * @param {number} [options.sweepTo] 指定すると frequency からここへ滑らす
+   * @param {number} [options.delayS] 今からの遅れ（続けて鳴らすとき用）
    */
   function playNoise({
     durationS = 0.2,
@@ -317,6 +389,7 @@ export function createAudio(getSettings, announce = () => {}) {
     frequency = 1200,
     q = 1,
     sweepTo = null,
+    delayS = 0,
   } = {}) {
     if (!getSettings().soundEnabled) return null;
     const ctx = ensureContext();
@@ -329,7 +402,7 @@ export function createAudio(getSettings, announce = () => {}) {
       band.frequency.value = frequency;
       band.Q.value = q;
       const envelope = ctx.createGain();
-      const at = ctx.currentTime;
+      const at = ctx.currentTime + Math.max(0, delayS);
       const peak = clampEffectGain(gain);
       // 立ち上がりを 0 から作る。いきなり値を入れるとプチッと鳴る。
       envelope.gain.setValueAtTime(0.0001, at);
@@ -480,7 +553,9 @@ export function createAudio(getSettings, announce = () => {}) {
       const start = ctx.currentTime + 0.05;
       const length = Math.min(durationS, NOISE_BUFFER_S - 0.1);
       const out = ctx.createGain();
-      out.gain.value = 0.8;
+      // 帯で削られるぶん持ち上げる。山が効果音の上限に収まる値を測って決めた
+      // （test-results/probe-sounds.mjs。0.8 のときは他の効果音より約19dB小さかった）。
+      out.gain.value = APPLAUSE_OUTPUT_GAIN;
       out.connect(ctx.destination);
 
       const crowd = ctx.createBufferSource();
@@ -517,6 +592,341 @@ export function createAudio(getSettings, announce = () => {}) {
         clap.start(at, Math.random() * (NOISE_BUFFER_S - 0.2), 0.06);
       }
       return out;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * ボヨーン（ばねの音）。びよっと上がって、ゆれながら落ちる。
+   *
+   * 打ち合わせで、力を入れたら「ボカーン」「ボヨーン」と音がするのがよい、
+   * と例に出た（docs/design-renewal-2026-09-25.md §1.7）。ボカーンは playBoom。
+   */
+  function playBoing() {
+    if (!getSettings().soundEnabled) return null;
+    if (trySample("boing")) return true;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const at = ctx.currentTime;
+      const oscillator = ctx.createOscillator();
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(150, at);
+      oscillator.frequency.exponentialRampToValueAtTime(330, at + 0.07);
+      oscillator.frequency.exponentialRampToValueAtTime(210, at + 0.7);
+      // ばねのゆれ: 11Hz のゆれが、だんだん小さくなる。
+      const wobble = ctx.createOscillator();
+      wobble.frequency.value = 11;
+      const depth = ctx.createGain();
+      depth.gain.setValueAtTime(70, at + 0.05);
+      depth.gain.exponentialRampToValueAtTime(2, at + 0.7);
+      wobble.connect(depth);
+      depth.connect(oscillator.frequency);
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, at);
+      out.gain.exponentialRampToValueAtTime(EFFECT_GAIN_CEILING, at + 0.02);
+      out.gain.setValueAtTime(EFFECT_GAIN_CEILING, at + 0.22);
+      out.gain.exponentialRampToValueAtTime(0.0001, at + 0.75);
+      oscillator.connect(out);
+      out.connect(ctx.destination);
+      oscillator.start(at);
+      wobble.start(at);
+      oscillator.stop(at + 0.8);
+      wobble.stop(at + 0.8);
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 「は」ひとつ（笑い声の1音）。息（ノイズ）で始まり、「あ」の響きの声が続く。
+   * 声の源はのこぎり波で、「あ」らしさは3つの山（フォルマント 800・1200・2600Hz）
+   * を通して作る。
+   */
+  function laughSyllable(ctx, destination, noise, at, pitch, level) {
+    const voicedS = 0.085;
+    const source = ctx.createOscillator();
+    source.type = "sawtooth";
+    source.frequency.setValueAtTime(pitch * 1.08, at + 0.02);
+    source.frequency.exponentialRampToValueAtTime(pitch * 0.88, at + 0.05 + voicedS);
+    const voice = ctx.createGain();
+    voice.gain.setValueAtTime(0.0001, at + 0.02);
+    voice.gain.exponentialRampToValueAtTime(level, at + 0.045);
+    voice.gain.exponentialRampToValueAtTime(0.0001, at + 0.05 + voicedS);
+    source.connect(voice);
+    [
+      [800, 5, 1],
+      [1200, 7, 0.55],
+      [2600, 9, 0.22],
+    ].forEach(([frequency, q, gain]) => {
+      const band = ctx.createBiquadFilter();
+      band.type = "bandpass";
+      band.frequency.value = frequency;
+      band.Q.value = q;
+      const weight = ctx.createGain();
+      weight.gain.value = gain;
+      voice.connect(band);
+      band.connect(weight);
+      weight.connect(destination);
+    });
+    const breath = ctx.createBufferSource();
+    breath.buffer = noise;
+    const breathBand = ctx.createBiquadFilter();
+    breathBand.type = "bandpass";
+    breathBand.frequency.value = 1600;
+    breathBand.Q.value = 0.7;
+    const breathGain = ctx.createGain();
+    breathGain.gain.setValueAtTime(0.0001, at);
+    breathGain.gain.exponentialRampToValueAtTime(level * 0.12, at + 0.012);
+    breathGain.gain.exponentialRampToValueAtTime(0.0001, at + 0.07);
+    breath.connect(breathBand);
+    breathBand.connect(breathGain);
+    breathGain.connect(destination);
+    source.start(at + 0.02);
+    source.stop(at + 0.1 + voicedS);
+    breath.start(at, Math.random() * (NOISE_BUFFER_S - 0.2), 0.09);
+  }
+
+  /**
+   * 笑い声（「あはは」）。できたときのおいわい。
+   *
+   * 打ち合わせで「できたー！ハハハーみたいな笑い声があると、周りが家族だけでも
+   * 盛り上がって、もうちょっと頑張ろうという気になる」と言われた（§1.7）。
+   * 録音（sampleUrls の laugh）があればそれを鳴らす。無ければ合成する: 高さと
+   * 間の違う3人ぶんの「はは…」を、少しずつ低く・弱くしながら重ねる。
+   */
+  function playLaugh() {
+    if (!getSettings().soundEnabled) return null;
+    if (trySample("laugh")) return true;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const noise = ensureNoiseBuffer(ctx);
+      const out = ctx.createGain();
+      out.gain.value = LAUGH_OUTPUT_GAIN;
+      // のこぎり波の高い倍音を落として、ブザーっぽさを減らす。
+      const soften = ctx.createBiquadFilter();
+      soften.type = "lowpass";
+      soften.frequency.value = 3800;
+      out.connect(soften);
+      soften.connect(ctx.destination);
+      const start = ctx.currentTime + 0.04;
+      // 主に笑う人1人と、少し遅れてつられる人1人。重ねすぎると「は」の区切りが
+      // 埋もれて、ざわざわした音になる（描いた波形で見た）。
+      [
+        { f0: 300, count: 6, gap: 0.17, offset: 0, level: 1 },
+        { f0: 400, count: 4, gap: 0.2, offset: 0.26, level: 0.45 },
+      ].forEach((person) => {
+        let at = start + person.offset;
+        for (let index = 0; index < person.count; index += 1) {
+          const pitch = person.f0 * (1.1 - index * 0.035) * (1 + (Math.random() - 0.5) * 0.05);
+          laughSyllable(ctx, out, noise, at, pitch, person.level * Math.pow(0.84, index));
+          at += person.gap * (1 + (Math.random() - 0.5) * 0.2);
+        }
+      });
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 短い上がる口笛（イルカの「キュイ」）。 */
+  function whistle(ctx, at, fromHz, toHz, durationS, gain) {
+    const oscillator = ctx.createOscillator();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(fromHz, at);
+    oscillator.frequency.exponentialRampToValueAtTime(toHz, at + durationS);
+    const envelope = ctx.createGain();
+    envelope.gain.setValueAtTime(0.0001, at);
+    envelope.gain.exponentialRampToValueAtTime(gain, at + 0.015);
+    envelope.gain.setValueAtTime(gain, at + durationS * 0.7);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, at + durationS);
+    oscillator.connect(envelope);
+    envelope.connect(ctx.destination);
+    oscillator.start(at);
+    oscillator.stop(at + durationS + 0.02);
+  }
+
+  /**
+   * 生きものの声（「おすと でてくる」「ぬりえ」の音の1つ）。
+   *
+   * 打ち合わせで「動物の鳴き声とかがいい」と例に出た（§1.7）。出てくるのは
+   * 海の生きもの（イルカ・カメ・タコ・カニ・クジラ）なので、鳴き声のあるものは
+   * それらしく、無いものは動きの音にした。録音（creature-<id>）があればそちら。
+   *
+   *   dolphin … キュイキュイ（上がる口笛2つ）
+   *   whale   … ブォーン（低くゆれる長い声）
+   *   turtle  … ぷくぷく（泡が3つ）
+   *   octopus … にゅるん（ゆれながら下がる）
+   *   crab    … チョキチョキ（はさみの音が2回ずつ）
+   */
+  function playCreature(id) {
+    if (!getSettings().soundEnabled) return null;
+    if (trySample(`creature-${id}`)) return true;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const at = ctx.currentTime + 0.01;
+      const peak = EFFECT_GAIN_CEILING;
+      if (id === "dolphin") {
+        whistle(ctx, at, 1500, 2900, 0.13, peak * 0.8);
+        whistle(ctx, at + 0.17, 1700, 3300, 0.13, peak * 0.8);
+      } else if (id === "whale") {
+        const oscillator = ctx.createOscillator();
+        oscillator.type = "triangle";
+        oscillator.frequency.setValueAtTime(230, at);
+        oscillator.frequency.exponentialRampToValueAtTime(300, at + 0.35);
+        oscillator.frequency.exponentialRampToValueAtTime(170, at + 1.1);
+        const sway = ctx.createOscillator();
+        sway.frequency.value = 5;
+        const swayDepth = ctx.createGain();
+        swayDepth.gain.value = 7;
+        sway.connect(swayDepth);
+        swayDepth.connect(oscillator.frequency);
+        const envelope = ctx.createGain();
+        envelope.gain.setValueAtTime(0.0001, at);
+        envelope.gain.exponentialRampToValueAtTime(peak, at + 0.18);
+        envelope.gain.setValueAtTime(peak, at + 0.7);
+        envelope.gain.exponentialRampToValueAtTime(0.0001, at + 1.15);
+        const hum = ctx.createBiquadFilter();
+        hum.type = "lowpass";
+        hum.frequency.value = 1400;
+        oscillator.connect(envelope);
+        envelope.connect(hum);
+        hum.connect(ctx.destination);
+        oscillator.start(at);
+        sway.start(at);
+        oscillator.stop(at + 1.2);
+        sway.stop(at + 1.2);
+      } else if (id === "turtle") {
+        [0, 0.12, 0.25].forEach((delay, index) => {
+          whistle(ctx, at + delay, 380 + index * 60, 900 + index * 120, 0.07, peak * 0.9);
+        });
+      } else if (id === "octopus") {
+        const oscillator = ctx.createOscillator();
+        oscillator.type = "triangle";
+        oscillator.frequency.setValueAtTime(620, at);
+        oscillator.frequency.exponentialRampToValueAtTime(190, at + 0.45);
+        const wobble = ctx.createOscillator();
+        wobble.frequency.value = 16;
+        const depth = ctx.createGain();
+        depth.gain.value = 45;
+        wobble.connect(depth);
+        depth.connect(oscillator.frequency);
+        const envelope = ctx.createGain();
+        envelope.gain.setValueAtTime(0.0001, at);
+        envelope.gain.exponentialRampToValueAtTime(peak, at + 0.02);
+        envelope.gain.exponentialRampToValueAtTime(0.0001, at + 0.5);
+        oscillator.connect(envelope);
+        envelope.connect(ctx.destination);
+        oscillator.start(at);
+        wobble.start(at);
+        oscillator.stop(at + 0.52);
+        wobble.stop(at + 0.52);
+      } else if (id === "crab") {
+        [0, 0.07, 0.24, 0.31].forEach((delay) => {
+          playNoise({ durationS: 0.035, gain: peak * 0.35, filter: "bandpass", frequency: 2800, q: 2, delayS: delay });
+          whistle(ctx, at + delay, 1500, 1100, 0.03, peak * 0.3);
+        });
+      } else {
+        return playChime(660);
+      }
+      return true;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * ボールを投げた音（「シュッ」）。ボールを打つ遊び（games/baseball.js）。
+   * 合図ではなく、投げた出来事を伝えるだけの小さい音。
+   */
+  function playThrow() {
+    return playNoise({ durationS: 0.16, gain: EFFECT_GAIN_CEILING * 0.6, filter: "bandpass", frequency: 900, q: 1.2, sweepTo: 2600 });
+  }
+
+  /** 枠が次へ動いたときの小さな音（設定の「枠が動いたときの音」）。 */
+  function playScanTick() {
+    if (!getSettings().soundEnabled) return null;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const at = ctx.currentTime;
+      const oscillator = ctx.createOscillator();
+      oscillator.type = "triangle";
+      oscillator.frequency.value = 1320;
+      const envelope = ctx.createGain();
+      envelope.gain.setValueAtTime(0.0001, at);
+      envelope.gain.exponentialRampToValueAtTime(EFFECT_GAIN_CEILING * 0.5, at + 0.005);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, at + 0.06);
+      oscillator.connect(envelope);
+      envelope.connect(ctx.destination);
+      oscillator.start(at);
+      oscillator.stop(at + 0.08);
+      return envelope;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 素振りの音（「ブン」）。ボールが来ていないときに振った。 */
+  function playSwing() {
+    return playNoise({ durationS: 0.12, gain: EFFECT_GAIN_CEILING * 0.5, filter: "bandpass", frequency: 500, q: 1, sweepTo: 180 });
+  }
+
+  /**
+   * 打った音。当たり方（ホームラン・ヒット・ころころ）で響きを変える。
+   *
+   * @param {"homerun"|"hit"|"bunt"} quality
+   * @param {string} [style] この遊びの設定の「打ったときの音」。"bat"（カキーン）|
+   *   "instrument"（楽器の音）| "boing"（ボヨーン）| "none"
+   */
+  function playBatHit(quality, style = "bat") {
+    if (style === "none") return null;
+    if (style === "boing") return playBoing();
+    if (style === "instrument") {
+      const notes = { homerun: [523.25, 659.25, 783.99, 1046.5], hit: [523.25, 783.99], bunt: [392] };
+      (notes[quality] || notes.bunt).forEach((frequency, index) => {
+        playChime(frequency, { delayS: index * 0.08, durationS: 0.8 });
+      });
+      return true;
+    }
+    if (!getSettings().soundEnabled) return null;
+    if (trySample(`bat-${quality}`)) return true;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const at = ctx.currentTime;
+      if (quality === "bunt") {
+        // コツン: こもった短い音。
+        playNoise({ durationS: 0.05, gain: EFFECT_GAIN_CEILING * 0.8, filter: "lowpass", frequency: 900 });
+        whistle(ctx, at, 720, 560, 0.08, EFFECT_GAIN_CEILING * 0.6);
+        return true;
+      }
+      // カキーン: 金属の高い響き2つ（倍音が整数倍でないので「金属」に聞こえる）と、
+      // 当たった瞬間の「カッ」。ホームランは長く響かせる。
+      const ring = quality === "homerun" ? 0.55 : 0.3;
+      playNoise({ durationS: 0.03, gain: EFFECT_GAIN_CEILING, filter: "bandpass", frequency: 3200, q: 1.5 });
+      [
+        { frequency: 1860, level: 0.8 },
+        { frequency: 2730, level: 0.5 },
+        { frequency: 4120, level: 0.25 },
+      ].forEach(({ frequency, level }) => {
+        const oscillator = ctx.createOscillator();
+        oscillator.type = "sine";
+        oscillator.frequency.value = frequency;
+        const envelope = ctx.createGain();
+        envelope.gain.setValueAtTime(0.0001, at);
+        envelope.gain.exponentialRampToValueAtTime(EFFECT_GAIN_CEILING * level, at + 0.004);
+        envelope.gain.exponentialRampToValueAtTime(0.0001, at + ring);
+        oscillator.connect(envelope);
+        envelope.connect(ctx.destination);
+        oscillator.start(at);
+        oscillator.stop(at + ring + 0.02);
+      });
+      return true;
     } catch {
       return null;
     }
@@ -579,6 +989,13 @@ export function createAudio(getSettings, announce = () => {}) {
     playToneAt,
     playChime,
     playBoom,
+    playBoing,
+    playLaugh,
+    playCreature,
+    playThrow,
+    playSwing,
+    playBatHit,
+    playScanTick,
     playApplause,
     playNoise,
     playSweep,

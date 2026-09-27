@@ -37,6 +37,9 @@ import {
 } from "../src/lib/content.js";
 import { gameCreators, gameModules } from "../src/lib/games/registry.js";
 import { slotSymbolStripUrl } from "../src/lib/games/slotArt.js";
+import { coloringMarkup } from "../src/lib/games/coloring.js";
+import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
+import { POP_ANIMALS } from "../src/lib/art/hakkiriArt.js";
 import { SLOT_ENGINE_VERSION } from "../src/lib/games/slotJudge.js";
 
 class MemoryStorage {
@@ -170,12 +173,19 @@ test("the redesign's settings survive a reload and fall back on unknown values",
   // 落ちると、支援者が選んだ音や画面のボタンが再読込のたびに既定へ戻る。
   const defaults = sanitizeState({}).settings;
   assert.equal(defaults.showScreenSwitch, false, "画面の「おす」ボタンは既定で出さない");
+  // 枠が動いたときの音は、既定では鳴らさない（今までと同じ）。選べば残り、知らない値は既定へ。
+  assert.equal(defaults.scanFeedback, "none");
+  assert.equal(sanitizeState({ settings: { scanFeedback: "speak" } }).settings.scanFeedback, "speak");
+  assert.equal(sanitizeState({ settings: { scanFeedback: "beep" } }).settings.scanFeedback, "none");
   // はじめの遊びは、遊びごとに見え方と音を持つ。既定の音に「びっくりする音」は使わない
   // （強すぎる音は発作につながりうる、と言われている）。
-  assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "color-legacy", "coloring"]);
+  assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "baseball", "color-legacy", "coloring"]);
+  // ボールを打つ遊びは、背景の代わりにボールの速さを持つ（遊びごとに項目が違う）。
+  assert.deepEqual(defaults.playPrefs.baseball, { speed: "normal", sound: "bat", cheer: "both" });
   Object.values(defaults.playPrefs).forEach((prefs) => {
     assert.notEqual(prefs.sound, "boom");
-    assert.equal(prefs.cheer, true);
+    // 打ち合わせで「笑い声があるとすごくいい」と言われた。既定で拍手と笑い声。
+    assert.equal(prefs.cheer, "both");
   });
   assert.equal(defaults.playPrefs["color-legacy"].background, "dark", "真っ暗な画面から出てくる");
 
@@ -183,14 +193,32 @@ test("the redesign's settings survive a reload and fall back on unknown values",
     settings: {
       showScreenSwitch: true,
       playPrefs: {
-        "color-legacy": { background: "light", sound: "none", cheer: false },
-        balloon: { background: "dark", sound: "boom", cheer: true },
+        "color-legacy": { background: "light", sound: "creature", cheer: "laugh" },
+        balloon: { background: "dark", sound: "boom", cheer: "none" },
       },
     },
   }).settings;
   assert.equal(chosen.showScreenSwitch, true);
-  assert.deepEqual(chosen.playPrefs["color-legacy"], { background: "light", sound: "none", cheer: false });
-  assert.deepEqual(chosen.playPrefs.balloon, { background: "dark", sound: "boom", cheer: true });
+  assert.deepEqual(chosen.playPrefs["color-legacy"], { background: "light", sound: "creature", cheer: "laugh" });
+  assert.deepEqual(chosen.playPrefs.balloon, { background: "dark", sound: "boom", cheer: "none" });
+
+  // 2巡目の保存（おいわいが あり／なし の2択だった）は、ありを今の既定へ、なしを「なし」へ。
+  const older = sanitizeState({
+    settings: {
+      playPrefs: {
+        "color-legacy": { background: "dark", sound: "pop", cheer: true },
+        balloon: { background: "light", sound: "pop", cheer: false },
+      },
+    },
+  }).settings;
+  assert.equal(older.playPrefs["color-legacy"].cheer, "both");
+  assert.equal(older.playPrefs.balloon.cheer, "none");
+
+  // 生きものの絵が出ない遊び（ふうせん）では、生きものの声は選べない。
+  const noCreature = sanitizeState({
+    settings: { playPrefs: { balloon: { background: "light", sound: "creature", cheer: "both" } } },
+  }).settings;
+  assert.equal(noCreature.playPrefs.balloon.sound, defaults.playPrefs.balloon.sound);
   // 保存に無い遊びは既定のまま（新しく足した遊びも、古い保存で壊れない）。
   assert.deepEqual(chosen.playPrefs.coloring, defaults.playPrefs.coloring);
 
@@ -274,6 +302,29 @@ test("sanitizeState keeps scan trials whose tolerance differs from the session d
 
 // 画像素材の欠落は画面上で「絵が出ない」だけになり、ビルドも通ってしまう。
 // content.js の asset 名と実ファイルの対応をここで固定しておく。
+test("every press of the colouring game colours something you can see", () => {
+  // ぬりえは「押せば必ず何かが起きる」遊び。部品の並び順で機械的に分けていた
+  // ころ、イルカの4回目は口の線だけで、黒い線が紺に変わるだけだった
+  // （2026-09-27）。どの動物のどの回にも、白でも黒に近い色でもない塗りか、
+  // 色のある線が1つは入っていること。
+  const visible = (part) => {
+    const fill = (part.match(/fill="([^"]+)"/) || [])[1] || "none";
+    const stroke = (part.match(/stroke="([^"]+)"/) || [])[1] || "";
+    const dark = (color) => /^#(10222E|1A1A1A|000000)$/i.test(color);
+    if (fill !== "none" && !/^#FFFFFF$/i.test(fill)) return true;
+    return fill === "none" && stroke && !dark(stroke);
+  };
+  POP_ANIMALS.forEach((animal) => {
+    const markup = coloringMarkup(animal);
+    const parts = markup.match(/<(path|circle|ellipse|rect)\b[^>]*>/g) || [];
+    for (let area = 0; area < BEGINNER_TARGET_PRESSES; area += 1) {
+      const inArea = parts.filter((part) => part.includes(`data-part="${area}"`));
+      assert.ok(inArea.length > 0, `${animal.id}: area ${area} is empty`);
+      assert.ok(inArea.some(visible), `${animal.id}: area ${area} changes nothing you can see`);
+    }
+  });
+});
+
 test("game art referenced by content.js exists on disk", () => {
   const assetPath = (relative) =>
     fileURLToPath(new URL(`../src/assets/${relative}`, import.meta.url));

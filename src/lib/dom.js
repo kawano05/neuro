@@ -98,6 +98,7 @@ export function collectElements() {
     switchControlModeNotice: document.querySelector("#switchControlModeNotice"),
     autoScan: document.querySelector("#autoScan"),
     showScreenSwitch: document.querySelector("#showScreenSwitch"),
+    scanFeedback: document.querySelector("#scanFeedback"),
     speechEnabled: document.querySelector("#speechEnabled"),
     speechVolume: document.querySelector("#speechVolume"),
     speechVolumeValue: document.querySelector("#speechVolumeValue"),

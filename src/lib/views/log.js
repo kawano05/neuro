@@ -384,7 +384,7 @@ export function initLog(ctx) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
       empty.textContent =
-        "まだ あそびの きろくがありません。リズム・UFOキャッチャー・さかなつりを1回終えると記録されます。";
+        "まだ あそびの きろくがありません。リールを止める・高い音だけ・アームでつかむ・さかなつりを1回終えると記録されます。";
       elements.sessionList.append(empty);
       return;
     }

@@ -24,7 +24,10 @@ const PALETTE = {
   high: { band: "#990099", ink: "#FFFFFF", thumb: "#F6DDF6" },
   arm: { band: "#804000", ink: "#FFFFFF", thumb: "#F3E4D6" },
   fish: { band: "#4DC4FF", ink: "#1A1A1A", thumb: "#D9F3FF" },
-  learn: { band: "#03AF7A", ink: "#1A1A1A", thumb: "#D6F5EA" },
+  baseball: { band: "#03AF7A", ink: "#1A1A1A", thumb: "#D8F2DA" },
+  // 「べつの遊び」は難しさの段に入らないので、色も段の色から外して落ち着かせる
+  // （緑は野球へ譲った）。枠は破線（theme-hakkiri.css）。
+  learn: { band: "#E3E7EE", ink: "#1A1A1A", thumb: "#F1F4F8" },
 };
 
 /**
@@ -41,6 +44,7 @@ export const TILE_THEME = {
   "color-legacy": { palette: "pop", art: "pop", level: "first" },
   balloon: { palette: "balloon", art: "balloon", level: "easy" },
   coloring: { palette: "coloring", art: "coloring", level: "easy" },
+  baseball: { palette: "baseball", art: "baseball", level: "used" },
   "slot-corner": { palette: "reel", art: "reel", level: "used" },
   gonogo: { palette: "high", art: "high", level: "used" },
   "crane-corner": { palette: "arm", art: "arm", level: "challenge" },
@@ -55,9 +59,10 @@ export const TILE_THEME = {
   fishing: { palette: "fish", art: "fish", level: "challenge" },
   "fishing-gonogo": { palette: "fish", art: "fish", level: "challenge" },
   "fishing-endless": { palette: "fish", art: "fish", level: "endless" },
-  matching: { palette: "learn", art: "learn", level: null },
-  voca: { palette: "learn", art: "learn", level: null },
-  letters: { palette: "learn", art: "learn", level: null },
+  // 中の3つは、何をするのかが絵で分かるように1つずつ描き分けた（以前は3つとも同じ絵）。
+  matching: { palette: "learn", art: "learnMatch", level: null },
+  voca: { palette: "learn", art: "learnVoca", level: null },
+  letters: { palette: "learn", art: "learnLetters", level: null },
 };
 
 /**

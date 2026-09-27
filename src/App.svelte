@@ -17,7 +17,7 @@
       <h1>NEURONODE</h1>
     </div>
     <div class="status-pill" aria-live="polite">
-      <span id="scanState">走査停止中</span>
+      <span id="scanState">枠は止まっています</span>
     </div>
     <div class="topbar-actions">
       <!--
@@ -195,7 +195,7 @@
       </div>
 
       <div class="question-board">
-        <span class="metric-label">お題</span>
+        <span class="metric-label" id="matchingLabel">お題</span>
         <strong id="matchingPrompt">赤いものを選んでください</strong>
       </div>
       <div class="card-grid" id="matchingGrid" aria-label="マッチング選択肢"></div>
@@ -211,7 +211,7 @@
       </div>
 
       <div class="message-board" aria-live="polite">
-        <span class="metric-label">選択したことば</span>
+        <span class="metric-label" id="vocaLabel">選択したことば</span>
         <strong id="currentPhrase">まだ選択されていません</strong>
       </div>
 
@@ -229,7 +229,7 @@
       </div>
 
       <div class="question-board letter-board">
-        <span class="metric-label">文字のお題</span>
+        <span class="metric-label" id="letterLabel">文字のお題</span>
         <strong id="letterPrompt">「あめ」の最初の文字を選んでください</strong>
       </div>
       <div class="letter-grid" id="letterGrid" aria-label="文字選択肢"></div>
@@ -386,6 +386,11 @@
             戻るときは「← ホームへ」です。
           </li>
         </ol>
+        <!-- 同じ内容を絵つきで、印刷して渡せる形にしたもの（public/guide.html）。
+             iPad のアプリ版では別の画面を開けないので、settings.js が隠す。 -->
+        <p class="settings-guide-print" id="settingsGuidePrint">
+          <a href="./guide.html" target="_blank" rel="noopener">印刷用の説明書（A4・絵つき）を開く</a>
+        </p>
       </details>
 
       <!--
@@ -460,7 +465,7 @@
             <small>黄色い枠が次へ動くまでの時間。長くすると、選ぶ時間に余裕ができます</small>
           </span>
           <input id="scanInterval" type="range" min="800" max="3200" step="100" />
-          <output id="scanIntervalValue" for="scanInterval">1600ms</output>
+          <output id="scanIntervalValue" for="scanInterval">1.6秒</output>
         </label>
 
         <label class="setting-row toggle-row">
@@ -476,6 +481,22 @@
           （docs/design-renewal-2026-09-25.md §3.5）。画面のどこかを押して
           「いまの枠」を決めたい人のためのもの。
         -->
+        <!--
+          枠が動いたときの音（settings.scanFeedback）。画面を見続けるのが難しい人は、
+          音や名前の読み上げで、いまどこに枠があるかが分かる（打ち合わせ §1.7）。
+        -->
+        <label class="setting-row">
+          <span>
+            <strong>枠が動いたときの音</strong>
+            <small>画面を見るのが難しい人のために、黄色い枠が次へ動くたびに小さな音を出したり、名前を読んだりします</small>
+          </span>
+          <select id="scanFeedback" data-scan>
+            <option value="none">なし</option>
+            <option value="tick">小さな音</option>
+            <option value="speak">名前を読む</option>
+          </select>
+        </label>
+
         <label class="setting-row toggle-row">
           <span>
             <strong>画面に「おす」ボタンを出す</strong>
@@ -605,7 +626,7 @@
             <small>絵が1周する時間。短いほど速くなります</small>
           </span>
           <input id="slotCycleMs" type="range" min="2800" max="6000" step="100" data-scan />
-          <output id="slotCycleMsValue" for="slotCycleMs">3200ms</output>
+          <output id="slotCycleMsValue" for="slotCycleMs">3.2秒</output>
         </label>
 
         <label class="setting-row">
@@ -614,7 +635,7 @@
             <small>目標の真ん中から前後どれくらいまでを「合った」にするか。広いほどやさしくなります</small>
           </span>
           <input id="slotToleranceMs" type="range" min="60" max="220" step="10" data-scan />
-          <output id="slotToleranceMsValue" for="slotToleranceMs">220ms</output>
+          <output id="slotToleranceMsValue" for="slotToleranceMs">0.22秒</output>
         </label>
 
         <label class="setting-row">
@@ -706,7 +727,7 @@
             <small>アームが端から端まで動く時間。短いほど速く、狙うのが難しくなります</small>
           </span>
           <input id="craneSweepMs" type="range" min="800" max="6000" step="100" data-scan />
-          <output id="craneSweepMsValue" for="craneSweepMs">2200ms</output>
+          <output id="craneSweepMsValue" for="craneSweepMs">2.2秒</output>
         </label>
 
         <label class="setting-row">
@@ -844,7 +865,7 @@
   <footer class="switch-dock">
     <button class="scan-control" id="toggleScan" data-scan>
       <i class="fa-solid fa-circle-stop" aria-hidden="true"></i>
-      <span id="toggleScanLabel">走査開始</span>
+      <span id="toggleScanLabel">枠を動かす</span>
     </button>
     <button class="primary-switch" id="primarySwitch">
       <i class="fa-solid fa-circle" aria-hidden="true"></i>

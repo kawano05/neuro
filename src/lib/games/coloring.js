@@ -33,6 +33,22 @@ export const COLORING_FINISH_DELAY_MS = 1700;
 let nextPicture = 0;
 
 /**
+ * 動物ごとの「ぬる場所」（絵の部品の番号。art/hakkiriArt.js の body の並び順）。
+ *
+ * 部品の並び順で機械的に分けると、イルカの4回目が「口の線」だけになり、黒い線が
+ * 紺の線に変わるだけで押しても何も起きないように見えた（2026-09-27）。どの回も
+ * はっきり色が変わるよう、手で組んである: 大きい体 → ひれ・足 → おなか・模様 →
+ * 顔（目が入って「生きる」のを最後に）。最後の5回目は背景（coloringMarkup）。
+ */
+export const COLORING_GROUPS = {
+  dolphin: [[0], [1, 3], [2], [4, 5, 6]],
+  turtle: [[6, 7, 8], [0, 1, 2, 3, 4], [5], [9, 10, 11]],
+  octopus: [[5], [0, 1, 2, 3, 4], [10, 11, 12], [6, 7, 8, 9]],
+  crab: [[7], [2, 3, 4, 5], [0, 1, 6], [8, 9, 10, 11, 12]],
+  whale: [[2], [0, 1], [3, 4], [5, 6, 7]],
+};
+
+/**
  * 絵を、押す回数ぶんの「ぬる場所」に分ける。
  *
  * 動物の部品（体・ひれ・目……）を前から順に 0〜(回数-2) へ振り分け、
@@ -46,6 +62,15 @@ let nextPicture = 0;
 export function coloringMarkup(art, parts = BEGINNER_TARGET_PRESSES) {
   const tags = art.body.match(/<(path|circle|ellipse|rect)\b[^>]*>(?:<\/\1>)?/g) || [];
   const lastPart = parts - 1;
+  // 手で組んだ場所があればそれを使う。無い絵（あとから足した絵）は並び順で分ける。
+  const groups = art.id && parts === BEGINNER_TARGET_PRESSES ? COLORING_GROUPS[art.id] : null;
+  const groupOf = (index) => {
+    if (groups) {
+      const found = groups.findIndex((members) => members.includes(index));
+      if (found >= 0) return found;
+    }
+    return Math.min(lastPart - 1, Math.floor((index * lastPart) / tags.length));
+  };
   const tag = (markup, part) => {
     const line = /fill="none"/.test(markup);
     return markup.replace(/^<(\w+)/, `<$1 class="cl-part${line ? " cl-line" : ""}" data-part="${part}"`);
@@ -55,9 +80,7 @@ export function coloringMarkup(art, parts = BEGINNER_TARGET_PRESSES) {
     '<path d="M38 40 L 43 54 L 57 58 L 43 62 L 38 76 L 33 62 L 19 58 L 33 54 Z" fill="#FFC83D"></path>',
     '<path d="M262 26 L 266 37 L 277 40 L 266 43 L 262 54 L 258 43 L 247 40 L 258 37 Z" fill="#FFC83D"></path>',
   ].map((markup) => tag(markup, lastPart));
-  const body = tags.map((markup, index) =>
-    tag(markup, Math.min(lastPart - 1, Math.floor((index * lastPart) / tags.length)))
-  );
+  const body = tags.map((markup, index) => tag(markup, groupOf(index)));
   return [...backdrop.slice(0, 1), ...body, ...backdrop.slice(1)].join("");
 }
 
@@ -108,7 +131,9 @@ export function createColoringGame(ctx) {
     audio.stopSpeech();
     const pressIndex = colored;
     colored += 1;
-    playPressSound(audio, playPrefsFor(settings, GAME_ID).sound, pressIndex);
+    playPressSound(audio, playPrefsFor(settings, GAME_ID).sound, pressIndex, {
+      creature: picture.id,
+    });
     update();
 
     const remaining = BEGINNER_TARGET_PRESSES - colored;

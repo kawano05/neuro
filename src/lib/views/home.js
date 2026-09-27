@@ -71,10 +71,17 @@ export function initHome(ctx) {
     return gameModules.find((game) => game.id === id);
   }
 
-  /** いまの画面幅でグリッドに並べるか（CSS の境界と同じ値を scanPaging.js から引く）。 */
+  /**
+   * グリッドで並べるか（先読みでページに分けない並べ方か）。
+   *
+   * デザイン改修（theme-hakkiri.css）では、スマホの幅でもホームは2列のグリッドで、
+   * 行の高さが画面の残りに合わせて伸び縮みする。画面の高さからの当て（740px）で
+   * 分けると、入るはずの iPhone でもページに分かれていた——打ち合わせで
+   * 「1画面にすべて並べる」「ページをめくらせない」と言われている（§1.3）。
+   * どの幅でも、描いたあとの実測で入らなかったときだけ分ける。
+   */
   function usesGridLayout() {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-    return window.matchMedia(`(min-width: ${GRID_LAYOUT_MIN_WIDTH}px)`).matches;
+    return true;
   }
 
   /** 走査順が視覚的にも分かる、横長アクティビティ行を生成する。 */
@@ -502,6 +509,7 @@ export function initHome(ctx) {
       gameById("color-legacy"),
       gameById("balloon"),
       gameById("coloring"),
+      gameById("baseball"),
       visibleSlotGames.length ? slotCornerTile : null,
       gameById("gonogo"),
       !state.settings.hideVisualTasks ? craneCornerTile : null,

@@ -131,7 +131,9 @@ export function createColorLegacyGame(ctx) {
     step += 1;
     shownIndex = pressIndex;
     fading = false;
-    playPressSound(audio, playPrefsFor(settings, GAME_ID).sound, pressIndex);
+    playPressSound(audio, playPrefsFor(settings, GAME_ID).sound, pressIndex, {
+      creature: popAnimalFor(pressIndex).id,
+    });
     render();
 
     const remaining = COLOR_TARGET_PRESSES - step;

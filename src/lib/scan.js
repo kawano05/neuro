@@ -102,6 +102,33 @@ export function createScanEngine(ctx) {
     target.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
+  /**
+   * 枠が動いたことを音で伝える（設定の「枠が動いたときの音」）。画面を見続けるのが
+   * 難しい利用者のため（打ち合わせ「画面を見なくても、音なら届く」§1.7）。
+   *
+   * 鳴らすのは枠が「動いた」とき（step）だけ。画面を描き直したときにも鳴らすと、
+   * 選んだ直後の「せいかい！」などの声を、次の項目の名前が打ち消してしまう。
+   * 利用者の画面（body.user-world）でだけ鳴らし、支援者の画面では鳴らさない。
+   */
+  function sayTarget(target) {
+    const mode = state.settings.scanFeedback;
+    const audio = ctx.audio;
+    if (!mode || mode === "none" || !audio || !target) return;
+    if (!document.body.classList.contains("user-world")) return;
+    if (mode === "speak") {
+      // 名前は読み上げ名（aria-label）を優先。無ければ、ふりがな（rt）を除いた字。
+      let name = target.getAttribute("aria-label") || "";
+      if (!name) {
+        const copy = target.cloneNode(true);
+        copy.querySelectorAll("rt").forEach((reading) => reading.remove());
+        name = copy.textContent || "";
+      }
+      name = name.replace(/\s+/g, " ").trim();
+      if (name && audio.speak(name)) return;
+    }
+    audio.playScanTick?.();
+  }
+
   /** ハイライトを1つ進める（自動走査のタイマー、または → キー） */
   function step() {
     if (scanningIsOff()) {
@@ -112,6 +139,7 @@ export function createScanEngine(ctx) {
     if (!scanTargets.length) return;
     scanIndex = (scanIndex + 1) % scanTargets.length;
     updateFocus();
+    sayTarget(scanTargets[scanIndex]);
   }
 
   /** 走査を開始する（既に動いていれば作り直す） */
@@ -133,8 +161,10 @@ export function createScanEngine(ctx) {
     scanIndex = scanTargets.length ? Math.max(0, scanIndex) : -1;
     updateFocus();
     scanTimer = window.setInterval(step, state.settings.scanInterval);
-    elements.scanState.textContent = "走査中";
-    elements.toggleScanLabel.textContent = "走査停止";
+    // 画面に出る言葉は「走査」を使わない（打ち合わせで、ふだん目にしない言葉は
+    // 難しく感じると言われた。docs/design-renewal-2026-09-25.md §1.2）。
+    elements.scanState.textContent = "枠が動いています";
+    elements.toggleScanLabel.textContent = "枠を止める";
   }
 
   /** 走査を停止する。clearFocus=false ならハイライト位置を保持する。 */
@@ -143,8 +173,8 @@ export function createScanEngine(ctx) {
       window.clearInterval(scanTimer);
       scanTimer = null;
     }
-    elements.scanState.textContent = usesNativeSwitchControl() ? "iPad走査を使用" : "走査停止中";
-    elements.toggleScanLabel.textContent = "走査開始";
+    elements.scanState.textContent = usesNativeSwitchControl() ? "iPad で操作中" : "枠は止まっています";
+    elements.toggleScanLabel.textContent = "枠を動かす";
     if (clearFocus) {
       clearScanFocus();
     }

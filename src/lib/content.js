@@ -68,10 +68,14 @@ export const gameTiles = [
   // どちらも測定の課題ではないので taskType を持たない。
   { id: "balloon", taskType: null, resultType: "completion", title: "ふうせん わり", description: "おすと ふうせんが われるよ", order: 2, enabled: true, iconClass: "fa-solid fa-burst" },
   { id: "coloring", taskType: null, resultType: "completion", title: "ぬりえ", description: "おすと いろが ぬれるよ", order: 3, enabled: true, iconClass: "fa-solid fa-paintbrush" },
-  { id: "slot-l1", taskType: "slot", title: "ひとつ とめる", description: "おなじ えが まんなかに きたら おそう", order: 4, enabled: true, visualRequired: true, iconClass: "fa-solid fa-circle-stop" },
-  { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの リールを じゅんばんに とめよう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
-  { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 6, enabled: true, iconClass: "fa-solid fa-bell" },
-  { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 7, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
+  // 野球盤のような遊び（打ち合わせで「誰でも野球盤」が例に出た）。押せば必ず
+  // 当たり、タイミングが合うほど遠くへ飛ぶ。はじめの遊びとタイミングの遊びの
+  // あいだの一段。これも測定の課題ではない（games/baseball.js）。
+  { id: "baseball", taskType: null, resultType: "completion", title: "ボールを うつ", description: "ボールが きたら おして うとう", order: 4, enabled: true, iconClass: "fa-solid fa-baseball-bat-ball" },
+  { id: "slot-l1", taskType: "slot", title: "ひとつ とめる", description: "おなじ えが まんなかに きたら おそう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-circle-stop" },
+  { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの リールを じゅんばんに とめよう", order: 6, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
+  { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 7, enabled: true, iconClass: "fa-solid fa-bell" },
+  { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 8, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
   // さかなつりは2種類ある。どちらも反応時間を測るが、測っているものが違う:
   //   fishing        … 純粋な単純反応時間。アタリ音は1種類だけで、迷う要素がない
   //   fishing-gonogo … そこに No-Go（長靴の低音）を混ぜた抑制つきの反応時間
@@ -79,9 +83,9 @@ export const gameTiles = [
   // （単純反応時間）なのに実体は Go/No-Go 課題という食い違いがあり、
   // 「この課題で何を測ったか」を書けなかった。ロビーでは「さかなつり」の
   // コーナー（fishingCornerTile）にまとめ、二階層目でどちらかを選ぶ。
-  { id: "fishing", taskType: "rt", title: "アタリで つる", description: "おとが なったら すぐ おそう", order: 8, enabled: true, iconClass: "fa-solid fa-fish" },
-  { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 9, enabled: true, iconClass: "fa-solid fa-fish-fins" },
-  { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 10, enabled: true, iconClass: "fa-solid fa-stopwatch" },
+  { id: "fishing", taskType: "rt", title: "アタリで つる", description: "おとが なったら すぐ おそう", order: 9, enabled: true, iconClass: "fa-solid fa-fish" },
+  { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 10, enabled: true, iconClass: "fa-solid fa-fish-fins" },
+  { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 11, enabled: true, iconClass: "fa-solid fa-stopwatch" },
 ];
 
 /** 視覚タイミング課題2種をまとめる二階層目への入口。 */
@@ -411,6 +415,7 @@ export const gameHowTo = {
   calibration: ["howto.calibration.1", "howto.calibration.2", "howto.calibration.3"],
   crane: ["howto.crane.1", "howto.crane.2", "howto.crane.3", "howto.crane.4"],
   fishing: ["howto.fishing.1", "howto.fishing.2", "howto.fishing.3", "howto.fishing.4"],
+  baseball: ["howto.baseball.1", "howto.baseball.2", "howto.baseball.3"],
   "fishing-gonogo": [
     "howto.fishing-gonogo.1",
     "howto.fishing-gonogo.2",
@@ -427,6 +432,8 @@ export const cueTones = { low: 440, high: 880, noGo: 330, hit: 660, miss: 220 };
 export const matchingTasks = [
   {
     prompt: "赤いものを選んでください",
+    // 画面に出す問い（ふりがな付き。i18n.js の書き方）。記録と正解の判定は answer / label のまま。
+    promptRuby: "赤[あか]い ものは どれかな？",
     answer: "りんご",
     options: [
       { label: "りんご", visual: "circle red" },
@@ -437,6 +444,7 @@ export const matchingTasks = [
   },
   {
     prompt: "丸い形を選んでください",
+    promptRuby: "丸[まる]い かたちは どれかな？",
     answer: "まる",
     options: [
       { label: "しかく", visual: "square teal" },
@@ -447,6 +455,7 @@ export const matchingTasks = [
   },
   {
     prompt: "食べものを選んでください",
+    promptRuby: "食[た]べものは どれかな？",
     answer: "パン",
     options: [
       { label: "くつ", visual: "bar teal" },
@@ -459,10 +468,10 @@ export const matchingTasks = [
 
 /** 文字学習の出題 */
 export const letterTasks = [
-  { prompt: "「あめ」の最初の文字を選んでください", answer: "あ", options: ["あ", "い", "う", "え"] },
-  { prompt: "「からだ」の最初の文字を選んでください", answer: "か", options: ["さ", "た", "か", "な"] },
-  { prompt: "「みず」の最初の文字を選んでください", answer: "み", options: ["に", "み", "し", "り"] },
-  { prompt: "「ありがとう」の最初の文字を選んでください", answer: "あ", options: ["お", "あ", "ま", "や"] },
+  { prompt: "「あめ」の最初の文字を選んでください", promptRuby: "「あめ」の はじめの 文字[もじ]は どれかな？", answer: "あ", options: ["あ", "い", "う", "え"] },
+  { prompt: "「からだ」の最初の文字を選んでください", promptRuby: "「からだ」の はじめの 文字[もじ]は どれかな？", answer: "か", options: ["さ", "た", "か", "な"] },
+  { prompt: "「みず」の最初の文字を選んでください", promptRuby: "「みず」の はじめの 文字[もじ]は どれかな？", answer: "み", options: ["に", "み", "し", "り"] },
+  { prompt: "「ありがとう」の最初の文字を選んでください", promptRuby: "「ありがとう」の はじめの 文字[もじ]は どれかな？", answer: "あ", options: ["お", "あ", "ま", "や"] },
 ];
 
 /** 操作訓練のモード一覧（iOS Switch Control の模擬） */
@@ -504,6 +513,35 @@ export const operationPointTargets = [
 ];
 
 /** 定型句VOCAのカテゴリと定型句 */
+/**
+ * 定型句と分類の、画面に出す形（ふりがな付き）。記録（logEvent の label）と
+ * 効果測定の手順（evaluationTasks）は、phraseCategories の元の文字のまま使う。
+ */
+export const PHRASE_RUBY = {
+  もう一度: "もう一度[いちど]",
+  大丈夫です: "大丈夫[だいじょうぶ]です",
+  痛いです: "痛[いた]いです",
+  寒いです: "寒[さむ]いです",
+  暑いです: "暑[あつ]いです",
+  眠いです: "眠[ねむ]いです",
+  休みたいです: "休[やす]みたいです",
+  水がほしいです: "水[みず]がほしいです",
+  姿勢を変えてください: "姿勢[しせい]を変[か]えてください",
+  トイレに行きたいです: "トイレに行[い]きたいです",
+  吸引してください: "吸引[きゅういん]してください",
+  家族に連絡してください: "家族[かぞく]に連絡[れんらく]してください",
+  待ってください: "待[ま]ってください",
+  不安です: "不安[ふあん]です",
+  楽しいです: "楽[たの]しいです",
+  静かにしたいです: "静[しず]かにしたいです",
+  外に出たいです: "外[そと]に出[で]たいです",
+  話したいです: "話[はな]したいです",
+  基本: "基本[きほん]",
+  体調: "体調[たいちょう]",
+  介助: "介助[かいじょ]",
+  気持ち: "気持[きも]ち",
+};
+
 export const phraseCategories = {
   基本: ["はい", "いいえ", "もう一度", "わかりません", "ありがとう", "大丈夫です"],
   体調: ["痛いです", "寒いです", "暑いです", "眠いです", "休みたいです", "水がほしいです"],

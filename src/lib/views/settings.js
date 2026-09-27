@@ -7,8 +7,22 @@ import { isMeasurementMode, resolveDifficultyMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
 import { evaluateReadiness } from "../readinessCheck.js";
 
+/**
+ * ミリ秒を「秒」で見せる（1600 → 1.6秒、220 → 0.22秒）。打ち合わせで設定の言葉を
+ * 「小学校高学年が読んで分かる」ようにと言われた（docs/design-renewal-2026-09-25.md
+ * §1.8）。「ms」はその外にある。保存する値はミリ秒のまま。
+ */
+export function formatSeconds(ms) {
+  return `${Number((ms / 1000).toFixed(2))}秒`;
+}
+
 export function initSettings(ctx) {
   const { state, elements, save, scan, announce, logEvent, audio } = ctx;
+
+  // 印刷用の説明書（public/guide.html）へのリンクは、iPad のアプリ版では隠す。
+  // アプリの中から別の画面を開けず、開けても戻る手段が無いため。ウェブ版だけ。
+  const guidePrint = document.querySelector("#settingsGuidePrint");
+  if (guidePrint && globalThis.Capacitor?.isNativePlatform?.()) guidePrint.hidden = true;
 
   // UFOキャッチャーの難易度。設定側が null のあいだは cranePresets の値を
   // 使うので、スライダーにもその既定値を映す（games/crane.js の
@@ -19,7 +33,7 @@ export function initSettings(ctx) {
       input: elements.craneSweepMs,
       output: elements.craneSweepMsValue,
       fallback: cranePresets.sweepMs,
-      format: (value) => `${value}ms`,
+      format: formatSeconds,
     },
     {
       key: "craneToleranceR",
@@ -43,14 +57,14 @@ export function initSettings(ctx) {
       input: elements.slotCycleMs,
       output: elements.slotCycleMsValue,
       fallback: slotPresets["slot-l1"].cycleMs,
-      format: (value) => `${value}ms`,
+      format: formatSeconds,
     },
     {
       key: "slotToleranceMs",
       input: elements.slotToleranceMs,
       output: elements.slotToleranceMsValue,
       fallback: slotPresets["slot-l1"].toleranceMs,
-      format: (value) => `${value}ms`,
+      format: formatSeconds,
     },
     {
       key: "slotL1Rounds",
@@ -83,7 +97,7 @@ export function initSettings(ctx) {
       select.value = settings[key] === null ? "" : String(settings[key]);
     });
     elements.scanInterval.value = settings.scanInterval;
-    elements.scanIntervalValue.value = `${settings.scanInterval}ms`;
+    elements.scanIntervalValue.value = formatSeconds(settings.scanInterval);
     difficultySliders.forEach(({ key, input, output, fallback, format }) => {
       const value = settings[key] ?? fallback;
       input.value = value;
@@ -92,6 +106,7 @@ export function initSettings(ctx) {
     elements.switchControlMode.checked = settings.switchControlMode;
     elements.autoScan.checked = settings.autoScan;
     elements.showScreenSwitch.checked = settings.showScreenSwitch;
+    if (elements.scanFeedback) elements.scanFeedback.value = settings.scanFeedback;
     elements.speechEnabled.checked = settings.speechEnabled;
     elements.speechVolume.value = settings.speechVolume;
     elements.speechVolumeValue.value = `${Math.round(settings.speechVolume * 100)}%`;
@@ -256,7 +271,7 @@ export function initSettings(ctx) {
   elements.scanInterval.addEventListener("input", (event) => {
     if (state.settings.switchControlMode) return;
     state.settings.scanInterval = Number(event.target.value);
-    elements.scanIntervalValue.value = `${state.settings.scanInterval}ms`;
+    elements.scanIntervalValue.value = formatSeconds(state.settings.scanInterval);
     save();
     if (scan.isRunning()) scan.start();
   });
@@ -284,8 +299,8 @@ export function initSettings(ctx) {
     scan.refresh();
     announce(
       delegated
-        ? "iPad Switch Controlに選択を任せます。アプリの走査と音声を停止しました"
-        : "iPad Switch Controlモードを解除しました。アプリ走査は停止したままです"
+        ? "iPad のスイッチコントロールで選ぶようにしました。このアプリの黄色い枠と読み上げは止めました"
+        : "iPad のスイッチコントロールを使うのをやめました。黄色い枠は止まったままです"
     );
   });
 
@@ -366,6 +381,12 @@ export function initSettings(ctx) {
       label: `難易度モードを ${state.settings.difficultyMode} に変更`,
       skipEvaluation: true,
     });
+  });
+
+  elements.scanFeedback?.addEventListener("change", () => {
+    state.settings.scanFeedback = elements.scanFeedback.value;
+    save();
+    announce("枠が動いたときの音を変えました");
   });
 
   elements.textMode.addEventListener("change", () => {

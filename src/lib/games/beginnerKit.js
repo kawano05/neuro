@@ -28,10 +28,22 @@ export function playPrefsFor(settings, gameId) {
   return settings?.playPrefs?.[gameId] ?? DEFAULT_PLAY_PREFS[gameId];
 }
 
-/** 押したときの音（この遊びの設定で選ぶ）。 */
-export function playPressSound(audio, style, pressIndex) {
+/**
+ * 押したときの音（この遊びの設定で選ぶ）。
+ * @param {object} [options]
+ * @param {string} [options.creature] 「生きものの声」で鳴らす生きもの（出てきた絵の id）
+ */
+export function playPressSound(audio, style, pressIndex, { creature = null } = {}) {
   if (style === "none") return;
-  if (style === "pop") {
+  if (style === "creature" && creature) {
+    audio.playCreature(creature);
+    return;
+  }
+  if (style === "boing") {
+    audio.playBoing();
+    return;
+  }
+  if (style === "pop" || style === "creature") {
     // 明るい効果音: 上がる「ポン」と、はじける音を少し。
     audio.playSweep({ fromHz: 300, toHz: 1100, durationS: 0.14, gain: 0.04 });
     audio.playNoise({ durationS: 0.08, gain: 0.018, filter: "bandpass", frequency: 2600, q: 1.4 });
@@ -47,7 +59,7 @@ export function playPressSound(audio, style, pressIndex) {
 /** 5回目（できた）の音。 */
 export function playFinishSound(audio, style) {
   if (style === "none") return;
-  if (style === "pop" || style === "boom") {
+  if (style === "pop" || style === "boom" || style === "boing") {
     [0, 0.12, 0.24].forEach((delayS, index) => {
       window.setTimeout(() => {
         audio.playSweep({
@@ -66,21 +78,25 @@ export function playFinishSound(audio, style) {
 }
 
 /**
- * できたときのおいわい。拍手（audio.playApplause）と「やったー」。
+ * できたときのおいわい。拍手（audio.playApplause）・笑い声（audio.playLaugh）と
+ * 「やったー」。
  *
- * 拍手と「やったー」は、この遊びの設定の「できたときの拍手と やったー」で
- * まとめて切れる。読み上げの声は、支援者の設定で読み上げが入っているときだけ
- * （切ってあるときは、この遊びの設定の画面にそう書いてある。gameSettings.js）。
+ * どれを出すかは、この遊びの設定の「できたときのおいわい」で選ぶ（state.js の
+ * PLAY_CHEERS）。「なし」以外なら「やったー」の声も出す。読み上げの声は、支援者の
+ * 設定で読み上げが入っているときだけ（切ってあるときは、この遊びの設定の画面に
+ * そう書いてある。gameSettings.js）。
  *
  * @param {object} ctx ゲームの ctx（audio / voiceFeedback / t / settings）
- * @param {{cheer: boolean}} prefs この遊びの設定
+ * @param {{cheer: string}} prefs この遊びの設定
  * @param {string} doneText 読み上げる「できた」の文（プレーン文）
  */
 export function celebrate(ctx, prefs, doneText) {
-  if (prefs.cheer) ctx.audio.playApplause();
+  const cheer = prefs.cheer;
+  if (cheer === "both" || cheer === "applause") ctx.audio.playApplause();
+  if (cheer === "both" || cheer === "laugh") ctx.audio.playLaugh();
   if (!ctx.settings.speechEnabled) return;
   const parts = [doneText];
-  if (prefs.cheer) parts.unshift(ctx.t("color.voice.cheer"));
+  if (cheer !== "none") parts.unshift(ctx.t("color.voice.cheer"));
   ctx.voiceFeedback(parts.join(" "));
 }
 

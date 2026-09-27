@@ -1,11 +1,19 @@
 // =====================================================================
-// views/voca.js — 定型句VOCA画面
+// views/voca.js — 「ことばで 伝える」（旧 定型句VOCA）
+//
+// 選んだことばの記録（logEvent の phrase）は元の文字のまま（効果測定の手順
+// 「VOCAで『痛いです』を選択」がこの名前で数えるため）。画面に出すときだけ、
+// ふりがなを付ける（content.js の PHRASE_RUBY）。
 //
 // 打合せ要件メモ: 「はい」「いいえ」をタイミングで選ばせる機能
 // （西村さんの強い要望）はこのビューの発展形として実装候補。
 // =====================================================================
 
-import { phraseCategories } from "../content.js";
+import { PHRASE_RUBY, phraseCategories } from "../content.js";
+import { rubyToHtml } from "../i18n.js";
+
+/** 画面に出す形（ふりがな付き）。無いものはそのまま。 */
+const shown = (text) => rubyToHtml(PHRASE_RUBY[text] || text);
 
 export function initVoca(ctx) {
   const { state, elements, save, logEvent, speak, voiceFeedback, playTone, scan } = ctx;
@@ -19,7 +27,7 @@ export function initVoca(ctx) {
       button.classList.toggle("is-active", category === state.currentCategory);
       button.type = "button";
       button.dataset.scan = "";
-      button.textContent = category;
+      button.innerHTML = shown(category);
       button.addEventListener("click", () => {
         state.currentCategory = category;
         save();
@@ -33,14 +41,15 @@ export function initVoca(ctx) {
 
   /** 定型句グリッドと選択中フレーズの描画 */
   function renderPhrases() {
-    elements.currentPhrase.textContent = state.currentPhrase || "まだ選択されていません";
+    if (state.currentPhrase) elements.currentPhrase.innerHTML = shown(state.currentPhrase);
+    else elements.currentPhrase.innerHTML = ctx.tHtml("learn.nothingYet");
     elements.phraseGrid.innerHTML = "";
     phraseCategories[state.currentCategory].forEach((phrase) => {
       const button = document.createElement("button");
       button.className = "phrase-button";
       button.type = "button";
       button.dataset.scan = "";
-      button.textContent = phrase;
+      button.innerHTML = shown(phrase);
       button.addEventListener("click", () => selectPhrase(phrase));
       elements.phraseGrid.append(button);
     });

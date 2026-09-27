@@ -12,7 +12,11 @@ export const SLOT_PROTOCOL_VERSION = "slot-v1";
 //   2 … リールの帯の描き方を直した（2026-09-27、reelTrackOffset）。並びの先頭の
 //       絵が停止線へ近づくあいだ（1周の12分の1）、リールに絵が1つも描かれて
 //       いなかった。判定は時刻で行うので値は正しいが、見えていたものが違う。
-export const SLOT_ENGINE_VERSION = 2;
+//   3 … れんしゅうの回だけ、リールを大きくし（1コマ 94px → 画面の高さに合わせて
+//       最大 136px）、当たったときの演出（星・「ぴったり！」・和音）を足した
+//       （2026-09-27、docs/design-renewal-2026-09-25.md §3.10）。そくていの回の
+//       見え方と音は 2 と同じ。どちらの回かは difficultyMode で分かる。
+export const SLOT_ENGINE_VERSION = 3;
 
 export const SLOT_SYMBOL_IDS = Object.freeze([
   "circle",

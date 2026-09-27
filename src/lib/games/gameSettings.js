@@ -29,6 +29,42 @@
 // =====================================================================
 
 import { isMeasurementMode } from "../difficultyMode.js";
+import { PLAY_SOUNDS_BY_GAME } from "../state.js";
+
+/** 音の選択肢の名前（支援者の画面の言葉）。 */
+const SOUND_LABELS = {
+  instrument: "楽器の音",
+  pop: "明るい効果音",
+  boing: "ボヨーン",
+  creature: "生きものの声",
+  boom: "びっくりする音",
+  bat: "カキーン（バット）",
+  none: "なし",
+};
+
+/** できたときのおいわい（拍手・笑い声。「なし」以外なら「やったー」の声つき）。 */
+function cheerGroup(gameId) {
+  return {
+    key: `playPrefs.${gameId}.cheer`,
+    kind: "cheer",
+    label: "できたときのおいわい（「やったー」の声つき）",
+    options: [
+      ["both", "拍手と笑い声"],
+      ["applause", "拍手"],
+      ["laugh", "笑い声"],
+      ["none", "なし"],
+    ],
+  };
+}
+
+function soundGroup(gameId, label) {
+  return {
+    key: `playPrefs.${gameId}.sound`,
+    kind: "sound",
+    label,
+    options: PLAY_SOUNDS_BY_GAME[gameId].map((value) => [value, SOUND_LABELS[value]]),
+  };
+}
 
 /**
  * はじめの遊び（失敗の無い遊び）の設定。遊びごとに持つ（settings.playPrefs、state.js）。
@@ -45,26 +81,25 @@ function beginnerGroups(gameId) {
         ["light", "明るい"],
       ],
     },
+    soundGroup(gameId, "押したときの音"),
+    cheerGroup(gameId),
+  ];
+}
+
+/** ボールを打つ遊び。速さは次の1球から効くので、その場で続けられる（live）。 */
+function baseballGroups() {
+  return [
     {
-      key: `playPrefs.${gameId}.sound`,
-      kind: "sound",
-      label: "押したときの音",
+      key: "playPrefs.baseball.speed",
+      label: "ボールの速さ",
       options: [
-        ["instrument", "楽器の音"],
-        ["pop", "明るい効果音"],
-        ["boom", "びっくりする音"],
-        ["none", "なし"],
+        ["slow", "ゆっくり"],
+        ["normal", "ふつう"],
+        ["fast", "はやい"],
       ],
     },
-    {
-      key: `playPrefs.${gameId}.cheer`,
-      kind: "cheer",
-      label: "できたときの拍手と「やったー」",
-      options: [
-        [true, "あり"],
-        [false, "なし"],
-      ],
-    },
+    soundGroup("baseball", "打ったときの音"),
+    cheerGroup("baseball"),
   ];
 }
 
@@ -78,6 +113,34 @@ const SLOT_SPEED = {
     [4800, "ゆっくり"],
     [3200, "ふつう"],
     [2800, "はやい"],
+  ],
+};
+
+// 「合った」にする広さ（目標の真ん中から前後何ミリ秒までを合ったとするか）。
+// 既定の 220 がいちばん広い（設定画面のつまみの上限）。打ち合わせで、ほかの
+// ソフトの「遊びの中でボールの大きさをボンと変えられる」のが使いやすいと
+// 言われた（docs/design-renewal-2026-09-25.md §1.8）。速さと並べて置く。
+const SLOT_TOLERANCE = {
+  key: "slotToleranceMs",
+  label: "「合った」にする広さ",
+  measured: true,
+  options: [
+    [220, "ひろい"],
+    [160, "すこし せまい"],
+    [100, "せまい"],
+  ],
+};
+
+// アームで「つかめる」広さ（床の上の半径）。null は content.js の cranePresets（15）。
+// 範囲は設定画面のつまみと同じ（4〜40）。
+const CRANE_TOLERANCE = {
+  key: "craneToleranceR",
+  label: "つかめる広さ",
+  measured: true,
+  options: [
+    [24, "ひろい"],
+    [null, "ふつう"],
+    [9, "せまい"],
   ],
 };
 
@@ -113,10 +176,11 @@ export const GAME_SETTINGS = {
   "color-legacy": { mode: "live", groups: beginnerGroups("color-legacy") },
   balloon: { mode: "live", groups: beginnerGroups("balloon") },
   coloring: { mode: "live", groups: beginnerGroups("coloring") },
-  "slot-l1": { mode: "restart", groups: [SLOT_SPEED] },
-  "slot-l2": { mode: "restart", groups: [SLOT_SPEED] },
+  baseball: { mode: "live", groups: baseballGroups() },
+  "slot-l1": { mode: "restart", groups: [SLOT_SPEED, SLOT_TOLERANCE] },
+  "slot-l2": { mode: "restart", groups: [SLOT_SPEED, SLOT_TOLERANCE] },
   gonogo: { mode: "restart", groups: [GONOGO_TEMPO] },
-  crane: { mode: "restart", groups: [CRANE_SPEED] },
+  crane: { mode: "restart", groups: [CRANE_SPEED, CRANE_TOLERANCE] },
 };
 
 /** settings の中の値を、点つなぎの場所で読む（"playPrefs.balloon.sound"）。 */
@@ -186,14 +250,14 @@ export function createGameSettings(ctx, host) {
     if (measuring && definition.groups.some((group) => group.measured)) {
       notes.push({
         lock: true,
-        text: "いまは「そくてい」の回なので、速さは変えられません。記録の条件をそろえるためです。",
+        text: "いまは「そくてい」の回なので、速さや広さは変えられません。記録の条件をそろえるためです。",
       });
     }
     const soundGroup = definition.groups.find((group) => group.kind === "sound");
     if (soundGroup && !state.settings.soundEnabled) {
       notes.push({
         lock: true,
-        text: "支援者の設定で「効果音」が切ってあるので、押したときの音と拍手は出ません。",
+        text: "支援者の設定で「効果音」が切ってあるので、押したときの音・拍手・笑い声は出ません。",
       });
     }
     if (soundGroup && draft[soundGroup.key] === "boom") {
@@ -207,7 +271,7 @@ export function createGameSettings(ctx, host) {
     if (definition.groups.some((group) => group.kind === "cheer") && !state.settings.speechEnabled) {
       notes.push({
         lock: true,
-        text: "支援者の設定で「読み上げ」が切ってあるので、「やったー」の声は出ません（拍手は出ます）。",
+        text: "支援者の設定で「読み上げ」が切ってあるので、「やったー」の声は出ません（拍手と笑い声は出ます）。",
       });
     }
     return notes;

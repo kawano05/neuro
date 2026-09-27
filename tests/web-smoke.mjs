@@ -70,6 +70,8 @@ const checks = [
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
   ["finishes color-legacy with progress, result, retry, and home", checkColorCompletionFlow],
   ["plays the balloon and coloring games to the end, with live per-game settings", checkBeginnerGamesFlow],
+  ["hits every pitch that is swung at and re-pitches a missed one in the baseball game", checkBaseballFlow],
+  ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
@@ -287,9 +289,9 @@ async function checkMainApp(page) {
   // the start screen and the header badge would read "走査中". Confirm the
   // badge reads stopped and that no element ever gains .scan-focus even
   // after waiting past the default scanInterval (1600ms, state.js).
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
   await page.waitForTimeout(1900);
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
   const scanFocusCount = await page.locator(".scan-focus").count();
   assert(scanFocusCount === 0, `Expected no .scan-focus elements on the start screen, found ${scanFocusCount}`);
 }
@@ -302,7 +304,7 @@ async function checkStartInputGuard(page) {
   await page.mouse.down();
   await page.mouse.up();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
   await page.waitForTimeout(600);
   assert(
     await page.locator("#homeView").evaluate((view) => view.classList.contains("is-active")),
@@ -327,7 +329,7 @@ async function checkStartToHomeToGameFlow(page) {
   // logs a "switch" event, and advances to home (detailed-design.md §2.2).
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
 
   // The color-legacy tile is enabled and first by order (content.js gameTiles).
   const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
@@ -734,7 +736,7 @@ async function checkStartToHomeToGameFlow(page) {
 async function checkColorCompletionFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
   await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
   await waitForClass(page, "#gameView", "is-active");
 
@@ -803,6 +805,7 @@ async function checkColorCompletionFlow(page) {
 
   await waitForClass(page, "#resultView", "is-active");
   await page.locator(".completion-result").waitFor({ state: "visible" });
+  await assertNoSplitRuby(page, "completion result");
   const plainOf = async (selector) =>
     page.locator(selector).evaluate((element) => {
       const clone = element.cloneNode(true);
@@ -872,7 +875,7 @@ async function checkBeginnerGamesFlow(page) {
   const presses = BEGINNER_TARGET_PRESSES;
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
 
   const plainOf = async (selector) =>
     page.locator(selector).evaluate((element) => {
@@ -971,7 +974,7 @@ async function checkBeginnerGamesFlow(page) {
   );
   await page.locator("#resultHome").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
 
   // --- ぬりえ ---
   await openActivity(page, t("tile.coloring.title"));
@@ -1043,6 +1046,155 @@ async function checkBeginnerGamesFlow(page) {
 }
 
 /**
+ * ボールを打つ遊び（games/baseball.js）。
+ *
+ * 約束は「振れば必ず当たる」。ボールが出ているあいだの1押しは、いつでも
+ * ホームラン・ヒット・ころころのどれかになり、下の5つの印が1つ埋まる。
+ * 構えているあいだの押しは素振り（数えない）、振らずに見送った球は数えずに
+ * もう一度投げる（へこませない）。5本でけっかへ行き、研究用の記録は作らない。
+ */
+async function checkBaseballFlow(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  await openActivity(page, t("tile.baseball.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  // やりかた（レディ画面）のひと押しは、説明を読み終えた合図。
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await assertNoSplitRuby(page, "baseball how-to");
+  await page.locator("#gameStage").click();
+  await page.locator("#gameStageContent.module-baseball .bb-field").waitFor({ state: "visible" });
+
+  const state = () =>
+    page.evaluate(() => {
+      const word = document.querySelector(".bb-word")?.dataset.word || "";
+      const match = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+        document.querySelector(".bb-ball")?.getAttribute("transform") || ""
+      );
+      return {
+        word,
+        ballY: match ? Number(match[2]) : null,
+        filled: document.querySelectorAll(".bb-slot:not([class='bb-slot'])").length,
+      };
+    });
+  const waitForPitch = () =>
+    page.waitForFunction(
+      () => {
+        const word = document.querySelector(".bb-word")?.dataset.word;
+        const match = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+          document.querySelector(".bb-ball")?.getAttribute("transform") || ""
+        );
+        return word === "" && match && Number(match[2]) > 420 && Number(match[2]) < 540;
+      },
+      null,
+      { timeout: 10_000 }
+    );
+
+  // 構えているあいだの押しは素振り。数えない。
+  await page.waitForFunction(() => document.querySelector(".bb-word")?.dataset.word === "baseball.word.ready");
+  await page.locator("#gameStage").dispatchEvent("click");
+  assert((await state()).filled === 0, "A swing before the pitch must not count as a hit");
+
+  // 見送った球は数えず、もう一度投げる。
+  await page.waitForFunction(
+    () => document.querySelector(".bb-word")?.dataset.word === "baseball.word.again",
+    null,
+    { timeout: 10_000 }
+  );
+  assert((await state()).filled === 0, "A pitch that was let go must not count");
+
+  const outcomes = [];
+  for (let swing = 1; swing <= 5; swing += 1) {
+    await waitForPitch();
+    await page.locator("#gameStage").dispatchEvent("click");
+    const after = await state();
+    assert(
+      ["baseball.word.homerun", "baseball.word.hit", "baseball.word.bunt"].includes(after.word),
+      `Swing ${swing} while the ball is out must always hit the ball, got "${after.word}"`
+    );
+    assert(after.filled === swing, `Swing ${swing} must fill exactly ${swing} marks, got ${after.filled}`);
+    outcomes.push(after.word);
+  }
+  await waitForClass(page, "#resultView", "is-active");
+  await page.locator(".completion-result").waitFor({ state: "visible" });
+  assert(
+    (await page.locator(".hk-result-item.is-ball").count()) === 5,
+    "The baseball result must line up the five hits"
+  );
+  const sessions = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key) || "{}").sessions || [],
+    storageKey
+  );
+  assert(
+    !sessions.some((session) => session.gameId === "baseball"),
+    "The baseball game must not create research sessions"
+  );
+  await page.locator("#resultHome").click();
+  await waitForClass(page, "#homeView", "is-active");
+}
+
+/**
+ * 枠が動いたときの音（settings.scanFeedback）。「名前を読む」にすると、枠が
+ * 次の項目へ動くたびに、その項目の名前を読む（画面を見続けるのが難しい利用者の
+ * ため。打ち合わせ「画面を見なくても、音なら届く」）。既定の「なし」では読まない。
+ */
+async function checkScanFeedbackSpeaksNames(page) {
+  // 読み上げを横取りして、読んだ文を数える（音は出さない）。
+  await page.addInitScript(() => {
+    window.__spoken = [];
+    if (typeof window.SpeechSynthesisUtterance !== "function") {
+      window.SpeechSynthesisUtterance = class {
+        constructor(text) {
+          this.text = text;
+        }
+      };
+    }
+    const synth = window.speechSynthesis || {};
+    synth.speak = (utterance) => window.__spoken.push(utterance.text);
+    synth.cancel = () => {};
+    if (!window.speechSynthesis) Object.defineProperty(window, "speechSynthesis", { value: synth });
+  });
+  // 枠を1つ進めて、そのあいだに読んだ文だけを返す（ホームへ入ったときの案内の
+  // 声など、ほかの読み上げは数えない）。
+  const stepAndHear = async () => {
+    const before = await page.evaluate(() => window.__spoken.length);
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(120);
+    return page.evaluate((from) => ({
+      said: window.__spoken.slice(from),
+      focused: document.querySelector("#gameTileGrid .scan-focus")?.getAttribute("aria-label") || null,
+    }), before);
+  };
+
+  // 既定（なし）では、枠が動いても読まない。
+  await page.reload();
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  const quiet = await stepAndHear();
+  assert(quiet.said.length === 0, `With the default setting the scan must stay silent, but it said ${JSON.stringify(quiet.said)}`);
+
+  // 「名前を読む」にすると、動いた先の名前を読む。
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    saved.settings = { ...(saved.settings || {}), scanFeedback: "speak", speechEnabled: true, autoScan: false };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, storageKey);
+  await page.reload();
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  for (let hop = 0; hop < 2; hop += 1) {
+    const heard = await stepAndHear();
+    assert(heard.focused, "Stepping the scan must focus a home item");
+    assert(
+      heard.said.at(-1) === heard.focused,
+      `Moving the scan frame must speak the focused item's name ("${heard.focused}"), got ${JSON.stringify(heard.said)}`
+    );
+  }
+}
+
+/**
  * Regression check for the on-device gap found 2026-07-04 (basic-design.md
  * §3.2): once a switch user (or a supporter) moved from home into the
  * supporter's world (any tab), there was no way back to the user's world
@@ -1078,7 +1230,7 @@ async function checkHomeReturnFromTabs(page) {
   // switchView("home") calls scan.restartIfNeeded(); with the default
   // autoScan=true (state.js) scanning must actually resume against home's
   // tiles, not stay stale/stopped from whatever the settings view left it in.
-  await waitForText(page, "#scanState", "走査中");
+  await waitForText(page, "#scanState", "枠が動いています");
 }
 
 /**
@@ -1104,10 +1256,10 @@ async function checkAnyKeyWhileScanning(page) {
   await waitForClass(page, "#homeView", "is-active");
 
   // 走査を動かす。
-  if (((await page.locator("#scanState").textContent()) || "").trim() !== "走査中") {
+  if (((await page.locator("#scanState").textContent()) || "").trim() !== "枠が動いています") {
     await page.locator("#toggleScan").click();
   }
-  await waitForText(page, "#scanState", "走査中");
+  await waitForText(page, "#scanState", "枠が動いています");
   await page.waitForFunction(() => document.querySelectorAll(".scan-focus").length > 0);
   await page.waitForTimeout(200);
 
@@ -1151,15 +1303,18 @@ async function checkKeyboardAndSwitchInput(page) {
   // must be a no-op rather than triggering a hidden training action.
   // 「走査停止」は利用者の画面には出さない（docs/design-renewal-2026-09-25.md
   // §3.5）ので、ボタンの配線そのものを呼ぶ。
-  if ((await page.locator("#scanState").textContent())?.trim() === "走査中") {
+  if ((await page.locator("#scanState").textContent())?.trim() === "枠が動いています") {
     await page.locator("#toggleScan").evaluate((button) => button.click());
   }
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   const firstPhrase = page.locator("#phraseGrid button").first();
   await firstPhrase.focus();
   await page.keyboard.press("Enter");
-  await page.waitForFunction(() => document.querySelector("#currentPhrase")?.textContent?.trim() !== "まだ選択されていません");
+  await page.waitForFunction(
+    (empty) => document.querySelector("#currentPhrase")?.textContent?.trim() !== empty,
+    t("learn.nothingYet")
+  );
 
   const logsBeforeUnfocusedSpace = await readLogCount(page);
   await page.evaluate(() => document.activeElement?.blur());
@@ -1174,7 +1329,7 @@ async function checkKeyboardAndSwitchInput(page) {
   // it can activate the highlighted target without ever becoming a dead slot.
   assert(!(await page.locator("#primarySwitch").getAttribute("data-scan")), "Primary switch must not scan itself");
   await page.locator("#toggleScan").evaluate((button) => button.click());
-  await waitForText(page, "#scanState", "走査中");
+  await waitForText(page, "#scanState", "枠が動いています");
   // toggleScan の pointerdown と物理入力代替の pointerdown は別入力。
   // Playwrightは人間より速いため、150msの入力dedupe窓を越えてから押す。
   await page.waitForTimeout(200);
@@ -1473,7 +1628,7 @@ async function checkSupporterMenuStaysOutOfTheScanRing(page) {
     ring.length === 0,
     `Supporter menu must not scan at all, found: ${ring.map((entry) => entry.label).join(", ")}`
   );
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   // 自動走査のタイマーも復活しない。手動の「走査開始」も効かない。
   await page.locator("#toggleScan").evaluate((target) => target.click());
@@ -1482,7 +1637,7 @@ async function checkSupporterMenuStaysOutOfTheScanRing(page) {
     (await page.locator(".scan-focus").count()) === 0,
     "No app scan focus may appear in the supporter menu"
   );
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   // 効かない操作子は無効として見せる（押しても動かない理由が支援者に分かる）。
   assert(await page.locator("#toggleScan").isDisabled(), "The dock scan toggle is dead here, so it must be disabled");
@@ -1530,7 +1685,7 @@ async function checkIpadSwitchControlMode(page, project) {
   await waitForClass(page, "#settings", "is-active");
   // 支援者メニューへ入った時点で自前走査は止まる（scan.js の
   // isSupporterMenu()）。委譲を用意する画面そのものが、もう走っていない。
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   const mode = page.locator("#switchControlMode");
   assert(!(await mode.isChecked()), "Switch Control mode must be explicit and default off");
@@ -1542,13 +1697,13 @@ async function checkIpadSwitchControlMode(page, project) {
   // Safe hand-off order: supporter stops app scanning, then enables iPad
   // Switch Control outside the app, then activates this native checkbox.
   await page.locator("#autoScan").click();
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
   assert((await page.locator(".scan-focus").count()) === 0, "Stopping app scan must clear its yellow focus");
   await mode.click();
   await page.waitForFunction(() => document.body.classList.contains("switch-control-mode"));
   await page.locator("#switchControlModeNotice").waitFor({ state: "visible" });
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
 
   assert(await page.locator("#autoScan").isDisabled(), "App auto scan must be locked out in iPad mode");
   assert(!(await page.locator("#autoScan").isChecked()), "App auto scan must be forced off");
@@ -1570,7 +1725,7 @@ async function checkIpadSwitchControlMode(page, project) {
   assert(!(await page.locator("#autoScan").isChecked()), "Reload must preserve app scan off");
   assert(await page.locator("#autoScan").isDisabled(), "Reloaded delegation must keep app scan locked");
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
 
   // 手動ボタン・右矢印・自動タイマーのどの入口からも黄色い枠を復活させない。
   await page.evaluate(() => {
@@ -1579,7 +1734,7 @@ async function checkIpadSwitchControlMode(page, project) {
   });
   await page.waitForTimeout(1_900);
   assert((await page.locator(".scan-focus").count()) === 0, "No app scan focus may survive in iPad mode");
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
 
   // Reloaded start -> home also uses click-only input. Compare the exact home
   // choice order at full width and a 507px Split View approximation.
@@ -1588,7 +1743,7 @@ async function checkIpadSwitchControlMode(page, project) {
   });
   await waitForClass(page, "#homeView", "is-active");
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
   const fullLayout = await collectActivityLayout(page, { checkScrollReach: true });
   const fullWidthTitles = fullLayout.titles;
   assert(
@@ -1596,8 +1751,8 @@ async function checkIpadSwitchControlMode(page, project) {
     `Delegated scanning must not hide choices behind a pager: ${JSON.stringify(fullLayout.pages)}`
   );
   assert(
-    fullWidthTitles.length === 8,
-    "Expected all eight home choices, got " + fullWidthTitles.join(", ")
+    fullWidthTitles.length === 9,
+    "Expected all nine home choices, got " + fullWidthTitles.join(", ")
   );
 
   await page.setViewportSize({ width: 507, height: 1194 });
@@ -1639,7 +1794,7 @@ async function checkIpadSwitchControlMode(page, project) {
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
   await page.waitForTimeout(400);
   assert((await page.locator(".scan-focus").count()) === 0, "Game return must not revive app scan");
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
 
   // OS項目走査が送るclick-only入力相当で支援者画面へ戻れる。
   await page.locator("#homeSupporterMenu").evaluate((target) => {
@@ -1672,7 +1827,7 @@ async function checkIpadSwitchControlMode(page, project) {
   await page.locator("#autoScan").click();
   assert(await page.locator("#autoScan").isChecked(), "Explicit ON must take effect");
   // 設定画面では走査しないので、ここではまだ止まったまま。
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   // Safe operating instructions stop app scanning first, but the product
   // invariant must also survive an incorrect order. Exercise the actual UI
@@ -1680,13 +1835,13 @@ async function checkIpadSwitchControlMode(page, project) {
   // a no-op. 走っている状態は支援者メニューでは作れないので、ホームで作る。
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForText(page, "#scanState", "走査中");
+  await waitForText(page, "#scanState", "枠が動いています");
   await page.waitForFunction(() => document.querySelectorAll(".scan-focus").length > 0);
 
   // 支援者メニューへ入るだけで、走っていた自前走査は止まり枠も消える。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
   assert(
     (await page.locator(".scan-focus").count()) === 0,
     "Entering the supporter menu must clear the yellow focus"
@@ -1700,7 +1855,7 @@ async function checkIpadSwitchControlMode(page, project) {
   assert(!(await page.locator("#autoScan").isChecked()), "Mode activation must force a running app scan off");
   assert(await page.locator("#autoScan").isDisabled(), "Forced delegation must lock the app scan control");
   assert((await page.locator(".scan-focus").count()) === 0, "Forced delegation must leave no yellow focus");
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
   const forcedSaved = await page.evaluate(
     (key) => JSON.parse(localStorage.getItem(key)).settings,
     storageKey
@@ -1717,7 +1872,7 @@ async function checkSlotL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
 
   await openActivity(page, t("tile.slot-corner.title"));
   await waitForActivityChoices(page, 3);
@@ -1728,6 +1883,7 @@ async function checkSlotL1GameFlow(page) {
   await page.locator(".tabbar").waitFor({ state: "hidden" });
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
   await page.locator(".game-ready").waitFor({ state: "visible" });
+  await assertNoSplitRuby(page, "slot-l1 how-to");
 
   await page.locator("#gameStage").click();
   await page.locator(".game-ready").waitFor({ state: "detached" });
@@ -1819,7 +1975,7 @@ async function checkSlotSequentialFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
 
   await openActivity(page, t("tile.slot-corner.title"));
   await waitForActivityChoices(page, 3);
@@ -1963,7 +2119,7 @@ async function checkRhythmL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
 
   await openActivity(page, "リズム");
   await waitForActivityChoices(page, 4);
@@ -2806,7 +2962,7 @@ async function checkScanFocusStaysVisible(page, project) {
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
 
   const tiles = await page.locator("#gameTileGrid .game-tile").count();
   for (let index = 0; index < tiles; index += 1) {
@@ -3239,9 +3395,9 @@ async function checkFeatureTabs(page) {
   // 直に click すると、2ページ目に居る項目に届かない——利用者と同じく
   // 「つぎのページ」を辿ってから押す。
   const activityTargets = [
-    ["matching", "マッチング"],
-    ["voca", "VOCA"],
-    ["letters", "文字学習"],
+    ["matching", t("tile.matching.title")],
+    ["voca", t("tile.voca.title")],
+    ["letters", t("tile.letters.title")],
   ];
   for (const [target, name] of activityTargets) {
     await openActivity(page, "学ぶ・伝える");
@@ -3363,7 +3519,7 @@ async function checkResearcherModeTabsNoRegression(page) {
 
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 7);
   // 1ページだけ見て判定すると、ページ分割の入る画面では「2ページ目に居る」
   // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
   const lobbyTitles = await collectActivityTitles(page);
@@ -3372,8 +3528,8 @@ async function checkResearcherModeTabsNoRegression(page) {
     `Visual-task setting must remove the claw corner from the lobby (saw: ${lobbyTitles.join(", ")})`
   );
   assert(
-    lobbyTitles.length === 6,
-    `Expected six remaining activities after hiding the claw, got ${lobbyTitles.length}`
+    lobbyTitles.length === 7,
+    `Expected seven remaining activities after hiding the claw, got ${lobbyTitles.length}`
   );
 }
 
@@ -3608,6 +3764,7 @@ async function checkLayoutInvariants(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await inspect("home");
+  await assertNoSplitRuby(page, "home");
 
   // 選択肢の名前が読める幅で置かれていること。
   //
@@ -3723,11 +3880,11 @@ async function checkIpadAccessibilityLayout(page, project) {
 
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 8);
+  await waitForActivityChoices(page, 9);
   const homeLayout = await collectActivityLayout(page, { checkViewport: true });
   assert(
-    homeLayout.titles.length === 8,
-    "Expected all eight accessible home choices, got " + homeLayout.titles.join(", ")
+    homeLayout.titles.length === 9,
+    "Expected all nine accessible home choices, got " + homeLayout.titles.join(", ")
   );
 
   // 設定が実際に画面へ効いていること。チェックボックスが入っていても
@@ -4085,6 +4242,30 @@ async function waitForClass(page, selector, className) {
     { selector, className },
     { timeout: 5_000 }
   );
+}
+
+/**
+ * ふりがな（ruby）が flex / grid の子としてばらけていないこと。
+ *
+ * flex の中に ruby と字がじかに並ぶと、1つずつが別の箱になり、gap のぶん
+ * 「上 の 目標 の 絵 を 見 ます」と字のあいだが空く（折り返しも語の途中で起きる）。
+ * 総ルビ（i18n.js）にしてから、「やりかた」の手順とけっかのボタンで起きていた。
+ */
+async function assertNoSplitRuby(page, where) {
+  const split = await page.evaluate(() => {
+    const found = [];
+    document.querySelectorAll("ruby").forEach((ruby) => {
+      const parent = ruby.parentElement;
+      if (!parent || parent.getClientRects().length === 0) return;
+      if (!/flex|grid/.test(getComputedStyle(parent).display)) return;
+      const others = [...parent.childNodes].filter(
+        (node) => node !== ruby && (node.nodeType === 1 ? node.tagName !== "RT" : node.textContent.trim())
+      );
+      if (others.length) found.push(parent.id || parent.className || parent.tagName);
+    });
+    return [...new Set(found)];
+  });
+  assert(split.length === 0, `${where}: furigana is split apart by a flex/grid parent — ${split.join(", ")}`);
 }
 
 async function readLogCount(page) {

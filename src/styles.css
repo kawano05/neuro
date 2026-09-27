@@ -464,6 +464,16 @@ h3 {
   display: block;
 }
 
+.settings-guide-print {
+  margin: 0;
+  padding: 0 20px 18px 44px;
+  font-weight: 700;
+}
+
+.settings-guide-print[hidden] {
+  display: none;
+}
+
 body.high-contrast .settings-guide {
   border-color: #000000;
   background: #ffffff;
@@ -7366,12 +7376,15 @@ body.high-contrast .fishing-water {
   pointer-events: none;
 }
 
+/* 真ん中のコマの上下の端。1コマの高さ（--slot-cell-size）から引くので、
+   リールの大きさ（スマホの 82px、れんしゅうの大きいリール）に付いてくる。
+   7px は線の太さ。 */
 .slot-stop-line.is-top {
-  top: calc(50% - 47px);
+  top: calc(50% - var(--slot-cell-size) / 2);
 }
 
 .slot-stop-line.is-bottom {
-  top: calc(50% + 40px);
+  top: calc(50% + var(--slot-cell-size) / 2 - 7px);
 }
 
 .slot-reel.is-active .slot-stop-line {
@@ -7538,14 +7551,6 @@ body.high-contrast .slot-symbol {
   .slot-reel-window {
     --slot-cell-size: 82px;
     min-width: 0;
-  }
-
-  .slot-stop-line.is-top {
-    top: calc(50% - 41px);
-  }
-
-  .slot-stop-line.is-bottom {
-    top: calc(50% + 34px);
   }
 
   .slot-reel .slot-symbol {
