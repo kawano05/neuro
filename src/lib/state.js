@@ -29,9 +29,44 @@ import { READINESS_STATES } from "./readinessCheck.js";
 import { SELECTABLE_TEXT_MODES, TEXT_MODES } from "./i18n.js";
 import { sanitizeSlotSession } from "./games/slotState.js";
 
-/** 「おすと でてくる」の背景と音の選択肢（settings.popBackground / popSound）。 */
-export const POP_BACKGROUNDS = new Set(["dark", "light"]);
-export const POP_SOUNDS = new Set(["instrument", "pop", "none"]);
+/**
+ * はじめの遊び（失敗の無い遊び）の、遊びごとの見え方と音（settings.playPrefs）。
+ *
+ *   background … "dark"（真っ暗な画面から出てくる）| "light"
+ *   sound      … "instrument"（楽器の音）| "pop"（明るい効果音）
+ *                | "boom"（びっくりする音。強いので既定にはしない）| "none"
+ *   cheer      … できたときに拍手と「やったー」を出すか
+ *
+ * 音は遊びごとに選べるようにする。打ち合わせで「強すぎる音ばかりだと発作を
+ * 起こす人もいる。楽器の音からびっくりする音まで、ゲームによって選べると
+ * いい」と言われた（docs/design-renewal-2026-09-25.md §1.7）。
+ * これらの遊びは測定の課題ではない（taskType なし）ので、記録の条件には入れない。
+ */
+export const PLAY_BACKGROUNDS = new Set(["dark", "light"]);
+export const PLAY_SOUNDS = new Set(["instrument", "pop", "boom", "none"]);
+export const DEFAULT_PLAY_PREFS = {
+  "color-legacy": { background: "dark", sound: "instrument", cheer: true },
+  balloon: { background: "light", sound: "pop", cheer: true },
+  coloring: { background: "light", sound: "instrument", cheer: true },
+};
+
+/** 遊びごとの設定を、知っている遊び・知っている値だけに正規化する。 */
+function sanitizePlayPrefs(candidate) {
+  const source = candidate && typeof candidate === "object" ? candidate : {};
+  return Object.fromEntries(
+    Object.entries(DEFAULT_PLAY_PREFS).map(([gameId, defaults]) => {
+      const entry = source[gameId] && typeof source[gameId] === "object" ? source[gameId] : {};
+      return [
+        gameId,
+        {
+          background: enumOr(entry.background, PLAY_BACKGROUNDS, defaults.background),
+          sound: enumOr(entry.sound, PLAY_SOUNDS, defaults.sound),
+          cheer: booleanOr(entry.cheer, defaults.cheer),
+        },
+      ];
+    })
+  );
+}
 
 /**
  * 旧保存キー（P0-0 移行元、detailed-design.md §9.5）。
@@ -91,15 +126,9 @@ export const defaultState = {
     // 分からない言葉・余計なボタンだった（docs/design-renewal-2026-09-25.md §3.5）。
     // NeuroNode やキーボードのスイッチは、これが無くても使える。
     showScreenSwitch: false,
-    // 「おすと でてくる」の見え方と音（ゲームの中の「この遊びの設定」で変える）。
-    // この遊びは測定の課題ではない（taskType なし）ので、記録の条件には入れない。
-    //   popBackground … "dark"（真っ暗な画面から出てくる）| "light"
-    //   popSound      … "instrument"（楽器の音）| "pop"（明るい効果音）| "none"
-    //   popCheer      … できたときに「やったー」と言うか
-    // 強い音ばかりだと発作を起こす人もいる、と言われたので既定は楽器の音。
-    popBackground: "dark",
-    popSound: "instrument",
-    popCheer: true,
+    // はじめの遊びの、遊びごとの見え方と音（ゲームの中の「この遊びの設定」で
+    // 変える）。中身と理由は上の DEFAULT_PLAY_PREFS。
+    playPrefs: JSON.parse(JSON.stringify(DEFAULT_PLAY_PREFS)),
     // 既定OFF。ONで操作訓練/効果測定/研究タブを表示する（P0-0, detailed-design.md §0.2）。
     researcherMode: false,
     // P0-2（ゲーム系設定、detailed-design.md §9.1）。judgmentWindowMs は判定窓の
@@ -1201,9 +1230,7 @@ export function sanitizeState(candidate) {
         fallback.settings.hideVisualTasks
       ),
       showScreenSwitch: booleanOr(settings.showScreenSwitch, fallback.settings.showScreenSwitch),
-      popBackground: enumOr(settings.popBackground, POP_BACKGROUNDS, fallback.settings.popBackground),
-      popSound: enumOr(settings.popSound, POP_SOUNDS, fallback.settings.popSound),
-      popCheer: booleanOr(settings.popCheer, fallback.settings.popCheer),
+      playPrefs: sanitizePlayPrefs(settings.playPrefs),
       researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),
       judgmentWindowMs: numberInRange(
         settings.judgmentWindowMs,

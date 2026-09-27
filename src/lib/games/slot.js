@@ -383,7 +383,7 @@ export function createSlotGame(gameId) {
 
       stageEl.classList.add("slot-stage");
       stageEl.innerHTML = `
-        <section class="slot-task" data-game-id="${gameId}">
+        <section class="slot-task" data-game-id="${gameId}" data-difficulty-mode="${config.difficultyMode}">
           <div class="slot-target" data-slot-target></div>
           <p class="slot-status" data-slot-status aria-live="polite"></p>
           <div class="slot-reels is-${config.reelCount}-reel" data-slot-reels></div>

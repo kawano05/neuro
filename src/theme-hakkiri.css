@@ -434,31 +434,14 @@ body.user-world .hk-tile[data-hk-slot="hero"] .scan-order {
   font-size: 1.4rem;
 }
 
-/* 「べつの遊び」（まなぶ・つたえる）は横長の帯。遊びの段とは別物なので、
-   番号を出さず、枠を破線にする。 */
-body.user-world .hk-tile[data-hk-slot="wide"] {
-  flex-direction: row;
+/* 「べつの遊び」（まなぶ・つたえる）は難しさの段に入らないので、枠を破線にして
+   分ける（views/home.js が data-hk-kind="other" を付ける）。番号も出さない。 */
+body.user-world .hk-tile[data-hk-kind="other"] {
   border-style: dashed;
 }
 
-body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-art {
-  width: clamp(120px, 18%, 190px);
-  flex: 0 0 auto;
-}
-
-body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-band {
-  flex: 1 1 auto;
-  justify-content: flex-start;
-  gap: 16px;
-}
-
-/* 札は帯の中へ移してある（views/home.js）。番号は出さない。 */
-body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-tags {
+body.user-world .hk-tile[data-hk-kind="other"] .scan-order {
   display: none;
-}
-
-body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-band {
-  padding: 8px 22px;
 }
 
 /* 遊びではない項目（戻る・つぎのページ）は、白地の小さいボタン。
@@ -518,25 +501,21 @@ body.user-world .game-tile.scan-focus {
    ここだけ変えると、先読みのページ分けと並べ方が食い違う。 */
 
 @media (min-width: 700px) {
-  /* ロビー: 1番が左上に大きく、5番が右下。いちばん下に「べつの遊び」。 */
+  /* ロビー: 1番（いちばん簡単）が左上に大きく、そこから右・下へ順に難しくなり、
+     右下が「べつの遊び」。3列×3段に 1番（2段ぶん）＋7つが入る。 */
   body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] {
     display: grid;
-    min-height: 340px;
+    min-height: 360px;
     flex: 1 1 auto;
     grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-auto-rows: minmax(0, 1fr);
     grid-auto-flow: row dense;
-    gap: 16px;
+    gap: 14px;
   }
 
   body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="hero"] {
     grid-column: 1;
     grid-row: 1 / span 2;
-  }
-
-  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="wide"] {
-    min-height: 76px;
-    grid-column: 1 / -1;
   }
 
   /* 縦向きのタブレット（iPad 縦 834x1194 など）: 3列だと1枚が細長くなり、
@@ -545,12 +524,36 @@ body.user-world .game-tile.scan-focus {
   @media (orientation: portrait) {
     body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
     }
 
-    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="hero"] {
+    /* 行の数は並ぶ数で決まる（1番＋2つずつの段＋べつの遊び）。べつの遊びの段は
+       低く、1番の段は少し高く。data-count は views/home.js が入れる。 */
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="8"] {
+      grid-template-rows: minmax(0, 1.3fr) repeat(3, minmax(0, 1fr)) auto;
+    }
+
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"][data-count="6"] {
+      grid-template-rows: minmax(0, 1.3fr) repeat(2, minmax(0, 1fr)) auto;
+    }
+
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="hero"],
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-kind="other"] {
       grid-column: 1 / -1;
       grid-row: auto;
+    }
+
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-kind="other"] {
+      min-height: 84px;
+      flex-direction: row;
+    }
+
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-kind="other"] .hk-tile-art {
+      width: clamp(120px, 22%, 190px);
+      flex: 0 0 auto;
+    }
+
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-kind="other"] .hk-tile-band {
+      flex: 1 1 auto;
     }
   }
 
@@ -607,21 +610,22 @@ body.user-world .game-tile.scan-focus {
   /* 高さは画面の高さに合わせる。余っている縦長の画面では絵を大きく、
      詰まっている画面では小さく（それでも入らなければ実測でページに分かれる）。 */
   body.user-world #gameTileGrid[data-paged="false"] .hk-tile {
-    min-height: clamp(112px, 15vh, 170px);
+    min-height: clamp(96px, 13vh, 170px);
   }
 
   body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-slot="hero"],
-  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-slot="wide"],
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-kind="other"],
   body.user-world #gameTileGrid[data-paged="false"] .game-tile:not(.hk-tile) {
     grid-column: 1 / -1;
   }
 
   body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-slot="hero"] {
-    min-height: clamp(140px, 18vh, 210px);
+    min-height: clamp(120px, 16vh, 210px);
   }
 
-  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-slot="wide"] {
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-kind="other"] {
     min-height: 64px;
+    flex-direction: row;
   }
 
   body.user-world .hk-tile .hk-tile-band {
@@ -685,18 +689,26 @@ body.user-world .game-tile.scan-focus {
     font-size: 0.8rem;
   }
 
-  body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-art {
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-kind="other"] .hk-tile-art {
     width: 84px;
+    flex: 0 0 auto;
   }
 
-  body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-band {
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-kind="other"] .hk-tile-band {
+    flex: 1 1 auto;
     padding: 6px 12px;
-    gap: 8px;
   }
 
   /* 2列の小さいタイルでは、名前の幅を取る（実測 108px で「リールを 止め／る」と
      折り返していた）。矢印は飾りなので外す——タイル全体がボタン。 */
-  body.user-world #gameTileGrid[data-paged="false"] .hk-tile:not([data-hk-slot]) .hk-tile-go {
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile:not([data-hk-slot]):not([data-hk-kind]) .hk-tile-go {
+    display: none;
+  }
+
+  /* 2列の小さいタイルと「べつの遊び」の行では、札が絵を隠し、名前にまで重なる
+     （絵の高さは 44px、行の絵の幅は 84px しかない）。ページに分けたときと同じく
+     番号だけ残す。札のことばは aria-describedby で読み上げには乗ったまま。 */
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile:not([data-hk-slot="hero"]) .hk-tile-badge {
     display: none;
   }
 
@@ -788,6 +800,46 @@ body.game-mode .game-actions .game-exit {
   margin-right: 8px;
   font-family: "Font Awesome 7 Free";
   font-weight: 900;
+}
+
+/* 暗いボタンの上では、ふりがなの既定の色（--muted）が沈んで読めない。 */
+.game-settings rt {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* スマホの幅では「この遊びの設定」を絵だけのボタンにする。文字のままだと
+   左上の遊びの名前に重なっていた（390px で実測）。文字は消さずに大きさを
+   0 にするので、読み上げの名前には残る。 */
+@media (max-width: 560px) {
+  .game-settings {
+    width: 48px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .game-settings rt {
+    font-size: 0;
+  }
+
+  .game-settings::before {
+    margin-right: 0;
+    font-size: 1.15rem;
+  }
+
+  body.game-mode.user-world .game-progress {
+    max-width: calc(100vw - 212px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* リールの目標の札が、上の帯（進みぐあい・設定・おわる）の裏に隠れていた
+     （390px で実測。札は画面の幅いっぱいに広がるので、左右の帯と重なる）。
+     帯の高さぶん下げる。入りきらないぶんは .slot-stage がスクロールする。 */
+  body.game-mode.user-world .slot-task {
+    padding-top: 76px;
+  }
 }
 
 body.user-world .game-exit {
@@ -900,10 +952,13 @@ body.user-world .game-exit::before {
   gap: 10px;
 }
 
+/* 文字の長さに合わせて広がり、入りきらなければ次の段へ回る（「びっくりする音」を
+   2行に折らない）。 */
 .gs-option {
   min-height: 54px;
   padding: 0 14px;
-  flex: 1 1 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
   border: 2px solid #1a1a1a;
   border-radius: 12px;
   background: #ffffff;
@@ -1106,6 +1161,252 @@ body.user-world .game-stage-content.is-ready {
 }
 
 /* ---------------------------------------------------------------------
+   はじめの遊び「ふうせん わり」（games/balloon.js）
+   --------------------------------------------------------------------- */
+
+.game-stage-content.module-balloon {
+  padding: 96px 24px 40px;
+  background: linear-gradient(180deg, #0b1a33 0%, #12305e 100%);
+  color: #ffffff;
+}
+
+.game-stage-content.module-balloon.is-light {
+  background: linear-gradient(180deg, #bfe4ff 0%, #eaf7ff 100%);
+  color: #1a1a1a;
+}
+
+.balloon-stage {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: 12px;
+}
+
+.balloon-word,
+.coloring-word {
+  min-height: 1.4em;
+  font-family: var(--font-round);
+  font-size: clamp(2rem, 5vw, 2.7rem);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.balloon-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2vw, 28px);
+}
+
+/* 浮かんでゆれる動きはふうせんの枠に、割れる動きは中の絵に付ける
+   （同じ要素に2つの transform を付けると、片方が消える）。 */
+.balloon {
+  position: relative;
+  display: block;
+  /* 横は5つが並ぶ幅、縦は画面の高さの4分の1まで（ノートPCの横長でもはみ出さない）。 */
+  width: clamp(56px, min(15.5vw, 25vh), 210px);
+  animation: balloon-float 3.2s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -0.55s);
+}
+
+.balloon-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.balloon-svg .balloon-body {
+  fill: var(--balloon);
+  stroke: rgba(0, 0, 0, 0.18);
+  stroke-width: 2px;
+}
+
+.balloon.is-popping .balloon-svg {
+  animation: balloon-pop 0.36s ease-out forwards;
+}
+
+/* 割れたあとには、そのふうせんの色の「パン」の印を残す。いくつ割ったかが
+   そのまま見え、並びも空かない（残りのふうせんが横へずれない）。印は
+   結果の画面と同じ形。印はゆれずに1列にそろえる。 */
+.balloon.is-popped {
+  animation: none;
+}
+
+.balloon.is-popped .balloon-svg {
+  visibility: hidden;
+}
+
+.balloon-mark {
+  position: absolute;
+  top: 6%;
+  left: 10%;
+  width: 80%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.balloon-mark svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.balloon.is-popped .balloon-mark {
+  opacity: 1;
+  animation: hk-pop 0.4s cubic-bezier(0.34, 1.36, 0.64, 1) both;
+}
+
+.balloon-burst {
+  position: absolute;
+  top: 33%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.balloon-burst i {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--balloon);
+  /* 暗い背景でも紫や青の紙ふぶきが消えないよう、白い縁を付ける。 */
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+  opacity: 0;
+}
+
+.balloon.is-popping .balloon-burst i {
+  animation: balloon-confetti 0.55s ease-out forwards;
+}
+
+/* スマホの縦長で5つを1列に並べると、ふうせんが 60px まで小さくなる。
+   3つと2つの2段にして、ひとつずつを大きく見せる（縦は余っている）。 */
+@media (max-width: 560px) {
+  .balloon-row {
+    max-width: 360px;
+    flex-wrap: wrap;
+    row-gap: 16px;
+  }
+
+  .balloon {
+    width: min(27vw, 108px);
+  }
+}
+
+@keyframes balloon-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes balloon-pop {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  45% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+}
+
+@keyframes balloon-confetti {
+  0% {
+    opacity: 1;
+    transform: rotate(calc(var(--piece) * 45deg)) translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--piece) * 45deg)) translateY(-120px);
+  }
+}
+
+/* ---------------------------------------------------------------------
+   はじめの遊び「ぬりえ」（games/coloring.js）
+   --------------------------------------------------------------------- */
+
+.game-stage-content.module-coloring {
+  padding: 96px 24px 44px;
+  background: #0b1a33;
+  color: #ffffff;
+}
+
+.game-stage-content.module-coloring.is-light {
+  background: #fff6e0;
+  color: #1a1a1a;
+}
+
+.coloring-stage {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.coloring-card {
+  display: grid;
+  width: min(540px, 82vw);
+  max-height: 58vh;
+  aspect-ratio: 300 / 240;
+  padding: 12px;
+  border: 3px solid #1a1a1a;
+  border-radius: 24px;
+  background: #ffffff;
+  place-items: center;
+}
+
+.coloring-art {
+  width: 100%;
+  height: 100%;
+}
+
+/* まだ塗っていない場所は白地に黒い線（ぬりえの線画）。塗ると、絵の本来の色へ
+   ゆっくり変わる（色は SVG の fill 属性。CSS の上書きが外れると属性の色になる）。 */
+.coloring-art .cl-part {
+  transition:
+    fill 0.45s ease,
+    stroke 0.45s ease,
+    stroke-width 0.45s ease;
+}
+
+.coloring-art .cl-part:not(.is-colored) {
+  fill: #ffffff;
+  stroke: #1a1a1a;
+  stroke-width: 3px;
+}
+
+.coloring-art .cl-line:not(.is-colored) {
+  fill: none;
+}
+
+.module-coloring.is-complete .coloring-card {
+  animation: hk-pop 0.4s cubic-bezier(0.34, 1.36, 0.64, 1) both;
+}
+
+/* ---------------------------------------------------------------------
    けっか
    --------------------------------------------------------------------- */
 
@@ -1178,6 +1479,27 @@ body.user-world .hk-result .completion-result-summary {
 .hk-result-item svg {
   width: 84%;
   height: auto;
+}
+
+.hk-result-item.is-burst svg {
+  width: 70%;
+}
+
+/* ぬりえのけっか: できあがった絵を1枚、大きく。 */
+.hk-result-picture {
+  display: grid;
+  width: clamp(200px, 30vw, 300px);
+  aspect-ratio: 300 / 240;
+  padding: 8px;
+  border: 3px solid #1a1a1a;
+  border-radius: 22px;
+  background: #d9f3ff;
+  place-items: center;
+}
+
+.hk-result-picture svg {
+  width: 100%;
+  height: 100%;
 }
 
 .hk-result-title {
@@ -1357,6 +1679,58 @@ body.result-mode.user-world #resultHome::before {
   }
 }
 
+/* リール: 下の「この6つの絵が動きます」を、れんしゅうの回では出さない。
+   打ち合わせで「リールの周りの余計なものは要らない」と言われた（§1.5）。
+   しかもこの一覧は生成画像で、リールに回っている絵とは描き方も色も違う
+   （丸が水色と黄色、など）。目標は上の札に、回る絵はリールに出ている。
+   そくていの回は画面を変えない（§3.3）。リールそのもの（大きさ・速さ）は
+   刺激なので、ここでは触らない（§6）。 */
+.slot-task:not([data-difficulty-mode="measure"]) .slot-symbol-guide {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------
+   背の低い画面（スマホの横向き 844x390 など）のはじめの遊び
+   上の帯（96px）と下の余白を取ったまま絵と言葉を縦に積むと、入りきらずに
+   言葉が画面の下へはみ出し、進みぐあいの点とも重なっていた（844x390 で実測:
+   絵 195px＋言葉 73px に対して、使える高さは 222px）。余白と絵と字を縮める。
+   --------------------------------------------------------------------- */
+@media (max-height: 520px) {
+  .game-stage-content.module-pop {
+    padding: 64px 24px 48px;
+  }
+
+  .pop-prompt,
+  .pop-figure,
+  .coloring-stage {
+    gap: 8px;
+  }
+
+  .pop-figure svg {
+    max-height: 42vh;
+  }
+
+  .pop-word,
+  .balloon-word,
+  .coloring-word {
+    font-size: clamp(1.5rem, 7vh, 2.2rem);
+  }
+
+  .pop-dots {
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .game-stage-content.module-balloon,
+  .game-stage-content.module-coloring {
+    padding-top: 72px;
+    padding-bottom: 16px;
+  }
+
+  .coloring-card {
+    max-height: 52vh;
+  }
+}
+
 /* プレビュー版だけの目印（src/main.js）。押せないので、下のタイルのタップを邪魔しない。 */
 .preview-badge {
   position: fixed;
@@ -1395,5 +1769,25 @@ body.result-mode.user-world #resultHome::before {
 
   .slot-cheer {
     display: none;
+  }
+
+  /* ふうせんは浮かばせず、割れたら動かずに消える。ぬりえは色がすぐ変わる。 */
+  .balloon,
+  .balloon.is-popping .balloon-svg,
+  .module-coloring.is-complete .coloring-card {
+    animation: none;
+  }
+
+  .balloon.is-popping .balloon-burst i {
+    animation: none;
+    opacity: 0;
+  }
+
+  .balloon.is-popped .balloon-mark {
+    animation: none;
+  }
+
+  .coloring-art .cl-part {
+    transition: none;
   }
 }

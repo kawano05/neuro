@@ -215,7 +215,6 @@ export function initNeuroNodeApp() {
     set(elements.startTitle, "start.srTitle", false);
     set(elements.startStageLabel, "start.begin");
     set(elements.startLead, "start.lead");
-    set(elements.homeOrderNote, "home.orderNote");
     set(elements.gameTitle, "game.srTitle", false);
     set(elements.gameExit, "game.exit");
     set(elements.gameSettings, "game.settings");

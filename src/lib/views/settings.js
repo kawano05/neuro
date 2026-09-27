@@ -182,7 +182,7 @@ export function initSettings(ctx) {
     if (!tab) return;
     tab.classList.toggle("is-measuring", measuring);
     // 印だけで意味を運ばない（色覚・読み上げ）。読み上げ名にも出す。
-    tab.setAttribute("aria-label", measuring ? "そくてい（いまは測定の回）" : "そくてい");
+    tab.setAttribute("aria-label", measuring ? "そくてい（研究・いまは測定の回）" : "そくてい（研究）");
   }
 
   /**
@@ -385,7 +385,7 @@ export function initSettings(ctx) {
    * （scan.js は [data-scan] を rect.width > 0 で絞るので、hidden の中は
    * 対象外になる）——「見えていないのに走査で止まる」を作らない。
    *
-   * どのタブを開いていたかは保存しない。設定を開くたび「そうさ」から
+   * どのタブを開いていたかは保存しない。設定を開くたび「スイッチ」から
    * 始まるほうが、いちばんよく使う面が毎回すぐ出る。
    */
   function showSettingsTab(name) {

@@ -8,6 +8,7 @@
 // 帯（band）の文字色は、帯の色とのコントラスト比 4.5 以上で選んだ:
 //   #005AFF / 白 5.4   #FF4B00 / 黒 5.2   #990099 / 白 7.5
 //   #804000 / 白 7.9   #4DC4FF / 黒 8.8   #03AF7A / 黒 6.1
+//   #FF8082 / 黒 7.2   #F6AA00 / 黒 8.8
 // （黒は #1A1A1A。赤橙と空色に白を載せると 3.4 / 2.0 で読めない）
 //
 // content.js のタイル定義（研究の taskType などを持つ純粋データ）とは分けて
@@ -17,6 +18,8 @@
 /** 遊びの系統ごとの色。子のタイル（コーナーの中）は親の色を継ぐ。 */
 const PALETTE = {
   pop: { band: "#005AFF", ink: "#FFFFFF", thumb: "#12305E" },
+  balloon: { band: "#FF8082", ink: "#1A1A1A", thumb: "#FFF3CC" },
+  coloring: { band: "#F6AA00", ink: "#1A1A1A", thumb: "#FFF6E0" },
   reel: { band: "#FF4B00", ink: "#1A1A1A", thumb: "#FFE5DA" },
   high: { band: "#990099", ink: "#FFFFFF", thumb: "#F6DDF6" },
   arm: { band: "#804000", ink: "#FFFFFF", thumb: "#F3E4D6" },
@@ -31,8 +34,13 @@ const PALETTE = {
  *   level   … 札（i18n の level.*）。null なら札を出さない
  */
 export const TILE_THEME = {
-  // ロビー（1画面に並ぶ5つ＋べつの遊び）。左上がいちばん簡単。
+  // ロビー（1画面に並ぶ7つ＋べつの遊び）。左上がいちばん簡単。
+  // はじめの3つ（失敗の無い遊び）は「かんたん」、その先頭の1番だけ
+  // 「はじめは ここから」。打ち合わせで「初級、初級、初級……と並んでいて、
+  // そこから中級・上級」という1画面の並びを言われた。
   "color-legacy": { palette: "pop", art: "pop", level: "first" },
+  balloon: { palette: "balloon", art: "balloon", level: "easy" },
+  coloring: { palette: "coloring", art: "coloring", level: "easy" },
   "slot-corner": { palette: "reel", art: "reel", level: "used" },
   gonogo: { palette: "high", art: "high", level: "used" },
   "crane-corner": { palette: "arm", art: "arm", level: "challenge" },

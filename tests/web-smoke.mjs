@@ -7,6 +7,7 @@ import { colorLegacyPreset, rhythmPresets, storageKey } from "../src/lib/content
 import { resolveTextMode, translate } from "../src/lib/i18n.js";
 import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
 import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLegacy.js";
+import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
 // 持つと、辞書を直したときにテストだけが古い文言を主張して落ちる——あるいは
@@ -68,6 +69,7 @@ const checks = [
   ["keeps the start press from falling through into a home activity", checkStartInputGuard],
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
   ["finishes color-legacy with progress, result, retry, and home", checkColorCompletionFlow],
+  ["plays the balloon and coloring games to the end, with live per-game settings", checkBeginnerGamesFlow],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
@@ -300,7 +302,7 @@ async function checkStartInputGuard(page) {
   await page.mouse.down();
   await page.mouse.up();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 8);
   await page.waitForTimeout(600);
   assert(
     await page.locator("#homeView").evaluate((view) => view.classList.contains("is-active")),
@@ -325,7 +327,7 @@ async function checkStartToHomeToGameFlow(page) {
   // logs a "switch" event, and advances to home (detailed-design.md §2.2).
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 8);
 
   // The color-legacy tile is enabled and first by order (content.js gameTiles).
   const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
@@ -732,7 +734,7 @@ async function checkStartToHomeToGameFlow(page) {
 async function checkColorCompletionFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 8);
   await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
   await waitForClass(page, "#gameView", "is-active");
 
@@ -854,6 +856,190 @@ async function checkColorCompletionFlow(page) {
   await page.locator("#resultHome").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
+}
+
+/**
+ * はじめの遊び「ふうせん わり」「ぬりえ」（docs/design-renewal-2026-09-25.md §1.4）。
+ *
+ * どちらも失敗が無く、5回で終わる。押すたびにちょうど1つ進むこと、5回で
+ * 結果へ行き6回目は数えないこと、研究用の記録（session）を作らないことを見る。
+ * あわせて「この遊びの設定」を通す: 開いているあいだの入力では進まない、
+ * 「びっくりする音」を選ぶとその場で注意が出る、背景はやり直さずに効く、
+ * 設定は遊びごとに保存されてほかの遊びには及ばない、閉じたらフォーカスは
+ * 遊びの面へ戻る（設定ボタンに残ると、次のひと押しでまた開いてしまう）。
+ */
+async function checkBeginnerGamesFlow(page) {
+  const presses = BEGINNER_TARGET_PRESSES;
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 8);
+
+  const plainOf = async (selector) =>
+    page.locator(selector).evaluate((element) => {
+      const clone = element.cloneNode(true);
+      clone.querySelectorAll("rt").forEach((reading) => reading.remove());
+      return clone.textContent.trim();
+    });
+  const savedState = () =>
+    page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}"), storageKey);
+  const option = (key, value) =>
+    page.locator(`.gs-option[data-gs-key="${key}"][data-gs-value='${JSON.stringify(value)}']`);
+
+  // --- ふうせん わり ---
+  await openActivity(page, t("tile.balloon.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  const balloonWord = "#gameStageContent.module-balloon .balloon-word";
+  await page.locator(balloonWord).waitFor({ state: "visible" });
+  await page.waitForTimeout(200);
+  const balloons = () =>
+    page.evaluate(() => ({
+      total: document.querySelectorAll(".balloon").length,
+      gone: document.querySelectorAll(".balloon.is-popping, .balloon.is-popped").length,
+      light: document.querySelector("#gameStageContent")?.classList.contains("is-light"),
+    }));
+  const fresh = await balloons();
+  assert(fresh.total === presses, `The balloon game must float ${presses} balloons, got ${fresh.total}`);
+  assert(fresh.gone === 0, "No balloon may be popped before the first press");
+  assert(fresh.light === true, "The balloon game must start on its own default (light) background");
+  assert((await plainOf(balloonWord)) === t("color.prompt"), "A new balloon session must invite the first press");
+
+  const logsBefore = await readLogCount(page);
+  await page.locator("#gameStage").click();
+  assert((await balloons()).gone === 1, "One press must pop exactly one balloon");
+  assert((await plainOf(balloonWord)) === t("balloon.pop"), "A popped balloon must say so");
+
+  await page.locator("#gameSettings").click();
+  await page.locator("#gameSettingsDialog").waitFor({ state: "visible" });
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(200);
+  assert((await balloons()).gone === 1, "A press while the game settings are open must not pop a balloon");
+  await option("playPrefs.balloon.sound", "boom").click();
+  const notes = await page.locator("#gameSettingsDialog .gs-note").allTextContents();
+  assert(
+    notes.some((note) => note.includes("びっくりする音")),
+    `Choosing the startling sound must warn the supporter on the spot, got ${JSON.stringify(notes)}`
+  );
+  await option("playPrefs.balloon.background", "dark").click();
+  await page.locator("#gameSettingsDialog .gs-apply").click();
+  await page.locator("#gameSettingsDialog").waitFor({ state: "hidden" });
+  const changed = await balloons();
+  assert(changed.light === false, "The background choice must apply without restarting the game");
+  assert(changed.gone === 1, "Changing the settings must keep the balloons already popped");
+  assert(
+    (await page.evaluate(() => document.activeElement?.id)) === "gameStage",
+    "Closing the game settings must hand focus back to the game, not to the settings button"
+  );
+  const prefs = (await savedState()).settings?.playPrefs;
+  assert(
+    prefs?.balloon?.background === "dark" && prefs?.balloon?.sound === "boom",
+    `The balloon settings must be saved for the balloon game, got ${JSON.stringify(prefs?.balloon)}`
+  );
+  assert(
+    prefs?.coloring?.background === "light" && prefs?.coloring?.sound === "instrument",
+    `Another game's settings must stay as they were, got ${JSON.stringify(prefs?.coloring)}`
+  );
+
+  for (let press = 2; press <= presses; press += 1) {
+    await page.waitForTimeout(170);
+    await page.locator("#gameStage").click();
+    assert((await balloons()).gone === press, `Press ${press} must pop balloon ${press}`);
+  }
+  assert(
+    (await plainOf(balloonWord)) === t("balloon.complete"),
+    "The last balloon must announce that every balloon is popped"
+  );
+  assert(
+    (await readLogCount(page)) === logsBefore + presses,
+    "A balloon session must log exactly one switch event per press"
+  );
+  // 最後のふうせんのあと、結果へ移るまでの間の入力は数えない。
+  await page.waitForTimeout(180);
+  await page.locator("#gameStage").dispatchEvent("click");
+  assert(
+    (await readLogCount(page)) === logsBefore + presses,
+    "The balloon game must ignore presses beyond the fixed goal"
+  );
+  await waitForClass(page, "#resultView", "is-active");
+  await page.locator(".completion-result").waitFor({ state: "visible" });
+  assert(
+    (await plainOf(".completion-result-summary")) === t("result.balloon.summary", { n: presses }),
+    "The balloon result must say how many balloons were popped"
+  );
+  assert(
+    (await page.locator(".hk-result-item.is-burst").count()) === presses,
+    "The balloon result must show one burst per balloon"
+  );
+  await page.locator("#resultHome").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 8);
+
+  // --- ぬりえ ---
+  await openActivity(page, t("tile.coloring.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  const coloringWord = "#gameStageContent.module-coloring .coloring-word";
+  await page.locator(coloringWord).waitFor({ state: "visible" });
+  await page.waitForTimeout(200);
+  // 絵は押す回数ぶんの「ぬる場所」に分かれている。場所の中の部品は、
+  // まとめて塗られる（半分だけ塗られた場所が無い）。
+  const picture = () =>
+    page.evaluate(() => {
+      const groups = new Map();
+      document.querySelectorAll(".coloring-art .cl-part").forEach((part) => {
+        const group = Number(part.dataset.part);
+        const on = part.classList.contains("is-colored");
+        const entry = groups.get(group) || { all: true, any: false };
+        entry.all = entry.all && on;
+        entry.any = entry.any || on;
+        groups.set(group, entry);
+      });
+      const sorted = [...groups].sort(([a], [b]) => a - b);
+      return {
+        groups: sorted.map(([group]) => group),
+        colored: sorted.filter(([, entry]) => entry.all).map(([group]) => group),
+        partial: sorted.filter(([, entry]) => entry.any && !entry.all).map(([group]) => group),
+        complete: document.querySelector("#gameStageContent")?.classList.contains("is-complete"),
+      };
+    });
+  const blank = await picture();
+  const expectedGroups = Array.from({ length: presses }, (_, index) => index);
+  assert(
+    JSON.stringify(blank.groups) === JSON.stringify(expectedGroups),
+    `The picture must be split into one area per press, got ${JSON.stringify(blank.groups)}`
+  );
+  assert(blank.colored.length === 0 && blank.partial.length === 0, "Nothing may be coloured before the first press");
+  assert((await plainOf(coloringWord)) === t("color.prompt"), "A new colouring session must invite the first press");
+
+  for (let press = 1; press <= presses; press += 1) {
+    await page.locator("#gameStage").click();
+    const now = await picture();
+    assert(
+      JSON.stringify(now.colored) === JSON.stringify(expectedGroups.slice(0, press)) && now.partial.length === 0,
+      `Press ${press} must colour exactly the first ${press} areas, got ${JSON.stringify(now)}`
+    );
+    assert(
+      (await plainOf(coloringWord)) === t(`coloring.word.${press - 1}`),
+      `Press ${press} must say "${t(`coloring.word.${press - 1}`)}"`
+    );
+    if (press < presses) await page.waitForTimeout(170);
+  }
+  assert((await picture()).complete, "The finished picture must be marked complete before the result");
+  await waitForClass(page, "#resultView", "is-active");
+  const pictureId = await page.locator(".hk-result-picture").getAttribute("data-picture");
+  assert(pictureId, "The colouring result must show the finished picture");
+  assert(
+    (await plainOf(".completion-result-summary")) ===
+      t("result.coloring.summary", { name: t(`animal.${pictureId}`) }),
+    "The colouring result must name the picture that was finished"
+  );
+
+  // はじめの遊びは測定の課題ではない。研究用の記録を作らない。
+  const sessions = (await savedState()).sessions || [];
+  assert(
+    !sessions.some((session) => session.gameId === "balloon" || session.gameId === "coloring"),
+    "Beginner games must not create research sessions"
+  );
+  await page.locator("#resultHome").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 /**
@@ -1402,7 +1588,7 @@ async function checkIpadSwitchControlMode(page, project) {
   });
   await waitForClass(page, "#homeView", "is-active");
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 8);
   const fullLayout = await collectActivityLayout(page, { checkScrollReach: true });
   const fullWidthTitles = fullLayout.titles;
   assert(
@@ -1410,8 +1596,8 @@ async function checkIpadSwitchControlMode(page, project) {
     `Delegated scanning must not hide choices behind a pager: ${JSON.stringify(fullLayout.pages)}`
   );
   assert(
-    fullWidthTitles.length === 6,
-    "Expected all six home choices, got " + fullWidthTitles.join(", ")
+    fullWidthTitles.length === 8,
+    "Expected all eight home choices, got " + fullWidthTitles.join(", ")
   );
 
   await page.setViewportSize({ width: 507, height: 1194 });
@@ -1531,7 +1717,7 @@ async function checkSlotL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 8);
 
   await openActivity(page, t("tile.slot-corner.title"));
   await waitForActivityChoices(page, 3);
@@ -1551,10 +1737,17 @@ async function checkSlotL1GameFlow(page) {
     "slot-l1 must render exactly one reel"
   );
 
+  // 6つの絵の一覧は、そくていの回にだけ出す（れんしゅうでは「リールの周りの
+  // 余計なもの」として外した。docs/design-renewal-2026-09-25.md §1.5）。
+  // 画像そのものは そくていの回で使うので、読み込めることは見ておく。
   const imageReady = await page.locator(".slot-symbol-guide img").evaluate(
     (image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
   );
   assert(imageReady, "Generated six-symbol guide PNG must load in the actual game");
+  assert(
+    !(await page.locator(".slot-symbol-guide").isVisible()),
+    "The six-symbol list must stay out of a practice run (nothing extra around the reel)"
+  );
 
   // 「140ms待って比べる」は時間の仮定だった。回転は rAF で進むので、遅い機械
   // では最初の1フレームがその窓に入らないことがある——CIの mobile-webkit-like
@@ -1622,7 +1815,7 @@ async function checkSlotSequentialFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 8);
 
   await openActivity(page, t("tile.slot-corner.title"));
   await waitForActivityChoices(page, 3);
@@ -1766,7 +1959,7 @@ async function checkRhythmL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 8);
 
   await openActivity(page, "リズム");
   await waitForActivityChoices(page, 4);
@@ -2609,7 +2802,7 @@ async function checkScanFocusStaysVisible(page, project) {
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 8);
 
   const tiles = await page.locator("#gameTileGrid .game-tile").count();
   for (let index = 0; index < tiles; index += 1) {
@@ -3160,13 +3353,13 @@ async function checkResearcherModeTabsNoRegression(page) {
   await waitForClass(page, "#settings", "is-active");
   await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").waitFor({ state: "visible" });
-  // 「出す遊び」は「そうさ」の面にある（設定はタブ分けされている）。
+  // 「ホームに出す遊び」は「スイッチ」の面にある（設定はタブ分けされている）。
   await openSettingsTab(page, "basic");
   await page.locator("#hideVisualTasks").click();
 
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 4);
+  await waitForActivityChoices(page, 6);
   // 1ページだけ見て判定すると、ページ分割の入る画面では「2ページ目に居る」
   // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
   const lobbyTitles = await collectActivityTitles(page);
@@ -3175,8 +3368,8 @@ async function checkResearcherModeTabsNoRegression(page) {
     `Visual-task setting must remove the claw corner from the lobby (saw: ${lobbyTitles.join(", ")})`
   );
   assert(
-    lobbyTitles.length === 4,
-    `Expected four remaining activities after hiding the claw, got ${lobbyTitles.length}`
+    lobbyTitles.length === 6,
+    `Expected six remaining activities after hiding the claw, got ${lobbyTitles.length}`
   );
 }
 
@@ -3526,11 +3719,11 @@ async function checkIpadAccessibilityLayout(page, project) {
 
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 8);
   const homeLayout = await collectActivityLayout(page, { checkViewport: true });
   assert(
-    homeLayout.titles.length === 6,
-    "Expected all six accessible home choices, got " + homeLayout.titles.join(", ")
+    homeLayout.titles.length === 8,
+    "Expected all eight accessible home choices, got " + homeLayout.titles.join(", ")
   );
 
   // 設定が実際に画面へ効いていること。チェックボックスが入っていても

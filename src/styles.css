@@ -416,6 +416,66 @@ h3 {
   line-height: 1.6;
 }
 
+/* はじめての支援者向けの「つかいかた」（App.svelte の #settingsGuide）。
+   ふだんは閉じておき、開いたときだけタブの面が下へずれる。 */
+.settings-guide {
+  margin: 0 0 18px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.settings-guide > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* 44px 未満のタップ標的を作らない（このアプリの全体規則）。 */
+  min-height: 44px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-guide > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-guide > summary::before {
+  content: "▶";
+  font-size: 0.8em;
+  transition: transform 0.15s ease;
+}
+
+.settings-guide[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.settings-guide-steps {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 4px 20px 18px 44px;
+  line-height: 1.7;
+}
+
+.settings-guide-steps strong {
+  display: block;
+}
+
+body.high-contrast .settings-guide {
+  border-color: #000000;
+  background: #ffffff;
+  color: #000000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-guide > summary::before {
+    transition: none;
+  }
+}
+
 .settings-mode-notice {
   grid-column: 1 / -1;
   margin: 0;

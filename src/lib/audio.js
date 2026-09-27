@@ -427,6 +427,101 @@ export function createAudio(getSettings, announce = () => {}) {
     }
   }
 
+  /**
+   * びっくりする音（ドカーン）。落ちていく低い「ボン」に、こもった破裂音を重ねる。
+   *
+   * 強い音なので、はじめの遊びの設定で選んだときだけ鳴らす（既定にはしない）。
+   * 打ち合わせで「爆発音ばかりだと発作を起こす人もいる」と言われている
+   * （docs/design-renewal-2026-09-25.md §1.7）。大きさは効果音の上限の中。
+   */
+  function playBoom() {
+    if (!getSettings().soundEnabled) return null;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const at = ctx.currentTime;
+      const oscillator = ctx.createOscillator();
+      const body = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(150, at);
+      oscillator.frequency.exponentialRampToValueAtTime(42, at + 0.45);
+      body.gain.setValueAtTime(0.0001, at);
+      body.gain.exponentialRampToValueAtTime(EFFECT_GAIN_CEILING, at + 0.01);
+      body.gain.exponentialRampToValueAtTime(0.0001, at + 0.55);
+      oscillator.connect(body);
+      body.connect(ctx.destination);
+      oscillator.start(at);
+      oscillator.stop(at + 0.6);
+      playNoise({ durationS: 0.35, gain: EFFECT_GAIN_CEILING, filter: "lowpass", frequency: 900, sweepTo: 120 });
+      return body;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 拍手と歓声（できたときのおいわい）。
+   *
+   * 録音は使わない。短いノイズの「パチ」をばらばらの間隔で重ね、下に
+   * こもったノイズの「わー」を敷く。打ち合わせで「できたー！のときに笑い声や
+   * 歓声があると、周りが家族だけでも盛り上がって、もう少し頑張ろうという気に
+   * なる」と言われた（docs/design-renewal-2026-09-25.md §1.7）。本物の笑い声には
+   * 録音素材が要る。
+   *
+   * 1つ1つの「パチ」は効果音の上限の半分ほどにして、重なっても上限を大きく
+   * 超えないようにしてある。
+   */
+  function playApplause({ durationS = 1.8 } = {}) {
+    if (!getSettings().soundEnabled) return null;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const buffer = ensureNoiseBuffer(ctx);
+      const start = ctx.currentTime + 0.05;
+      const length = Math.min(durationS, NOISE_BUFFER_S - 0.1);
+      const out = ctx.createGain();
+      out.gain.value = 0.8;
+      out.connect(ctx.destination);
+
+      const crowd = ctx.createBufferSource();
+      crowd.buffer = buffer;
+      const crowdBand = ctx.createBiquadFilter();
+      crowdBand.type = "bandpass";
+      crowdBand.frequency.value = 800;
+      crowdBand.Q.value = 0.6;
+      const crowdGain = ctx.createGain();
+      crowdGain.gain.setValueAtTime(0.0001, start);
+      crowdGain.gain.exponentialRampToValueAtTime(EFFECT_GAIN_CEILING * 0.5, start + 0.25);
+      crowdGain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+      crowd.connect(crowdBand);
+      crowdBand.connect(crowdGain);
+      crowdGain.connect(out);
+      crowd.start(start, 0, length);
+
+      for (let index = 0; index < 26; index += 1) {
+        // 前半に多く、後半はまばらに（拍手が鳴りやんでいく感じ）。
+        const at = start + Math.pow(Math.random(), 1.6) * (length - 0.1);
+        const clap = ctx.createBufferSource();
+        clap.buffer = buffer;
+        const band = ctx.createBiquadFilter();
+        band.type = "bandpass";
+        band.frequency.value = 1400 + Math.random() * 1200;
+        band.Q.value = 1.2;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(EFFECT_GAIN_CEILING * (0.35 + Math.random() * 0.25), at + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.05);
+        clap.connect(band);
+        band.connect(gain);
+        gain.connect(out);
+        clap.start(at, Math.random() * (NOISE_BUFFER_S - 0.2), 0.06);
+      }
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
   /** 短い確認音を即時に鳴らす（soundEnabled が ON のときのみ、既存呼び出し互換）。 */
   function playTone(frequency) {
     if (!getSettings().soundEnabled) return null;
@@ -483,6 +578,8 @@ export function createAudio(getSettings, announce = () => {}) {
     playTone,
     playToneAt,
     playChime,
+    playBoom,
+    playApplause,
     playNoise,
     playSweep,
     unlock,

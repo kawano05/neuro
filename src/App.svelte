@@ -338,10 +338,55 @@
     <section class="view" id="settings" aria-labelledby="settings-title">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Prototype settings</p>
+          <p class="eyebrow">支援者の方へ</p>
           <h2 id="settings-title">設定</h2>
         </div>
       </div>
+
+      <!--
+        はじめての支援者向けの説明（つかいかた）。打ち合わせで「最初の画面だけでも、
+        どのボタンが何をするのか支援者向けに書いてあれば解決しそう」「お母さんに
+        渡す簡単な説明書がほしい」と言われた（docs/design-renewal-2026-09-25.md §1.8）。
+        いちばん詰まったのは、iPad 本体のスイッチコントロールとこのアプリの関係だった。
+
+        ふだんは閉じておく。開くとタブの面が下へずれるだけで、設定の操作子の数や
+        走査（この画面では動かない）には関わらない。
+      -->
+      <details class="settings-guide" id="settingsGuide">
+        <summary>はじめての方へ：つかいかた</summary>
+        <ol class="settings-guide-steps">
+          <li>
+            <strong>つなぐ</strong>
+            NeuroNode を iPad にキーボードとしてつなぎます。スイッチを押すと、画面の遊びが進みます。
+          </li>
+          <li>
+            <strong>スイッチコントロールは、ふつうはオフ</strong>
+            NeuroNode をそのまま使うときは、iPad 本体の「スイッチコントロール」も、下の
+            「iPad のスイッチコントロールを使う」もオフのままにします（このアプリの黄色い枠で選びます）。
+            iPad 本体のスイッチコントロールで操作するときだけ、両方をオンにします。
+            iPad 本体だけをオンにすると、黄色い枠と iPad の枠が両方出て、うまく選べません。
+          </li>
+          <li>
+            <strong>はじめる</strong>
+            最初の画面は「はじめる」だけです。スイッチを1回押すと、遊びを選ぶ画面になります。
+          </li>
+          <li>
+            <strong>遊びを選ぶ</strong>
+            黄色い枠が順番に動きます。やりたい遊びに枠が来たら押します。①がいちばんかんたんで、
+            番号が大きいほどむずかしくなります。画面を直接さわっても選べます。
+          </li>
+          <li>
+            <strong>遊んでいるとき</strong>
+            右上の「この遊びの設定」で、音や速さをその場で変えられます（変えられる遊びだけ）。
+            やめるときは「おわる」です。
+          </li>
+          <li>
+            <strong>この画面に来るには</strong>
+            遊びを選ぶ画面の右上「支援者の設定」を、指でさわります（スイッチでは来られません）。
+            戻るときは「← ホームへ」です。
+          </li>
+        </ol>
+      </details>
 
       <!--
         設定をタブに分ける。
@@ -350,10 +395,10 @@
         「開いてから探す」が残るので、はじめから面を分ける。
 
         分けかたは支援者の目的順:
-          そうさ … 利用者が何をどう選ぶか（走査の速さ・出す遊び）
+          スイッチ … 利用者が何をどう選ぶか（枠の速さ・ホームに出す遊び）
           見え方・音 … 感覚まわり
           むずかしさ … あそびごとの難易度
-          そくてい … 研究者向けの設定と測定条件
+          そくてい（研究） … 研究者向けの設定と測定条件
 
         1面が1画面に収まることを基準に配分した（iPad 実測）。収まっていれば
         探す動作が要らない——タブに分けても面が長ければ、結局スクロールで
@@ -364,7 +409,7 @@
       -->
       <div class="settings-tabs" role="tablist" aria-label="設定の分類">
         <button class="settings-tab" role="tab" data-settings-tab="basic" aria-selected="true" data-scan>
-          そうさ
+          スイッチ
         </button>
         <button class="settings-tab" role="tab" data-settings-tab="senses" aria-selected="false" data-scan>
           見え方・音
@@ -373,7 +418,7 @@
           むずかしさ
         </button>
         <button class="settings-tab" role="tab" data-settings-tab="measure" aria-selected="false" data-scan>
-          そくてい
+          そくてい（研究）
         </button>
       </div>
 
@@ -385,16 +430,16 @@
         既に見出しで囲ってあるので、全体設定側も同じ規則へ揃える。
         並べ替えているだけで、項目そのものは足しても引いてもいない。
       -->
-      <h3 class="settings-group-title">走査（スイッチで選ぶ）</h3>
+      <h3 class="settings-group-title">スイッチで選ぶとき</h3>
       <p class="settings-group-note">
-        利用者がどう選ぶか。速さは利用者ごとに大きく違うので、いちばん上に置きます。
+        黄色い枠が順番に動き、枠がある遊びをスイッチで選びます。合う速さは人によって大きく違います。
       </p>
 
       <div class="settings-grid">
         <label class="setting-row toggle-row">
           <span>
-            <strong>iPad Switch Controlモード</strong>
-            <small>支援者が自動走査をOFF→iPad側をONの順に準備してから切り替えます</small>
+            <strong>iPad のスイッチコントロールを使う</strong>
+            <small>ふつうはオフのまま。iPad 本体のスイッチコントロールで操作するときだけオンにします（アプリの黄色い枠は止まります）</small>
           </span>
           <input
             id="switchControlMode"
@@ -405,14 +450,14 @@
         </label>
 
         <p class="settings-mode-notice" id="switchControlModeNotice" hidden>
-          iPadの「設定」でもSwitch ControlをONにしてください。アプリ音声は比較しやすいよう、
-          このモードをONにした時点でいったんOFFになります。
+          iPad の「設定」→「アクセシビリティ」→「スイッチコントロール」もオンにしてください。
+          このアプリの読み上げは、ここでいったんオフになります（「見え方・音」でオンに戻せます）。
         </p>
 
         <label class="setting-row">
           <span>
-            <strong>走査間隔</strong>
-            <small>Switch Control相当のハイライト速度</small>
+            <strong>枠が動く速さ</strong>
+            <small>黄色い枠が次へ動くまでの時間。長くすると、選ぶ時間に余裕ができます</small>
           </span>
           <input id="scanInterval" type="range" min="800" max="3200" step="100" />
           <output id="scanIntervalValue" for="scanInterval">1600ms</output>
@@ -420,8 +465,8 @@
 
         <label class="setting-row toggle-row">
           <span>
-            <strong>自動走査</strong>
-            <small>画面切り替え後に走査を開始します</small>
+            <strong>枠を自動で動かす</strong>
+            <small>画面が変わると、黄色い枠が自動で動き出します。オフにすると枠は止まったままです</small>
           </span>
           <input id="autoScan" type="checkbox" role="switch" data-scan />
         </label>
@@ -440,13 +485,13 @@
         </label>
       </div>
 
-      <h3 class="settings-group-title">出す遊び</h3>
+      <h3 class="settings-group-title">ホームに出す遊び</h3>
 
       <div class="settings-grid">
         <label class="setting-row toggle-row">
           <span>
-            <strong>視覚課題を隠す</strong>
-            <small>画面注視が必要なリール停止とUFOキャッチャーをロビーから外します</small>
+            <strong>画面をよく見る遊びを隠す</strong>
+            <small>「リールを止める」と「アームでつかむ」は画面を見続ける遊びです。見るのが難しい人のときは外せます</small>
           </span>
           <input id="hideVisualTasks" type="checkbox" role="switch" data-scan />
         </label>
@@ -457,23 +502,23 @@
       <div class="settings-panel" data-settings-panel="senses" hidden>
       <h3 class="settings-group-title">音と言葉</h3>
       <p class="settings-group-note">
-        効果音を切っても、リズムやアタリの合図音は鳴ります。合図は課題そのものなので、
-        ここでは止められません。
+        効果音を切っても、遊びの合図の音（「高い音だけ」の音や、さかなつりのアタリの音など）は
+        鳴ります。合図が無いと遊べないためです。
       </p>
 
       <div class="settings-grid">
         <label class="setting-row toggle-row">
           <span>
-            <strong>音声読み上げ</strong>
-            <small>定型句やフィードバックを読み上げます</small>
+            <strong>声で読み上げる</strong>
+            <small>説明やほめ言葉（「やったー」など）を声で読み上げます</small>
           </span>
           <input id="speechEnabled" type="checkbox" role="switch" data-scan />
         </label>
 
         <label class="setting-row">
           <span>
-            <strong>アプリ音声の音量</strong>
-            <small>OSの読み上げではなく、このアプリが出す声だけを調整します</small>
+            <strong>読み上げの声の大きさ</strong>
+            <small>このアプリの声だけの大きさです（iPad 全体の音量とは別）</small>
           </span>
           <input id="speechVolume" type="range" min="0.2" max="1" step="0.1" />
           <output id="speechVolumeValue" for="speechVolume">100%</output>
@@ -483,7 +528,7 @@
           <span>
             <strong>効果音</strong>
             <small>
-              押した結果の音（アームの上下や把持、水音やリール）を鳴らします
+              押したときの音や拍手（アームの音、水の音、リールの音など）を鳴らします
             </small>
           </span>
           <input id="soundEnabled" type="checkbox" role="switch" data-scan />
@@ -492,9 +537,7 @@
 
       <h3 class="settings-group-title">見え方</h3>
       <p class="settings-group-note">
-        文字づかいは利用者に合わせて選びます。ひらがなだけが常にやさしいとは
-        限りません——日本語は漢字が語の切れ目を作るので、漢字が読める人には
-        漢字のほうが速く読めます。
+        遊びの画面の文字は、漢字にふりがなを付けて出します。英語にもできます。
       </p>
 
       <div class="settings-grid">
@@ -502,8 +545,7 @@
           <span>
             <strong>文字づかい</strong>
             <small>
-              あそびの画面に出る文字。支援者向けの画面（設定・記録・研究）は
-              日本語のままです
+              遊びの画面の文字。支援者の画面（設定・記録）は日本語のままです
             </small>
           </span>
           <select id="textMode" data-scan>
@@ -515,15 +557,15 @@
         <label class="setting-row toggle-row">
           <span>
             <strong>大きい文字</strong>
-            <small>共有iPadで見やすい表示にします</small>
+            <small>文字を大きくします</small>
           </span>
           <input id="largeText" type="checkbox" role="switch" data-scan />
         </label>
 
         <label class="setting-row toggle-row">
           <span>
-            <strong>高コントラスト</strong>
-            <small>ハイライトと文字の差を強めます</small>
+            <strong>くっきり表示</strong>
+            <small>枠と文字の色の差を強くします</small>
           </span>
           <input id="highContrast" type="checkbox" role="switch" data-scan />
         </label>
@@ -545,21 +587,22 @@
         <i class="fa-solid fa-lock" aria-hidden="true"></i>
         <span>
           いまは「そくてい」の回です。下のむずかしさは決まった値に固定されていて
-          変えられません。調整したいときは「そくてい」タブで「練習」に
+          変えられません。変えたいときは「そくてい（研究）」タブで「練習」に
           切り替えてください。
         </span>
       </p>
 
-      <h3 class="settings-group-title">リール停止の難易度</h3>
+      <h3 class="settings-group-title">リールを止める</h3>
       <p class="settings-group-note">
-        練習のL1とL2にききます。測定ではslot-v1の値（3200ms・220ms・L1 8回・L2 4回）に固定されます。
+        練習の回にだけ効きます。測定の回は決まった値です（1周3.2秒・「合った」の広さ0.22秒・
+        「ひとつ止める」8回・「3つ止める」4回）。
       </p>
 
       <div class="settings-grid">
         <label class="setting-row">
           <span>
             <strong>リールの速さ</strong>
-            <small>絵柄が1周する時間。短いほど速くなります</small>
+            <small>絵が1周する時間。短いほど速くなります</small>
           </span>
           <input id="slotCycleMs" type="range" min="2800" max="6000" step="100" data-scan />
           <output id="slotCycleMsValue" for="slotCycleMs">3200ms</output>
@@ -567,8 +610,8 @@
 
         <label class="setting-row">
           <span>
-            <strong>合う時間の広さ</strong>
-            <small>目標の中心から前後何msまでを「合った」とするか</small>
+            <strong>「合った」にする広さ</strong>
+            <small>目標の真ん中から前後どれくらいまでを「合った」にするか。広いほどやさしくなります</small>
           </span>
           <input id="slotToleranceMs" type="range" min="60" max="220" step="10" data-scan />
           <output id="slotToleranceMsValue" for="slotToleranceMs">220ms</output>
@@ -576,7 +619,7 @@
 
         <label class="setting-row">
           <span>
-            <strong>L1のラウンド数</strong>
+            <strong>「ひとつ止める」の回数</strong>
             <small>1本のリールを止める回数です</small>
           </span>
           <input id="slotL1Rounds" type="range" min="3" max="20" step="1" data-scan />
@@ -585,24 +628,24 @@
 
         <label class="setting-row">
           <span>
-            <strong>L2のラウンド数</strong>
-            <small>1ラウンドで3本を左から順に止めます</small>
+            <strong>「3つ止める」の回数</strong>
+            <small>1回ごとに、3本を左から順に止めます</small>
           </span>
           <input id="slotL2Rounds" type="range" min="2" max="12" step="1" data-scan />
           <output id="slotL2RoundsValue" for="slotL2Rounds">4</output>
         </label>
       </div>
 
-      <h3 class="settings-group-title">音の課題の難易度</h3>
+      <h3 class="settings-group-title">高い音だけ</h3>
       <p class="settings-group-note">
-        「たかいおとだけ」にききます。支援者向けの「そくてい」は固定条件です。
+        練習の回にだけ効きます。測定の回と「押すタイミングの測定」は、決まった条件で行います。
       </p>
 
       <div class="settings-grid">
         <label class="setting-row">
           <span>
-            <strong>テンポ</strong>
-            <small>1分あたりの拍数。ゆっくりなほど、合わせるのがやさしくなります</small>
+            <strong>音の速さ（テンポ）</strong>
+            <small>1分に鳴る音の数。ゆっくりなほど、やさしくなります</small>
           </span>
           <select id="rhythmBpm" data-scan>
             <option value="">あそびごとの既定</option>
@@ -616,8 +659,8 @@
 
         <label class="setting-row">
           <span>
-            <strong>1回の拍数</strong>
-            <small>1セッションで押す回数。長くも短くもできます</small>
+            <strong>1回に鳴る音の数</strong>
+            <small>1回の遊びで鳴る音の数。長くも短くもできます</small>
           </span>
           <select id="rhythmTargetBeats" data-scan>
             <option value="">あそびごとの既定</option>
@@ -640,21 +683,20 @@
         -->
         <label class="setting-row toggle-row">
           <span>
-            <strong>練習で 流れるノートを出す</strong>
+            <strong>次の音が来る場所を画面に出す</strong>
             <small>
-              ノートが判定面へ流れます（練習の既定）。切ると未来ノートなしの
-              計器盤になり、おしたあとの はやい/おそいだけを見せます。
-              測定と そくていは自動で計器盤です
+              練習では、次の音が来る場所を画面に出します（練習の既定）。切ると、
+              押したあとの「はやい／おそい」だけを出します。測定の回と「押すタイミングの測定」では
+              自動で切れます
             </small>
           </span>
           <input id="visualGuidance" type="checkbox" role="switch" data-scan />
         </label>
       </div>
 
-      <h3 class="settings-group-title">UFOキャッチャーの難易度</h3>
+      <h3 class="settings-group-title">アームでつかむ</h3>
       <p class="settings-group-note">
-        変えた値は、つぎに はじめる ときから ききます。どの ねらいで
-        あそんだかは 記録に のこります。
+        変えた値は、次に始めるときから効きます。どの設定で遊んだかは記録に残ります。
       </p>
 
       <div class="settings-grid">
@@ -678,8 +720,8 @@
 
         <label class="setting-row">
           <span>
-            <strong>1回の回数</strong>
-            <small>1セッションでアームを下ろす回数。短くも長くもできます</small>
+            <strong>1回にアームを下ろす回数</strong>
+            <small>1回の遊びでアームを下ろす回数。短くも長くもできます</small>
           </span>
           <input id="craneTargetTrials" type="range" min="3" max="15" step="1" data-scan />
           <output id="craneTargetTrialsValue" for="craneTargetTrials">5</output>
@@ -695,11 +737,10 @@
         -->
         <label class="setting-row toggle-row">
           <span>
-            <strong>狙いの通過音</strong>
+            <strong>ねらいの上で音を鳴らす</strong>
             <small>
-              アームが ねらいの上を通ったとき、小さい音で知らせます。画面を
-              見つづけるのが むずかしいときに。入れると、耳だけでも あそべる
-              ぶん、目で追う練習にはなりません
+              アームがねらいの上を通ったとき、小さい音で知らせます。画面を見続けるのが
+              難しいときに。入れると耳だけでも遊べるぶん、目で追う練習にはなりません
             </small>
           </span>
           <input id="craneAudioGuidance" type="checkbox" role="switch" data-scan />
@@ -711,8 +752,8 @@
       <div class="settings-panel" data-settings-panel="measure" hidden>
       <div class="supporter-actions">
         <div>
-          <strong>入力タイミングの測定</strong>
-          <span>利用者ホームには表示せず、支援者と一緒に実施します。</span>
+          <strong>押すタイミングの測定（研究用）</strong>
+          <span>ホームには出しません。支援者と一緒に行います。</span>
         </div>
         <button class="secondary" id="startCalibration" type="button">
           そくていを始める
@@ -725,7 +766,7 @@
         <label class="setting-row toggle-row">
           <span>
             <strong>研究者モード</strong>
-            <small>操作訓練・効果測定・研究タブを表示します</small>
+            <small>研究用のタブ（操作訓練・効果測定・研究）を出します</small>
           </span>
           <input id="researcherMode" type="checkbox" role="switch" data-scan />
         </label>
@@ -755,20 +796,19 @@
         「交絡が無い」ことを意味しない。名前つきの束にして、解析ではまず
         そくていの回だけを見ればよい状態にする（src/lib/difficultyMode.js）。
       -->
-      <h3 class="settings-group-title">この回の使い方</h3>
+      <h3 class="settings-group-title">この回は、練習？ 測定？</h3>
       <p class="settings-group-note">
-        測るための回か、ふだんの練習の回かを選びます。どちらだったかは
-        1回ごとに記録され、評価ログとCSVに出ます。
+        ふだんは「練習」のままで大丈夫です。研究で測るときだけ「測定」にします。
+        どちらだったかは1回ごとに記録されます。
       </p>
 
       <div class="settings-grid">
         <label class="setting-row">
           <span>
-            <strong>難易度の決め方</strong>
+            <strong>練習／測定</strong>
             <small>
-              そくていを選ぶと、テンポ・拍数・つかめる広さ・画面の手がかり・
-              通過音・アシストが決まった値に固定され、下の設定は変えられなく
-              なります。回どうし・利用者どうしを同じ条件で比べるためです
+              測定にすると、速さや回数などが決まった値になり、変えられなくなります。
+              回どうし・人どうしを同じ条件で比べるためです
             </small>
           </span>
           <select id="difficultyMode">

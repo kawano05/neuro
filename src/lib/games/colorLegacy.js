@@ -18,13 +18,22 @@
 //   - 得点・正誤は作らない。結果は「何回遊んだか」と「会えた動物」だけ。
 //   - 強制終了（おわる／Esc）は結果を経由せずホームへ戻る。
 //
-// 見え方と音は、遊びの中の「この遊びの設定」で変えられる（games/gameSettings.js）:
-//   settings.popBackground（暗い／明るい）、popSound（楽器の音／明るい効果音／なし）、
-//   popCheer（できたときの「やったー」）。測定の課題ではないので記録の条件には入れない。
+// 見え方と音は、遊びの中の「この遊びの設定」で変えられる（games/gameSettings.js、
+// settings.playPrefs["color-legacy"]）。はじめの遊び3つの共通部品は beginnerKit.js。
+// 測定の課題ではないので記録の条件には入れない。
 // =====================================================================
 
 import { colorLegacyPreset, switchModules } from "../content.js";
 import { POP_ANIMALS, artSvg } from "../art/hakkiriArt.js";
+import {
+  celebrate,
+  playFinishSound,
+  playPrefsFor,
+  playPressSound,
+  progressDotsHtml,
+} from "./beginnerKit.js";
+
+const GAME_ID = "color-legacy";
 
 // 音が鳴り終わってから短い読み上げを出す。連打時は最後の1回だけ。
 export const COLOR_TTS_DELAY_MS = 240;
@@ -35,11 +44,6 @@ export const POP_FADE_MS = 500;
 // 5回目の動物と「できた！」を見せてから結果へ進む。
 export const COLOR_FINISH_DELAY_MS = 1600;
 export const COLOR_TARGET_PRESSES = colorLegacyPreset.targetPresses;
-
-// 楽器の音: ペンタトニック（ドレミソラ）。どの順で鳴っても濁らない。
-const INSTRUMENT_NOTES = [523.25, 587.33, 659.25, 783.99, 880.0];
-// できたときの和音（ド・ミ・ソ・ド）。
-const FINISH_CHORD = [523.25, 659.25, 783.99, 1046.5];
 
 /** 何回目に出てくる動物か（5匹を順に。6回目以降は最初に戻る）。 */
 export function popAnimalFor(pressIndex) {
@@ -72,7 +76,7 @@ export function createColorLegacyGame(ctx) {
 
   function render() {
     if (!stageEl) return;
-    stageEl.classList.toggle("is-light", settings.popBackground === "light");
+    stageEl.classList.toggle("is-light", playPrefsFor(settings, GAME_ID).background === "light");
 
     let center;
     if (shownIndex >= 0) {
@@ -96,44 +100,10 @@ export function createColorLegacyGame(ctx) {
       center = `<span class="pop-count">${tHtml("color.count", { n: step })}</span>`;
     }
 
-    const dots = Array.from(
-      { length: COLOR_TARGET_PRESSES },
-      (_, index) => `<span class="pop-dot${index < step ? " is-done" : ""}"></span>`
-    ).join("");
-
     stageEl.innerHTML = `
       <span class="pop-stage" aria-hidden="true">${center}</span>
-      <span class="pop-dots" aria-hidden="true" data-done="${step}" data-total="${COLOR_TARGET_PRESSES}">${dots}</span>
+      ${progressDotsHtml(step, COLOR_TARGET_PRESSES)}
     `;
-  }
-
-  /** 押したときの音（この遊びの設定で選ぶ）。 */
-  function playPressSound(pressIndex) {
-    const style = settings.popSound;
-    if (style === "none") return;
-    if (style === "pop") {
-      // 明るい効果音: 上がる「ポン」と、はじける音を少し。
-      audio.playSweep({ fromHz: 300, toHz: 1100, durationS: 0.14, gain: 0.04 });
-      audio.playNoise({ durationS: 0.08, gain: 0.018, filter: "bandpass", frequency: 2600, q: 1.4 });
-      return;
-    }
-    audio.playChime(INSTRUMENT_NOTES[pressIndex % INSTRUMENT_NOTES.length]);
-  }
-
-  function playFinishSound() {
-    const style = settings.popSound;
-    if (style === "none") return;
-    if (style === "pop") {
-      [0, 0.12, 0.24].forEach((delay, index) => {
-        window.setTimeout(() => {
-          audio.playSweep({ fromHz: 400 + index * 120, toHz: 1300 + index * 200, durationS: 0.12, gain: 0.04 });
-        }, delay * 1000);
-      });
-      return;
-    }
-    FINISH_CHORD.forEach((frequency, index) => {
-      audio.playChime(frequency, { delayS: 0.14 + index * 0.11, durationS: 1.1 });
-    });
   }
 
   /** 見せていた動物を消して、真っ暗な画面に戻す。 */
@@ -161,7 +131,7 @@ export function createColorLegacyGame(ctx) {
     step += 1;
     shownIndex = pressIndex;
     fading = false;
-    playPressSound(pressIndex);
+    playPressSound(audio, playPrefsFor(settings, GAME_ID).sound, pressIndex);
     render();
 
     const remaining = COLOR_TARGET_PRESSES - step;
@@ -175,17 +145,13 @@ export function createColorLegacyGame(ctx) {
         voiceFeedback(t("color.voice.progress", { name, n: remaining }));
       }, COLOR_TTS_DELAY_MS);
     } else {
-      playFinishSound();
-      // 最後の動物と「できた！」を見せてから共通結果へ進む。
+      playFinishSound(audio, playPrefsFor(settings, GAME_ID).sound);
+      // 最後の動物と「できた！」を見せてから共通結果へ進む。けっかの画面が
+      // 出るのと同時に拍手と「やったー」（この遊びの設定で切れる）。
       finishTimer = window.setTimeout(() => {
         finishTimer = null;
         finishDelivered = true;
-        if (settings.speechEnabled) {
-          const parts = [t("color.voice.finish", { n: COLOR_TARGET_PRESSES })];
-          // 「やったー」は、この遊びの設定で「あり」のときだけ。
-          if (settings.popCheer) parts.unshift(t("color.voice.cheer"));
-          voiceFeedback(parts.join(" "));
-        }
+        celebrate(ctx, playPrefsFor(settings, GAME_ID), t("color.voice.finish", { n: COLOR_TARGET_PRESSES }));
         finish({
           presses: COLOR_TARGET_PRESSES,
           animals: Array.from({ length: COLOR_TARGET_PRESSES }, (_, index) => popAnimalFor(index).id),

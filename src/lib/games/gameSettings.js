@@ -30,33 +30,43 @@
 
 import { isMeasurementMode } from "../difficultyMode.js";
 
-const POP_GROUPS = [
-  {
-    key: "popBackground",
-    label: "遊ぶ画面の背景",
-    options: [
-      ["dark", "暗い（ふつう）"],
-      ["light", "明るい"],
-    ],
-  },
-  {
-    key: "popSound",
-    label: "押したときの音",
-    options: [
-      ["instrument", "楽器の音"],
-      ["pop", "明るい効果音"],
-      ["none", "なし"],
-    ],
-  },
-  {
-    key: "popCheer",
-    label: "できたときの声（「やったー」）",
-    options: [
-      [true, "あり"],
-      [false, "なし"],
-    ],
-  },
-];
+/**
+ * はじめの遊び（失敗の無い遊び）の設定。遊びごとに持つ（settings.playPrefs、state.js）。
+ * 音は遊びごとに選べる、と打ち合わせで言われた（docs/design-renewal-2026-09-25.md §1.7）。
+ * key は settings の中の場所（"playPrefs.balloon.sound" のような点つなぎ）。
+ */
+function beginnerGroups(gameId) {
+  return [
+    {
+      key: `playPrefs.${gameId}.background`,
+      label: "遊ぶ画面の背景",
+      options: [
+        ["dark", "暗い"],
+        ["light", "明るい"],
+      ],
+    },
+    {
+      key: `playPrefs.${gameId}.sound`,
+      kind: "sound",
+      label: "押したときの音",
+      options: [
+        ["instrument", "楽器の音"],
+        ["pop", "明るい効果音"],
+        ["boom", "びっくりする音"],
+        ["none", "なし"],
+      ],
+    },
+    {
+      key: `playPrefs.${gameId}.cheer`,
+      kind: "cheer",
+      label: "できたときの拍手と「やったー」",
+      options: [
+        [true, "あり"],
+        [false, "なし"],
+      ],
+    },
+  ];
+}
 
 // リールが1周する時間（ミリ秒）。大きいほど ゆっくり。範囲は設定画面の
 // つまみと同じ（2800〜6000）。ふつう＝content.js の slotPresets.cycleMs。
@@ -85,13 +95,45 @@ const CRANE_SPEED = {
   ],
 };
 
+// 「高い音だけ」の音の速さ（1分あたりの拍数）。null は content.js の rhythmPresets
+// （50）。設定画面の「テンポ」と同じ値で、あちらの選択肢（30〜80）の中から選ぶ。
+const GONOGO_TEMPO = {
+  key: "rhythmBpm",
+  label: "音の速さ（テンポ）",
+  measured: true,
+  options: [
+    [40, "ゆっくり"],
+    [null, "ふつう"],
+    [60, "はやい"],
+  ],
+};
+
 /** 遊びごとの設定。ここに無い遊びにはボタンを出さない。 */
 export const GAME_SETTINGS = {
-  "color-legacy": { mode: "live", groups: POP_GROUPS },
+  "color-legacy": { mode: "live", groups: beginnerGroups("color-legacy") },
+  balloon: { mode: "live", groups: beginnerGroups("balloon") },
+  coloring: { mode: "live", groups: beginnerGroups("coloring") },
   "slot-l1": { mode: "restart", groups: [SLOT_SPEED] },
   "slot-l2": { mode: "restart", groups: [SLOT_SPEED] },
+  gonogo: { mode: "restart", groups: [GONOGO_TEMPO] },
   crane: { mode: "restart", groups: [CRANE_SPEED] },
 };
+
+/** settings の中の値を、点つなぎの場所で読む（"playPrefs.balloon.sound"）。 */
+export function readSetting(settings, key) {
+  return key.split(".").reduce((value, part) => (value == null ? undefined : value[part]), settings);
+}
+
+/** settings の中の値を、点つなぎの場所へ書く。途中の入れ物は作る。 */
+export function writeSetting(settings, key, value) {
+  const parts = key.split(".");
+  const last = parts.pop();
+  const holder = parts.reduce((object, part) => {
+    if (!object[part] || typeof object[part] !== "object") object[part] = {};
+    return object[part];
+  }, settings);
+  holder[last] = value;
+}
 
 /**
  * いまの設定で、この遊びに変えられる項目があるか。
@@ -147,16 +189,25 @@ export function createGameSettings(ctx, host) {
         text: "いまは「そくてい」の回なので、速さは変えられません。記録の条件をそろえるためです。",
       });
     }
-    if (definition.groups.some((group) => group.key === "popSound") && !state.settings.soundEnabled) {
+    const soundGroup = definition.groups.find((group) => group.kind === "sound");
+    if (soundGroup && !state.settings.soundEnabled) {
       notes.push({
         lock: true,
-        text: "支援者の設定で「効果音」が切ってあるので、押したときの音は出ません。",
+        text: "支援者の設定で「効果音」が切ってあるので、押したときの音と拍手は出ません。",
       });
     }
-    if (definition.groups.some((group) => group.key === "popCheer") && !state.settings.speechEnabled) {
+    if (soundGroup && draft[soundGroup.key] === "boom") {
+      // 打ち合わせで「爆発音ばかりだと発作が起きることもある」と言われた音。
+      // 選べるようにはするが、選んだ人にはその場で注意を出す。
       notes.push({
         lock: true,
-        text: "支援者の設定で「読み上げ」が切ってあるので、「やったー」の声は出ません。",
+        text: "「びっくりする音」は強い音です。音に驚きやすい人や、発作のある人には使わないでください。",
+      });
+    }
+    if (definition.groups.some((group) => group.kind === "cheer") && !state.settings.speechEnabled) {
+      notes.push({
+        lock: true,
+        text: "支援者の設定で「読み上げ」が切ってあるので、「やったー」の声は出ません（拍手は出ます）。",
       });
     }
     return notes;
@@ -208,7 +259,9 @@ export function createGameSettings(ctx, host) {
     if (isOpen() || !gameSettingsAvailable(gameId, state.settings)) return;
     const definition = GAME_SETTINGS[gameId];
     openFor = gameId;
-    draft = Object.fromEntries(definition.groups.map((group) => [group.key, state.settings[group.key]]));
+    draft = Object.fromEntries(
+      definition.groups.map((group) => [group.key, readSetting(state.settings, group.key)])
+    );
     stoppedSession = false;
     // 時間で進む遊びは、開いた時点でその回を止める（上のコメント）。
     if (definition.mode === "restart" && host.sessionRunning()) {
@@ -235,8 +288,8 @@ export function createGameSettings(ctx, host) {
     const changed = [];
     if (apply) {
       definition.groups.forEach((group) => {
-        if (state.settings[group.key] !== draft[group.key]) {
-          state.settings[group.key] = draft[group.key];
+        if (readSetting(state.settings, group.key) !== draft[group.key]) {
+          writeSetting(state.settings, group.key, draft[group.key]);
           changed.push(group.label);
         }
       });

@@ -169,25 +169,47 @@ test("the redesign's settings survive a reload and fall back on unknown values",
   // 落ちると、支援者が選んだ音や画面のボタンが再読込のたびに既定へ戻る。
   const defaults = sanitizeState({}).settings;
   assert.equal(defaults.showScreenSwitch, false, "画面の「おす」ボタンは既定で出さない");
-  assert.equal(defaults.popBackground, "dark");
-  assert.equal(defaults.popSound, "instrument", "既定は強すぎない楽器の音");
-  assert.equal(defaults.popCheer, true);
+  // はじめの遊びは、遊びごとに見え方と音を持つ。既定の音に「びっくりする音」は使わない
+  // （強すぎる音は発作につながりうる、と言われている）。
+  assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "color-legacy", "coloring"]);
+  Object.values(defaults.playPrefs).forEach((prefs) => {
+    assert.notEqual(prefs.sound, "boom");
+    assert.equal(prefs.cheer, true);
+  });
+  assert.equal(defaults.playPrefs["color-legacy"].background, "dark", "真っ暗な画面から出てくる");
 
   const chosen = sanitizeState({
-    settings: { showScreenSwitch: true, popBackground: "light", popSound: "none", popCheer: false },
+    settings: {
+      showScreenSwitch: true,
+      playPrefs: {
+        "color-legacy": { background: "light", sound: "none", cheer: false },
+        balloon: { background: "dark", sound: "boom", cheer: true },
+      },
+    },
   }).settings;
   assert.equal(chosen.showScreenSwitch, true);
-  assert.equal(chosen.popBackground, "light");
-  assert.equal(chosen.popSound, "none");
-  assert.equal(chosen.popCheer, false);
+  assert.deepEqual(chosen.playPrefs["color-legacy"], { background: "light", sound: "none", cheer: false });
+  assert.deepEqual(chosen.playPrefs.balloon, { background: "dark", sound: "boom", cheer: true });
+  // 保存に無い遊びは既定のまま（新しく足した遊びも、古い保存で壊れない）。
+  assert.deepEqual(chosen.playPrefs.coloring, defaults.playPrefs.coloring);
 
   const unknown = sanitizeState({
-    settings: { showScreenSwitch: "yes", popBackground: "pink", popSound: "boom", popCheer: 1 },
+    settings: {
+      showScreenSwitch: "yes",
+      playPrefs: {
+        "color-legacy": { background: "pink", sound: "siren", cheer: 1 },
+        someOtherGame: { background: "dark", sound: "pop", cheer: false },
+      },
+    },
   }).settings;
   assert.equal(unknown.showScreenSwitch, false);
-  assert.equal(unknown.popBackground, "dark");
-  assert.equal(unknown.popSound, "instrument");
-  assert.equal(unknown.popCheer, true);
+  assert.deepEqual(unknown.playPrefs["color-legacy"], defaults.playPrefs["color-legacy"]);
+  assert.ok(!("someOtherGame" in unknown.playPrefs), "知らない遊びの設定は持ち込まない");
+
+  // 既定値は呼び出しごとに別の物（片方を書き換えても、もう片方に波及しない）。
+  const first = sanitizeState({}).settings;
+  first.playPrefs.balloon.sound = "none";
+  assert.equal(sanitizeState({}).settings.playPrefs.balloon.sound, defaults.playPrefs.balloon.sound);
 });
 
 test("sanitizeState keeps scan trials whose tolerance differs from the session default", () => {

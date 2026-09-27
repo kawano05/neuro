@@ -62,11 +62,16 @@ export const colorLegacyPreset = {
 export const gameTiles = [
   // iconClass は Font Awesome Free の統一アイコン。製品アイコンに絵文字を
   // 使わず、年齢を限定しない視覚言語に揃える。
-  { id: "color-legacy", taskType: null, resultType: "completion", title: "いろと おと", description: "5かい おして いろと おとを かえよう", order: 1, enabled: true, iconClass: "fa-solid fa-palette" },
-  { id: "slot-l1", taskType: "slot", title: "ひとつ とめる", description: "おなじ えが まんなかに きたら おそう", order: 2, enabled: true, visualRequired: true, iconClass: "fa-solid fa-circle-stop" },
-  { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの リールを じゅんばんに とめよう", order: 3, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
-  { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true, iconClass: "fa-solid fa-bell" },
-  { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
+  { id: "color-legacy", taskType: null, resultType: "completion", title: "おすと でてくる", description: "おすと えと おとが でるよ", order: 1, enabled: true, iconClass: "fa-solid fa-palette" },
+  // はじめの遊び（失敗の無い遊び）の2つめと3つめ。打ち合わせで「こういう遊びを
+  // 増やしてほしい」と言われた（docs/design-renewal-2026-09-25.md §1.4）。
+  // どちらも測定の課題ではないので taskType を持たない。
+  { id: "balloon", taskType: null, resultType: "completion", title: "ふうせん わり", description: "おすと ふうせんが われるよ", order: 2, enabled: true, iconClass: "fa-solid fa-burst" },
+  { id: "coloring", taskType: null, resultType: "completion", title: "ぬりえ", description: "おすと いろが ぬれるよ", order: 3, enabled: true, iconClass: "fa-solid fa-paintbrush" },
+  { id: "slot-l1", taskType: "slot", title: "ひとつ とめる", description: "おなじ えが まんなかに きたら おそう", order: 4, enabled: true, visualRequired: true, iconClass: "fa-solid fa-circle-stop" },
+  { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの リールを じゅんばんに とめよう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
+  { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 6, enabled: true, iconClass: "fa-solid fa-bell" },
+  { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 7, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
   // さかなつりは2種類ある。どちらも反応時間を測るが、測っているものが違う:
   //   fishing        … 純粋な単純反応時間。アタリ音は1種類だけで、迷う要素がない
   //   fishing-gonogo … そこに No-Go（長靴の低音）を混ぜた抑制つきの反応時間
@@ -74,9 +79,9 @@ export const gameTiles = [
   // （単純反応時間）なのに実体は Go/No-Go 課題という食い違いがあり、
   // 「この課題で何を測ったか」を書けなかった。ロビーでは「さかなつり」の
   // コーナー（fishingCornerTile）にまとめ、二階層目でどちらかを選ぶ。
-  { id: "fishing", taskType: "rt", title: "アタリで つる", description: "おとが なったら すぐ おそう", order: 6, enabled: true, iconClass: "fa-solid fa-fish" },
-  { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 7, enabled: true, iconClass: "fa-solid fa-fish-fins" },
-  { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 8, enabled: true, iconClass: "fa-solid fa-stopwatch" },
+  { id: "fishing", taskType: "rt", title: "アタリで つる", description: "おとが なったら すぐ おそう", order: 8, enabled: true, iconClass: "fa-solid fa-fish" },
+  { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 9, enabled: true, iconClass: "fa-solid fa-fish-fins" },
+  { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 10, enabled: true, iconClass: "fa-solid fa-stopwatch" },
 ];
 
 /** 視覚タイミング課題2種をまとめる二階層目への入口。 */

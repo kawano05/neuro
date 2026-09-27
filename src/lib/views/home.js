@@ -30,6 +30,11 @@ import {
   slotCornerTile,
 } from "../content.js";
 
+/** 丸数字（①〜⑳）。範囲外はふつうの数字。 */
+export function circledNumber(n) {
+  return Number.isInteger(n) && n >= 1 && n <= 20 ? String.fromCodePoint(0x245f + n) : String(n);
+}
+
 export function initHome(ctx) {
   const { state, elements, save, announce, logEvent, scan } = ctx;
   let activeCorner = null;
@@ -269,19 +274,16 @@ export function initHome(ctx) {
     elements.gameTileGrid.dataset.paged = String(paginate);
     elements.gameTileGrid.dataset.count = String(slice.visible.length);
 
+    // 番号は一覧全体での順番（①〜）。ページに分けても振り直さない——
+    // 「①から⑦へ、だんだん難しくなる」の番号と、画面の番号を食い違わせない。
+    const numberOffset = paginate ? slice.pageIndex * pageSize : 0;
     slice.visible.forEach((item, index) => {
-      const button = createTileButton(item, index);
-      if (layout === "lobby" && !paginate) {
-        const key = item.id || item.view;
-        if (key === "learning-corner") {
-          button.dataset.hkSlot = "wide";
-          // 横長の帯では、札を名前の前（帯の中）に並べる。
-          const badge = button.querySelector(".hk-tile-badge");
-          const band = button.querySelector(".hk-tile-band");
-          if (badge && band) band.prepend(badge);
-        } else if (index === 0 && key === "color-legacy") {
-          button.dataset.hkSlot = "hero";
-        }
+      const button = createTileButton(item, numberOffset + index);
+      const key = item.id || item.view;
+      // 「べつの遊び」は難しさの段に入らないので、枠を破線にして分ける。
+      if (key === "learning-corner") button.dataset.hkKind = "other";
+      if (layout === "lobby" && !paginate && index === 0 && key === "color-legacy") {
+        button.dataset.hkSlot = "hero";
       }
       button.addEventListener("click", (event) => {
         if (homeClickIsGuarded(event)) return;
@@ -494,14 +496,27 @@ export function initHome(ctx) {
     const visibleSlotGames = ["slot-l1", "slot-l2"]
       .map(gameById)
       .filter((game) => game && (!state.settings.hideVisualTasks || !game.visualRequired));
+    // 左上（1番）から右下へ、簡単な順。はじめの3つは失敗の無い遊び
+    // （docs/design-renewal-2026-09-25.md §1.4）。
     const homeTiles = [
       gameById("color-legacy"),
+      gameById("balloon"),
+      gameById("coloring"),
       visibleSlotGames.length ? slotCornerTile : null,
       gameById("gonogo"),
       !state.settings.hideVisualTasks ? craneCornerTile : null,
       fishingCornerTile,
       learningCornerTile,
     ].filter(Boolean);
+    // 「①から⑦へ」の数は、いま並べた遊びの数（べつの遊びは段に入れない）。
+    // 画面をよく見る遊びを隠すと減る。
+    const gameCount = homeTiles.filter((tile) => tile.id !== "learning-corner").length;
+    if (elements.homeOrderNote) {
+      elements.homeOrderNote.innerHTML = ctx.tHtml("home.orderNote", {
+        last: circledNumber(gameCount),
+        n: gameCount,
+      });
+    }
 
     /** 二階層目のコーナーへ入る。ページ番号は持ち越さない。 */
     function enterCorner(corner, spoken) {

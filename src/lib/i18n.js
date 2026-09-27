@@ -118,10 +118,12 @@ const STRINGS = {
   },
   // 並び順の意味を画面に書く。打ち合わせで「どれから始めればいいのか、
   // どれが難しいのか分からない」と言われた（同 §1.3）。
-  "home.orderNote": { ruby: "①から⑤へ、だんだん難[むずか]しくなるよ",
-    kanji: "①から⑤へ、だんだん難しくなるよ",
-    kana: "①から⑤へ、だんだん むずかしく なるよ",
-    en: "From 1 to 5, the games get harder",
+  // {last} は丸数字（①…）、{n} はその数（英語用）。遊びの数は設定で変わる
+  // （「画面をよく見る遊びを隠す」）ので、views/home.js が並べた数から入れる。
+  "home.orderNote": { ruby: "①から{last}へ、だんだん難[むずか]しくなるよ",
+    kanji: "①から{last}へ、だんだん難しくなるよ",
+    kana: "①から{last}へ、だんだん むずかしく なるよ",
+    en: "From 1 to {n}, the games get harder",
   },
   "home.back": { ruby: "戻[もど]る",
     kanji: "戻る",
@@ -130,6 +132,7 @@ const STRINGS = {
   },
   // タイルの札（難しさ）。数字の順番と同じことを、ことばでも言う。
   "level.first": { ruby: "はじめは ここから", kanji: "はじめは ここから", kana: "はじめは ここから", en: "Start here" },
+  "level.easy": { ruby: "かんたん", kanji: "かんたん", kana: "かんたん", en: "Easy" },
   "level.used": { ruby: "なれたら", kanji: "なれたら", kana: "なれたら", en: "Next step" },
   "level.challenge": { ruby: "チャレンジ", kanji: "チャレンジ", kana: "チャレンジ", en: "Challenge" },
   "level.endless": { ruby: "ずっと つづく", kanji: "ずっと つづく", kana: "ずっと つづく", en: "Keeps going" },
@@ -152,6 +155,30 @@ const STRINGS = {
     kana: "おすと えと おとが でるよ",
     en: "Press to make a picture and a sound",
   },
+  // --- はじめの遊び（失敗の無い遊び）の2つめと3つめ -------------------
+  "tile.balloon.title": { ruby: "ふうせん わり", kanji: "ふうせん わり", kana: "ふうせん わり", en: "Pop the balloons" },
+  "tile.balloon.desc": { ruby: "押[お]すと ふうせんが われるよ", kanji: "押すと ふうせんが われるよ", kana: "おすと ふうせんが われるよ", en: "Press to pop a balloon" },
+  "tile.coloring.title": { ruby: "ぬりえ", kanji: "ぬりえ", kana: "ぬりえ", en: "Colouring" },
+  "tile.coloring.desc": { ruby: "押[お]すと 色[いろ]が ぬれるよ", kanji: "押すと 色が ぬれるよ", kana: "おすと いろが ぬれるよ", en: "Press to colour in the picture" },
+  "balloon.pop": { ruby: "パン！", kanji: "パン！", kana: "パン！", en: "Pop!" },
+  "balloon.complete": { ruby: "ぜんぶ われた！", kanji: "ぜんぶ われた！", kana: "ぜんぶ われた！", en: "All popped!" },
+  "balloon.voice.progress": { ruby: "パン！ あと {n}こ", kanji: "パン！ あと {n}こ", kana: "パン！ あと {n}こ", en: "Pop! {n} left" },
+  "balloon.voice.finish": { ruby: "{n}こ われたよ", kanji: "{n}こ われたよ", kana: "{n}こ われたよ", en: "You popped {n} balloons" },
+  "coloring.word.0": { ruby: "色[いろ]が ついた！", kanji: "色が ついた！", kana: "いろが ついた！", en: "Colour!" },
+  "coloring.word.1": { ruby: "いいね！", kanji: "いいね！", kana: "いいね！", en: "Nice!" },
+  "coloring.word.2": { ruby: "きれい！", kanji: "きれい！", kana: "きれい！", en: "Pretty!" },
+  "coloring.word.3": { ruby: "もう すこし！", kanji: "もう すこし！", kana: "もう すこし！", en: "Almost!" },
+  "coloring.word.4": { ruby: "できあがり！", kanji: "できあがり！", kana: "できあがり！", en: "All done!" },
+  "coloring.voice.progress": {
+    ruby: "色[いろ]が ついたよ。あと {n}回[かい]",
+    kanji: "色が ついたよ。あと {n}回",
+    kana: "いろが ついたよ。あと {n}かい",
+    en: "Coloured! {n} left",
+  },
+  "coloring.voice.finish": { ruby: "{name}が できたよ", kanji: "{name}が できたよ", kana: "{name}が できたよ", en: "You made a {name}" },
+  "result.balloon.summary": { ruby: "ふうせんが {n}こ われたよ", kanji: "ふうせんが {n}こ われたよ", kana: "ふうせんが {n}こ われたよ", en: "You popped {n} balloons" },
+  "result.coloring.summary": { ruby: "{name}の ぬりえが できたよ", kanji: "{name}の ぬりえが できたよ", kana: "{name}の ぬりえが できたよ", en: "Your {name} picture is done" },
+
   // 押す前の1行だけ。言葉の説明は要らない、絵と音で分かるように、と
   // 言われている（docs/design-renewal-2026-09-25.md §1.4）。
   "color.prompt": { ruby: "押[お]してみよう", kanji: "押してみよう", kana: "おしてみよう", en: "Give it a press" },

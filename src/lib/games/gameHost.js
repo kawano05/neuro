@@ -42,7 +42,7 @@ import { PRIZE_ART } from "./craneArt.js";
 import { slotSymbolHtml } from "./slotArt.js";
 import { MAX_SESSIONS } from "../state.js";
 import { gameHowTo } from "../content.js";
-import { POP_ANIMALS, SCENE_ART, artSvg } from "../art/hakkiriArt.js";
+import { POP_ANIMALS, SCENE_ART, artSvg, burstSvg } from "../art/hakkiriArt.js";
 import { tileThemeFor } from "../homeTheme.js";
 import { createGameSettings } from "./gameSettings.js";
 import { resolveReadinessState } from "../readinessCheck.js";
@@ -361,12 +361,31 @@ function renderReactionResult(summary, context = {}) {
 function renderCompletionResult(summary, context = {}) {
   const t = context.t;
   const presses = Number.isFinite(summary?.presses) ? Math.max(0, Math.round(summary.presses)) : 0;
-  const animals = (Array.isArray(summary?.animals) ? summary.animals : [])
-    .map((id) => POP_ANIMALS.find((animal) => animal.id === id))
-    .filter(Boolean);
-  const items = animals
-    .map((animal) => `<span class="hk-result-item" data-animal="${animal.id}">${artSvg(animal)}</span>`)
-    .join("");
+  // 何が起きたかを並べる。遊びによって並べるものが違う:
+  //   おすと でてくる … 出てきた動物 / ふうせん わり … 割ったふうせん（はじけた形）
+  //   ぬりえ … できあがった絵を大きく1枚
+  let items = "";
+  let summaryText = "";
+  if (Array.isArray(summary?.balloons)) {
+    items = summary.balloons
+      .map((color) => `<span class="hk-result-item is-burst">${burstSvg(color)}</span>`)
+      .join("");
+    summaryText = t("result.balloon.summary", { n: summary.balloons.length });
+  } else if (typeof summary?.picture === "string") {
+    const picture = POP_ANIMALS.find((animal) => animal.id === summary.picture);
+    if (picture) {
+      items = `<span class="hk-result-picture" data-picture="${picture.id}">${artSvg(picture)}</span>`;
+      summaryText = t("result.coloring.summary", { name: t(`animal.${picture.id}`) });
+    }
+  } else {
+    const animals = (Array.isArray(summary?.animals) ? summary.animals : [])
+      .map((id) => POP_ANIMALS.find((animal) => animal.id === id))
+      .filter(Boolean);
+    items = animals
+      .map((animal) => `<span class="hk-result-item" data-animal="${animal.id}">${artSvg(animal)}</span>`)
+      .join("");
+    summaryText = t("result.completion.summary", { n: presses, m: animals.length });
+  }
 
   return `
     <div class="hk-result completion-result">
@@ -375,7 +394,7 @@ function renderCompletionResult(summary, context = {}) {
         ${items}
       </div>
       <strong class="hk-result-title completion-result-title">${t("result.completion.title")}</strong>
-      <p class="hk-result-summary completion-result-summary">${t("result.completion.summary", { n: presses, m: animals.length })}</p>
+      <p class="hk-result-summary completion-result-summary">${summaryText}</p>
     </div>
   `;
 }

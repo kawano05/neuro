@@ -36,6 +36,14 @@ export const SCENE_ART = {
     viewBox: "0 0 360 176",
     body: `<rect x="0" y="0" width="360" height="176" fill="#D6F5EA"></rect><rect x="96" y="40" width="96" height="120" rx="12" fill="#9BE0B0" transform="rotate(-10 144 100)"></rect><circle cx="138" cy="100" r="22" fill="#FF7A2F" transform="rotate(-10 144 100)"></circle><rect x="160" y="44" width="96" height="120" rx="12" fill="#4DC4FF" transform="rotate(8 208 104)"></rect><rect x="168" y="52" width="80" height="104" rx="8" fill="#FFFFFF" transform="rotate(8 208 104)"></rect><path d="M208 76 L 232 124 L 184 124 Z" fill="#03AF7A" transform="rotate(8 208 104)"></path><rect x="222" y="14" width="82" height="46" rx="14" fill="#FFC87A"></rect><path d="M236 58 L 230 72 L 250 58 Z" fill="#FFC87A"></path><circle cx="246" cy="37" r="5" fill="#FFFFFF"></circle><circle cx="263" cy="37" r="5" fill="#FFFFFF"></circle><circle cx="280" cy="37" r="5" fill="#FFFFFF"></circle>`,
   },
+  balloon: {
+    viewBox: "0 0 360 176",
+    body: `<rect x="-360" y="0" width="1080" height="176" fill="#FFF3CC"></rect><ellipse cx="62" cy="146" rx="54" ry="16" fill="#FFFFFF"></ellipse><ellipse cx="300" cy="152" rx="60" ry="15" fill="#FFFFFF"></ellipse><path d="M128 118 C 122 136, 136 150, 130 170" fill="none" stroke="#5A6B7B" stroke-width="2"></path><path d="M188 104 C 194 128, 180 146, 188 170" fill="none" stroke="#5A6B7B" stroke-width="2"></path><path d="M246 116 C 240 136, 254 152, 248 170" fill="none" stroke="#5A6B7B" stroke-width="2"></path><ellipse cx="128" cy="80" rx="28" ry="36" fill="#FF4B00"></ellipse><path d="M122 114 L 134 114 L 128 121 Z" fill="#FF4B00"></path><ellipse cx="118" cy="66" rx="6" ry="10" fill="#FFFFFF" opacity="0.55"></ellipse><ellipse cx="188" cy="64" rx="30" ry="38" fill="#03AF7A"></ellipse><path d="M182 100 L 194 100 L 188 107 Z" fill="#03AF7A"></path><ellipse cx="177" cy="50" rx="6" ry="10" fill="#FFFFFF" opacity="0.55"></ellipse><ellipse cx="246" cy="80" rx="27" ry="35" fill="#005AFF"></ellipse><path d="M240 113 L 252 113 L 246 120 Z" fill="#005AFF"></path><ellipse cx="237" cy="66" rx="6" ry="10" fill="#FFFFFF" opacity="0.55"></ellipse><path d="M300 40 L 306 56 L 322 52 L 312 64 L 326 74 L 308 74 L 306 90 L 298 76 L 284 84 L 290 68 L 276 58 L 294 58 Z" fill="#F6AA00"></path>`,
+  },
+  coloring: {
+    viewBox: "0 0 360 176",
+    body: `<rect x="-360" y="0" width="1080" height="176" fill="#FFF6E0"></rect><path d="M168 20 L 187 68 L 238 70 L 198 102 L 212 152 L 168 124 L 124 152 L 138 102 L 98 70 L 149 68 Z" fill="#FFFFFF"></path><path d="M168 20 L 187 68 L 238 70 L 198 102 L 212 152 L 168 124 Z" fill="#F6AA00"></path><path d="M168 20 L 187 68 L 238 70 L 198 102 L 212 152 L 168 124 L 124 152 L 138 102 L 98 70 L 149 68 Z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linejoin="round"></path><g transform="rotate(32 286 92)"><rect x="272" y="34" width="28" height="92" rx="6" fill="#FF4B00"></rect><rect x="272" y="52" width="28" height="10" fill="#FFFFFF" opacity="0.5"></rect><path d="M272 126 L 300 126 L 286 150 Z" fill="#F5D6B8"></path><path d="M281 142 L 291 142 L 286 150 Z" fill="#FF4B00"></path></g><path d="M84 122 L 88 134 L 100 138 L 88 142 L 84 154 L 80 142 L 68 138 L 80 134 Z" fill="#4DC4FF"></path>`,
+  },
   reelOne: {
     viewBox: "0 0 360 200",
     body: `<rect x="0" y="0" width="360" height="200" fill="#FFE5DA"></rect><rect x="130" y="30" width="100" height="140" rx="16" fill="#6F5BB8"></rect><rect x="146" y="46" width="68" height="108" rx="10" fill="#FFFDF4"></rect><path d="M180 72 L 188 90 L 207 91 L 192 103 L 197 122 L 180 111 L 163 122 L 168 103 L 153 91 L 172 90 Z" fill="#F6AA00"></path>`,
@@ -93,4 +101,23 @@ export function artSvg(art, { className = "", slice = false } = {}) {
   const ratio = slice ? "xMidYMid slice" : "xMidYMid meet";
   const cls = className ? ` class="${className}"` : "";
   return `<svg${cls} viewBox="${art.viewBox}" preserveAspectRatio="${ratio}" aria-hidden="true" focusable="false">${art.body}</svg>`;
+}
+
+/**
+ * ふうせん1つ（viewBox 120x190）。色は CSS の --balloon で塗る（.balloon-body）。
+ * ふうせん わり（games/balloon.js）とけっかで使う。
+ */
+export const BALLOON_ART = {
+  viewBox: "0 0 120 190",
+  body:
+    '<ellipse class="balloon-body" cx="60" cy="62" rx="48" ry="58"></ellipse>' +
+    '<path class="balloon-body" d="M52 118 L 68 118 L 60 130 Z"></path>' +
+    '<ellipse cx="44" cy="40" rx="10" ry="17" fill="#FFFFFF" opacity="0.5"></ellipse>' +
+    '<path d="M60 130 C 50 150, 70 166, 60 188" fill="none" stroke="#5A6B7B" stroke-width="2.5"></path>',
+};
+
+/** はじけたあと（けっかに並べる星形）。色だけ変える。 */
+export function burstSvg(color, { className = "" } = {}) {
+  const cls = className ? ` class="${className}"` : "";
+  return `<svg${cls} viewBox="0 0 60 60" aria-hidden="true" focusable="false"><path d="M30 4 L 36 20 L 54 16 L 42 30 L 56 42 L 38 42 L 34 58 L 28 44 L 12 52 L 18 36 L 4 26 L 22 24 Z" fill="${color}" stroke="#1A1A1A" stroke-width="2.5" stroke-linejoin="round"></path></svg>`;
 }
