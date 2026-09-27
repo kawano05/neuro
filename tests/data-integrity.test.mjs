@@ -25,6 +25,8 @@ import { fileURLToPath } from "node:url";
 import { PRIZE_ART } from "../src/lib/games/craneArt.js";
 import {
   colorLegacyPreset,
+  isPreviewBuild,
+  storageKey,
   cranePresets,
   cranePrizes,
   fishingPresets,
@@ -151,6 +153,15 @@ test("Switch Control mode owns shell scanning and speech volume stays in range",
   assert.equal(invalid.switchControlMode, false);
   assert.equal(invalid.speechVolume, 1);
   assert.equal(invalid.autoScan, true);
+});
+
+test("only a preview build moves to its own storage key", () => {
+  // プレビュー版（本番サイトの /preview/。VITE_PREVIEW=1 でビルド）は保存キーを
+  // 分けて、同じオリジンの本番と記録を混ぜない（src/lib/content.js）。
+  // 逆に、ふつうのビルドがプレビューのキーを使うと、端末に残っている本番の
+  // 記録がまるごと見えなくなる。テスト（Node）とふつうのビルドは本番のキー。
+  assert.equal(isPreviewBuild, false);
+  assert.equal(storageKey, "neuronode-prototype-state-v4");
 });
 
 test("the redesign's settings survive a reload and fall back on unknown values", () => {

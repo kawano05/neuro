@@ -15,8 +15,18 @@
  * ことに伴うバンプ。旧キー（v2: "neuronode-prototype-state-v2"、
  * v1: "neuro-trainer-state-v1"）は state.js の loadState() が v3 未保存時にのみ
  * 読み、settings・logs・evaluation を移行する。旧キー自体は削除しない。
+ *
+ * プレビュー版はキーを分ける。プレビュー版は、デザイン改修中のブランチを本番サイトの
+ * /preview/ に同居させたもの（.github/workflows/pages.yml が VITE_PREVIEW=1 でビルド）。
+ * GitHub Pages のプロジェクトサイトは同じオリジン（kawano05.github.io）に載るので、
+ * キーが同じだと、同じ端末で本番とプレビューが1つの保存を取り合う——プレビューで
+ * 試しに遊んだ回が、本番の記録（CSV）に混ざる。
+ * Node で読むとき（テスト）は import.meta.env が無いので、本番のキーになる。
  */
-export const storageKey = "neuronode-prototype-state-v4";
+export const isPreviewBuild = import.meta.env?.VITE_PREVIEW === "1";
+export const storageKey = isPreviewBuild
+  ? "neuronode-prototype-state-v4-preview"
+  : "neuronode-prototype-state-v4";
 
 /**
  * スイッチ教材モジュールの一覧（現状 "color" の1件のみ）。

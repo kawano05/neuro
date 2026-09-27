@@ -1,0 +1,32 @@
+name: Update Pages preview
+
+# デザイン改修中のブランチ（design/hakkiri）へ push したら、本番サイトの
+# /preview/ を作り直す（https://kawano05.github.io/neuro/preview/）。
+#
+# ここでは公開しない。公開先の github-pages 環境は main からしか公開を
+# 許していないので、main の pages.yml を workflow_dispatch で起動し、
+# 「main の本番＋このブランチのプレビュー」を1つのサイトとして公開し直して
+# もらう（組み立ては pages.yml の Preview の段）。
+#
+# GITHUB_TOKEN で起こしたイベントはふつう新しい実行を作らないが、
+# workflow_dispatch は例外で作れる。
+#
+# このファイルが main へ入っても、動くのはこのブランチへの push だけ。
+
+on:
+  push:
+    branches:
+      - design/hakkiri
+
+permissions:
+  actions: write
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Rebuild the site from main (main + preview)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "${{ github.repository }}" --ref main

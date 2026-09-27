@@ -1357,6 +1357,21 @@ body.result-mode.user-world #resultHome::before {
   }
 }
 
+/* プレビュー版だけの目印（src/main.js）。押せないので、下のタイルのタップを邪魔しない。 */
+.preview-badge {
+  position: fixed;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  left: max(8px, env(safe-area-inset-left));
+  z-index: 60;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(26, 26, 26, 0.82);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
 /* ---------------------------------------------------------------------
    動きを減らす設定
    --------------------------------------------------------------------- */

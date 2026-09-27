@@ -268,3 +268,23 @@
   `SLOT_ENGINE_VERSION` を上げるかどうかと一緒に決める
 - 「中断からの再開」（デザイン案の画面）は入れていない。時間で進む遊びを途中から
   再開すると、1回の記録の中に空白ができる。回数だけの遊びなら可能
+
+## 7. プレビューの公開（2026-09-27）
+
+このブランチは本番サイトの下で見られる: https://kawano05.github.io/neuro/preview/
+（本番 https://kawano05.github.io/neuro/ はそのまま）。
+
+- GitHub Pages は1つのリポジトリに1サイト。公開（github-pages 環境）は main からしか
+  許していないので、main の `.github/workflows/pages.yml` が本番をビルドしたあと、
+  このブランチも `VITE_PREVIEW=1` でビルドして `dist/preview/` に同居させる。
+  プレビューのビルドやテストが落ちても、本番の公開は止めない（プレビューが消えるだけ）。
+- このブランチへ push すると `.github/workflows/preview-pages.yml` が main の
+  pages.yml を起動し、サイトを作り直す（手で動かすなら `gh workflow run pages.yml --ref main`）。
+- **プレビュー版は保存キーを分ける**（`neuronode-prototype-state-v4-preview`、
+  `src/lib/content.js` の `isPreviewBuild`）。本番とプレビューは同じオリジン
+  （kawano05.github.io）に載るので、同じキーだと1つの保存を取り合い、プレビューで
+  試しに遊んだ回が本番の記録（CSV）に混ざる。プレビューでは設定も記録も最初から。
+- 画面の左下に「プレビュー版（記録は本番と別）」と出る（押せない飾り、読み上げにも乗らない）。
+- Service Worker は本番（/neuro/）とプレビュー（/neuro/preview/）で範囲とキャッシュ名が
+  分かれている。本番の SW は通信優先なので、オンラインならプレビューの画面は
+  プレビューのものが出る。
