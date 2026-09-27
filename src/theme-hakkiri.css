@@ -1,0 +1,1384 @@
+/* =====================================================================
+   theme-hakkiri.css — デザイン「はっきりした色」（利用者の世界）
+
+   docs/design-renewal-2026-09-25.md。styles.css のあとに読み込む。
+   当てる範囲は body.user-world（start / home / game / result と
+   まなぶ・つたえる）だけ。支援者の世界（評価ログ・設定）は業務画面のまま。
+
+   決まりは4つ:
+     1. 地は白、文字と枠は黒（#1A1A1A）。枠は2pxで、面の境目をはっきりさせる。
+     2. 遊びごとに色を分ける（src/lib/homeTheme.js。カラーユニバーサル
+        デザイン推奨配色）。色だけに頼らず、番号・札・絵でも見分けられる。
+     3. いま選べる場所（走査の枠）は、黄色＋黒の二重の輪。どんな地の上でも見える。
+     4. 文字はWebフォントを読まない（オフラインで動くことが要件）。
+        iPad ではヒラギノ丸ゴが、それ以外では端末の丸ゴ／ゴシックが出る。
+   ===================================================================== */
+
+body.user-world {
+  --hk-ink: #1a1a1a;
+  --hk-sub: #3a3a3a;
+  --hk-paper: #ffffff;
+  --hk-blue: #005aff;
+  --hk-blue-deep: #0047cc;
+  --hk-yellow: #ffc83d;
+  --hk-night: #000814;
+  --hk-ring: 0 0 0 5px var(--hk-yellow), 0 0 0 8px var(--hk-ink);
+  --font-round:
+    "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", "BIZ UDPGothic",
+    "Zen Maru Gothic", "Yu Gothic UI", "Yu Gothic", Meiryo, system-ui, sans-serif;
+  background: var(--hk-paper);
+  color: var(--hk-ink);
+}
+
+/* ---------------------------------------------------------------------
+   シェル（ヘッダ・画面のスイッチ）
+   --------------------------------------------------------------------- */
+
+/* 画面の「おす」ボタンは既定で出さない（docs §3.5）。出さないときは、
+   ドックのために空けていた下の余白も外す——空けたままだと、画面の下に
+   何も無い帯が残る。 */
+body.user-world:not(.screen-switch-on) .switch-dock {
+  display: none;
+}
+
+body.user-world:not(.screen-switch-on) .app-shell {
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+/* 出すときも「走査停止」は出さない。止めたいのは支援者で、
+   その役は設定の「自動走査」がする。 */
+body.user-world .switch-dock .scan-control {
+  display: none;
+}
+
+body.user-world .switch-dock {
+  border: 2px solid var(--hk-ink);
+  background: var(--hk-paper);
+}
+
+body.user-world .primary-switch {
+  border: 2px solid var(--hk-ink);
+  background: var(--hk-blue);
+  color: #ffffff;
+  font-size: 1.7rem;
+  letter-spacing: 0.1em;
+}
+
+body.user-world .topbar {
+  min-height: 64px;
+  margin-bottom: 0;
+  padding: 4px 0 10px;
+  border-bottom: 2px solid var(--hk-ink);
+}
+
+body.user-world .brand-lockup h1 {
+  color: var(--hk-ink);
+  font-family: var(--font-round);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+body.user-world .brand-mark {
+  color: var(--hk-blue);
+}
+
+/* 「走査中／走査停止中」は利用者にも家族にも伝わらない言葉だった（docs §1.2）。
+   黄色い枠が動いていることで分かるので、利用者の世界では出さない。 */
+body.user-world .status-pill {
+  display: none;
+}
+
+/* ヘッダは3列のグリッド（ブランド／状態／入口）。状態を消しても、入口は右端の列に置く。 */
+body.user-world .topbar-actions {
+  grid-column: 3;
+}
+
+body.user-world .home-supporter-menu {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 2px solid var(--hk-ink);
+  border-radius: 12px;
+  background: var(--hk-paper);
+  color: var(--hk-ink);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+body.user-world .home-supporter-menu[hidden] {
+  display: none;
+}
+
+/* 走査の枠。黄色だけだと白い地で薄く、黒だけだと黒い地で消えるので、両方を重ねる。 */
+body.user-world .scan-focus {
+  box-shadow: var(--hk-ring);
+  transform: none;
+}
+
+/* ---------------------------------------------------------------------
+   スタート画面
+   --------------------------------------------------------------------- */
+
+body.start-mode.user-world .app-shell {
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+body.user-world .start-screen {
+  min-height: calc(100dvh - 60px);
+}
+
+body.user-world .start-screen .eyebrow {
+  color: var(--hk-sub);
+  letter-spacing: 0.2em;
+}
+
+/* 当たり判定は画面いっぱい（狙って押せない利用者がいる）。見た目は
+   地と同じ白にして、絵・一言・「はじめる」だけが見えるようにする。 */
+body.user-world .start-stage {
+  display: flex;
+  width: 100%;
+  min-height: calc(100dvh - 110px);
+  padding: 24px 16px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 3vh, 26px);
+  border: 0;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--hk-ink);
+  box-shadow: none;
+}
+
+body.user-world .start-stage:hover {
+  background: #f5f9ff;
+}
+
+body.user-world .start-art {
+  display: grid;
+  width: clamp(170px, 30vmin, 260px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #d9f3ff;
+  place-items: center;
+}
+
+body.user-world .start-art svg {
+  width: 84%;
+  height: auto;
+}
+
+body.user-world .start-lead {
+  font-family: var(--font-round);
+  font-size: clamp(1.7rem, 4.6vw, 2.5rem);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+body.user-world .start-stage-label {
+  display: inline-flex;
+  min-width: min(470px, 84vw);
+  min-height: 96px;
+  padding: 0 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  border-radius: 24px;
+  background: var(--hk-blue);
+  color: #ffffff;
+  font-size: clamp(2rem, 6vw, 2.6rem);
+  letter-spacing: 0.08em;
+  box-shadow: var(--hk-ring);
+}
+
+/* 「はじめる ▶」の三角。文字ではなく形にする（読み上げに乗らない）。 */
+body.user-world .start-stage-label::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 0.36em solid transparent;
+  border-bottom: 0.36em solid transparent;
+  border-left: 0.5em solid currentColor;
+}
+
+/* ---------------------------------------------------------------------
+   ホーム（遊びを選ぼう）
+   --------------------------------------------------------------------- */
+
+/* ホームは1画面に収める（ページをめくらせない。docs §1.3）。シェルを縦の
+   flex にして、残りの高さをタイルの一覧が使う。 */
+body.home-mode.user-world .app-shell {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+
+body.home-mode.user-world main {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin-top: 0;
+}
+
+body.home-mode.user-world #homeView.is-active {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+body.user-world .home-intro {
+  display: grid;
+  margin: 16px 6px 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  column-gap: 16px;
+}
+
+body.user-world .home-intro .eyebrow {
+  display: none;
+}
+
+body.user-world .home-intro h2 {
+  margin: 0;
+  font-family: var(--font-round);
+  font-size: clamp(1.8rem, 3.6vw, 2.35rem);
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+body.user-world .home-guide {
+  grid-column: 1;
+  margin: 2px 0 0;
+  color: var(--hk-sub);
+  font-size: clamp(1rem, 1.8vw, 1.15rem);
+  font-weight: 600;
+}
+
+body.user-world .home-order-note {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: end;
+  margin: 0;
+  color: var(--hk-sub);
+  font-size: clamp(0.9rem, 1.5vw, 1rem);
+  font-weight: 600;
+}
+
+body.user-world .home-order-note[hidden] {
+  display: none;
+}
+
+body.user-world .activity-list {
+  gap: 14px;
+  margin: 0;
+  padding: 10px 6px 6px;
+}
+
+/* --- タイル ---------------------------------------------------------- */
+
+body.user-world .hk-tile {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  flex-direction: column;
+  /* styles.css の .game-tile は align-items: center。そのままだと絵の枠
+     （中身が絶対配置のSVGだけ）の幅が0になって消える。 */
+  align-items: stretch;
+  gap: 0;
+  border: 2px solid var(--hk-ink);
+  border-radius: 18px;
+  background: var(--hk-paper);
+  color: var(--hk-ink);
+  text-align: left;
+  box-shadow: none;
+}
+
+body.user-world .hk-tile:hover {
+  border-color: var(--hk-ink);
+  background: var(--hk-paper);
+  box-shadow: none;
+}
+
+/* styles.css の `.module-button span`（薄い色・小さい字）を、タイルの中では外す。 */
+body.user-world .hk-tile span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+body.user-world .hk-tile .hk-tile-art {
+  position: relative;
+  display: block;
+  min-height: 64px;
+  flex: 1 1 auto;
+  background: var(--tile-thumb);
+}
+
+body.user-world .hk-tile .hk-tile-art svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body.user-world .hk-tile .hk-tile-tags {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+body.user-world .hk-tile .scan-order {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--hk-ink);
+  color: #ffffff;
+  place-items: center;
+  font-family: var(--font-round);
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 2px #ffffff;
+}
+
+body.user-world .hk-tile .hk-tile-badge {
+  padding: 4px 12px;
+  border: 2px solid var(--hk-ink);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--hk-ink);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+body.user-world .hk-tile .hk-tile-band {
+  display: flex;
+  min-height: 62px;
+  padding: 10px 18px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--tile-band);
+  color: var(--tile-band-ink);
+}
+
+/* 名前の欄は帯の幅いっぱいを持つ。中身の幅に縮めると、短い名前ほど
+   「置ける幅」が狭く見え、長い名前は矢印のぶん早く折り返す。 */
+body.user-world .hk-tile .tile-text {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 2px;
+}
+
+body.user-world .hk-tile .tile-text strong {
+  color: inherit;
+  font-family: var(--font-round);
+  font-size: clamp(1.2rem, 2.1vw, 1.55rem);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+/* 説明文は大きいタイル（1番とコーナーのカード）でだけ見せる。小さいタイルでは
+   名前が主役。説明は aria-describedby で読み上げには常に乗る。 */
+body.user-world .hk-tile .tile-description {
+  display: none;
+  color: inherit;
+  font-size: clamp(0.95rem, 1.6vw, 1.1rem);
+  font-weight: 600;
+  line-height: 1.4;
+  opacity: 0.94;
+}
+
+body.user-world .hk-tile .hk-tile-go {
+  flex: 0 0 auto;
+  font-size: 1.1rem;
+}
+
+body.user-world .hk-tile .scan-current-label {
+  display: none;
+}
+
+/* いちばん簡単な遊び（ロビーの1番）は大きく、左上に。 */
+body.user-world .hk-tile[data-hk-slot="hero"] .hk-tile-band {
+  min-height: 104px;
+  padding: 14px 24px;
+}
+
+body.user-world .hk-tile[data-hk-slot="hero"] .tile-text strong {
+  font-size: clamp(1.7rem, 3.2vw, 2.4rem);
+}
+
+body.user-world .hk-tile[data-hk-slot="hero"] .tile-description {
+  display: block;
+}
+
+body.user-world .hk-tile[data-hk-slot="hero"] .scan-order {
+  width: 42px;
+  height: 42px;
+  font-size: 1.4rem;
+}
+
+/* 「べつの遊び」（まなぶ・つたえる）は横長の帯。遊びの段とは別物なので、
+   番号を出さず、枠を破線にする。 */
+body.user-world .hk-tile[data-hk-slot="wide"] {
+  flex-direction: row;
+  border-style: dashed;
+}
+
+body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-art {
+  width: clamp(120px, 18%, 190px);
+  flex: 0 0 auto;
+}
+
+body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-band {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  gap: 16px;
+}
+
+/* 札は帯の中へ移してある（views/home.js）。番号は出さない。 */
+body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-tags {
+  display: none;
+}
+
+body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-band {
+  padding: 8px 22px;
+}
+
+/* 遊びではない項目（戻る・つぎのページ）は、白地の小さいボタン。
+   遊びのタイルと同じ見た目にすると、選ぶ対象に見えてしまう。 */
+body.user-world .game-tile:not(.hk-tile) {
+  display: flex;
+  min-height: 60px;
+  padding: 0 22px;
+  align-items: center;
+  gap: 12px;
+  border: 2px solid var(--hk-ink);
+  border-radius: 14px;
+  background: var(--hk-paper);
+  color: var(--hk-ink);
+  box-shadow: none;
+}
+
+body.user-world .game-tile:not(.hk-tile) .scan-order,
+body.user-world .game-tile:not(.hk-tile) .scan-current-label,
+body.user-world .game-tile:not(.hk-tile) .tile-description {
+  display: none;
+}
+
+body.user-world .game-tile:not(.hk-tile) .tile-icon {
+  width: auto;
+  height: auto;
+  border: 0;
+  background: transparent;
+  color: var(--hk-ink);
+  font-size: 1.3rem;
+}
+
+body.user-world .game-tile:not(.hk-tile) strong {
+  font-family: var(--font-round);
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+body.user-world .game-tile:not(.hk-tile) .tile-text {
+  flex: 1 1 auto;
+}
+
+body.user-world .game-tile.scan-pager {
+  border-style: dashed;
+}
+
+/* 走査の枠（タイル・戻る・ページ送り）。タイルの box-shadow: none より後に、
+   強い指定で置く——同じ強さだと後ろのタイルの規則に消される（実際に消えていた）。 */
+body.user-world .hk-tile.scan-focus,
+body.user-world .game-tile.scan-focus {
+  box-shadow: var(--hk-ring);
+  transform: none;
+}
+
+/* --- 並べ方 ------------------------------------------------------------
+   グリッドにする幅は src/lib/scanPaging.js の GRID_LAYOUT_MIN_WIDTH と同じ。
+   ここだけ変えると、先読みのページ分けと並べ方が食い違う。 */
+
+@media (min-width: 700px) {
+  /* ロビー: 1番が左上に大きく、5番が右下。いちばん下に「べつの遊び」。 */
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] {
+    display: grid;
+    min-height: 340px;
+    flex: 1 1 auto;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-auto-flow: row dense;
+    gap: 16px;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="hero"] {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="wide"] {
+    min-height: 76px;
+    grid-column: 1 / -1;
+  }
+
+  /* 縦向きのタブレット（iPad 縦 834x1194 など）: 3列だと1枚が細長くなり、
+     名前が1文字だけ次の行へ落ちる（「止め／る」）。2列にして、1番を上に横長で置く。
+     簡単→難しいが左上→右下に並ぶことは変わらない。 */
+  @media (orientation: portrait) {
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    }
+
+    body.user-world #gameTileGrid[data-layout="lobby"][data-paged="false"] .hk-tile[data-hk-slot="hero"] {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+  }
+
+  /* 遊びかたを選ぶ画面（コーナー）: 大きなカードを横に並べ、戻るは下に小さく。 */
+  /* 列の数はカードの数（data-count は「戻る」を含む）。auto-fit にすると、
+     全幅の「戻る」が空の列を生かしたままにして、カードが縮む。 */
+  body.user-world #gameTileGrid[data-layout="corner"][data-paged="false"] {
+    display: grid;
+    min-height: 320px;
+    flex: 1 1 auto;
+    grid-template-columns: repeat(var(--hk-cols, 2), minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 22px;
+  }
+
+  body.user-world #gameTileGrid[data-layout="corner"][data-count="2"] {
+    --hk-cols: 1;
+  }
+
+  body.user-world #gameTileGrid[data-layout="corner"][data-count="4"] {
+    --hk-cols: 3;
+  }
+
+  body.user-world #gameTileGrid[data-layout="corner"][data-paged="false"] .game-tile:not(.hk-tile) {
+    grid-column: 1 / -1;
+    justify-self: start;
+    align-self: end;
+  }
+
+  body.user-world #gameTileGrid[data-layout="corner"] .hk-tile .hk-tile-band {
+    min-height: 104px;
+    padding: 14px 24px;
+  }
+
+  body.user-world #gameTileGrid[data-layout="corner"] .hk-tile .tile-text strong {
+    font-size: clamp(1.6rem, 2.8vw, 2.1rem);
+  }
+
+  body.user-world #gameTileGrid[data-layout="corner"] .hk-tile .tile-description {
+    display: block;
+  }
+}
+
+/* 狭い画面（スマホ・分割表示）: 2列のサムネイル。1番と「べつの遊び」は横いっぱい。
+   リストより背が低く収まるので、縦長のスマホ（390x812）でもページをめくらずに済む。
+   それでも入らない画面（iPhone 14 の 664px など）は、実測でページに分かれる。 */
+@media (max-width: 699px) {
+  body.user-world #gameTileGrid[data-paged="false"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  /* 高さは画面の高さに合わせる。余っている縦長の画面では絵を大きく、
+     詰まっている画面では小さく（それでも入らなければ実測でページに分かれる）。 */
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile {
+    min-height: clamp(112px, 15vh, 170px);
+  }
+
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-slot="hero"],
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-slot="wide"],
+  body.user-world #gameTileGrid[data-paged="false"] .game-tile:not(.hk-tile) {
+    grid-column: 1 / -1;
+  }
+
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-slot="hero"] {
+    min-height: clamp(140px, 18vh, 210px);
+  }
+
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile[data-hk-slot="wide"] {
+    min-height: 64px;
+  }
+
+  body.user-world .hk-tile .hk-tile-band {
+    min-height: 54px;
+    padding: 8px 12px;
+  }
+
+  body.user-world .hk-tile[data-hk-slot="hero"] .hk-tile-band {
+    min-height: 72px;
+    padding: 10px 16px;
+  }
+
+  body.user-world .hk-tile .hk-tile-tags {
+    top: 8px;
+    left: 8px;
+  }
+
+  body.user-world .home-intro {
+    margin: 10px 4px 6px;
+    grid-template-columns: 1fr;
+  }
+
+  body.user-world .home-intro h2 {
+    font-size: 1.6rem;
+  }
+
+  body.user-world .home-guide,
+  body.user-world .home-order-note {
+    font-size: 0.9rem;
+  }
+
+  body.user-world .home-order-note {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 2px;
+  }
+
+  /* スマホでは名前と絵を一段小さくする。背が伸びるのは中身（ふりがな付きの
+     2行の名前、帯の中で折り返す札）のせいで、実測では最小の高さより
+     25〜50px 高くなっていた（390x812 で「次のページ」に分かれた原因）。 */
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile .hk-tile-art {
+    min-height: 44px;
+  }
+
+  body.user-world .hk-tile .tile-text strong {
+    font-size: 1.05rem;
+  }
+
+  body.user-world .hk-tile[data-hk-slot="hero"] .tile-text strong {
+    font-size: 1.4rem;
+  }
+
+  body.user-world .hk-tile .scan-order {
+    width: 30px;
+    height: 30px;
+    font-size: 1rem;
+  }
+
+  body.user-world .hk-tile .hk-tile-badge {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+  }
+
+  body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-art {
+    width: 84px;
+  }
+
+  body.user-world .hk-tile[data-hk-slot="wide"] .hk-tile-band {
+    padding: 6px 12px;
+    gap: 8px;
+  }
+
+  /* 2列の小さいタイルでは、名前の幅を取る（実測 108px で「リールを 止め／る」と
+     折り返していた）。矢印は飾りなので外す——タイル全体がボタン。 */
+  body.user-world #gameTileGrid[data-paged="false"] .hk-tile:not([data-hk-slot]) .hk-tile-go {
+    display: none;
+  }
+
+  body.user-world .activity-list {
+    padding-right: 0;
+    padding-left: 0;
+  }
+}
+
+/* ページに分けたとき（どの幅でも）: 絵を左、名前を右に置いた横長の行。
+   1ページは3つ＋「つぎのページ」なので、行のほうが大きく見せられる。 */
+body.user-world #gameTileGrid[data-paged="true"] {
+  display: grid;
+  gap: 12px;
+}
+
+body.user-world #gameTileGrid[data-paged="true"] .hk-tile {
+  min-height: 96px;
+  flex-direction: row;
+}
+
+body.user-world #gameTileGrid[data-paged="true"] .hk-tile .hk-tile-art {
+  width: clamp(96px, 30%, 170px);
+  flex: 0 0 auto;
+}
+
+body.user-world #gameTileGrid[data-paged="true"] .hk-tile .hk-tile-band {
+  flex: 1 1 auto;
+}
+
+/* 行の並びでは札が名前の上に重なる（絵の幅が狭い）。番号だけ残す。
+   札のことばは aria-describedby で読み上げには乗ったまま。 */
+body.user-world #gameTileGrid[data-paged="true"] .hk-tile .hk-tile-badge {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------
+   ゲーム画面の上の帯（進みぐあい・この遊びの設定・おわる）
+   --------------------------------------------------------------------- */
+
+body.game-mode.user-world .game-progress {
+  top: max(16px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  padding: 8px 16px;
+  border: 2px solid rgba(255, 255, 255, 0.42);
+  border-radius: 12px;
+  background: rgba(0, 8, 20, 0.78);
+  font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+}
+
+.game-actions {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+body.game-mode .game-actions {
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+}
+
+/* 包含ブロックは .game-actions に移した。位置は親が持つ。 */
+.game-actions .game-exit,
+body.game-mode .game-actions .game-exit {
+  position: static;
+}
+
+.game-settings {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  background: rgba(0, 8, 20, 0.78);
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.game-settings[hidden] {
+  display: none;
+}
+
+.game-settings::before {
+  content: "\f1de";
+  margin-right: 8px;
+  font-family: "Font Awesome 7 Free";
+  font-weight: 900;
+}
+
+body.user-world .game-exit {
+  min-height: 48px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  background: rgba(0, 8, 20, 0.78);
+  font-size: 1rem;
+}
+
+body.user-world .game-exit::before {
+  content: "\f00d";
+  margin-right: 8px;
+  font-family: "Font Awesome 7 Free";
+  font-weight: 900;
+}
+
+/* --- この遊びの設定（ダイアログ） ------------------------------------
+   hidden を display で打ち消さない（引き継ぎ書 §3 で2回踏んだ型）。
+   見せるときだけ :not([hidden]) で並べる。 */
+.game-settings-dialog:not([hidden]) {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  padding: 16px;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.gs-panel {
+  display: flex;
+  width: min(600px, 100%);
+  max-height: calc(100dvh - 32px);
+  padding: 26px 30px;
+  overflow: auto;
+  flex-direction: column;
+  gap: 18px;
+  border-radius: 22px;
+  background: #ffffff;
+  color: #1a1a1a;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  font-family: var(--font-round, system-ui, sans-serif);
+  text-align: left;
+}
+
+.gs-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.gs-eyebrow {
+  display: block;
+  color: #3a3a3a;
+  font-size: 0.9rem;
+}
+
+.gs-title {
+  margin: 2px 0 0;
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.gs-close {
+  width: 52px;
+  min-width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 2px solid #1a1a1a;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1a1a1a;
+  font-size: 1.3rem;
+}
+
+.gs-note {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #eaf2ff;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.gs-note.is-lock {
+  background: #fff4d6;
+}
+
+.gs-group {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.gs-group legend {
+  margin-bottom: 10px;
+  padding: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.gs-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gs-option {
+  min-height: 54px;
+  padding: 0 14px;
+  flex: 1 1 0;
+  border: 2px solid #1a1a1a;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1a1a1a;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.gs-option[aria-pressed="true"] {
+  border-color: #005aff;
+  background: #005aff;
+  color: #ffffff;
+}
+
+.gs-option:disabled {
+  opacity: 0.45;
+}
+
+.gs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.gs-actions button {
+  min-height: 60px;
+  flex: 1 1 200px;
+  border-radius: 14px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.gs-cancel {
+  border: 2px solid #1a1a1a;
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.gs-apply {
+  border: 2px solid #005aff;
+  background: #005aff;
+  color: #ffffff;
+}
+
+/* --- やりかた（レディ画面） -------------------------------------------
+   まだ計測が始まっていない画面なので、色も絵も自由に使える
+   （detailed-design.md §2.4）。選んだタイルと同じ絵を出して、
+   「さっき押した遊び」だと分かるようにする。 */
+body.user-world .game-stage-content.is-ready {
+  background: #0b1a33;
+  background-image: none;
+}
+
+.game-ready-art {
+  display: block;
+  width: min(360px, 62vw);
+  aspect-ratio: 360 / 176;
+  overflow: hidden;
+  border: 3px solid #ffffff;
+  border-radius: 18px;
+  background: var(--tile-thumb, #12305e);
+}
+
+.game-ready-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------------
+   はじめの遊び「おすと でてくる」（games/colorLegacy.js）
+   --------------------------------------------------------------------- */
+
+.game-stage-content.module-pop {
+  padding: 96px 24px 72px;
+  background: #000000;
+  background-image: none;
+  color: #ffffff;
+}
+
+.game-stage-content.module-pop.is-light {
+  background: #f2f7ff;
+  color: #1a1a1a;
+}
+
+.pop-stage {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
+
+.pop-prompt,
+.pop-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.pop-prompt-ring {
+  display: grid;
+  width: 120px;
+  height: 120px;
+  border: 4px dashed #6a7a96;
+  border-radius: 50%;
+  place-items: center;
+  font-size: 3.2rem;
+}
+
+.pop-word {
+  font-family: var(--font-round);
+  font-size: clamp(2rem, 5vw, 2.7rem);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.pop-figure svg {
+  width: min(440px, 72vw);
+  height: auto;
+  max-height: 50vh;
+}
+
+.pop-figure {
+  animation: hk-pop 0.32s cubic-bezier(0.34, 1.36, 0.64, 1) both;
+}
+
+.pop-figure.is-gone {
+  animation: hk-fade 0.5s ease-out both;
+}
+
+.pop-count {
+  color: #8a9ab6;
+  font-size: clamp(1.2rem, 2.6vw, 1.5rem);
+  font-weight: 700;
+}
+
+.module-pop.is-light .pop-count {
+  color: #4e5d78;
+}
+
+.pop-dots {
+  position: absolute;
+  right: 0;
+  bottom: max(26px, env(safe-area-inset-bottom));
+  left: 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.pop-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #3a4a66;
+}
+
+.pop-dot.is-done {
+  background: #4dc4ff;
+  box-shadow: 0 0 0 3px rgba(77, 196, 255, 0.35);
+}
+
+.module-pop.is-light .pop-dot {
+  background: #c9d3e3;
+}
+
+.module-pop.is-light .pop-dot.is-done {
+  background: #005aff;
+}
+
+@keyframes hk-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes hk-fade {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+/* ---------------------------------------------------------------------
+   けっか
+   --------------------------------------------------------------------- */
+
+/* 見出し「けっか」は読み上げ用に残し、画面には出さない。
+   画面の主役は一言（できた！ など）。 */
+body.result-mode.user-world #resultView .section-head {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+body.result-mode.user-world #resultView {
+  display: grid;
+  min-height: calc(100dvh - 120px);
+  align-content: center;
+  justify-items: center;
+  gap: 18px;
+}
+
+body.result-mode.user-world .result-stats {
+  width: min(960px, 100%);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hk-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+/* 旧「色と音」のけっかの地（クリームの板）を外す。白い画面の上に、
+   動物と一言だけが乗る形にする。 */
+body.user-world .hk-result.completion-result {
+  padding: 0;
+  background: none;
+}
+
+body.user-world .hk-result .completion-result-title,
+body.user-world .hk-result .completion-result-summary {
+  line-height: 1.35;
+}
+
+.hk-result-items {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.hk-result-item {
+  display: grid;
+  width: clamp(76px, 12vw, 118px);
+  aspect-ratio: 1;
+  border: 3px solid #1a1a1a;
+  border-radius: 22px;
+  background: #ffffff;
+  place-items: center;
+}
+
+.hk-result-item svg {
+  width: 84%;
+  height: auto;
+}
+
+.hk-result-title {
+  font-family: var(--font-round);
+  font-size: clamp(2rem, 5vw, 2.9rem);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.hk-result-summary {
+  margin: 0;
+  color: #3a3a3a;
+  font-size: clamp(1.1rem, 2.4vw, 1.4rem);
+  font-weight: 600;
+}
+
+.hk-stars {
+  display: flex;
+  gap: 12px;
+  color: #f6aa00;
+  font-size: clamp(2.4rem, 7vw, 3.4rem);
+}
+
+.hk-star.is-off {
+  color: #d9d9d9;
+}
+
+.hk-result-medal {
+  display: grid;
+  width: clamp(72px, 10vw, 96px);
+  aspect-ratio: 1;
+  /* 並びの高さ（動物の枠）に引き伸ばされて楕円にならないように。 */
+  align-self: center;
+  border-radius: 50%;
+  background: #f6aa00;
+  box-shadow: inset 0 0 0 6px #ffc83d;
+  color: #ffffff;
+  place-items: center;
+  font-size: clamp(2rem, 5vw, 2.8rem);
+}
+
+/* 支援者むけの数値は畳んでおく。走査の輪には入れない（summary は data-scan なし）。 */
+.result-details {
+  width: 100%;
+  margin-top: 6px;
+  text-align: center;
+}
+
+.result-details[open] {
+  text-align: left;
+}
+
+.result-details[open] > summary {
+  display: block;
+  text-align: center;
+}
+
+.result-details > summary {
+  display: inline-block;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: #3a3a3a;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.result-details[open] > summary {
+  margin-bottom: 10px;
+}
+
+body.result-mode.user-world #resultView .action-row {
+  justify-content: center;
+  gap: 22px;
+}
+
+body.result-mode.user-world #resultRetry,
+body.result-mode.user-world #resultHome {
+  display: inline-flex;
+  width: min(360px, 86vw);
+  min-height: 84px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 2px solid var(--hk-ink);
+  border-radius: 18px;
+  font-family: var(--font-round);
+  font-size: clamp(1.5rem, 3.4vw, 1.75rem);
+  font-weight: 800;
+}
+
+body.result-mode.user-world #resultRetry {
+  border-color: var(--hk-blue);
+  background: var(--hk-blue);
+  color: #ffffff;
+}
+
+body.result-mode.user-world #resultHome {
+  background: var(--hk-paper);
+  color: var(--hk-ink);
+}
+
+body.result-mode.user-world #resultRetry::before,
+body.result-mode.user-world #resultHome::before {
+  font-family: "Font Awesome 7 Free";
+  font-size: 0.9em;
+  font-weight: 900;
+}
+
+body.result-mode.user-world #resultRetry::before {
+  content: "\f2f9";
+}
+
+body.result-mode.user-world #resultHome::before {
+  content: "\f009";
+}
+
+/* ---------------------------------------------------------------------
+   れんしゅうの回だけの演出（docs/design-renewal-2026-09-25.md §1.5, §3.3）
+   --------------------------------------------------------------------- */
+
+/* さかなつり: アタリのときの大きな「！」。糸と魚のあいだ、目が向く場所に出す。 */
+.fishing-bite-mark {
+  position: absolute;
+  top: 36%;
+  left: calc(50% + 34px);
+  z-index: 3;
+  display: grid;
+  width: clamp(72px, 11vmin, 112px);
+  aspect-ratio: 1;
+  border: 5px solid #1a1a1a;
+  border-radius: 50%;
+  background: #ffc83d;
+  color: #1a1a1a;
+  place-items: center;
+  font-family: var(--font-round, system-ui, sans-serif);
+  font-size: clamp(3rem, 8vmin, 4.8rem);
+  font-weight: 900;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.4);
+}
+
+.fishing-scene.is-bite .fishing-bite-mark {
+  animation: hk-pop 0.24s cubic-bezier(0.34, 1.36, 0.64, 1) both;
+}
+
+/* リール: 目標の絵で止めたときに、星がはじける。 */
+.slot-cheer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.slot-cheer-star {
+  position: absolute;
+  color: #ffc83d;
+  font-size: clamp(1.4rem, 3.4vmin, 2.2rem);
+  text-shadow: 0 0 0 #1a1a1a, 0 2px 0 rgba(0, 0, 0, 0.35);
+  animation: slot-cheer 0.8s ease-out both;
+}
+
+@keyframes slot-cheer {
+  from {
+    opacity: 1;
+    transform: rotate(calc(var(--i) * 45deg)) translateY(0) scale(0.4);
+  }
+
+  to {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 45deg)) translateY(-110px) scale(1.1);
+  }
+}
+
+/* ---------------------------------------------------------------------
+   動きを減らす設定
+   --------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .pop-figure,
+  .pop-figure.is-gone {
+    animation: none;
+  }
+
+  body.user-world .start-stage-label {
+    animation: none;
+  }
+
+  /* 「！」は動かさずに出すだけにする（出ること自体が手がかりなので消さない）。 */
+  .fishing-scene.is-bite .fishing-bite-mark {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .slot-cheer {
+    display: none;
+  }
+}

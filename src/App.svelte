@@ -20,9 +20,14 @@
       <span id="scanState">走査停止中</span>
     </div>
     <div class="topbar-actions">
+      <!--
+        支援者の入口。利用者の走査の輪には入れない（タップ専用）。
+        打ち合わせで「設定は支援者しか触らないので端に小さく、ハイライトで
+        選べなくてよい」と言われた形のまま（docs/design-renewal-2026-09-25.md §1.3）。
+      -->
       <button class="home-supporter-menu" id="homeSupporterMenu" type="button" hidden>
-        <i class="fa-solid fa-user" aria-hidden="true"></i>
-        <span>支援者メニュー</span>
+        <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+        <span>支援者の設定</span>
       </button>
     </div>
   </header>
@@ -81,14 +86,23 @@
       利用者向けフロー（detailed-design.md §10）: start/home/game/result。
       起動時は必ず #startView から始まる（P1-2、state.js/neuronodeApp.js参照）。
     -->
+    <!--
+      スタート画面は「はじめる」だけ。以前あった小さな「せってい」は消した——
+      打ち合わせで「先に設定しないといけないと思った」と言われた
+      （docs/design-renewal-2026-09-25.md §1.2）。支援者はホーム右上から入る。
+
+      見た目は絵＋一言＋「はじめる」だが、当たり判定は画面全体のまま
+      （detailed-design.md §2.2。狙って押せない利用者がいる）。
+    -->
     <section class="view is-active" id="startView" aria-labelledby="start-title">
       <div class="start-screen">
         <p class="eyebrow">NeuroNode</p>
         <h2 id="start-title" class="sr-only">スタート画面</h2>
         <button class="start-stage" id="startStage" type="button">
+          <span class="start-art" id="startArt" aria-hidden="true"></span>
+          <span class="start-lead" id="startLead" aria-hidden="true">おして、はじめよう。</span>
           <span class="start-stage-label">はじめる</span>
         </button>
-        <button class="start-settings-link" id="startSettingsLink" type="button">せってい</button>
       </div>
     </section>
 
@@ -97,6 +111,7 @@
         <p class="eyebrow" id="homeEyebrow">Home</p>
         <h2 id="home-title">アクティビティ</h2>
         <p class="home-guide" id="homeGuide">やりたいことを えらびます</p>
+        <p class="home-order-note" id="homeOrderNote"></p>
       </div>
       <div class="activity-list" id="gameTileGrid" aria-label="アクティビティの一覧"></div>
     </section>
@@ -120,7 +135,24 @@
         <div class="game-stage-content" id="gameStageContent" aria-hidden="true"></div>
       </div>
       <div class="game-progress" id="gameProgress" aria-live="polite"></div>
-      <button class="game-exit" id="gameExit" type="button">おわる</button>
+      <!--
+        この遊びの設定（支援者がその場で変える。docs/design-renewal-2026-09-25.md §1.8）。
+        「おわる」と同じく #gameStage の兄弟に置く——入れ子にすると
+        role="button" の子孫として AT から見えなくなる（上のコメント参照）。
+        変えられる項目のある遊びでだけ出す（games/gameSettings.js）。
+      -->
+      <div class="game-actions">
+        <button class="game-settings" id="gameSettings" type="button" hidden>この遊びの設定</button>
+        <button class="game-exit" id="gameExit" type="button">おわる</button>
+      </div>
+      <div
+        class="game-settings-dialog"
+        id="gameSettingsDialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="gameSettingsTitle"
+        hidden
+      ></div>
     </section>
 
     <section class="view" id="resultView" aria-labelledby="result-title">
@@ -392,6 +424,19 @@
             <small>画面切り替え後に走査を開始します</small>
           </span>
           <input id="autoScan" type="checkbox" role="switch" data-scan />
+        </label>
+
+        <!--
+          利用者の画面の下の「おす」ボタン（画面のスイッチ）。既定は出さない
+          （docs/design-renewal-2026-09-25.md §3.5）。画面のどこかを押して
+          「いまの枠」を決めたい人のためのもの。
+        -->
+        <label class="setting-row toggle-row">
+          <span>
+            <strong>画面に「おす」ボタンを出す</strong>
+            <small>画面のボタンをスイッチのかわりに使う人のためのものです。ふだんは出しません</small>
+          </span>
+          <input id="showScreenSwitch" type="checkbox" role="switch" data-scan />
         </label>
       </div>
 

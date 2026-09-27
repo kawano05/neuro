@@ -188,6 +188,33 @@ export function createSlotGame(gameId) {
       persist();
     }
 
+    /**
+     * 目標の絵で止められたときの演出（れんしゅうの回だけ）。
+     *
+     * 打ち合わせで「止まったときに当たったと分かる派手な演出がほしい」と
+     * 言われた（docs/design-renewal-2026-09-25.md §1.5）。例に出たのは
+     * 「メダルがパーンと出る」だったが、リールの遊びでメダルを出すと
+     * スロットの払い出しに見える——この遊びは賭博の表現を使わない
+     * （detailed-design.md §0A.5）。星がはじけるだけにした（同 §3.4）。
+     *
+     * そくていの回は出さない。止めたあとの演出でも、次のリールを止める
+     * ときに目に入る（L2 は3本を続けて止める）。刺激の見え方は測定の条件。
+     */
+    function cheerReel(reelIndex) {
+      if (config.difficultyMode === "measure") return;
+      const view = reelViews[reelIndex];
+      if (!view) return;
+      const burst = document.createElement("span");
+      burst.className = "slot-cheer";
+      burst.setAttribute("aria-hidden", "true");
+      burst.innerHTML = Array.from(
+        { length: 8 },
+        (_, index) => `<i class="fa-solid fa-star slot-cheer-star" style="--i:${index}"></i>`
+      ).join("");
+      view.root.append(burst);
+      window.setTimeout(() => burst.remove(), 900);
+    }
+
     function recordStop({ inputMs, timeoutAtMs = null, source = "timeout" }) {
       const round = currentRound();
       if (!round || activeReelIndex === null || session.finished) return null;
@@ -232,6 +259,7 @@ export function createSlotGame(gameId) {
       reelViews[reelIndex].stoppedPhase = result.stoppedPhase;
       paintReel(reelIndex, stoppedAtMs);
       audio.playTone(result.judgment === "hit" ? 660 : 440);
+      if (result.judgment === "hit") cheerReel(reelIndex);
       persist();
       return row;
     }

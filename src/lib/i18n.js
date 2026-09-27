@@ -108,17 +108,32 @@ export function rubyToPlain(text) {
 const STRINGS = {
   // --- ホームの見出し ---
   "home.eyebrow": { ruby: "ホーム", kanji: "ホーム", kana: "ホーム", en: "Home" },
-  "home.title": { ruby: "アクティビティ", kanji: "アクティビティ", kana: "アクティビティ", en: "Activities" },
-  "home.guide": { ruby: "やりたいことを選[えら]びます",
-    kanji: "やりたいことを選びます",
-    kana: "やりたいことを えらびます",
-    en: "Choose what to do",
+  // 見出しは「何をする画面か」だけを言う（docs/design-renewal-2026-09-25.md §1.3）。
+  // 以前の「アクティビティ」は支援者の言葉で、利用者にもお母さんにも伝わらなかった。
+  "home.title": { ruby: "遊[あそ]びを選[えら]ぼう", kanji: "遊びを選ぼう", kana: "あそびを えらぼう", en: "Pick a game" },
+  "home.guide": { ruby: "遊[あそ]びたい絵[え]を押[お]してね",
+    kanji: "遊びたい絵を押してね",
+    kana: "あそびたい えを おしてね",
+    en: "Press the picture you want to play",
   },
-  "home.back": { ruby: "アクティビティへ戻[もど]る",
-    kanji: "アクティビティへ戻る",
-    kana: "アクティビティへ もどる",
-    en: "Back to activities",
+  // 並び順の意味を画面に書く。打ち合わせで「どれから始めればいいのか、
+  // どれが難しいのか分からない」と言われた（同 §1.3）。
+  "home.orderNote": { ruby: "①から⑤へ、だんだん難[むずか]しくなるよ",
+    kanji: "①から⑤へ、だんだん難しくなるよ",
+    kana: "①から⑤へ、だんだん むずかしく なるよ",
+    en: "From 1 to 5, the games get harder",
   },
+  "home.back": { ruby: "戻[もど]る",
+    kanji: "戻る",
+    kana: "もどる",
+    en: "Back",
+  },
+  // タイルの札（難しさ）。数字の順番と同じことを、ことばでも言う。
+  "level.first": { ruby: "はじめは ここから", kanji: "はじめは ここから", kana: "はじめは ここから", en: "Start here" },
+  "level.used": { ruby: "なれたら", kanji: "なれたら", kana: "なれたら", en: "Next step" },
+  "level.challenge": { ruby: "チャレンジ", kanji: "チャレンジ", kana: "チャレンジ", en: "Challenge" },
+  "level.endless": { ruby: "ずっと つづく", kanji: "ずっと つづく", kana: "ずっと つづく", en: "Keeps going" },
+  "level.other": { ruby: "べつの 遊[あそ]び", kanji: "べつの 遊び", kana: "べつの あそび", en: "Something else" },
   "home.nextPage": { ruby: "次[つぎ]のページ", kanji: "次のページ", kana: "つぎの ページ", en: "Next page" },
   "home.pageOf": { ruby: "{n} / {total} ページ目[め]", kanji: "{n} / {total} ページ目", kana: "{n} / {total} ページ目", en: "Page {n} of {total}" },
   "home.scanning": { ruby: "いま選[えら]んでいます",
@@ -128,48 +143,47 @@ const STRINGS = {
   },
 
   // --- あそびの名前と説明（content.js の gameTiles と対応） ---
-  "tile.color-legacy.title": { ruby: "色[いろ]と音[おと]", kanji: "色と音", kana: "いろと おと", en: "Colour & Sound" },
-  "tile.color-legacy.desc": { ruby: "5回[かい]押[お]して色[いろ]と音[おと]を変[か]えよう",
-    kanji: "5回押して色と音を変えよう",
-    kana: "5かい おして いろと おとを かえよう",
-    en: "Press 5 times to change colour and sound",
+  // 旧「色と音」。押すと真っ暗な画面から絵が出てくる、失敗の無い遊びに
+  // 作り直した（games/colorLegacy.js、docs/design-renewal-2026-09-25.md §1.4）。
+  // gameId は color-legacy のまま——記録（logEvent の switch）をつなげるため。
+  "tile.color-legacy.title": { ruby: "押[お]すと 出[で]てくる", kanji: "押すと 出てくる", kana: "おすと でてくる", en: "Press and see" },
+  "tile.color-legacy.desc": { ruby: "押[お]すと 絵[え]と 音[おと]が 出[で]るよ",
+    kanji: "押すと 絵と 音が 出るよ",
+    kana: "おすと えと おとが でるよ",
+    en: "Press to make a picture and a sound",
   },
-  "color.changed": {
-    ruby: "色[いろ]が変[か]わった",
-    kanji: "色が変わった",
-    kana: "いろが かわった",
-    en: "Colour changed",
-  },
-  "color.complete": {
-    ruby: "できた！",
-    kanji: "できた！",
-    kana: "できた！",
-    en: "All done!",
-  },
-  "color.progress": {
-    ruby: "あと {n}回[かい]",
-    kanji: "あと {n}回",
-    kana: "あと {n}かい",
-    en: "{n} left",
-  },
-  "color.progressComplete": {
-    ruby: "ぜんぶ できた！",
-    kanji: "ぜんぶ できた！",
-    kana: "ぜんぶ できた！",
-    en: "All 5 done!",
-  },
+  // 押す前の1行だけ。言葉の説明は要らない、絵と音で分かるように、と
+  // 言われている（docs/design-renewal-2026-09-25.md §1.4）。
+  "color.prompt": { ruby: "押[お]してみよう", kanji: "押してみよう", kana: "おしてみよう", en: "Give it a press" },
+  // 動物が消えて真っ暗に戻ったときに、うすく出しておく。
+  "color.count": { ruby: "{n}回[かい] 遊[あそ]んだよ", kanji: "{n}回 遊んだよ", kana: "{n}かい あそんだよ", en: "Played {n} times" },
+  // 出てきた絵に添える一言。何回目でも前向きなことしか言わない。
+  "color.pop.0": { ruby: "出[で]てきた！", kanji: "出てきた！", kana: "でてきた！", en: "Here it is!" },
+  "color.pop.1": { ruby: "変[か]わった！", kanji: "変わった！", kana: "かわった！", en: "It changed!" },
+  "color.pop.2": { ruby: "いいね！", kanji: "いいね！", kana: "いいね！", en: "Nice!" },
+  "color.pop.3": { ruby: "もう いっかい！", kanji: "もう いっかい！", kana: "もう いっかい！", en: "One more!" },
+  "color.pop.4": { ruby: "できた！", kanji: "できた！", kana: "できた！", en: "You did it!" },
+  // 出てくる動物の名前。読み上げで名前を言う（ことばを覚える入口にもなる）。
+  "animal.dolphin": { ruby: "イルカ", kanji: "イルカ", kana: "いるか", en: "Dolphin" },
+  "animal.turtle": { ruby: "カメ", kanji: "カメ", kana: "かめ", en: "Turtle" },
+  "animal.octopus": { ruby: "タコ", kanji: "タコ", kana: "たこ", en: "Octopus" },
+  "animal.crab": { ruby: "カニ", kanji: "カニ", kana: "かに", en: "Crab" },
+  "animal.whale": { ruby: "クジラ", kanji: "クジラ", kana: "くじら", en: "Whale" },
   "color.voice.progress": {
-    ruby: "色[いろ]が変[か]わった。あと {n}回[かい]",
-    kanji: "色が変わった。あと {n}回",
-    kana: "いろが かわった。あと {n}かい",
-    en: "Colour changed. {n} left",
+    ruby: "{name}！ あと {n}回[かい]",
+    kanji: "{name}！ あと {n}回",
+    kana: "{name}！ あと {n}かい",
+    en: "{name}! {n} left",
   },
   "color.voice.finish": {
-    ruby: "{n}回[かい]できたよ。おしまいです",
-    kanji: "{n}回できたよ。おしまいです",
-    kana: "{n}かい できたよ。おしまいです",
-    en: "All done. You made {n} changes",
+    ruby: "{n}回[かい]できたよ",
+    kanji: "{n}回できたよ",
+    kana: "{n}かい できたよ",
+    en: "You did it {n} times",
   },
+  // 「できたときの声」がありのときだけ言う（この遊びの設定）。
+  // 周りが家族だけでも盛り上がるように、と頼まれている（同 §1.7）。
+  "color.voice.cheer": { ruby: "やったー！", kanji: "やったー！", kana: "やったー！", en: "Hooray!" },
   "tile.rhythm-l1.title": { ruby: "リズム 練習[れんしゅう]", kanji: "リズム 練習", kana: "リズム れんしゅう", en: "Rhythm: practice" },
   "tile.rhythm-l1.desc": { ruby: "音[おと]の合図[あいず]に合[あ]わせて押[お]そう",
     kanji: "音の合図に合わせて押そう",
@@ -338,16 +352,6 @@ const STRINGS = {
   //
   // 書き方の決まり: 利用者向けにひらがな主体・1行1動作。読み上げ
   // （audio.speak）にもそのまま渡すので、記号や英字を入れない。
-  "howto.color-legacy.1": { ruby: "画面[がめん]を押[お]すと、色[いろ]と音[おと]が変[か]わります。",
-    kanji: "画面を押すと、色と音が変わります。",
-    kana: "がめんを おすと、いろと おとが かわります。",
-    en: "Press the screen to change the colour and sound.",
-  },
-  "howto.color-legacy.2": { ruby: "5回[かい]押[お]すと、おしまいの画面[がめん]が出[で]ます。",
-    kanji: "5回押すと、おしまいの画面が出ます。",
-    kana: "5かい おすと、おしまいの がめんが でます。",
-    en: "After 5 presses, the result screen appears.",
-  },
   // 「2かい」は rhythmPresets["rhythm-l1"].countInBeats と揃えてある。
   // 以前は 3かい と書いてあり、実際に鳴る回数と食い違っていた。
   "howto.rhythm-l1.1": { ruby: "低[ひく]い音[おと]が2回[かい]鳴[な]ります。",
@@ -719,22 +723,34 @@ const STRINGS = {
 
 
   "result.completion.title": {
-    ruby: "できた！",
-    kanji: "できた！",
-    kana: "できた！",
-    en: "All done!",
+    ruby: "できた！ 楽[たの]しかったね",
+    kanji: "できた！ 楽しかったね",
+    kana: "できた！ たのしかったね",
+    en: "You did it! That was fun",
   },
   "result.completion.summary": {
-    ruby: "色[いろ]と音[おと]を {n}回[かい]変[か]えました",
-    kanji: "色と音を {n}回変えました",
-    kana: "いろと おとを {n}かい かえました",
-    en: "You changed colour and sound {n} times",
+    ruby: "{n}回[かい]遊[あそ]んで、{m}ひきに会[あ]えたよ",
+    kanji: "{n}回遊んで、{m}ひきに会えたよ",
+    kana: "{n}かい あそんで、{m}ひきに あえたよ",
+    en: "You played {n} times and met {m} friends",
   },
-  "result.completion.colors": {
-    ruby: "{n}つの色[いろ]",
-    kanji: "{n}つの色",
-    kana: "{n}つの いろ",
-    en: "Colours shown: {n}",
+  // 点のある遊びのけっか。一言は前向きなものだけにする——「つぎは もうちょっと」
+  // のような言い方も、へこませない、という要望に合わない（同 §1.5, §1.6）。
+  "result.praise.great": { ruby: "すごい！ きみは プロだ！", kanji: "すごい！ きみは プロだ！", kana: "すごい！ きみは プロだ！", en: "Amazing! You're a pro!" },
+  "result.praise.good": { ruby: "よく できました！", kanji: "よく できました！", kana: "よく できました！", en: "Well done!" },
+  "result.praise.tried": { ruby: "がんばったね！", kanji: "がんばったね！", kana: "がんばったね！", en: "Nice try!" },
+  "result.score": {
+    ruby: "{total}回[かい]のうち {n}回[かい] できたよ",
+    kanji: "{total}回のうち {n}回 できたよ",
+    kana: "{total}かいの うち {n}かい できたよ",
+    en: "{n} out of {total}",
+  },
+  // 数値の表は支援者のためのもの。利用者の画面では畳んでおく。
+  "result.details": {
+    ruby: "支援者[しえんしゃ]むけ：くわしい けっか",
+    kanji: "支援者むけ：くわしい けっか",
+    kana: "しえんしゃむけ：くわしい けっか",
+    en: "For supporters: details",
   },
   // --- リザルトの見出し（課題ごと） ---
   "result.gonogo.goHit": { ruby: "Go せいこう", kanji: "Go せいこう", kana: "Go せいこう", en: "Go correct" },
@@ -804,11 +820,14 @@ const STRINGS = {
   "start.srTitle": { ruby: "スタート画面[がめん]", kanji: "スタート画面", kana: "スタートがめん", en: "Start screen" },
   "start.begin": { ruby: "はじめる", kanji: "はじめる", kana: "はじめる", en: "Start" },
   "start.settings": { ruby: "せってい", kanji: "せってい", kana: "せってい", en: "Settings" },
+  "start.lead": { ruby: "押[お]して、はじめよう。", kanji: "押して、はじめよう。", kana: "おして、はじめよう。", en: "Press to start." },
   "game.srTitle": { ruby: "ゲーム画面[がめん]", kanji: "ゲーム画面", kana: "ゲームがめん", en: "Activity screen" },
   "game.exit": { ruby: "おわる", kanji: "おわる", kana: "おわる", en: "Finish" },
+  // 遊びの中の設定（支援者がその場で変える）。docs/design-renewal-2026-09-25.md §1.8
+  "game.settings": { ruby: "この遊[あそ]びの設定[せってい]", kanji: "この遊びの設定", kana: "この あそびの せってい", en: "Game settings" },
   "result.title": { ruby: "けっか", kanji: "けっか", kana: "けっか", en: "Result" },
   "result.retry": { ruby: "もういちど", kanji: "もういちど", kana: "もういちど", en: "Again" },
-  "result.home": { ruby: "メニューへ", kanji: "メニューへ", kana: "メニューへ", en: "Back to menu" },
+  "result.home": { ruby: "遊[あそ]びを選[えら]ぶ", kanji: "遊びを選ぶ", kana: "あそびを えらぶ", en: "Pick a game" },
 
   // ずれの目盛り
   "scale.early": { ruby: "はやい", kanji: "はやい", kana: "はやい", en: "Early" },

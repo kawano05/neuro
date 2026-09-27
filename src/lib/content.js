@@ -33,9 +33,6 @@ export const switchModules = [
   },
 ];
 
-/** スイッチ教材ステージの背景色サイクル */
-export const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747"];
-
 /** 色と音の通常セッション。効果測定の「スイッチ教材を5回入力」と同じ長さ。 */
 export const colorLegacyPreset = {
   targetPresses: 5,
@@ -388,7 +385,11 @@ export const fishingSpecies = [
  * 入れない。読み上げにもそのまま渡すため）は i18n.js 側に置いてある。
  */
 export const gameHowTo = {
-  "color-legacy": ["howto.color-legacy.1", "howto.color-legacy.2"],
+  // color-legacy（おすと でてくる）には「やりかた」を挟まない。遊びの画面が
+  // 最初から「押してみよう」と出していて、それ自体が説明になっている。
+  // 言葉の説明は要らない、押せば出てくるだけでいい、と言われた遊びに、
+  // 読む画面をもう1枚挟むと、最初のひと押しが「説明を閉じる」に使われて
+  // 何も出てこない（docs/design-renewal-2026-09-25.md §1.4）。
   "slot-l1": ["howto.slot-l1.1", "howto.slot-l1.2", "howto.slot-l1.3"],
   "slot-l2": ["howto.slot-l2.1", "howto.slot-l2.2", "howto.slot-l2.3"],
   gonogo: ["howto.gonogo.1", "howto.gonogo.2"],

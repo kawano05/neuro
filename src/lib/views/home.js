@@ -10,7 +10,10 @@
 
 import { gameModules } from "../games/registry.js";
 import { isMeasurementMode } from "../difficultyMode.js";
+import { POP_ANIMALS, SCENE_ART, artSvg } from "../art/hakkiriArt.js";
+import { tileThemeFor } from "../homeTheme.js";
 import {
+  GRID_LAYOUT_MIN_WIDTH,
   SCAN_OVERLAP_TOLERANCE_PX,
   SCAN_PAGE_SIZE,
   SCAN_PAGE_SIZE_MIN,
@@ -63,6 +66,12 @@ export function initHome(ctx) {
     return gameModules.find((game) => game.id === id);
   }
 
+  /** いまの画面幅でグリッドに並べるか（CSS の境界と同じ値を scanPaging.js から引く）。 */
+  function usesGridLayout() {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+    return window.matchMedia(`(min-width: ${GRID_LAYOUT_MIN_WIDTH}px)`).matches;
+  }
+
   /** 走査順が視覚的にも分かる、横長アクティビティ行を生成する。 */
   function createTileButton(tile, index) {
     const button = document.createElement("button");
@@ -104,16 +113,53 @@ export function initHome(ctx) {
       ? ctx.tHtml(`tile.${tileKey}.desc`)
       : tile.descriptionHtml || tile.description;
     const descriptionId = descText ? `tile-desc-${tileKey}` : "";
-    if (descriptionId) button.setAttribute("aria-describedby", descriptionId);
     const description = descriptionId
       ? `<span class="tile-description" id="${descriptionId}">${descHtml}</span>`
       : "";
+
+    // 遊びのタイルは絵・色・難しさの札を持つ（homeTheme.js）。戻る・ページ送りは
+    // 遊びではないので持たない——同じ見た目にすると、選ぶ対象に見えてしまう。
+    const theme = tileThemeFor(tileKey);
+    if (!theme) {
+      if (descriptionId) button.setAttribute("aria-describedby", descriptionId);
+      button.innerHTML = `
+        <span class="scan-order" aria-hidden="true">${index + 1}</span>
+        ${icon}
+        <span class="tile-text">
+          <strong>${shownHtml}</strong>
+          ${description}
+        </span>
+        <span class="scan-current-label" aria-hidden="true">${ctx.t("home.scanning")}</span>
+      `;
+      return button;
+    }
+
+    button.classList.add("hk-tile");
+    button.dataset.palette = theme.palette;
+    button.style.setProperty("--tile-band", theme.colors.band);
+    button.style.setProperty("--tile-band-ink", theme.colors.ink);
+    button.style.setProperty("--tile-thumb", theme.colors.thumb);
+    // 札（はじめは ここから／なれたら／チャレンジ）は、名前の次に読む説明へ入れる。
+    // 名前（aria-label）は識別子なので短いまま。
+    const levelKey = theme.level ? `level.${theme.level}` : null;
+    const levelId = levelKey ? `tile-level-${tileKey}` : "";
+    const describedBy = [levelId, descriptionId].filter(Boolean).join(" ");
+    if (describedBy) button.setAttribute("aria-describedby", describedBy);
+    const badge = levelKey
+      ? `<span class="hk-tile-badge" id="${levelId}">${ctx.tHtml(levelKey)}</span>`
+      : "";
     button.innerHTML = `
-      <span class="scan-order" aria-hidden="true">${index + 1}</span>
-      ${icon}
-      <span class="tile-text">
-        <strong>${shownHtml}</strong>
-        ${description}
+      <span class="hk-tile-art" aria-hidden="true">${artSvg(SCENE_ART[theme.art])}</span>
+      <span class="hk-tile-tags">
+        <span class="scan-order" aria-hidden="true">${index + 1}</span>
+        ${badge}
+      </span>
+      <span class="hk-tile-band">
+        <span class="tile-text">
+          <strong>${shownHtml}</strong>
+          ${description}
+        </span>
+        <i class="fa-solid fa-chevron-right hk-tile-go" aria-hidden="true"></i>
       </span>
       <span class="scan-current-label" aria-hidden="true">${ctx.t("home.scanning")}</span>
     `;
@@ -205,6 +251,7 @@ export function initHome(ctx) {
       {
         delegatedToOsScanning: Boolean(state.settings.switchControlMode),
         forcedByOverflow: overflowPaginate,
+        gridLayout: usesGridLayout(),
       }
     );
     const slice = paginate
@@ -214,8 +261,28 @@ export function initHome(ctx) {
     // おかないと、次の描画でまた範囲外の値から始まる。
     pageIndex = slice.pageIndex;
 
+    // 並べ方はCSSが決める（theme-hakkiri.css）。ページに分けたときは1列の
+    // リスト、分けないときはグリッド。グリッドのロビーでは、いちばん簡単な
+    // 遊びを大きく左上に、「べつの遊び」を横長で下に置く（簡単→難しいが
+    // 左上→右下に並ぶ。docs/design-renewal-2026-09-25.md §1.3）。
+    const layout = elements.gameTileGrid.dataset.layout;
+    elements.gameTileGrid.dataset.paged = String(paginate);
+    elements.gameTileGrid.dataset.count = String(slice.visible.length);
+
     slice.visible.forEach((item, index) => {
       const button = createTileButton(item, index);
+      if (layout === "lobby" && !paginate) {
+        const key = item.id || item.view;
+        if (key === "learning-corner") {
+          button.dataset.hkSlot = "wide";
+          // 横長の帯では、札を名前の前（帯の中）に並べる。
+          const badge = button.querySelector(".hk-tile-badge");
+          const band = button.querySelector(".hk-tile-band");
+          if (badge && band) band.prepend(badge);
+        } else if (index === 0 && key === "color-legacy") {
+          button.dataset.hkSlot = "hero";
+        }
+      }
       button.addEventListener("click", (event) => {
         if (homeClickIsGuarded(event)) return;
         onSelect(item);
@@ -346,6 +413,9 @@ export function initHome(ctx) {
   /** 利用者ホームまたは二階層目を、同じ5項目以内の走査リストで描画する。 */
   function renderTiles() {
     elements.gameTileGrid.innerHTML = "";
+    elements.gameTileGrid.dataset.layout = activeCorner ? "corner" : "lobby";
+    // 並び順の注記（①から⑤へ…）はロビーだけのもの。コーナーの中では意味が違う。
+    if (elements.homeOrderNote) elements.homeOrderNote.hidden = Boolean(activeCorner);
 
     /**
      * エンドレスの選択肢を引く。
@@ -475,10 +545,10 @@ export function initHome(ctx) {
     scan.restartIfNeeded();
   }
 
-  elements.startSettingsLink.addEventListener("click", (event) => {
-    event.stopPropagation(); // ファネルに入れない（走査対象外・タップ専用、§2.2）
-    ctx.switchView("settings");
-  });
+
+  // スタート画面の絵。はじめの遊び（おすと でてくる）に出てくる子と同じにして、
+  // 「押すと、この子が出てくる」という最初の約束を画面で見せる。
+  if (elements.startArt) elements.startArt.innerHTML = artSvg(POP_ANIMALS[0]);
 
   function showLobby() {
     activeCorner = null;
@@ -518,6 +588,8 @@ export function initHome(ctx) {
   if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
     const layoutBreakpoints = [
       window.matchMedia("(max-height: 740px)"),
+      // グリッドとリストの境目。ここをまたぐと並べ方も先読みも変わる。
+      window.matchMedia(`(min-width: ${GRID_LAYOUT_MIN_WIDTH}px)`),
       // iPad full width→Split Viewでは高さが変わらない。幅側のCSS境界も
       // 監視しないと、広い画面で決めたページ構成をそのまま持ち越す。
       window.matchMedia("(max-width: 820px)"),

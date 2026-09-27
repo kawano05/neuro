@@ -250,6 +250,18 @@ export function createFishingGame(gameId) {
   const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml } = ctx;
 
   const config = { ...fishingPresets[gameId] };
+  // アタリのときに大きな「！」を出すか（docs/design-renewal-2026-09-25.md §1.5, §3.3）。
+  //
+  // 打ち合わせで「アタリのとき、でっかいビックリマークがバーンと出たら、押すときだと
+  // 分かる」と言われた。いまは下に小さく「アタリ！」と出るだけで気づきにくい。
+  //
+  // 出すのは、れんしゅうの回の fishing（単純反応）だけ:
+  //   - そくていの回は、刺激の見え方を変えない。「！」はアタリ音と同じ瞬間に
+  //     出るので、目立ち方が変わると反応時間が変わりうる。解析はまず measure の
+  //     回だけを見る前提なので、れんしゅうに足すぶんには比較を壊さない。
+  //   - fishing-gonogo には出さない。長靴のときに出さず魚のときだけ出すと、
+  //     「！を見たら押す」だけで解けてしまい、見送る練習にならない。
+  const showBiteMark = gameId === "fishing" && resolveDifficultyMode(ctx.settings) !== "measure";
   // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
   // 返すので、測る回の長さは protocol のまま動かない。
   config.endless = resolveEndlessMode(ctx.settings, ctx.endless);
@@ -406,6 +418,7 @@ export function createFishingGame(gameId) {
         <div class="fishing-score">0 cm</div>
         <div class="fishing-streak"></div>
         <div class="fishing-status">${tHtml("fishing.wait")}</div>
+        ${showBiteMark ? '<div class="fishing-bite-mark"><span>!</span></div>' : ""}
       </div>
     `;
     sceneEl = stageEl.querySelector(".fishing-scene");
@@ -479,6 +492,7 @@ export function createFishingGame(gameId) {
     // アニメーションはここで明示的に外す（付けっぱなしにすると
     // transform が競合して巻き上げが揺れる）。
     swimmerEl.classList.remove("is-biting");
+    sceneEl?.classList.remove("is-bite");
     swimmerEl.classList.add("is-hooked");
     catchEl.textContent = speedBonus
       ? `★ ${planned.lengthCm} cm ＋${SPEED_BONUS_CM}`
@@ -715,6 +729,7 @@ export function createFishingGame(gameId) {
     if (resolvedIndex === currentIndex && resolvedJudgment === "hit") {
       swimmerEl.style.opacity = "0";
       swimmerEl.classList.remove("is-biting", "is-lost");
+      sceneEl?.classList.remove("is-bite");
       return;
     }
 
@@ -744,6 +759,7 @@ export function createFishingGame(gameId) {
     swimmerEl.classList.toggle("is-lost", settled);
     if (settled) {
       swimmerEl.classList.remove("is-biting");
+      sceneEl?.classList.remove("is-bite");
       return;
     }
 
@@ -757,6 +773,8 @@ export function createFishingGame(gameId) {
       setStatus("fishing.bite");
     }
     swimmerEl.classList.toggle("is-biting", !beforeCue && withinWindow);
+    // 大きな「！」はアタリと同じ区間だけ（出す条件は上の showBiteMark）。
+    sceneEl?.classList.toggle("is-bite", showBiteMark && !beforeCue && withinWindow);
   }
 
   function loop() {

@@ -83,6 +83,12 @@ const TAB_WORLD_VIEWS = new Set([
 // 代わりに残っているもの: 支援者の世界への入口がタップ専用であること、
 // 破壊的な操作（記録の消去・候補値の保存）が走査対象外であること。
 const USER_ACTIVITY_VIEWS = new Set(["matching", "voca", "letters"]);
+/**
+ * 利用者の世界（デザイン「はっきりした色」を当てる画面。src/theme-hakkiri.css）。
+ * 支援者の世界（評価ログ・設定）は業務画面のまま——こちらは「子ども向けに
+ * してほしい」とは言われていない（docs/design-renewal-2026-09-25.md §3.1）。
+ */
+const USER_WORLD_VIEWS = new Set(["start", "home", "game", "result", ...USER_ACTIVITY_VIEWS]);
 
 export function initNeuroNodeApp() {
   // --- 状態と要素 ---
@@ -208,9 +214,11 @@ export function initNeuroNodeApp() {
     };
     set(elements.startTitle, "start.srTitle", false);
     set(elements.startStageLabel, "start.begin");
-    set(elements.startSettingsLink, "start.settings");
+    set(elements.startLead, "start.lead");
+    set(elements.homeOrderNote, "home.orderNote");
     set(elements.gameTitle, "game.srTitle", false);
     set(elements.gameExit, "game.exit");
+    set(elements.gameSettings, "game.settings");
     set(elements.resultTitle, "result.title");
     set(elements.resultRetry, "result.retry");
     set(elements.resultHome, "result.home");
@@ -238,7 +246,9 @@ export function initNeuroNodeApp() {
     document.body.classList.toggle("user-activity-mode", USER_ACTIVITY_VIEWS.has(nextView));
     // スタート画面では支援者向けシェル（ヘッダ・タブバー）を CSS で隠し、
     // 「はじめる」への集中を保つ（styles.css の body.start-mode ルール参照）。
-    // 支援者のタップ導線は #startSettingsLink（せってい）が残る。
+    // 支援者の入口はホーム右上の「支援者の設定」だけにした——スタートに
+    // 「せってい」があると、先に設定しないといけないと思われた
+    // （docs/design-renewal-2026-09-25.md §1.2）。
     document.body.classList.toggle("start-mode", nextView === "start");
     // 支援者メニューでは自前走査を動かさない（scan.js の isSupporterMenu()）。
     // ドックの2つは、そこでは押しても何も起きない操作子になるので無効化する
@@ -254,7 +264,10 @@ export function initNeuroNodeApp() {
     });
     elements.homeReturn.hidden = !TAB_WORLD_VIEWS.has(nextView);
     elements.homeSupporterMenu.hidden = nextView !== "home";
-    elements.primarySwitchLabel.textContent = nextView === "home" ? "入力して決定" : "入力";
+    // 利用者の世界では「おす」だけ（出すのは showScreenSwitch がONのとき。
+    // theme-hakkiri.css）。「入力して決定」は支援者の言葉だった。
+    elements.primarySwitchLabel.textContent = USER_WORLD_VIEWS.has(nextView) ? "おす" : "入力";
+    document.body.classList.toggle("user-world", USER_WORLD_VIEWS.has(nextView));
 
     ctx.views.home.render();
     ctx.views.matching.render();
@@ -381,6 +394,9 @@ export function initNeuroNodeApp() {
       // ゲーム中の Esc はホスト側の強制終了（home へ直帰）。
       // それ以外は従来どおり走査停止（detailed-design.md §2.4）。
       if (state.currentView === "game") {
+        // 支援者が「この遊びの設定」を開いていたら、まずそれを閉じる
+        // （変えずに戻る）。遊びそのものは終わらせない。
+        if (ctx.gameHost.closeSettings()) return;
         ctx.gameHost.abort();
       } else {
         ctx.scan.stop();

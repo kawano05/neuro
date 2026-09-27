@@ -381,6 +381,52 @@ export function createAudio(getSettings, announce = () => {}) {
     }
   }
 
+  /**
+   * 楽器の音（木琴に近い、やわらかい音）。「おすと でてくる」の押したときの音。
+   *
+   * 基音（sine）に、すぐ消える4倍音を少し重ねる。純音1本だと測定の合図
+   * （440/880Hz の sine）と同じ音色になる——この遊びは測定の課題ではないが、
+   * 同じ耳で聞く音なので紛らわしくしない。
+   * 音量は旧「色と音」の playTone と同じ（DEFAULT_TONE_GAIN）。強すぎる音は
+   * 発作につながりうる、と打ち合わせで言われている
+   * （docs/design-renewal-2026-09-25.md §1.7）。
+   *
+   * @param {number} frequency 基音（Hz）
+   * @param {{delayS?: number, durationS?: number}} [options]
+   *   delayS は今からの遅れ（和音を順に鳴らすとき用）
+   */
+  function playChime(frequency, { delayS = 0, durationS = 0.9 } = {}) {
+    if (!getSettings().soundEnabled) return null;
+    const ctx = ensureContext();
+    if (!ctx) return null;
+    try {
+      const at = ctx.currentTime + Math.max(0, delayS);
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, at);
+      out.gain.exponentialRampToValueAtTime(DEFAULT_TONE_GAIN, at + 0.012);
+      out.gain.exponentialRampToValueAtTime(0.0001, at + durationS);
+      out.connect(ctx.destination);
+      [
+        { ratio: 1, level: 1, decayS: durationS },
+        { ratio: 4, level: 0.28, decayS: 0.18 },
+      ].forEach(({ ratio, level, decayS }) => {
+        const oscillator = ctx.createOscillator();
+        const partial = ctx.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = frequency * ratio;
+        partial.gain.setValueAtTime(level, at);
+        partial.gain.exponentialRampToValueAtTime(0.0001, at + decayS);
+        oscillator.connect(partial);
+        partial.connect(out);
+        oscillator.start(at);
+        oscillator.stop(at + durationS + 0.02);
+      });
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
   /** 短い確認音を即時に鳴らす（soundEnabled が ON のときのみ、既存呼び出し互換）。 */
   function playTone(frequency) {
     if (!getSettings().soundEnabled) return null;
@@ -436,6 +482,7 @@ export function createAudio(getSettings, announce = () => {}) {
     stopSpeech,
     playTone,
     playToneAt,
+    playChime,
     playNoise,
     playSweep,
     unlock,

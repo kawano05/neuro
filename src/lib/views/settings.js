@@ -91,6 +91,7 @@ export function initSettings(ctx) {
     });
     elements.switchControlMode.checked = settings.switchControlMode;
     elements.autoScan.checked = settings.autoScan;
+    elements.showScreenSwitch.checked = settings.showScreenSwitch;
     elements.speechEnabled.checked = settings.speechEnabled;
     elements.speechVolume.value = settings.speechVolume;
     elements.speechVolumeValue.value = `${Math.round(settings.speechVolume * 100)}%`;
@@ -233,6 +234,8 @@ export function initSettings(ctx) {
     document.body.classList.toggle("high-contrast", state.settings.highContrast);
     document.body.classList.toggle("researcher-mode", state.settings.researcherMode);
     document.body.classList.toggle("switch-control-mode", state.settings.switchControlMode);
+    // 利用者の画面に「おす」ボタンを出すか（theme-hakkiri.css が見る）。
+    document.body.classList.toggle("screen-switch-on", Boolean(state.settings.showScreenSwitch));
 
     // ルート（html）にも付ける。
     //
@@ -306,6 +309,7 @@ export function initSettings(ctx) {
 
   [
     ["autoScan", elements.autoScan],
+    ["showScreenSwitch", elements.showScreenSwitch],
     ["speechEnabled", elements.speechEnabled],
     ["soundEnabled", elements.soundEnabled],
     ["largeText", elements.largeText],

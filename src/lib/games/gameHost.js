@@ -41,7 +41,10 @@ import { displayOffsetMs } from "./rhythm.js";
 import { PRIZE_ART } from "./craneArt.js";
 import { slotSymbolHtml } from "./slotArt.js";
 import { MAX_SESSIONS } from "../state.js";
-import { gameHowTo, stageColors } from "../content.js";
+import { gameHowTo } from "../content.js";
+import { POP_ANIMALS, SCENE_ART, artSvg } from "../art/hakkiriArt.js";
+import { tileThemeFor } from "../homeTheme.js";
+import { createGameSettings } from "./gameSettings.js";
 import { resolveReadinessState } from "../readinessCheck.js";
 
 /** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
@@ -348,30 +351,95 @@ function renderReactionResult(summary, context = {}) {
   `;
 }
 
-/** 正誤のない「できた」型ゲームの軽量リザルト。研究taskTypeとは分離する。 */
+/**
+ * 正誤のない「できた」型ゲームの軽量リザルト（おすと でてくる）。研究taskTypeとは分離する。
+ *
+ * 出てきた動物を並べる。数だけより「だれに会えたか」が見えるほうが、
+ * もう一度やる理由になる（docs/design-renewal-2026-09-25.md §1.6）。
+ * デザイン案ではメダルを置いていたが、星にした（同 §3.4）。
+ */
 function renderCompletionResult(summary, context = {}) {
   const t = context.t;
   const presses = Number.isFinite(summary?.presses) ? Math.max(0, Math.round(summary.presses)) : 0;
-  const colorCount = Number.isFinite(summary?.colors) ? Math.max(0, Math.round(summary.colors)) : 0;
-  const swatches = stageColors
-    .slice(0, colorCount)
-    .map((color) => `<span class="color-result-swatch" style="--result-color:${color}"></span>`)
+  const animals = (Array.isArray(summary?.animals) ? summary.animals : [])
+    .map((id) => POP_ANIMALS.find((animal) => animal.id === id))
+    .filter(Boolean);
+  const items = animals
+    .map((animal) => `<span class="hk-result-item" data-animal="${animal.id}">${artSvg(animal)}</span>`)
     .join("");
 
   return `
-    <div class="completion-result">
-      <span class="completion-result-icon" aria-hidden="true">
-        <i class="fa-solid fa-star"></i>
-      </span>
-      <strong class="completion-result-title">${t("result.completion.title")}</strong>
-      <p class="completion-result-summary">${t("result.completion.summary", { n: presses })}</p>
-      <div class="color-result-palette" aria-hidden="true">${swatches}</div>
-      <span class="color-result-caption">${t("result.completion.colors", { n: colorCount })}</span>
+    <div class="hk-result completion-result">
+      <div class="hk-result-items" aria-hidden="true">
+        <span class="hk-result-medal"><i class="fa-solid fa-star"></i></span>
+        ${items}
+      </div>
+      <strong class="hk-result-title completion-result-title">${t("result.completion.title")}</strong>
+      <p class="hk-result-summary completion-result-summary">${t("result.completion.summary", { n: presses, m: animals.length })}</p>
     </div>
   `;
 }
 
+/**
+ * 点のある遊びの、利用者向けの一言（docs/design-renewal-2026-09-25.md §1.6）。
+ *
+ * 「最小限の情報で、点数と一言」と言われた。一言は前向きなものだけ——
+ * いちばん低い段でも「がんばったね！」で、星も必ず1つは付く。へこませず、
+ * あっさり次へ行けるように（同 §1.5）。
+ *
+ * 数え方は各遊びの「成功」の定義に合わせる（連続記録と同じ数え方）:
+ *   slot   … 合った本数 / 止めた本数
+ *   scan   … 取れた数 / 回数（crane）
+ *   rt     … 釣れた＋長靴を見送れた / 回数（fishing。見送れたのも成功）
+ *   gonogo … 押せた＋見送れた / 拍の数
+ *   sms    … 合った拍 / 押すべき拍
+ * @returns {{done:number,total:number}|null}
+ */
+export function resultScore(rendererType, summary) {
+  if (!summary) return null;
+  const n = (value) => (Number.isFinite(value) ? value : 0);
+  switch (rendererType) {
+    case "slot":
+      return { done: n(summary.hits), total: n(summary.trials) };
+    case "scan":
+      return { done: n(summary.grips), total: n(summary.trials) };
+    case "rt":
+      return { done: n(summary.hits) + n(summary.correctRejections), total: n(summary.trials) };
+    case "gonogo":
+      return {
+        done: n(summary.hits) + n(summary.correctRejections),
+        total: n(summary.hits) + n(summary.misses) + n(summary.commissions) + n(summary.correctRejections),
+      };
+    case "sms":
+      return { done: n(summary.hits), total: n(summary.hits) + n(summary.misses) };
+    default:
+      return null;
+  }
+}
 
+/** 割合から一言と星の数を決める。どの段も前向きな言葉にする。 */
+export function praiseFor(done, total) {
+  const ratio = total > 0 ? done / total : 0;
+  if (ratio >= 0.8) return { key: "result.praise.great", stars: 3 };
+  if (ratio >= 0.5) return { key: "result.praise.good", stars: 2 };
+  return { key: "result.praise.tried", stars: 1 };
+}
+
+function renderPraise(score, context, extraHtml = "") {
+  const t = context.t;
+  const praise = praiseFor(score.done, score.total);
+  const stars = [1, 2, 3]
+    .map((index) => `<i class="fa-solid fa-star hk-star${index <= praise.stars ? "" : " is-off"}"></i>`)
+    .join("");
+  return `
+    <div class="hk-result" data-praise="${praise.key}">
+      <div class="hk-stars" aria-hidden="true">${stars}</div>
+      ${extraHtml}
+      <strong class="hk-result-title">${t(praise.key)}</strong>
+      <p class="hk-result-summary">${t("result.score", { n: score.done, total: score.total })}</p>
+    </div>
+  `;
+}
 
 /** slot-v1 の利用者向け結果。失敗数を主見出しにせず、成功とずれの要約を示す。 */
 function renderSlotResult(summary, context = {}) {
@@ -428,6 +496,18 @@ export function createGameHost(ctx) {
   // P4-3: 今回のリザルトで既に候補値を保存したか（同一リザルト画面での
   // 二重保存を防ぎ、保存後は確認文言に切り替える。launch() のたびにリセット）。
   let calibrationOffsetSaved = false;
+
+  // この遊びの設定（遊んでいる最中に支援者が変える。games/gameSettings.js）。
+  // 関数宣言は巻き上がるので、ここで launch / destroyActive を渡してよい。
+  const gameSettings = createGameSettings(ctx, {
+    activeGameId: () => activeGameId,
+    sessionRunning: () => Boolean(activeInstance) && !pendingModule,
+    abortSession: () => destroyActive(),
+    relaunch: () => {
+      if (activeGameId) launch(activeGameId, { endless: requestedEndless });
+    },
+    applyLive: () => activeInstance?.applySettings?.(),
+  });
 
   /** instance.destroy() を安全に呼ぶ（例外を握りつぶし、activeInstance を必ずクリアする）。 */
   function destroyActive() {
@@ -621,9 +701,14 @@ export function createGameHost(ctx) {
     const steps = resolvedKeys.map((key) => ctx.tHtml(key));
     const spokenSteps = resolvedKeys.map((key) => ctx.t(key));
     const items = steps.map((line) => `<li>${line}</li>`).join("");
-    const icon = module.iconClass
-      ? `<span class="game-ready-icon" aria-hidden="true"><i class="${module.iconClass}"></i></span>`
-      : "";
+    // ホームで押したタイルと同じ絵を出す（docs/design-renewal-2026-09-25.md）。
+    // 絵の無い遊びは、これまでどおりアイコン。
+    const theme = tileThemeFor(module.id);
+    const icon = theme
+      ? `<span class="game-ready-art" aria-hidden="true" style="--tile-thumb:${theme.colors.thumb}">${artSvg(SCENE_ART[theme.art], { slice: true })}</span>`
+      : module.iconClass
+        ? `<span class="game-ready-icon" aria-hidden="true"><i class="${module.iconClass}"></i></span>`
+        : "";
     elements.gameStageContent.classList.add("is-ready");
     elements.gameStageContent.innerHTML = `
       <div class="game-ready">
@@ -726,6 +811,8 @@ export function createGameHost(ctx) {
    * （detailed-design.md §2.4「aborted の場合は home へ直帰」）。
    */
   function returnHome() {
+    // 設定を開いたまま抜けた（おわる・画面が隠れた）ときは、変更を捨てて閉じる。
+    gameSettings.dismiss();
     // レディ画面から「おわる」/Esc で抜けた場合は instance がまだ無い。
     // 保留を落とし、読み上げも黙らせる（ホームに戻ってから喋り続けない）。
     pendingModule = null;
@@ -741,6 +828,9 @@ export function createGameHost(ctx) {
 
   /** シェルが計時した入力を現在のゲームへ渡す（入力ファネル経由。§3.3）。 */
   function dispatchInput(t, source) {
+    // 支援者が設定を開いているあいだは、スイッチを押しても遊びは進まない
+    // （時間で進む遊びは、開いた時点でその回を止めてある。gameSettings.js）。
+    if (gameSettings.isOpen()) return;
     // レディ画面のひと押しは「説明を読み終えた合図」であって課題の入力では
     // ないので、ゲームへは渡さず、logEvent にも残さない。これを渡すと
     // セッション開始前の入力が1件目の試行として記録されてしまう。
@@ -803,6 +893,8 @@ export function createGameHost(ctx) {
     dispatchInput,
     retry,
     abort: returnHome,
+    /** 設定が開いていれば閉じる（変更は捨てる）。閉じたら true（Esc 用）。 */
+    closeSettings: () => gameSettings.close({ apply: false }),
     getActiveGameId: () => activeGameId,
     getLastSummary: () => lastResultSummary,
     /** gameProgress / resultStats の表示更新（ctx.renderAll() から呼ばれる）。 */
@@ -813,6 +905,12 @@ export function createGameHost(ctx) {
       // ——registry の title は日本語のままなので、直に出すと英語表記でも
       // ここだけ日本語になる。
       elements.gameProgress.textContent = activeModule ? moduleTitle(activeModule) : "";
+      // 変えられる項目のある遊びでだけ出す（そくていの回で速さしか無い遊びは出さない）。
+      elements.gameSettings.hidden = !(
+        state.currentView === "game" &&
+        activeGameId &&
+        gameSettings.available(activeGameId)
+      );
 
       // 正常終了の要約をアプリTTSが所有する場合、同じ遷移で結果DOMまで
       // VoiceOverへ読ませない。TTSがOFFなら従来どおりpolite live regionが所有する。
@@ -830,7 +928,7 @@ export function createGameHost(ctx) {
         : null;
       if (lastResultSummary && resultRenderer) {
         const session = currentSession();
-        elements.resultStats.innerHTML = resultRenderer(lastResultSummary, {
+        const context = {
           best: bestBeforeCurrentSession(),
           trials: session?.trials,
           config: session?.config,
@@ -843,7 +941,25 @@ export function createGameHost(ctx) {
           // aria-label と、textContent へ入る文字（自己最高の行）は
           // プレーン文でなければならない。同じ context に両方を入れておく。
           tPlain: ctx.t,
-        });
+        };
+        const detailed = resultRenderer(lastResultSummary, context);
+        const score = resultScore(rendererType, lastResultSummary);
+        if (score && score.total > 0) {
+          // 利用者に見せるのは一言と「何回のうち何回」だけ。数値の表は
+          // 支援者のもので、畳んでおく（docs/design-renewal-2026-09-25.md §1.6）。
+          // 走査の輪には入れない（summary に data-scan を付けない）。
+          // キャリブレーションは支援者と一緒に使う測定なので、開いたまま出す。
+          const open = activeGameId === "calibration" ? " open" : "";
+          elements.resultStats.innerHTML = `
+            ${renderPraise(score, context)}
+            <details class="result-details"${open}>
+              <summary>${ctx.tHtml("result.details")}</summary>
+              ${detailed}
+            </details>
+          `;
+        } else {
+          elements.resultStats.innerHTML = detailed;
+        }
       } else if (lastResultSummary) {
         elements.resultStats.innerHTML = `<p class="panel-note">${ctx.tHtml("result.none")}</p>`;
       } else {

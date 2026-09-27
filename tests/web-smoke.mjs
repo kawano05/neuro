@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { colorLegacyPreset, rhythmPresets, storageKey } from "../src/lib/content.js";
 import { resolveTextMode, translate } from "../src/lib/i18n.js";
 import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
+import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLegacy.js";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
 // 持つと、辞書を直したときにテストだけが古い文言を主張して落ちる——あるいは
@@ -97,6 +98,25 @@ const checks = [
   ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
 ];
 
+// 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。
+//   SMOKE_PROJECTS=chromium-desktop SMOKE_CHECKS=color,result node tests/web-smoke.mjs
+// 実寸 × 検査の全部は重い（WebKit を4実寸立てる）。直した画面の周りだけを
+// 先に回して、全体は CI に任せる使い方のため。絞ったときは最後にそう書く
+// ——絞った緑を全体の緑と取り違えないように。
+const listFromEnv = (name) =>
+  (process.env[name] || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+const onlyProjects = listFromEnv("SMOKE_PROJECTS");
+const onlyChecks = listFromEnv("SMOKE_CHECKS");
+const selectedProjects = onlyProjects.length
+  ? projects.filter((project) => onlyProjects.includes(project.name))
+  : projects;
+const selectedChecks = onlyChecks.length
+  ? checks.filter(([name]) => onlyChecks.some((keyword) => name.includes(keyword)))
+  : checks;
+
 const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
   stdio: ["ignore", "pipe", "pipe"],
   windowsHide: true,
@@ -122,10 +142,10 @@ const SKIPPED = Symbol("skipped");
 try {
   await waitForServer();
 
-  for (const project of projects) {
+  for (const project of selectedProjects) {
     const browser = await project.browserType.launch({ headless: !headed });
     try {
-      for (const [name, check] of checks) {
+      for (const [name, check] of selectedChecks) {
         const context = await browser.newContext(project.contextOptions);
         await context.addInitScript(() => {
           const marker = "neuro-smoke-initialized";
@@ -196,8 +216,14 @@ if (failures.length) {
   // 多く見える。
   console.log(
     `\n${executed} smoke checks passed, ${skipped} skipped ` +
-      `(${projects.length} viewports x ${checks.length} checks).`
+      `(${selectedProjects.length} viewports x ${selectedChecks.length} checks).`
   );
+  if (selectedProjects.length < projects.length || selectedChecks.length < checks.length) {
+    console.log(
+      `NOTE: filtered run (SMOKE_PROJECTS / SMOKE_CHECKS). ` +
+        `Full suite is ${projects.length} viewports x ${checks.length} checks.`
+    );
+  }
 }
 
 async function findAvailablePort() {
@@ -337,18 +363,15 @@ async function checkStartToHomeToGameFlow(page) {
   // window before treating this as a distinct input.
   await page.waitForTimeout(200);
 
-  // Games that carry a "やりかた" entry in content.js now open on the ready
-  // screen (games/gameHost.js renderReady) so the rules are shown before any
-  // beat is scheduled. The first press dismisses it and starts the session;
-  // it is not a task input, so it must not be forwarded to the game nor
-  // recorded in the log.
-  await page.locator(".game-ready").waitFor({ state: "visible" });
-  const logsBeforeReadyDismiss = await readLogCount(page);
-  await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  // はじめの遊び（おすと でてくる）は「やりかた」を挟まない。遊びの画面が
+  // 最初から「押してみよう」と出していて、最初のひと押しで動物が出る
+  // （content.js の gameHowTo、docs/design-renewal-2026-09-25.md §1.4）。
+  // レディ画面を挟む遊びの契約（1押し目は記録しない）は slot / fishing /
+  // crane の検査が見ている。
+  await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
   assert(
-    (await readLogCount(page)) === logsBeforeReadyDismiss,
-    "Expected the ready-screen press to start the session without logging an input"
+    (await page.locator(".game-ready").count()) === 0,
+    "The first game must open straight on its prompt, without a ready screen"
   );
 
   // Pure tone owns the first ~0.2s. Spy on the actual app-TTS call and both
@@ -418,20 +441,18 @@ async function checkStartToHomeToGameFlow(page) {
     window.__colorClickAt = clickAt;
     stage.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
     await new Promise((resolve) => setTimeout(resolve, 120));
-    const feedback = stageContent.querySelector(".color-feedback");
-    const feedbackText = feedback?.cloneNode(true);
+    const feedback = stageContent.querySelector(".pop-figure");
+    const feedbackText = feedback?.querySelector(".pop-word")?.cloneNode(true);
     feedbackText?.querySelectorAll("rt").forEach((reading) => reading.remove());
     const box = feedback?.getBoundingClientRect();
-    const opacity = feedback ? Number(getComputedStyle(feedback).opacity) : 0;
     return {
       speechCount: speechCalls.length,
       liveCount: liveEvents.length,
       progressCount: progressEvents.length,
       progressBefore,
       progressAfter: progress.textContent,
-      hasFeedbackClass: stageContent.classList.contains("is-feedback"),
+      animal: feedback?.dataset.animal || "",
       feedbackText: feedbackText?.textContent?.trim() || "",
-      feedbackOpacity: opacity,
       feedbackInViewport: Boolean(
         box && box.width > 0 && box.height > 0 && box.left >= 0 && box.top >= 0 &&
         box.right <= window.innerWidth && box.bottom <= window.innerHeight
@@ -442,10 +463,15 @@ async function checkStartToHomeToGameFlow(page) {
   assert(earlyFeedback.liveCount === 0, "Assertive live region must stay unchanged during the pure tone");
   assert(earlyFeedback.progressCount === 0, "Polite game progress must stay unchanged during the pure tone");
   assert(earlyFeedback.progressAfter === earlyFeedback.progressBefore, "Color input must not use live progress");
-  assert(earlyFeedback.hasFeedbackClass, "Expected short visual feedback after color input");
-  assert(earlyFeedback.feedbackText === t("color.changed"), "Visual feedback must say what changed");
-  assert(earlyFeedback.feedbackOpacity >= 0.9, `Expected visible feedback, opacity=${earlyFeedback.feedbackOpacity}`);
+  assert(earlyFeedback.animal === popAnimalFor(0).id, "The first press must bring out the first animal");
+  assert(earlyFeedback.feedbackText === t("color.pop.0"), "The animal must come with its short word");
   assert(earlyFeedback.feedbackInViewport, "Visual feedback must stay inside the viewport");
+  // 出てくる動きが終わったら、はっきり見えていること（hk-pop の途中は opacity が低い）。
+  await page.waitForTimeout(300);
+  const settledOpacity = await page.locator("#gameStageContent .pop-figure").evaluate(
+    (figure) => Number(getComputedStyle(figure).opacity)
+  );
+  assert(settledOpacity >= 0.9, `Expected the animal to be clearly visible, opacity=${settledOpacity}`);
   assert((await readLogCount(page)) === logsBeforeTimedFeedback + 1, "Timed click must log one input");
 
   // アプリTTSが届くのを待つ。
@@ -493,7 +519,11 @@ async function checkStartToHomeToGameFlow(page) {
     liveCount: window.__colorLiveEvents.length,
     progressCount: window.__colorProgressEvents.length,
   }));
-  assert(deliveredFeedback.speech.text === t("color.voice.progress", { n: 4 }), "App TTS must report the change and remaining presses");
+  assert(
+    deliveredFeedback.speech.text ===
+      t("color.voice.progress", { name: t(`animal.${popAnimalFor(0).id}`), n: 4 }),
+    "App TTS must name the animal and report the remaining presses"
+  );
   assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt >= 220, "App TTS started before the tone ended");
   assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt <= 600, "App TTS arrived too late for a short response");
   assert(deliveredFeedback.speech.volume === 1, "Normal-mode TTS must retain the existing full-volume default");
@@ -531,23 +561,25 @@ async function checkStartToHomeToGameFlow(page) {
   assert(nextSpeech.at - nextInputCancellation.clickAt >= 220, "Replacement TTS started before its tone ended");
   assert(nextSpeech.at - nextInputCancellation.clickAt <= 600, "Replacement TTS arrived too late");
   assert(
-    nextSpeech.text === t("color.voice.progress", { n: 3 }),
-    "Replacement TTS must report the new remaining count"
+    nextSpeech.text === t("color.voice.progress", { name: t(`animal.${popAnimalFor(1).id}`), n: 3 }),
+    "Replacement TTS must name the new animal and report the new remaining count"
   );
 
+  // 出た動物はしばらく見せて、消えて真っ暗に戻る（「出て、消えて、次」）。
   await page.waitForFunction(
-    () => !document.querySelector("#gameStageContent")?.classList.contains("is-feedback"),
+    () => !document.querySelector("#gameStageContent .pop-figure"),
     null,
-    { timeout: 2_000 }
+    { timeout: POP_SHOW_MS + POP_FADE_MS + 3_000 }
   );
   const feedbackEndedAt = await page.evaluate(() => performance.now());
-  assert(feedbackEndedAt - nextInputCancellation.clickAt >= 430, "Visual feedback disappeared too early");
-  assert(feedbackEndedAt - nextInputCancellation.clickAt < 2_000, "Visual feedback stayed on screen too long");
-  await page.waitForTimeout(130);
-  const endedOpacity = await page.locator(".color-feedback").evaluate(
-    (feedback) => Number(getComputedStyle(feedback).opacity)
+  assert(
+    feedbackEndedAt - nextInputCancellation.clickAt >= POP_SHOW_MS,
+    "The animal disappeared before it could be seen"
   );
-  assert(endedOpacity <= 0.1, `Visual feedback remained visible after its timeout (opacity=${endedOpacity})`);
+  assert(
+    feedbackEndedAt - nextInputCancellation.clickAt < POP_SHOW_MS + POP_FADE_MS + 2_000,
+    "The animal stayed on screen too long"
+  );
 
   // Turning app TTS off must cancel current speech. Later color feedback then
   // belongs to the live region only.
@@ -583,10 +615,7 @@ async function checkStartToHomeToGameFlow(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
   await waitForClass(page, "#gameView", "is-active");
-  await page.locator(".game-ready").waitFor({ state: "visible" });
-  await page.waitForTimeout(200);
-  await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
 
   // Switch Control / assistive technologies may emit click-only input. Two
   // accepted presses 170ms apart are outside shell dedupe but inside the
@@ -635,7 +664,11 @@ async function checkStartToHomeToGameFlow(page) {
     secondAt: window.__rapidSecondAt,
     speechCount: window.__colorSpeechCalls.length,
   }));
-  assert(rapidDelivered.events[0].text === t("color.voice.progress", { n: 3 }), "Last rapid click must own the remaining-count announcement");
+  assert(
+    rapidDelivered.events[0].text ===
+      t("color.voice.progress", { name: t(`animal.${popAnimalFor(1).id}`), n: 3 }),
+    "Last rapid click must own the remaining-count announcement"
+  );
   assert(rapidDelivered.events[0].at - rapidDelivered.secondAt >= 220, "Rapid announcement started too early");
   assert(rapidDelivered.events[0].at - rapidDelivered.secondAt <= 600, "Rapid announcement arrived too late");
   assert(rapidDelivered.speechCount === 0, "Live-region ownership must suppress app TTS");
@@ -676,18 +709,15 @@ async function checkStartToHomeToGameFlow(page) {
     window.__destroyColorEvents.map((event) => event.text)
   );
   assert(
-    !destroyEventTexts.includes(t("color.voice.progress", { n: 2 })),
+    !destroyEventTexts.includes(
+      t("color.voice.progress", { name: t(`animal.${popAnimalFor(2).id}`), n: 2 })
+    ),
     "destroy() must cancel the pending delayed color announcement"
   );
   assert(
-    !(await page.locator("#gameStageContent").evaluate((target) => target.classList.contains("is-feedback"))),
-    "destroy() must clear visual feedback state"
+    (await page.locator("#gameStageContent .pop-figure").count()) === 0,
+    "destroy() must not leave the animal on the (hidden) stage"
   );
-  const destroyedOpacity = await page.evaluate(() => {
-    const feedback = document.querySelector("#gameStageContent .color-feedback");
-    return feedback ? Number(getComputedStyle(feedback).opacity) : 0;
-  });
-  assert(destroyedOpacity <= 0.1, `destroy() left visual feedback visible (opacity=${destroyedOpacity})`);
   await page.evaluate(() => window.__destroyColorObserver.disconnect());
 
   // Aborting remains distinct from normal completion: Esc returns directly to home.
@@ -706,11 +736,9 @@ async function checkColorCompletionFlow(page) {
   await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
   await waitForClass(page, "#gameView", "is-active");
 
-  async function beginReadySession() {
-    await page.locator(".game-ready").waitFor({ state: "visible" });
-    await page.waitForTimeout(200);
-    await page.locator("#gameStage").click();
-    await page.locator(".game-ready").waitFor({ state: "detached" });
+  // おすと でてくる（旧 色と音）。レディ画面は挟まず、最初から「押してみよう」。
+  async function waitForPrompt() {
+    await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
     await page.waitForTimeout(200);
   }
 
@@ -723,90 +751,83 @@ async function checkColorCompletionFlow(page) {
         return clone?.textContent?.trim() || "";
       };
       return {
-        total: document.querySelectorAll(".color-progress-dot").length,
-        done: document.querySelectorAll(".color-progress-dot.is-done").length,
-        label: plainText(".color-session-progress .reaction-detail"),
-        feedback: plainText(".color-feedback"),
-        chipColor: document.querySelector(".color-chip")?.style.getPropertyValue("--chip-color").trim() || "",
-        lastDoneColor:
-          [...document.querySelectorAll(".color-progress-dot.is-done")].at(-1)
-            ?.style.getPropertyValue("--dot-color").trim() || "",
+        total: document.querySelectorAll(".pop-dot").length,
+        done: document.querySelectorAll(".pop-dot.is-done").length,
+        word: plainText(".pop-word"),
+        animal: document.querySelector(".pop-figure")?.dataset.animal || "",
       };
     });
   }
 
-  await beginReadySession();
+  await waitForPrompt();
   const initial = await progressSnapshot();
-  assert(initial.total === colorLegacyPreset.targetPresses, "Color session must show one dot per required press");
-  assert(initial.done === 0, "A new color session must start with zero completed dots");
-  assert(
-    initial.label === t("color.progress", { n: colorLegacyPreset.targetPresses }),
-    "A new color session must state the complete remaining goal"
-  );
+  assert(initial.total === colorLegacyPreset.targetPresses, "The game must show one dot per required press");
+  assert(initial.done === 0, "A new session must start with zero completed dots");
+  assert(initial.word === t("color.prompt"), "A new session must invite the first press");
+  assert(initial.animal === "", "No animal may be out before the first press");
 
   const logsBefore = await readLogCount(page);
   for (let press = 1; press <= colorLegacyPreset.targetPresses; press += 1) {
     await page.locator("#gameStage").click();
     const snapshot = await progressSnapshot();
-    assert(snapshot.done === press, "Expected " + press + " completed color progress dots");
+    assert(snapshot.done === press, "Expected " + press + " completed progress dots");
+    // どの回も必ず動物が出る（失敗が無い）。出る順番は決まっている。
     assert(
-      snapshot.chipColor === snapshot.lastDoneColor,
-      `Press ${press} must collect the same colour shown in the centre (${snapshot.chipColor} vs ${snapshot.lastDoneColor})`
+      snapshot.animal === popAnimalFor(press - 1).id,
+      `Press ${press} must bring out ${popAnimalFor(press - 1).id}, got ${snapshot.animal}`
     );
-    if (press < colorLegacyPreset.targetPresses) {
-      assert(
-        snapshot.label === t("color.progress", { n: colorLegacyPreset.targetPresses - press }),
-        "Color progress must count down after every accepted press"
-      );
-      assert(snapshot.feedback === t("color.changed"), "Non-final color presses must show the change");
-      await page.waitForTimeout(170);
-    } else {
-      assert(snapshot.label === t("color.progressComplete"), "The fifth press must show visual completion");
-      assert(snapshot.feedback === t("color.complete"), "The fifth press must say that the goal is complete");
-    }
+    const expectedWord =
+      press < colorLegacyPreset.targetPresses ? t(`color.pop.${Math.min(press - 1, 3)}`) : t("color.pop.4");
+    assert(snapshot.word === expectedWord, `Press ${press} must say "${expectedWord}", got "${snapshot.word}"`);
+    if (press < colorLegacyPreset.targetPresses) await page.waitForTimeout(170);
   }
   assert(
     (await readLogCount(page)) === logsBefore + colorLegacyPreset.targetPresses,
-    "A completed color session must log exactly the required number of presses"
+    "A completed session must log exactly the required number of presses"
   );
 
-  // The completion card stays on screen briefly. A sixth accepted activation
+  // The last animal stays on screen briefly. A sixth accepted activation
   // during that interval must be ignored rather than producing an extra tone/log.
   await page.waitForTimeout(180);
-  // The new prism is still in its 360ms arrival animation here. Playwright's
-  // actionability wait can outlast the 560ms finish delay and then find the
-  // stage hidden by the result view, although a real switch event is accepted
-  // immediately. Dispatch the same click event directly: this assertion is
+  // Dispatch the click directly: Playwright's actionability wait can outlast
+  // the finish delay and then find the stage hidden by the result view,
+  // although a real switch event is accepted immediately. This assertion is
   // about the input guard, not about animation stability.
   await page.locator("#gameStage").dispatchEvent("click");
   assert(
     (await readLogCount(page)) === logsBefore + colorLegacyPreset.targetPresses,
-    "Color completion must ignore presses beyond the fixed goal"
+    "Completion must ignore presses beyond the fixed goal"
   );
 
   await waitForClass(page, "#resultView", "is-active");
   await page.locator(".completion-result").waitFor({ state: "visible" });
+  const plainOf = async (selector) =>
+    page.locator(selector).evaluate((element) => {
+      const clone = element.cloneNode(true);
+      clone.querySelectorAll("rt").forEach((reading) => reading.remove());
+      return clone.textContent.trim();
+    });
   assert(
-    await page.locator(".completion-result-title").evaluate(
-      (element, expected) => element.textContent.trim() === expected,
-      t("result.completion.title")
-    ),
-    "Color result must have an explicit completion heading"
+    (await plainOf(".completion-result-title")) === t("result.completion.title"),
+    "The result must have an explicit completion heading"
   );
   assert(
-    await page.locator(".completion-result-summary").evaluate(
-      (element, expected) => {
-        const clone = element.cloneNode(true);
-        clone.querySelectorAll("rt").forEach((reading) => reading.remove());
-        return clone.textContent.trim() === expected;
-      },
-      t("result.completion.summary", { n: colorLegacyPreset.targetPresses })
-    ),
-    "Color result must report the completed press count"
+    (await plainOf(".completion-result-summary")) ===
+      t("result.completion.summary", {
+        n: colorLegacyPreset.targetPresses,
+        m: colorLegacyPreset.targetPresses,
+      }),
+    "The result must report how many times the child played and how many friends came out"
+  );
+  const resultAnimals = await page.locator(".hk-result-item").evaluateAll((items) =>
+    items.map((item) => item.dataset.animal)
   );
   assert(
-    (await page.locator(".color-result-swatch").count()) === colorLegacyPreset.targetPresses,
-    "Color result must retain the five-colour visual history"
+    JSON.stringify(resultAnimals) ===
+      JSON.stringify(
+        Array.from({ length: colorLegacyPreset.targetPresses }, (_, index) => popAnimalFor(index).id)
+      ),
+    `The result must line up the animals that came out, got ${JSON.stringify(resultAnimals)}`
   );
   assert(
     (await page.locator("#resultStats").getAttribute("aria-live")) === "off",
@@ -816,17 +837,14 @@ async function checkColorCompletionFlow(page) {
     const saved = JSON.parse(localStorage.getItem(key) || "{}");
     return (saved.sessions || []).some((session) => session.gameId === "color-legacy");
   }, storageKey);
-  assert(!hasFakeResearchSession, "Completion-only color play must not create a fake research taskType session");
+  assert(!hasFakeResearchSession, "Completion-only play must not create a fake research taskType session");
 
   await page.locator("#resultRetry").click();
   await waitForClass(page, "#gameView", "is-active");
-  await beginReadySession();
+  await waitForPrompt();
   const retried = await progressSnapshot();
-  assert(retried.done === 0, "Retry must reset color progress to zero");
-  assert(
-    retried.label === t("color.progress", { n: colorLegacyPreset.targetPresses }),
-    "Retry must restore the full five-press goal"
-  );
+  assert(retried.done === 0, "Retry must reset progress to zero");
+  assert(retried.word === t("color.prompt"), "Retry must invite the first press again");
 
   for (let press = 0; press < colorLegacyPreset.targetPresses; press += 1) {
     await page.locator("#gameStage").click();
@@ -935,6 +953,8 @@ async function checkAnyKeyWhileScanning(page) {
 }
 
 async function checkKeyboardAndSwitchInput(page) {
+  // 物理入力代替（画面の「おす」）を確かめるので、出す設定にしておく。
+  await enableScreenSwitch(page);
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await openActivity(page, "学ぶ・伝える");
@@ -943,8 +963,10 @@ async function checkKeyboardAndSwitchInput(page) {
 
   // Stop auto scan so an unfocused Space has no selected target and therefore
   // must be a no-op rather than triggering a hidden training action.
+  // 「走査停止」は利用者の画面には出さない（docs/design-renewal-2026-09-25.md
+  // §3.5）ので、ボタンの配線そのものを呼ぶ。
   if ((await page.locator("#scanState").textContent())?.trim() === "走査中") {
-    await page.locator("#toggleScan").click();
+    await page.locator("#toggleScan").evaluate((button) => button.click());
   }
   await waitForText(page, "#scanState", "走査停止中");
 
@@ -965,7 +987,7 @@ async function checkKeyboardAndSwitchInput(page) {
   // The physical-input substitute is intentionally outside [data-scan], so
   // it can activate the highlighted target without ever becoming a dead slot.
   assert(!(await page.locator("#primarySwitch").getAttribute("data-scan")), "Primary switch must not scan itself");
-  await page.locator("#toggleScan").click();
+  await page.locator("#toggleScan").evaluate((button) => button.click());
   await waitForText(page, "#scanState", "走査中");
   // toggleScan の pointerdown と物理入力代替の pointerdown は別入力。
   // Playwrightは人間より速いため、150msの入力dedupe窓を越えてから押す。
@@ -1415,12 +1437,14 @@ async function checkIpadSwitchControlMode(page, project) {
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
   });
   await waitForClass(page, "#gameView", "is-active");
-  await page.locator(".game-ready").waitFor({ state: "visible" });
+  // はじめの遊び（おすと でてくる）はレディ画面を挟まない。click-only の
+  // ひと押しで、そのまま動物が出ること（Switch Control の入力で遊べること）を見る。
+  await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
   await page.waitForTimeout(200);
   await page.locator("#gameStage").evaluate((target) => {
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
   });
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await page.locator("#gameStageContent .pop-figure").waitFor({ state: "visible" });
   await page.locator("#gameExit").evaluate((target) => {
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
   });
@@ -1688,7 +1712,14 @@ async function checkSlotSequentialFlow(page) {
   }
 
   await waitForClass(page, "#resultView", "is-active");
-  await page.locator(".slot-result").waitFor({ state: "visible" });
+  // 利用者に見えるのは一言と「何回のうち何回」。数値の表（.slot-result）は
+  // 支援者むけに畳んである（docs/design-renewal-2026-09-25.md §1.6）。
+  await page.locator("#resultStats .hk-result").waitFor({ state: "visible" });
+  await page.locator("#resultStats .result-details .slot-result").waitFor({ state: "attached" });
+  assert(
+    !(await page.locator("#resultStats .result-details").evaluate((details) => details.open)),
+    "The supporter's numbers must start folded on the child's result screen"
+  );
 
   const session = await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || "{}");
@@ -3286,8 +3317,35 @@ async function checkMobileLayout(page) {
   });
 
   assert(overflow <= 2, `Expected horizontal overflow <= 2px, got ${overflow}px`);
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+
+  // 利用者の画面には、既定で「走査停止」「入力」のドックを出さない
+  // （docs/design-renewal-2026-09-25.md §3.5。打ち合わせで名指しされた
+  // 分からない言葉・余計なボタンだった）。スイッチ機器とタイルの直接タップは
+  // ドックが無くても使える。
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // 画面をスイッチ代わりに使う人のために、設定で「おす」だけを出せる。
+  // 出しても「走査停止」は出さない（止めたいのは支援者で、設定の自動走査がする）。
+  await enableScreenSwitch(page);
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
   await page.locator("#primarySwitch").waitFor({ state: "visible" });
+  await page.locator("#toggleScan").waitFor({ state: "hidden" });
+  assert(
+    ((await page.locator("#primarySwitchLabel").textContent()) || "").trim() === "おす",
+    "The on-screen switch must speak the user's word, not 入力"
+  );
+}
+
+/** 利用者の画面に「おす」ボタン（画面のスイッチ）を出す設定を入れて読み直す。 */
+async function enableScreenSwitch(page) {
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    saved.settings = { ...(saved.settings || {}), showScreenSwitch: true };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, storageKey);
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
 }
 
 /**
@@ -3491,13 +3549,16 @@ async function checkIpadAccessibilityLayout(page, project) {
 
   const layout = await page.evaluate(() => {
     const rows = [...document.querySelectorAll("#gameTileGrid .game-tile")];
-    const dock = document.querySelector(".switch-dock")?.getBoundingClientRect();
-    const last = rows.at(-1)?.getBoundingClientRect();
+    const dockEl = document.querySelector(".switch-dock");
+    // ドックは利用者の画面では既定で出ない。出ていなければ画面の下端が限界
+    // （アプリ側の判定 views/home.js の listOverflowsDock と同じ規則）。
+    const dockShown = dockEl && getComputedStyle(dockEl).display !== "none";
+    const bottoms = rows.map((row) => row.getBoundingClientRect().bottom);
     return {
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       rowWritingModes: rows.map((row) => getComputedStyle(row).writingMode),
-      lastBottom: last ? last.bottom : null,
-      dockTop: dock ? dock.top : null,
+      lastBottom: bottoms.length ? Math.max(...bottoms) : null,
+      dockTop: dockShown ? dockEl.getBoundingClientRect().top : window.innerHeight,
     };
   });
 
@@ -3519,8 +3580,13 @@ async function checkIpadAccessibilityLayout(page, project) {
   //      下の lastBottom <= dockTop と対になる）
   const tileNaming = await page.evaluate(() =>
     [...document.querySelectorAll("#gameTileGrid .game-tile")].map((tile) => {
-      const describedBy = tile.getAttribute("aria-describedby");
-      const description = describedBy ? document.getElementById(describedBy) : null;
+      // 遊びのタイルは「札（難しさ）＋説明」の2つを describedby に持つ
+      // （views/home.js）。説明はそのうちの tile-description。
+      const describedIds = (tile.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+      const description =
+        describedIds
+          .map((id) => document.getElementById(id))
+          .find((element) => element?.classList.contains("tile-description")) || null;
       const heading = tile.querySelector("strong");
       const px = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
       // 利用者向けの文言は総ルビなので、textContent にはふりがなの読みも
@@ -3536,6 +3602,11 @@ async function checkIpadAccessibilityLayout(page, project) {
       return {
         name: tile.getAttribute("aria-label") || "",
         isPager: tile.classList.contains("scan-pager"),
+        isHero: tile.dataset.hkSlot === "hero",
+        badgeVisible: (() => {
+          const badge = tile.querySelector(".hk-tile-badge");
+          return badge ? badge.getBoundingClientRect().width > 2 : null;
+        })(),
         heading: baseText(heading),
         description: baseText(description),
         descriptionIsVisible: description
@@ -3558,22 +3629,31 @@ async function checkIpadAccessibilityLayout(page, project) {
     tileNaming.filter((tile) => tile.isPager).length === (homeLayout.pages.length > 1 ? 1 : 0),
     "A paginated home must expose exactly one reachable next-page control"
   );
+  // デザイン「はっきりした色」（docs/design-renewal-2026-09-25.md §2.1）:
+  // 絵と名前と難しさの札で選ぶ。説明文を画面に出すのは、いちばん簡単な
+  // 大きな1番だけ——小さいタイルまで文を並べると、打ち合わせで言われた
+  // 「文字が多くて難しそう」に戻る。説明は全タイルで読み上げに乗る。
+  // 行の高さの上限（旧 200px）は外した。グリッドは画面の高さに合わせて
+  // タイルが伸びるので、守るのは下の「最後の項目まで画面に届く」のほう。
   tileNaming.forEach((tile) => {
-    assert(tile.name === tile.heading, `Tile name must stay the short heading, got "${tile.name}"`);
+    assert(tile.name === tile.heading, `Tile "${tile.name}" name must stay the short heading, got "${tile.heading}"`);
     assert(tile.description.length > 0, `Tile "${tile.name}" must expose its description to AT`);
-    assert(
-      tile.descriptionIsVisible,
-      `Tile "${tile.name}" description must be readable on screen, not only by AT`
-    );
-    assert(
-      tile.descriptionFontPx < tile.headingFontPx,
-      `Tile "${tile.name}" description must stay subordinate to the heading ` +
-        `(description ${tile.descriptionFontPx}px vs heading ${tile.headingFontPx}px)`
-    );
-    assert(
-      tile.rowHeight <= 200,
-      `Tile "${tile.name}" row grew to ${tile.rowHeight}px; the current page no longer fits above the dock`
-    );
+    if (tile.isHero) {
+      assert(
+        tile.descriptionIsVisible,
+        `The first (easiest) tile "${tile.name}" must show its description on screen`
+      );
+    }
+    if (tile.badgeVisible !== null) {
+      assert(tile.badgeVisible, `Tile "${tile.name}" must show how hard it is (its level badge) on screen`);
+    }
+    if (tile.descriptionIsVisible) {
+      assert(
+        tile.descriptionFontPx < tile.headingFontPx,
+        `Tile "${tile.name}" description must stay subordinate to the heading ` +
+          `(description ${tile.descriptionFontPx}px vs heading ${tile.headingFontPx}px)`
+      );
+    }
   });
 
   assert(layout.overflow <= 2, `Expected iPad horizontal overflow <= 2px, got ${layout.overflow}px`);

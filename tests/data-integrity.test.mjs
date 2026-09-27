@@ -153,6 +153,32 @@ test("Switch Control mode owns shell scanning and speech volume stays in range",
   assert.equal(invalid.autoScan, true);
 });
 
+test("the redesign's settings survive a reload and fall back on unknown values", () => {
+  // デザイン改修で足した設定（docs/design-renewal-2026-09-25.md）。sanitize で
+  // 落ちると、支援者が選んだ音や画面のボタンが再読込のたびに既定へ戻る。
+  const defaults = sanitizeState({}).settings;
+  assert.equal(defaults.showScreenSwitch, false, "画面の「おす」ボタンは既定で出さない");
+  assert.equal(defaults.popBackground, "dark");
+  assert.equal(defaults.popSound, "instrument", "既定は強すぎない楽器の音");
+  assert.equal(defaults.popCheer, true);
+
+  const chosen = sanitizeState({
+    settings: { showScreenSwitch: true, popBackground: "light", popSound: "none", popCheer: false },
+  }).settings;
+  assert.equal(chosen.showScreenSwitch, true);
+  assert.equal(chosen.popBackground, "light");
+  assert.equal(chosen.popSound, "none");
+  assert.equal(chosen.popCheer, false);
+
+  const unknown = sanitizeState({
+    settings: { showScreenSwitch: "yes", popBackground: "pink", popSound: "boom", popCheer: 1 },
+  }).settings;
+  assert.equal(unknown.showScreenSwitch, false);
+  assert.equal(unknown.popBackground, "dark");
+  assert.equal(unknown.popSound, "instrument");
+  assert.equal(unknown.popCheer, true);
+});
+
 test("sanitizeState keeps scan trials whose tolerance differs from the session default", () => {
   const base = {
     sessionId: "assist-1",

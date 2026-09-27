@@ -29,6 +29,10 @@ import { READINESS_STATES } from "./readinessCheck.js";
 import { SELECTABLE_TEXT_MODES, TEXT_MODES } from "./i18n.js";
 import { sanitizeSlotSession } from "./games/slotState.js";
 
+/** 「おすと でてくる」の背景と音の選択肢（settings.popBackground / popSound）。 */
+export const POP_BACKGROUNDS = new Set(["dark", "light"]);
+export const POP_SOUNDS = new Set(["instrument", "pop", "none"]);
+
 /**
  * 旧保存キー（P0-0 移行元、detailed-design.md §9.5）。
  * v2 … src/lib 分割版（リファクタリングノート2026-06-10時点）。
@@ -82,6 +86,20 @@ export const defaultState = {
     highContrast: false,
     // 視覚を必要とする課題（現在は crane）をロビーから隠す。
     hideVisualTasks: false,
+    // 利用者の画面の下に「おす」ボタン（画面のスイッチ）を出すか。
+    // 既定は出さない。「走査停止」「入力」の2つは、打ち合わせで名指しされた
+    // 分からない言葉・余計なボタンだった（docs/design-renewal-2026-09-25.md §3.5）。
+    // NeuroNode やキーボードのスイッチは、これが無くても使える。
+    showScreenSwitch: false,
+    // 「おすと でてくる」の見え方と音（ゲームの中の「この遊びの設定」で変える）。
+    // この遊びは測定の課題ではない（taskType なし）ので、記録の条件には入れない。
+    //   popBackground … "dark"（真っ暗な画面から出てくる）| "light"
+    //   popSound      … "instrument"（楽器の音）| "pop"（明るい効果音）| "none"
+    //   popCheer      … できたときに「やったー」と言うか
+    // 強い音ばかりだと発作を起こす人もいる、と言われたので既定は楽器の音。
+    popBackground: "dark",
+    popSound: "instrument",
+    popCheer: true,
     // 既定OFF。ONで操作訓練/効果測定/研究タブを表示する（P0-0, detailed-design.md §0.2）。
     researcherMode: false,
     // P0-2（ゲーム系設定、detailed-design.md §9.1）。judgmentWindowMs は判定窓の
@@ -1182,6 +1200,10 @@ export function sanitizeState(candidate) {
         settings.hideVisualTasks,
         fallback.settings.hideVisualTasks
       ),
+      showScreenSwitch: booleanOr(settings.showScreenSwitch, fallback.settings.showScreenSwitch),
+      popBackground: enumOr(settings.popBackground, POP_BACKGROUNDS, fallback.settings.popBackground),
+      popSound: enumOr(settings.popSound, POP_SOUNDS, fallback.settings.popSound),
+      popCheer: booleanOr(settings.popCheer, fallback.settings.popCheer),
       researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),
       judgmentWindowMs: numberInRange(
         settings.judgmentWindowMs,
