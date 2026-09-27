@@ -6,7 +6,7 @@
 // 中断した回は試行数が足りず不利になる。
 
 import assert from "node:assert/strict";
-import { bestRecordLine, personalBest, praiseFor, resultScore } from "../src/lib/games/gameHost.js";
+import { bestRecordLine, personalBest, praiseFor, resultScore } from "../src/lib/games/results.js";
 import { resolveTextMode, translate } from "../src/lib/i18n.js";
 
 // 文言は表記モードで変わるので、テスト側も辞書を通して引く。

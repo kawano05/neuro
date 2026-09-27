@@ -103,6 +103,9 @@ export const SESSION_LEDGER_HEADERS = Object.freeze([
   ...DEVICE_HEADERS,
   "configJson",
   "summaryJson",
+  // 演出の強さ（src/lib/fx/）。configJson の中にもあるが、層別にすぐ使えるよう列にも出す。
+  // 末尾に足す（列位置を動かさない）。演出エンジンより前の記録は空欄。
+  "fxLevel",
 ]);
 
 function deviceColumns(session) {
@@ -175,6 +178,10 @@ export function buildRhythmCsvRows(sessions) {
       // 除外するかどうかを決めるのは解析側なので、アプリは測定を止めず
       // 記録する（測定条件は禁止せず記録する、という全体の方針）。
       "measurementReadiness",
+      // 演出の強さ（src/lib/fx/。none / subtle / normal / big）。れんしゅうの回は、
+      // 当たったときの星や紙吹雪が成績に効きうる。末尾に足す（列位置を動かさない）。
+      // 演出エンジンより前の記録は空欄。
+      "fxLevel",
     ],
   ];
   sessions.forEach((session) => {
@@ -203,6 +210,7 @@ export function buildRhythmCsvRows(sessions) {
         config.difficultyMode ?? "practice",
         ...deviceColumns(session),
         config.measurementReadiness ?? "n/a",
+        config.fxLevel ?? "",
       ]);
     });
   });
@@ -239,6 +247,7 @@ export function buildSessionLedgerRows(sessions) {
       ...deviceColumns(session),
       JSON.stringify(session.config ?? {}),
       JSON.stringify(session.summary ?? {}),
+      session.config?.fxLevel ?? "",
     ]);
   });
   return rows;
@@ -281,6 +290,10 @@ export function buildTaskCsvRows(sessions, taskType) {
         "sweepMs",
         "endlessProtocolVersion",
         "endReason",
+        // 演出の強さ（src/lib/fx/。none / subtle / normal / big）。れんしゅうの回は、
+        // 当たったときの星や紙吹雪が成績に効きうる。末尾に足す（列位置を動かさない）。
+        // 演出エンジンより前の記録は空欄。
+        "fxLevel",
       ],
     ];
     sessions
@@ -314,6 +327,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             trial.sweepMs ?? session.config?.sweepMs ?? "",
             session.config?.endlessProtocolVersion ?? "",
             session.endReason ?? "",
+            session.config?.fxLevel ?? "",
           ]);
         });
       });
@@ -343,6 +357,10 @@ export function buildTaskCsvRows(sessions, taskType) {
         "limitMs",
         "endlessProtocolVersion",
         "endReason",
+        // 演出の強さ（src/lib/fx/。none / subtle / normal / big）。れんしゅうの回は、
+        // 当たったときの星や紙吹雪が成績に効きうる。末尾に足す（列位置を動かさない）。
+        // 演出エンジンより前の記録は空欄。
+        "fxLevel",
       ],
     ];
     sessions
@@ -371,6 +389,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             trial.limitMs ?? session.config?.limitMs ?? "",
             session.config?.endlessProtocolVersion ?? "",
             session.endReason ?? "",
+            session.config?.fxLevel ?? "",
           ]);
         });
       });

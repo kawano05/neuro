@@ -590,6 +590,21 @@
           </span>
           <input id="highContrast" type="checkbox" role="switch" data-scan />
         </label>
+
+        <!-- 演出の強さ（settings.fxLevel。docs/overall-design-2026-09-28.md §4）。
+             光の点滅・揺れ・粒の数の上限は、どの強さでも同じ。 -->
+        <label class="setting-row">
+          <span>
+            <strong>演出の強さ</strong>
+            <small>できたときの紙吹雪や、はじける星の量です。光の点滅は1秒に3回までにしてあります。刺激に弱い人は「ひかえめ」か「なし」に</small>
+          </span>
+          <select id="fxLevel" data-scan>
+            <option value="none">なし</option>
+            <option value="subtle">ひかえめ</option>
+            <option value="normal">ふつう</option>
+            <option value="big">はで</option>
+          </select>
+        </label>
       </div>
 
       <!-- 録音の素材のクレジット（src/lib/soundCredits.js。views/settings.js が中を描く）。

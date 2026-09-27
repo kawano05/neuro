@@ -14,13 +14,7 @@
 // =====================================================================
 
 import { POP_ANIMALS } from "../art/hakkiriArt.js";
-import {
-  BEGINNER_TARGET_PRESSES,
-  celebrate,
-  playFinishSound,
-  playPrefsFor,
-  playPressSound,
-} from "./beginnerKit.js";
+import { BEGINNER_TARGET_PRESSES, createBeginnerFlow, playPrefsFor } from "./beginnerKit.js";
 
 const GAME_ID = "coloring";
 
@@ -85,16 +79,39 @@ export function coloringMarkup(art, parts = BEGINNER_TARGET_PRESSES) {
 }
 
 export function createColoringGame(ctx) {
-  const { settings, audio, voiceFeedback, logEvent, finish, t, tHtml } = ctx;
+  const { settings, t, tHtml, fx } = ctx;
 
   let stageEl = null;
   let picture = POP_ANIMALS[0];
-  let colored = 0;
-  let speechTimer = null;
-  let finishTimer = null;
-  let finishDelivered = false;
+
+  // 押す → 音 → 進み → 5回目 → フィナーレ → けっか（beginnerKit.js の共通の流れ）。
+  const flow = createBeginnerFlow(ctx, {
+    gameId: GAME_ID,
+    ttsDelayMs: COLORING_TTS_DELAY_MS,
+    finishDelayMs: COLORING_FINISH_DELAY_MS,
+    logLabel: "ぬりえ",
+    onPress(pressIndex) {
+      update();
+      // ② 起きたこと: 色がついた場所から、その色のしぶき。
+      const parts = [...(stageEl?.querySelectorAll(`.cl-part[data-part="${pressIndex}"]`) || [])];
+      const painted = parts.find((part) => !part.classList.contains("cl-line"));
+      fx?.paintSplash(stageEl?.querySelector(".coloring-card"), {
+        k: pressIndex,
+        color: painted?.getAttribute("fill") || "#FFC83D",
+        parts,
+      });
+      fx?.motion.stamp(stageEl?.querySelector(".coloring-word"), { delayMs: 90 });
+      return { creature: picture.id };
+    },
+    progressSpeech: (remaining) => t("coloring.voice.progress", { n: remaining }),
+    finishSpeech: () => t("coloring.voice.finish", { name: t(`animal.${picture.id}`) }),
+    finishSummary: () => ({ presses: BEGINNER_TARGET_PRESSES, picture: picture.id }),
+    // ⑤ フィナーレ: できあがった絵が跳ねて、星の輪と紙吹雪。
+    onFinale: () => fx?.finale(stageEl, { hero: stageEl?.querySelector(".coloring-card") }),
+  });
 
   function wordKey() {
+    const colored = flow.count();
     if (colored === 0) return "color.prompt";
     return `coloring.word.${Math.min(colored - 1, BEGINNER_TARGET_PRESSES - 1)}`;
   }
@@ -115,6 +132,7 @@ export function createColoringGame(ctx) {
 
   function update() {
     if (!stageEl) return;
+    const colored = flow.count();
     stageEl.classList.toggle("is-light", playPrefsFor(settings, GAME_ID).background === "light");
     stageEl.querySelectorAll(".cl-part").forEach((part) => {
       part.classList.toggle("is-colored", Number(part.dataset.part) < colored);
@@ -126,43 +144,13 @@ export function createColoringGame(ctx) {
 
   /** スイッチ入力1回ぶん。いつ押しても次の場所に色がつく（失敗が無い）。 */
   function handleInput() {
-    if (colored >= BEGINNER_TARGET_PRESSES || finishTimer !== null) return;
-    window.clearTimeout(speechTimer);
-    audio.stopSpeech();
-    const pressIndex = colored;
-    colored += 1;
-    playPressSound(audio, playPrefsFor(settings, GAME_ID).sound, pressIndex, {
-      creature: picture.id,
-    });
-    update();
-
-    const remaining = BEGINNER_TARGET_PRESSES - colored;
-    if (remaining > 0) {
-      speechTimer = window.setTimeout(() => {
-        speechTimer = null;
-        voiceFeedback(t("coloring.voice.progress", { n: remaining }));
-      }, COLORING_TTS_DELAY_MS);
-    } else {
-      playFinishSound(audio, playPrefsFor(settings, GAME_ID).sound);
-      finishTimer = window.setTimeout(() => {
-        finishTimer = null;
-        finishDelivered = true;
-        celebrate(
-          ctx,
-          playPrefsFor(settings, GAME_ID),
-          t("coloring.voice.finish", { name: t(`animal.${picture.id}`) })
-        );
-        finish({ presses: BEGINNER_TARGET_PRESSES, picture: picture.id });
-      }, COLORING_FINISH_DELAY_MS);
-    }
-    logEvent({ type: "switch", label: "ぬりえ" });
+    flow.handleInput();
   }
 
   return {
     mount(el) {
       stageEl = el;
-      colored = 0;
-      finishDelivered = false;
+      flow.reset();
       picture = POP_ANIMALS[nextPicture % POP_ANIMALS.length];
       nextPicture += 1;
       stageEl.classList.add("module-coloring");
@@ -174,11 +162,7 @@ export function createColoringGame(ctx) {
       update();
     },
     destroy() {
-      window.clearTimeout(speechTimer);
-      window.clearTimeout(finishTimer);
-      speechTimer = null;
-      finishTimer = null;
-      if (!finishDelivered) audio.stopSpeech();
+      flow.destroy();
       if (stageEl) {
         stageEl.classList.remove("module-coloring", "is-light", "is-complete");
         stageEl.innerHTML = "";

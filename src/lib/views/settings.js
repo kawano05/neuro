@@ -149,6 +149,7 @@ export function initSettings(ctx) {
     elements.autoScan.checked = settings.autoScan;
     elements.showScreenSwitch.checked = settings.showScreenSwitch;
     if (elements.scanFeedback) elements.scanFeedback.value = settings.scanFeedback;
+    if (elements.fxLevel) elements.fxLevel.value = settings.fxLevel;
     elements.speechEnabled.checked = settings.speechEnabled;
     elements.speechVolume.value = settings.speechVolume;
     elements.speechVolumeValue.value = `${Math.round(settings.speechVolume * 100)}%`;
@@ -430,6 +431,21 @@ export function initSettings(ctx) {
     state.settings.scanFeedback = elements.scanFeedback.value;
     save();
     announce("枠が動いたときの音を変えました");
+  });
+
+  elements.fxLevel?.addEventListener("change", () => {
+    state.settings.fxLevel = elements.fxLevel.value;
+    save();
+    announce("演出の強さを変えました");
+    // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
+    ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });
+    ctx.fx?.engine.burst({
+      ...ctx.fx.engine.pointOf(elements.fxLevel),
+      count: 12,
+      shapes: ["sparkle", "star"],
+      colors: ["#FFC83D", "#4DC4FF", "#FFFFFF"],
+      gravity: 120,
+    });
   });
 
   elements.textMode.addEventListener("change", () => {

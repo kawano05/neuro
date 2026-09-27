@@ -99,6 +99,7 @@ export function collectElements() {
     autoScan: document.querySelector("#autoScan"),
     showScreenSwitch: document.querySelector("#showScreenSwitch"),
     scanFeedback: document.querySelector("#scanFeedback"),
+    fxLevel: document.querySelector("#fxLevel"),
     speechEnabled: document.querySelector("#speechEnabled"),
     speechVolume: document.querySelector("#speechVolume"),
     speechVolumeValue: document.querySelector("#speechVolumeValue"),

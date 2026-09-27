@@ -74,6 +74,7 @@ const checks = [
   ["finishes color-legacy with progress, result, retry, and home", checkColorCompletionFlow],
   ["plays the balloon and coloring games to the end, with live per-game settings", checkBeginnerGamesFlow],
   ["hits every pitch that is swung at and re-pitches a missed one in the baseball game", checkBaseballFlow],
+  ["adds effects within the safety rules and never in a measured run", checkEffectsFollowSafetyRules],
   ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
@@ -862,6 +863,118 @@ async function checkColorCompletionFlow(page) {
   await page.locator("#resultHome").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
+}
+
+/**
+ * 演出エンジン（src/lib/fx/。docs/overall-design-2026-09-28.md §4・§5）。
+ *
+ *   - 演出のキャンバスは入力をさえぎらず、読み上げにも乗らない
+ *   - ふつうの強さでは押すと粒が出て、動きが止まればキャンバスも描くのをやめる
+ *   - 強さ「なし」では粒を出さない
+ *   - けっかの星は飛び込んでくる（見せ始めのアニメーションがある）
+ *   - そくていの回の遊びでは、どの強さを選んでいても何も足さず、その回の
+ *     session.config.fxLevel は "none" と記録される
+ */
+async function checkEffectsFollowSafetyRules(page) {
+  const emitted = () =>
+    page.evaluate(() => Number(document.querySelector("#fxLayer")?.dataset.emitted || 0));
+  const setSettings = (patch) =>
+    page.evaluate(
+      ({ key, patch }) => {
+        const saved = JSON.parse(localStorage.getItem(key) || "{}");
+        saved.settings = { ...(saved.settings || {}), ...patch };
+        localStorage.setItem(key, JSON.stringify(saved));
+      },
+      { key: storageKey, patch }
+    );
+  const toHome = async () => {
+    await page.reload();
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+  };
+  const openBalloon = async () => {
+    await openActivity(page, t("tile.balloon.title"));
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator("#gameStageContent.module-balloon .balloon-word").waitFor({ state: "visible" });
+    await page.waitForTimeout(200);
+  };
+  const gone = () =>
+    page.evaluate(() => document.querySelectorAll(".balloon.is-popping, .balloon.is-popped").length);
+
+  // 1. ふつう: ふうせんを割ると粒が出る。キャンバスは入力をさえぎらない。
+  await setSettings({ fxLevel: "normal" });
+  await toHome();
+  await openBalloon();
+  const before = await emitted();
+  await page.locator("#gameStage").click();
+  await page.waitForFunction(
+    (n) => Number(document.querySelector("#fxLayer")?.dataset.emitted || 0) > n,
+    before,
+    { timeout: 3000 }
+  );
+  const layer = await page.evaluate(() => {
+    const el = document.querySelector("#fxLayer");
+    const style = getComputedStyle(el);
+    return { pointerEvents: style.pointerEvents, ariaHidden: el.getAttribute("aria-hidden"), position: style.position };
+  });
+  assert(layer.pointerEvents === "none", `The effects canvas must never take input, got pointer-events: ${layer.pointerEvents}`);
+  assert(layer.ariaHidden === "true", "The effects canvas must stay out of the accessibility tree");
+  assert(layer.position === "fixed", "The effects canvas must cover the viewport without moving the layout");
+  // 粒が飛んでいる最中でも、次のひと押しはふうせんに届く。
+  await page.waitForTimeout(200);
+  await page.locator("#gameStage").click();
+  assert((await gone()) === 2, "A press during the effects must still pop the next balloon");
+  // 動くものが無くなったら、キャンバスは描くのをやめる（遊んでいない時間に描き続けない）。
+  await page.waitForFunction(() => document.querySelector("#fxLayer")?.dataset.active === "false", null, {
+    timeout: 8000,
+  });
+
+  // けっかの星は飛び込んでくる（見せ始めのアニメーション）。
+  for (let press = 3; press <= 5; press += 1) {
+    await page.waitForTimeout(220);
+    await page.locator("#gameStage").click();
+  }
+  await waitForClass(page, "#resultView", "is-active");
+  await page.waitForTimeout(120);
+  const revealing = await page.evaluate(() => {
+    const medal = document.querySelector("#resultStats .hk-result-medal");
+    return medal && typeof medal.getAnimations === "function" ? medal.getAnimations().length : -1;
+  });
+  assert(revealing !== 0, "The result star must fly in when the result first appears");
+
+  // 2. なし: 粒を出さない（押した結果の絵そのものは残る）。
+  await setSettings({ fxLevel: "none" });
+  await toHome();
+  await openBalloon();
+  const quietBefore = await emitted();
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(450);
+  assert((await gone()) === 1, "With effects off, the balloon must still pop");
+  assert((await emitted()) === quietBefore, "With effects off, no particles may be drawn");
+
+  // 3. そくていの回: どの強さを選んでいても何も足さない。
+  await setSettings({ fxLevel: "big", difficultyMode: "measure" });
+  await toHome();
+  await openActivity(page, "さかなつり");
+  await openActivity(page, "アタリで釣る");
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) return SKIPPED;
+  const measuredBefore = await emitted();
+  await page.locator(".fishing-scene.is-bite").waitFor({ timeout: 15000 });
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(600);
+  assert((await emitted()) === measuredBefore, "A measured run must not add any effects");
+  const recorded = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return (state.sessions || []).at(-1)?.config?.fxLevel ?? null;
+  }, storageKey);
+  assert(recorded === "none", `A measured run must record fxLevel "none", got ${JSON.stringify(recorded)}`);
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 /**

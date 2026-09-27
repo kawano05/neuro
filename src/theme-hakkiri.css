@@ -1363,31 +1363,8 @@ body.user-world .game-stage-content.is-ready {
   animation: hk-pop 0.4s cubic-bezier(0.34, 1.36, 0.64, 1) both;
 }
 
-.balloon-burst {
-  position: absolute;
-  top: 33%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-}
-
-.balloon-burst i {
-  position: absolute;
-  top: -8px;
-  left: -8px;
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  background: var(--balloon);
-  /* 暗い背景でも紫や青の紙ふぶきが消えないよう、白い縁を付ける。 */
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
-  opacity: 0;
-}
-
-.balloon.is-popping .balloon-burst i {
-  animation: balloon-confetti 0.55s ease-out forwards;
-}
+/* 割れたときの紙吹雪は、演出エンジン（src/lib/fx/ の balloonPop）がキャンバスに描く。
+   以前はふうせんごとに CSS の小片8枚を持っていた（docs/overall-design-2026-09-28.md §6.1）。 */
 
 /* スマホの縦長で5つを1列に並べると、ふうせんが 60px まで小さくなる。
    3つと2つの2段にして、ひとつずつを大きく見せる（縦は余っている）。 */
@@ -1428,18 +1405,6 @@ body.user-world .game-stage-content.is-ready {
   100% {
     opacity: 0;
     transform: scale(0.2);
-  }
-}
-
-@keyframes balloon-confetti {
-  0% {
-    opacity: 1;
-    transform: rotate(calc(var(--piece) * 45deg)) translateY(0);
-  }
-
-  100% {
-    opacity: 0;
-    transform: rotate(calc(var(--piece) * 45deg)) translateY(-120px);
   }
 }
 
@@ -1717,47 +1682,8 @@ body.user-world.user-activity-mode .tabbar {
   transition-duration: 0.09s;
 }
 
-/* ホームランのはなび（スタンドの上で3つはじける）。 */
-.bb-fireworks {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.bb-firework {
-  position: absolute;
-  top: calc(4% + var(--f) * 3%);
-  left: calc(22% + var(--f) * 24%);
-  width: clamp(60px, 10vmin, 110px);
-  opacity: 0;
-}
-
-.bb-firework svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.module-baseball.is-homerun .bb-firework {
-  animation: bb-firework 1s ease-out both;
-  animation-delay: calc(0.35s + var(--f) * 0.18s);
-}
-
-@keyframes bb-firework {
-  0% {
-    opacity: 0;
-    transform: scale(0.2) rotate(0deg);
-  }
-
-  30% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-    transform: scale(1.4) rotate(40deg);
-  }
-}
+/* ホームランの火花・花火・光の尾は、演出エンジン（src/lib/fx/ の batHit・homerunSky・
+   trail）がキャンバスに描く。以前は CSS の星3つだった（docs/overall-design-2026-09-28.md §6.1）。 */
 
 /* 打った5本（下の列）。ホームランは金、ヒットは白、ころころは小さく。 */
 .bb-slots {
@@ -2126,24 +2052,23 @@ body.result-mode.user-world #resultHome::before {
   pointer-events: none;
 }
 
-.slot-cheer-star {
+/* 星は演出エンジン（src/lib/fx/ の reelHit）がキャンバスに描く。以前は Font Awesome の
+   星12個を DOM に並べて CSS で飛ばしていた（docs/overall-design-2026-09-28.md §6.1）。 */
+
+/* 続けて当てたときの「2かい れんぞく！」。「ぴったり！」の下に、少し遅れて弾む。 */
+.slot-cheer-streak {
   position: absolute;
-  color: #ffc83d;
-  font-size: clamp(1.6rem, 4vmin, 2.6rem);
-  text-shadow: 0 0 0 #1a1a1a, 0 2px 0 rgba(0, 0, 0, 0.35);
-  animation: slot-cheer 0.95s ease-out both;
-}
-
-@keyframes slot-cheer {
-  from {
-    opacity: 1;
-    transform: rotate(var(--a)) translateY(0) scale(0.4);
-  }
-
-  to {
-    opacity: 0;
-    transform: rotate(var(--a)) translateY(-150px) scale(1.2);
-  }
+  top: calc(50% + 2.2em);
+  padding: 2px 12px;
+  border: 3px solid #1a1a1a;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #6f5bb8;
+  font-family: var(--font-round, system-ui, sans-serif);
+  font-size: clamp(1rem, 2.6vmin, 1.5rem);
+  font-weight: 900;
+  white-space: nowrap;
+  animation: slot-cheer-word 1.05s ease-out 0.08s both;
 }
 
 /* 「ぴったり！」。リールの上の縁に、はずむように出て消える（真ん中に出すと、
@@ -2365,6 +2290,20 @@ body.result-mode.user-world #resultHome::before {
   font-size: clamp(0.9rem, 1.8vw, 1.05rem);
 }
 
+/* ---------------------------------------------------------------------
+   演出のキャンバス（src/lib/fx/fxEngine.js）。画面いっぱいに1枚。入力と読み上げには
+   何も足さない（pointer-events: none・aria-hidden）。遊びの面（z 20）より上、
+   遊びの中の設定（z 40）より下。
+   --------------------------------------------------------------------- */
+.fx-layer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 30;
+}
+
 /* プレビュー版だけの目印（src/main.js）。押せないので、下のタイルのタップを邪魔しない。 */
 .preview-badge {
   position: fixed;
@@ -2408,17 +2347,13 @@ body.result-mode.user-world #resultHome::before {
     transition: none;
   }
 
-  .module-baseball.is-homerun .bb-firework,
   .bb-word[data-word] {
     animation: none;
   }
 
-  /* 星は飛ばさず、「ぴったり！」だけを動かさずに出す。 */
-  .slot-cheer-star {
-    display: none;
-  }
-
-  .slot-cheer-word {
+  /* 「ぴったり！」は動かさずに出す（星は演出エンジンが「動きを減らす」を見て減らす）。 */
+  .slot-cheer-word,
+  .slot-cheer-streak {
     animation: none;
   }
 
@@ -2427,11 +2362,6 @@ body.result-mode.user-world #resultHome::before {
   .balloon.is-popping .balloon-svg,
   .module-coloring.is-complete .coloring-card {
     animation: none;
-  }
-
-  .balloon.is-popping .balloon-burst i {
-    animation: none;
-    opacity: 0;
   }
 
   .balloon.is-popped .balloon-mark {

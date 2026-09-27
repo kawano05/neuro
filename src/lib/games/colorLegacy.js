@@ -25,13 +25,7 @@
 
 import { colorLegacyPreset, switchModules } from "../content.js";
 import { POP_ANIMALS, artSvg } from "../art/hakkiriArt.js";
-import {
-  celebrate,
-  playFinishSound,
-  playPrefsFor,
-  playPressSound,
-  progressDotsHtml,
-} from "./beginnerKit.js";
+import { createBeginnerFlow, playPrefsFor, progressDotsHtml } from "./beginnerKit.js";
 
 const GAME_ID = "color-legacy";
 
@@ -51,33 +45,66 @@ export function popAnimalFor(pressIndex) {
 }
 
 export function createColorLegacyGame(ctx) {
-  const { settings, audio, voiceFeedback, logEvent, finish, t, tHtml } = ctx;
+  const { settings, t, tHtml, fx } = ctx;
   const legacyModule = switchModules.find((module) => module.id === "color") || switchModules[0];
 
   let stageEl = null;
-  let step = 0;
   // いま出ている動物（押した回の番号）。-1 なら真っ暗。
   let shownIndex = -1;
   let fading = false;
-  let speechTimer = null;
   let hideTimer = null;
   let fadeTimer = null;
-  let finishTimer = null;
-  let finishDelivered = false;
 
   function clearTimers() {
-    window.clearTimeout(speechTimer);
     window.clearTimeout(hideTimer);
     window.clearTimeout(fadeTimer);
-    speechTimer = null;
     hideTimer = null;
     fadeTimer = null;
   }
+
+  // 押す → 音 → 進み → 5回目 → フィナーレ → けっか（beginnerKit.js の共通の流れ）。
+  // この遊びが書くのは「押したら動物がポンと出る」ことだけ。
+  const flow = createBeginnerFlow(ctx, {
+    gameId: GAME_ID,
+    target: COLOR_TARGET_PRESSES,
+    ttsDelayMs: COLOR_TTS_DELAY_MS,
+    finishDelayMs: COLOR_FINISH_DELAY_MS,
+    // 既存の評価/ログ連動（views/evaluation.js の countEntry が entry.type を見て
+    // 自動集計する仕組み）を維持するため、旧 switcher.js と同じ label を残す。
+    logLabel: legacyModule.name,
+    onPress(pressIndex) {
+      clearTimers();
+      shownIndex = pressIndex;
+      fading = false;
+      render();
+      // ② 起きたこと: 動物がポンと出て、輪ときらきら（回を追うごとに大きく）。
+      const figure = stageEl?.querySelector(".pop-figure");
+      fx?.popAppear(figure, { k: pressIndex });
+      fx?.motion.stamp(figure?.querySelector(".pop-word"), { delayMs: 150 });
+      // ③ 進みぐあい: 埋まった点が弾む。
+      const done = stageEl?.querySelectorAll(".pop-dot.is-done");
+      fx?.motion.bump(done?.[done.length - 1], { delayMs: 120 });
+      if (pressIndex + 1 < COLOR_TARGET_PRESSES) scheduleHide();
+      return { creature: popAnimalFor(pressIndex).id };
+    },
+    // 動物の名前を言う（ことばを覚える入口にもなる）。読み上げが OFF なら
+    // live region へ回る（audio.speakOrAnnounce）。
+    progressSpeech: (remaining, pressIndex) =>
+      t("color.voice.progress", { name: t(`animal.${popAnimalFor(pressIndex).id}`), n: remaining }),
+    finishSpeech: () => t("color.voice.finish", { n: COLOR_TARGET_PRESSES }),
+    finishSummary: () => ({
+      presses: COLOR_TARGET_PRESSES,
+      animals: Array.from({ length: COLOR_TARGET_PRESSES }, (_, index) => popAnimalFor(index).id),
+    }),
+    // ⑤ フィナーレ: 最後の動物が跳ねて、星の輪と紙吹雪。
+    onFinale: () => fx?.finale(stageEl, { hero: stageEl?.querySelector(".pop-figure") }),
+  });
 
   function render() {
     if (!stageEl) return;
     stageEl.classList.toggle("is-light", playPrefsFor(settings, GAME_ID).background === "light");
 
+    const step = flow.count();
     let center;
     if (shownIndex >= 0) {
       const animal = popAnimalFor(shownIndex);
@@ -123,56 +150,15 @@ export function createColorLegacyGame(ctx) {
 
   /** スイッチ入力1回ぶん。いつ押しても出てくる（失敗が無い）。 */
   function handleInput() {
-    if (step >= COLOR_TARGET_PRESSES || finishTimer !== null) return;
-    clearTimers();
-    // 前の読み上げが次の音に重ならないよう、押した瞬間に音へ所有権を戻す。
-    audio.stopSpeech();
-    const pressIndex = step;
-    step += 1;
-    shownIndex = pressIndex;
-    fading = false;
-    playPressSound(audio, playPrefsFor(settings, GAME_ID).sound, pressIndex, {
-      creature: popAnimalFor(pressIndex).id,
-    });
-    render();
-
-    const remaining = COLOR_TARGET_PRESSES - step;
-    if (remaining > 0) {
-      scheduleHide();
-      // 動物の名前を言う（ことばを覚える入口にもなる）。読み上げが OFF なら
-      // live region へ回る（audio.speakOrAnnounce）。
-      const name = t(`animal.${popAnimalFor(pressIndex).id}`);
-      speechTimer = window.setTimeout(() => {
-        speechTimer = null;
-        voiceFeedback(t("color.voice.progress", { name, n: remaining }));
-      }, COLOR_TTS_DELAY_MS);
-    } else {
-      playFinishSound(audio, playPrefsFor(settings, GAME_ID).sound);
-      // 最後の動物と「できた！」を見せてから共通結果へ進む。けっかの画面が
-      // 出るのと同時に拍手と「やったー」（この遊びの設定で切れる）。
-      finishTimer = window.setTimeout(() => {
-        finishTimer = null;
-        finishDelivered = true;
-        celebrate(ctx, playPrefsFor(settings, GAME_ID), t("color.voice.finish", { n: COLOR_TARGET_PRESSES }));
-        finish({
-          presses: COLOR_TARGET_PRESSES,
-          animals: Array.from({ length: COLOR_TARGET_PRESSES }, (_, index) => popAnimalFor(index).id),
-        });
-      }, COLOR_FINISH_DELAY_MS);
-    }
-    // 既存の評価/ログ連動（views/evaluation.js の countEntry が entry.type
-    // を見て自動集計する仕組み）を維持するため、旧 switcher.js と同じ
-    // {type:"switch", label} を記録する。
-    logEvent({ type: "switch", label: legacyModule.name });
+    flow.handleInput();
   }
 
   return {
     mount(el) {
       stageEl = el;
-      step = 0;
+      flow.reset();
       shownIndex = -1;
       fading = false;
-      finishDelivered = false;
       stageEl.classList.add("module-pop");
       render();
     },
@@ -186,11 +172,7 @@ export function createColorLegacyGame(ctx) {
     },
     destroy() {
       clearTimers();
-      window.clearTimeout(finishTimer);
-      finishTimer = null;
-      // 正常終了の完了案内は、結果画面へ遷移しても最後まで読ませる。
-      // 中断時は gameHost.returnHome() が先に stopSpeech() する。
-      if (!finishDelivered) audio.stopSpeech();
+      flow.destroy();
       // 出ていた動物も消す。中断（おわる／Esc）のあとに、見えない画面へ
       // 絵を残しておかない（次に開いたとき一瞬だけ前の絵が出る）。
       if (stageEl) {

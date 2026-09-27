@@ -41,6 +41,9 @@ export const SLOT_CSV_HEADERS = Object.freeze([
   "deviceBaseLatencyS",
   // その回の入力経路（direct / ios-switch-control）。他のCSVと同じ意味。
   "deviceInputMethod",
+  // 演出の強さ（src/lib/fx/）。れんしゅうの回の「ぴったり！」の星は成績に効きうる。
+  // 末尾に足す（列位置を動かさない）。演出エンジンより前の記録は空欄。
+  "fxLevel",
 ]);
 
 export function buildSlotCsvRows(sessions) {
@@ -86,6 +89,7 @@ export function buildSlotCsvRows(sessions) {
           device.outputLatencyS ?? "",
           device.baseLatencyS ?? "",
           device.inputMethod ?? "",
+          config.fxLevel ?? "",
         ]);
       });
     });

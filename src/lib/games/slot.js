@@ -62,9 +62,12 @@ export function createSlotGame(gameId) {
       setProgress,
       t,
       tHtml,
+      fx,
     } = ctx;
 
     let stageEl = null;
+    // れんしゅうの回で、続けて「ぴったり」だった数（演出だけに使う。記録はしない）。
+    let hitStreak = 0;
     let reelsEl = null;
     let targetEl = null;
     let statusEl = null;
@@ -212,12 +215,15 @@ export function createSlotGame(gameId) {
       const burst = document.createElement("span");
       burst.className = "slot-cheer";
       burst.setAttribute("aria-hidden", "true");
-      const stars = Array.from(
-        { length: 12 },
-        (_, index) => `<i class="fa-solid fa-star slot-cheer-star" style="--a:${index * 30}deg"></i>`
-      ).join("");
-      burst.innerHTML = `${stars}<span class="slot-cheer-word">${tHtml("slot.cheer")}</span>`;
+      // 続けて当てたら「2かい れんぞく！」。続くほど星が大きく、多くなる
+      // （だんだん盛り上がる。docs/overall-design-2026-09-28.md §3.1）。
+      const streak =
+        hitStreak >= 2 ? `<span class="slot-cheer-streak">${tHtml("slot.streak", { n: hitStreak })}</span>` : "";
+      burst.innerHTML = `<span class="slot-cheer-word">${tHtml("slot.cheer")}</span>${streak}`;
       view.root.append(burst);
+      // 星は演出エンジン（src/lib/fx/ の reelHit）が描く。以前は Font Awesome の星
+      // 12個を DOM に並べていた（技術負債の返済）。
+      fx?.reelHit(view.root, { streak: hitStreak });
       window.setTimeout(() => burst.remove(), 1100);
     }
 
@@ -243,8 +249,10 @@ export function createSlotGame(gameId) {
     /** 止めたときの音。れんしゅうで当たったときは、明るい和音（ソ・シ・レ）。 */
     function playStopSound(judgment) {
       if (judgment === "hit" && config.difficultyMode !== "measure") {
+        // 続けて当てるほど、和音が全音ずつ高くなる（大きさは変えない）。
+        const lift = Math.pow(2, (2 * Math.min(Math.max(hitStreak - 1, 0), 4)) / 12);
         [784, 987.77, 1174.66].forEach((frequency, index) => {
-          audio.playChime(frequency, { delayS: index * 0.07, durationS: 0.8 });
+          audio.playChime(frequency * lift, { delayS: index * 0.07, durationS: 0.8 });
         });
         return;
       }
@@ -294,6 +302,7 @@ export function createSlotGame(gameId) {
       session.trials.push(row);
       reelViews[reelIndex].stoppedPhase = result.stoppedPhase;
       paintReel(reelIndex, stoppedAtMs);
+      hitStreak = result.judgment === "hit" ? hitStreak + 1 : 0;
       playStopSound(result.judgment);
       if (result.judgment === "hit") cheerReel(reelIndex);
       else if (source !== "timeout") nudgeReel(reelIndex);
@@ -457,6 +466,7 @@ export function createSlotGame(gameId) {
       }));
 
       sessionStartPerfMs = performance.now();
+      hitStreak = 0;
       session = {
         sessionId: generateSessionId(),
         taskType: "slot",
@@ -477,6 +487,8 @@ export function createSlotGame(gameId) {
           maxCyclesPerReel: config.maxCyclesPerReel,
           seed: config.seed,
           difficultyMode: config.difficultyMode,
+          // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
+          fxLevel: ctx.fx?.level() ?? null,
           textMode: config.textMode,
           measurementReadiness: config.measurementReadiness,
           visualGuidance: false,

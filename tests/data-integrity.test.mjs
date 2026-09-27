@@ -1000,9 +1000,13 @@ test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
     "deviceOutputLatencyS",
     "deviceBaseLatencyS",
     "deviceInputMethod",
+    // 演出の強さ（2026-09-28、src/lib/fx/）。いちばん後ろに足す。
+    "fxLevel",
   ]);
-  assert.equal(rows[0].length, 31);
-  assert.equal(rows[1].length, 31);
+  assert.equal(rows[0].length, 32);
+  assert.equal(rows[1].length, 32);
+  // 演出の強さを持たない古い記録は空欄（分からないことを空欄で表す）。
+  assert.equal(rows[1].at(-1), "");
   assert.equal(rows[1][22], JSON.stringify(["circle", "fish", "star", "flower", "bird", "square"]));
   // 遅延を持たない端末の記録は空欄（0にしない——測っていないことと、
   // 遅延が0だったことは違う）。
@@ -1057,8 +1061,9 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // 既存18列 ＋ audioGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness
   // ＋ endless ＋ sweepMs。
   // ＋ endless ＋ sweepMs ＋ endlessProtocolVersion ＋ endReason。
-  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 5);
-  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 5);
+  // ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
+  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 6);
+  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 6);
   assert.equal(scanRows[0][17], "judgment");
   assert.equal(scanRows[1][17], "grip");
   assert.equal(scanRows[0][18], "audioGuidance");
@@ -1089,9 +1094,12 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、toleranceR
   // だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
   assert.equal(scanRows[0][29], "sweepMs");
-  assert.equal(scanRows[0].at(-1), "endReason");
+  assert.equal(scanRows[0].at(-2), "endReason");
+  assert.equal(scanRows[0].at(-1), "fxLevel");
   assert.equal(scanRows[1][29], "");
   // 終了理由を持たない回は空欄（「分からない」と「予定どおり」は違う）。
+  assert.equal(scanRows[1].at(-2), "");
+  // 演出の強さを持たない古い記録も空欄。
   assert.equal(scanRows[1].at(-1), "");
 
   const rtRows = buildTaskCsvRows(
@@ -1121,8 +1129,9 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // 同じ2列を、既存列の**うしろ**に足す。
   // ＋ difficultyMode ＋ readiness ＋ endless ＋ limitMs
   //   ＋ endlessProtocolVersion ＋ endReason。
-  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 6);
-  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 6);
+  //   ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 7);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 7);
   assert.equal(rtRows[0][13], "excluded");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 2], "deviceUserAgent");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceInputMethod");
@@ -1131,7 +1140,8 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 2], "endless");
   // 試行ごとの受付時間。エンドレスでは試行ごとに短くなる。
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 3], "limitMs");
-  assert.equal(rtRows[0].at(-1), "endReason");
+  assert.equal(rtRows[0].at(-2), "endReason");
+  assert.equal(rtRows[0].at(-1), "fxLevel");
   // 列を持たない古い記録は practice / n/a / false に倒す（scan と同じ既定）。
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS], "practice");
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 1], "n/a");
@@ -1928,7 +1938,8 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
   // 途中に挿すと、列位置で読んでいる解析側が黙って壊れる。
   // 既存18列 ＋ visualGuidance ＋ difficultyMode ＋ 端末7列 ＋ readiness。
   // 端末列は 2026-08-29 に deviceInputMethod を末尾へ足して7つになった。
-  assert.equal(rows[0].length, 20 + 7 + 1);
+  // ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
+  assert.equal(rows[0].length, 20 + 7 + 2);
   assert.equal(rows[0][16], "judgment");
   assert.equal(rows[0][17], "excluded");
   assert.equal(rows[0][18], "visualGuidance");
@@ -1942,10 +1953,12 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
 
   // 末尾に成立確認の状態（src/lib/readinessCheck.js）。この列が無いと、
   // 成績の低い回について「そもそも課題が成立していたのか」を後から分けられない。
-  assert.equal(rows[0].at(-1), "measurementReadiness");
+  assert.equal(rows[0].at(-2), "measurementReadiness");
+  assert.equal(rows[0].at(-1), "fxLevel");
   // 列を持たない古い記録は n/a。met と復元してしまうと、確認を経た回と
   // 区別できなくなる。
-  assert.equal(rows[1].at(-1), "n/a");
+  assert.equal(rows[1].at(-2), "n/a");
+  assert.equal(rows[1].at(-1), "");
 });
 
 test("the rhythm CSV carries the readiness state of a measurement run", () => {
@@ -1975,7 +1988,52 @@ test("the rhythm CSV carries the readiness state of a measurement run", () => {
   ]);
   // 成立確認を通さずに測った回。測定は止めない代わりに、必ずそう書き出す
   // ——保存されているだけで書き出されない値は、実質「記録していない」のと同じ。
-  assert.equal(rows[1].at(-1), "overridden");
+  assert.equal(rows[1].at(-2), "overridden");
+});
+
+test("the effect level survives config -> sanitize -> CSV for every timing game", () => {
+  // 演出の強さ（src/lib/fx/）は、れんしゅうの回の成績に効きうる測定の条件。
+  // 残したつもりで sanitize が落とすと、再読み込みしただけで消える（このリポジトリで
+  // 何度も踏んだ形）。3経路すべてを通ることを固定する。
+  const sanitized = sanitizeState({
+    sessions: [
+      {
+        sessionId: "fx-rt",
+        taskType: "rt",
+        gameId: "fishing",
+        startedAtIso: "2026-09-28T00:00:00.000Z",
+        aborted: false,
+        finished: true,
+        device: {},
+        config: { targetTrials: 1, limitMs: 2000, difficultyMode: "practice", fxLevel: "big" },
+        trials: [{ index: 0, kind: "real", foreperiodMs: 1500, cueMs: 1800, inputMs: 2100, reactionTimeMs: 300, judgment: "hit", excluded: false }],
+      },
+      {
+        sessionId: "fx-unknown",
+        taskType: "rt",
+        gameId: "fishing",
+        startedAtIso: "2026-09-28T00:00:00.000Z",
+        aborted: false,
+        finished: true,
+        device: {},
+        config: { targetTrials: 1, limitMs: 2000, fxLevel: "blinding" },
+        trials: [],
+      },
+    ],
+  });
+  const kept = sanitized.sessions.find((session) => session.sessionId === "fx-rt");
+  assert.equal(kept.config.fxLevel, "big");
+  const unknown = sanitized.sessions.find((session) => session.sessionId === "fx-unknown");
+  assert.equal(unknown.config.fxLevel, null, "知らない値は null（分からない）");
+  const rows = buildTaskCsvRows([kept], "rt");
+  assert.equal(rows[0].at(-1), "fxLevel");
+  assert.equal(rows[1].at(-1), "big");
+  const ledger = buildSessionLedgerRows([kept]);
+  assert.equal(ledger[0].at(-1), "fxLevel");
+  assert.equal(ledger[1].at(-1), "big");
+  // 設定そのものも保存をまたいで残り、知らない値は既定（ふつう）へ戻る。
+  assert.equal(sanitizeState({ settings: { fxLevel: "subtle" } }).settings.fxLevel, "subtle");
+  assert.equal(sanitizeState({ settings: { fxLevel: "strobe" } }).settings.fxLevel, "normal");
 });
 
 test("the phrase board has English for every phrase and group", () => {

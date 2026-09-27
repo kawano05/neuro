@@ -1069,6 +1069,7 @@ const STRINGS = {
   "slot.status.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
   "slot.progress": { ruby: "のこり {n}かい", kanji: "のこり {n}かい", kana: "のこり {n}かい", en: "{n} to go" },
   // 外したときの一言（れんしゅうの回だけ。slot.js の nudgeReel）。
+  "slot.streak": { ruby: "{n}かい れんぞく！", kanji: "{n}かい れんぞく！", kana: "{n}かい れんぞく！", en: "{n} in a row!" },
   "slot.nudge": { ruby: "おしい！", kanji: "おしい！", kana: "おしい！", en: "So close!" },
   "slot.progress.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
   "slot.voice.round": { ruby: "{total}回[かい]のうち {current}回目[かいめ]です", kanji: "{total}回のうち {current}回目です", kana: "{total}かいの うち {current}かいめです", en: "Round {current} of {total}." },

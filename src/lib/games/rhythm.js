@@ -856,6 +856,10 @@ export function createRhythmGame(gameId) {
         beatIndex: result.beatIndex,
         offsetMs: shownOffsetMs,
       });
+      // 合った音符がはじける（れんしゅうの回だけ。そくていの回は演出エンジンが何もしない）。
+      if (result.judgment === "hit") {
+        ctx.fx?.noteHit(stageEl?.querySelector(".rhythm-hit-line") || stageEl?.querySelector(".rhythm-judgment"));
+      }
       playFeedback(result.judgment);
       updateProgressText();
       finalizeIfComplete();
@@ -954,6 +958,8 @@ export function createRhythmGame(gameId) {
           // 解析ではまず measure だけを見ればよい——これが「主要測定の条件を
           // 固定する」ということ。
           difficultyMode: resolveDifficultyMode(settings),
+          // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
+          fxLevel: ctx.fx?.level() ?? null,
           // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
           // 通っていない状態でも測定は止めない代わりに、どちらだったかを必ず
           // 残す。成績が低かった回について「規則を理解していなかったのでは」を

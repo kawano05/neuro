@@ -55,6 +55,15 @@ import { sanitizeSlotSession } from "./games/slotState.js";
  */
 export const SCAN_FEEDBACKS = new Set(["none", "tick", "speak"]);
 
+/**
+ * 演出の強さ（settings.fxLevel。src/lib/fx/fxSafety.js の FX_LEVELS と同じ値）。
+ * docs/overall-design-2026-09-28.md §4。光・揺れ・粒の上限は強さによらず同じ。
+ *   none … 粒・揺れ・紙吹雪を出さない / subtle … ひかえめ / normal … ふつう（既定）/ big … はで
+ * れんしゅうの回のタイミングの遊びでは測定の条件になりうるので、実際に効いていた
+ * 強さを session.config.fxLevel に残す（sanitize → CSV まで）。
+ */
+export const FX_LEVELS = new Set(["none", "subtle", "normal", "big"]);
+
 export const PLAY_BACKGROUNDS = new Set(["dark", "light"]);
 export const PLAY_CHEERS = new Set(["both", "applause", "laugh", "none"]);
 /** ボールを打つ遊びの、ボールの速さ（games/baseball.js の PITCH_MS）。 */
@@ -160,6 +169,8 @@ export const defaultState = {
     showScreenSwitch: false,
     // 枠が動いたときの音（SCAN_FEEDBACKS）。
     scanFeedback: "none",
+    // 演出の強さ（FX_LEVELS）。
+    fxLevel: "normal",
     // はじめの遊びの、遊びごとの見え方と音（ゲームの中の「この遊びの設定」で
     // 変える）。中身と理由は上の DEFAULT_PLAY_PREFS。
     playPrefs: JSON.parse(JSON.stringify(DEFAULT_PLAY_PREFS)),
@@ -669,6 +680,10 @@ function sanitizeRhythmSession(session, taskType) {
     // 既定は practice: この列を持たない古い記録は、モードという概念自体が
     // 無かった頃のもので、支援者が自由に調整できる状態で取られている。
     difficultyMode: enumOr(config.difficultyMode, DIFFICULTY_MODES, "practice"),
+    // 演出の強さ（src/lib/fx/）。れんしゅうの回は、当たったときの星や紙吹雪が
+    // 成績に効きうるので、実際に効いていた強さを残す。この列を持たない古い記録は
+    // 演出エンジンが無かった頃のもので、null（分からない）のまま。
+    fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
     // どの表記で回したか。手順の説明が読めるかは成績に効きうる。
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
@@ -875,6 +890,10 @@ function sanitizeScanSession(session) {
     endlessProtocolVersion: stringOr(config.endlessProtocolVersion) || null,
     // そくてい／れんしゅうのどちらの回か（src/lib/difficultyMode.js）。
     difficultyMode: enumOr(config.difficultyMode, DIFFICULTY_MODES, "practice"),
+    // 演出の強さ（src/lib/fx/）。れんしゅうの回は、当たったときの星や紙吹雪が
+    // 成績に効きうるので、実際に効いていた強さを残す。この列を持たない古い記録は
+    // 演出エンジンが無かった頃のもので、null（分からない）のまま。
+    fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
     textMode: enumOr(config.textMode, TEXT_MODES, "kana"),
@@ -1031,6 +1050,10 @@ function sanitizeReactionSession(session) {
     // sanitize が落とすと、再読み込みしただけで測定条件が消える——
     // visualGuidance を落としていたときと同じ穴なので、ここで必ず保持する。
     difficultyMode: enumOr(config.difficultyMode, DIFFICULTY_MODES, "practice"),
+    // 演出の強さ（src/lib/fx/）。れんしゅうの回は、当たったときの星や紙吹雪が
+    // 成績に効きうるので、実際に効いていた強さを残す。この列を持たない古い記録は
+    // 演出エンジンが無かった頃のもので、null（分からない）のまま。
+    fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
     // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
     measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
   };
@@ -1268,6 +1291,7 @@ export function sanitizeState(candidate) {
       ),
       showScreenSwitch: booleanOr(settings.showScreenSwitch, fallback.settings.showScreenSwitch),
       scanFeedback: enumOr(settings.scanFeedback, SCAN_FEEDBACKS, fallback.settings.scanFeedback),
+      fxLevel: enumOr(settings.fxLevel, FX_LEVELS, fallback.settings.fxLevel),
       playPrefs: sanitizePlayPrefs(settings.playPrefs),
       researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),
       judgmentWindowMs: numberInRange(

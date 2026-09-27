@@ -13,13 +13,7 @@
 // =====================================================================
 
 import { BALLOON_ART, artSvg, burstSvg } from "../art/hakkiriArt.js";
-import {
-  BEGINNER_TARGET_PRESSES,
-  celebrate,
-  playFinishSound,
-  playPrefsFor,
-  playPressSound,
-} from "./beginnerKit.js";
+import { BEGINNER_TARGET_PRESSES, createBeginnerFlow, playPrefsFor } from "./beginnerKit.js";
 
 const GAME_ID = "balloon";
 
@@ -34,18 +28,46 @@ export const BALLOON_TTS_DELAY_MS = 260;
 export const BALLOON_FINISH_DELAY_MS = 1500;
 
 export function createBalloonGame(ctx) {
-  const { settings, audio, voiceFeedback, logEvent, finish, t, tHtml } = ctx;
+  const { settings, t, tHtml, fx } = ctx;
 
   let stageEl = null;
-  let popped = 0;
   // いま割れている途中のふうせん（-1 なら無し）。
   let poppingIndex = -1;
   let popTimer = null;
-  let speechTimer = null;
-  let finishTimer = null;
-  let finishDelivered = false;
+
+  // 押す → 音 → 進み → 5回目 → フィナーレ → けっか（beginnerKit.js の共通の流れ）。
+  const flow = createBeginnerFlow(ctx, {
+    gameId: GAME_ID,
+    ttsDelayMs: BALLOON_TTS_DELAY_MS,
+    finishDelayMs: BALLOON_FINISH_DELAY_MS,
+    // 評価ログの集計（入力の回数）は、ほかのはじめの遊びと同じ switch で残す。
+    logLabel: "ふうせん わり",
+    onPress(pressIndex) {
+      window.clearTimeout(popTimer);
+      poppingIndex = pressIndex;
+      update();
+      // ② 起きたこと: そのふうせんの色の紙吹雪と輪。残りのふうせんが、びくっとする。
+      const balloons = [...(stageEl?.querySelectorAll(".balloon") || [])];
+      fx?.balloonPop(balloons[pressIndex], {
+        k: pressIndex,
+        color: BALLOON_COLORS[pressIndex % BALLOON_COLORS.length],
+        neighbors: balloons.slice(pressIndex + 1),
+      });
+      fx?.motion.stamp(stageEl?.querySelector(".balloon-word"), { delayMs: 80 });
+      popTimer = window.setTimeout(() => {
+        popTimer = null;
+        poppingIndex = -1;
+        update();
+      }, BALLOON_POP_MS);
+    },
+    progressSpeech: (remaining) => t("balloon.voice.progress", { n: remaining }),
+    finishSpeech: () => t("balloon.voice.finish", { n: BEGINNER_TARGET_PRESSES }),
+    finishSummary: () => ({ presses: BEGINNER_TARGET_PRESSES, balloons: [...BALLOON_COLORS] }),
+    onFinale: () => fx?.finale(stageEl?.querySelector(".balloon-stage") || stageEl, {}),
+  });
 
   function wordKey() {
+    const popped = flow.count();
     if (popped >= BEGINNER_TARGET_PRESSES) return "balloon.complete";
     if (popped === 0) return "color.prompt";
     return "balloon.pop";
@@ -57,19 +79,16 @@ export function createBalloonGame(ctx) {
    */
   function build() {
     if (!stageEl) return;
-    const balloons = BALLOON_COLORS.map((color, index) => {
-      const confetti = Array.from(
-        { length: 8 },
-        (_, piece) => `<i style="--piece:${piece}"></i>`
-      ).join("");
-      return `
+    // 割れたときの紙吹雪は演出エンジン（fx.balloonPop）が描く。以前は CSS の
+    // 小片8枚をふうせんごとに持っていた（技術負債の返済）。
+    const balloons = BALLOON_COLORS.map(
+      (color, index) => `
         <span class="balloon" style="--balloon:${color};--i:${index}">
           ${artSvg(BALLOON_ART, { className: "balloon-svg" })}
           <span class="balloon-mark">${burstSvg(color)}</span>
-          <span class="balloon-burst">${confetti}</span>
         </span>
-      `;
-    }).join("");
+      `
+    ).join("");
     stageEl.innerHTML = `
       <span class="balloon-stage" aria-hidden="true">
         <span class="balloon-word"></span>
@@ -83,6 +102,7 @@ export function createBalloonGame(ctx) {
   function update() {
     if (!stageEl) return;
     stageEl.classList.toggle("is-light", playPrefsFor(settings, GAME_ID).background === "light");
+    const popped = flow.count();
     stageEl.querySelectorAll(".balloon").forEach((balloon, index) => {
       balloon.classList.toggle("is-popping", index === poppingIndex);
       balloon.classList.toggle("is-popped", index < popped && index !== poppingIndex);
@@ -93,46 +113,14 @@ export function createBalloonGame(ctx) {
 
   /** スイッチ入力1回ぶん。いつ押しても次のふうせんが割れる（失敗が無い）。 */
   function handleInput() {
-    if (popped >= BEGINNER_TARGET_PRESSES || finishTimer !== null) return;
-    window.clearTimeout(speechTimer);
-    window.clearTimeout(popTimer);
-    audio.stopSpeech();
-    const pressIndex = popped;
-    popped += 1;
-    poppingIndex = pressIndex;
-    playPressSound(audio, playPrefsFor(settings, GAME_ID).sound, pressIndex);
-    update();
-    popTimer = window.setTimeout(() => {
-      popTimer = null;
-      poppingIndex = -1;
-      update();
-    }, BALLOON_POP_MS);
-
-    const remaining = BEGINNER_TARGET_PRESSES - popped;
-    if (remaining > 0) {
-      speechTimer = window.setTimeout(() => {
-        speechTimer = null;
-        voiceFeedback(t("balloon.voice.progress", { n: remaining }));
-      }, BALLOON_TTS_DELAY_MS);
-    } else {
-      playFinishSound(audio, playPrefsFor(settings, GAME_ID).sound);
-      finishTimer = window.setTimeout(() => {
-        finishTimer = null;
-        finishDelivered = true;
-        celebrate(ctx, playPrefsFor(settings, GAME_ID), t("balloon.voice.finish", { n: BEGINNER_TARGET_PRESSES }));
-        finish({ presses: BEGINNER_TARGET_PRESSES, balloons: [...BALLOON_COLORS] });
-      }, BALLOON_FINISH_DELAY_MS);
-    }
-    // 評価ログの集計（入力の回数）は、ほかのはじめの遊びと同じ switch で残す。
-    logEvent({ type: "switch", label: "ふうせん わり" });
+    flow.handleInput();
   }
 
   return {
     mount(el) {
       stageEl = el;
-      popped = 0;
+      flow.reset();
       poppingIndex = -1;
-      finishDelivered = false;
       stageEl.classList.add("module-balloon");
       build();
     },
@@ -142,13 +130,9 @@ export function createBalloonGame(ctx) {
       update();
     },
     destroy() {
-      window.clearTimeout(speechTimer);
       window.clearTimeout(popTimer);
-      window.clearTimeout(finishTimer);
-      speechTimer = null;
       popTimer = null;
-      finishTimer = null;
-      if (!finishDelivered) audio.stopSpeech();
+      flow.destroy();
       if (stageEl) {
         stageEl.classList.remove("module-balloon", "is-light");
         stageEl.innerHTML = "";

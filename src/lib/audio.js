@@ -590,10 +590,10 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
    * （docs/design-renewal-2026-09-25.md §1.7）。
    *
    * @param {number} frequency 基音（Hz）
-   * @param {{delayS?: number, durationS?: number}} [options]
-   *   delayS は今からの遅れ（和音を順に鳴らすとき用）
+   * @param {{delayS?: number, durationS?: number, level?: number}} [options]
+   *   delayS は今からの遅れ（和音を順に鳴らすとき用）。level は 0〜1 の倍率
    */
-  function playChime(frequency, { delayS = 0, durationS = 0.9 } = {}) {
+  function playChime(frequency, { delayS = 0, durationS = 0.9, level = 1 } = {}) {
     if (!getSettings().soundEnabled) return null;
     const ctx = ensureContext();
     if (!ctx) return null;
@@ -601,7 +601,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       const at = ctx.currentTime + Math.max(0, delayS);
       const out = ctx.createGain();
       out.gain.setValueAtTime(0.0001, at);
-      out.gain.exponentialRampToValueAtTime(DEFAULT_TONE_GAIN, at + 0.012);
+      // level … 和音で重ねるときに下げる（重ねた山が上限を越えないように）。1 より上にはしない。
+      out.gain.exponentialRampToValueAtTime(DEFAULT_TONE_GAIN * Math.min(Math.max(level, 0.05), 1), at + 0.012);
       out.gain.exponentialRampToValueAtTime(0.0001, at + durationS);
       out.connect(effectOut(ctx));
       [

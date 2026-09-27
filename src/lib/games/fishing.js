@@ -248,7 +248,7 @@ const ENDLESS_MAX_TRIALS = 200;
 
 export function createFishingGame(gameId) {
   return function create(ctx) {
-  const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml } = ctx;
+  const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml, fx } = ctx;
 
   // れんしゅうの回は、支援者が選んだアタリの長さ（difficultyMode.js）。
   const config = resolveFishingDifficulty(gameId, ctx.settings, fishingPresets[gameId]);
@@ -500,6 +500,9 @@ export function createFishingGame(gameId) {
       ? `★ ${planned.lengthCm} cm ＋${SPEED_BONUS_CM}`
       : `${planned.lengthCm} cm`;
     catchEl.classList.add("is-shown");
+    // 釣れた瞬間の水しぶき（れんしゅうの回だけ。そくていの回は演出エンジンが何もしない）。
+    fx?.fishCatch(swimmerEl, { lengthCm: planned.lengthCm });
+    fx?.motion.stamp(catchEl);
     window.clearTimeout(catchTimer);
     catchTimer = window.setTimeout(() => {
       catchEl?.classList.remove("is-shown");
@@ -992,6 +995,8 @@ export function createFishingGame(gameId) {
         // fishingPresets 由来のまま同じ行に出るので、解析側はそちらで確かめ
         // られる。
         difficultyMode: resolveDifficultyMode(ctx.settings),
+        // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
+        fxLevel: ctx.fx?.level() ?? null,
         // 成立確認の状態（met / overridden / n/a）。他の課題と同じ意味。
         measurementReadiness: ctx.readiness || "n/a",
       },

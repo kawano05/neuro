@@ -294,6 +294,9 @@ export function initHome(ctx) {
       }
       button.addEventListener("click", (event) => {
         if (homeClickIsGuarded(event)) return;
+        // 選んだタイルから輪ときらきら（① 手応え。docs/overall-design-2026-09-28.md §7）。
+        // 画面が遊びへ切り替わっても、粒はキャンバスの上で流れて消える。
+        celebrateChoice(button);
         onSelect(item);
       });
       elements.gameTileGrid.append(button);
@@ -552,8 +555,32 @@ export function initHome(ctx) {
    * AudioContext アンロック＋確認音（880Hz）＋ログ記録＋home 遷移＋announce。
    * この1押しは L0（反応確認）を兼ねるため logEvent({type:"switch"}) を記録する。
    */
+  /** 選んだものから、輪ときらきら。 */
+  function celebrateChoice(el) {
+    const fx = ctx.fx;
+    if (!fx || !el) return;
+    const art = el.querySelector(".hk-tile-art, .game-tile-art, svg") || el;
+    const { x, y } = fx.engine.pointOf(art);
+    fx.engine.ring({ x, y, color: "#FFC83D", r0: 18, r1: 150, width: 7, life: 0.5 });
+    fx.engine.burst({
+      x,
+      y,
+      count: 16,
+      speed: [320, 720],
+      shapes: ["sparkle", "star", "dot"],
+      colors: ["#FFC83D", "#FFFFFF", "#4DC4FF", "#FF8082"],
+      size: [16, 28],
+      life: [0.6, 1.1],
+      gravity: 200,
+      drag: 2.6,
+      twinkle: 0.2,
+    });
+  }
+
   function leaveStart(/* t */) {
     if (state.currentView !== "start") return;
+    // 「はじめる」から、きらきらが広がってホームへ。
+    celebrateChoice(elements.startArt || elements.startStage);
     // pointerdown で画面が切り替わった直後、同じ物理操作の pointerup/click が
     // 新しく現れたホーム行へ落ちるのを防ぐ。入力ファネルのdedupeを通らない
     // 通常ボタンのclickにも効く、画面遷移側のガード。

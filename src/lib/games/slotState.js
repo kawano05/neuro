@@ -16,6 +16,8 @@ const JUDGMENTS = new Set(SLOT_JUDGMENTS);
 const DIFFICULTY_MODES = new Set(["measure", "practice"]);
 const TEXT_MODES = new Set(["ruby", "kanji", "kana", "en"]);
 const READINESS_STATES = new Set(["met", "overridden", "n/a"]);
+// 演出の強さ（src/lib/fx/fxSafety.js の FX_LEVELS と同じ値）。
+const FX_LEVELS = new Set(["none", "subtle", "normal", "big"]);
 const MAX_COUNTER = 1_000_000_000;
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -70,6 +72,8 @@ function sanitizeConfig(gameId, rawConfig) {
       ? value.difficultyMode
       : "practice",
     textMode: TEXT_MODES.has(value.textMode) ? value.textMode : "ruby",
+    // 演出の強さ（れんしゅうの回の「ぴったり！」の星）。無い古い記録は null。
+    fxLevel: FX_LEVELS.has(value.fxLevel) ? value.fxLevel : null,
     measurementReadiness: READINESS_STATES.has(value.measurementReadiness)
       ? value.measurementReadiness
       : "n/a",

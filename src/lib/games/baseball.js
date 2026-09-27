@@ -19,7 +19,7 @@
 // 描画のフレームには頼らない。
 // =====================================================================
 
-import { BALL_FIELD_ART, burstSvg } from "../art/hakkiriArt.js";
+import { BALL_FIELD_ART } from "../art/hakkiriArt.js";
 import { BEGINNER_TARGET_PRESSES, celebrate, playPrefsFor } from "./beginnerKit.js";
 
 const GAME_ID = "baseball";
@@ -61,9 +61,11 @@ const lerp = (a, b, k) => a + (b - a) * k;
 const easeOut = (k) => 1 - (1 - k) * (1 - k);
 
 export function createBaseballGame(ctx) {
-  const { settings, audio, voiceFeedback, logEvent, finish, t, tHtml } = ctx;
+  const { settings, audio, voiceFeedback, logEvent, finish, t, tHtml, fx } = ctx;
 
   let stageEl = null;
+  let boardEl = null;
+  let trailFrame = 0;
   let ballEl = null;
   let batEl = null;
   let wordEl = null;
@@ -148,15 +150,24 @@ export function createBaseballGame(ctx) {
           return;
         }
       } else if (phase === "flying" && flight) {
-        const k = Math.min(1, (now - flight.start) / flight.duration);
+        // ヒットストップ（当たった瞬間に少し止める）のあいだは、k が 0 のまま。
+        const k = Math.max(0, Math.min(1, (now - flight.start) / flight.duration));
         const e = easeOut(k);
         const x = lerp(flight.from.x, flight.to.x, e);
         // 放物線（高く上がって落ちる）を、上から見た盤では大きさで見せる。
         const lift = Math.sin(Math.PI * Math.min(1, k * flight.arc)) * flight.height;
         const scale = flight.scale0 + lift - (flight.shrink * e);
         placeBall(x, lerp(flight.from.y, flight.to.y, e), Math.max(0.2, scale), k > 0.85 ? (1 - k) / 0.15 : 1);
+        // 光の尾（ホームランは金色）。1コマおきに少しだけ出す。
+        trailFrame += 1;
+        if (k > 0 && k < 0.9 && trailFrame % 2 === 0 && flight.quality !== "bunt") {
+          fx?.trail(fx.engine.pointOf(ballEl), { gold: flight.quality === "homerun" });
+        }
         if (k >= 1) {
+          const landed = flight;
           flight = null;
+          // ホームランは、球が消えた空で星と花火。
+          if (landed.quality === "homerun") fx?.homerunSky({ point: fx.engine.pointOf(ballEl), stageEl: boardEl });
           afterFlight();
           return;
         }
@@ -201,11 +212,20 @@ export function createBaseballGame(ctx) {
     const result = judgeSwing(inputMs - arrivalAt);
     results.push(result);
     renderSlots();
+    // ③ 進みぐあい: 埋まった枠が弾む。
+    fx?.motion.bump(slotsEl?.children[results.length - 1], { amount: 0.5 });
     phase = "flying";
     const shape = FLIGHTS[result];
-    flight = { ...shape, from, start: now, scale0: 1 };
+    // ヒットストップ（docs/overall-design-2026-09-28.md §3.2）: ホームランは当たった
+    // 瞬間に少しだけ止めてから飛ばす。判定は押した時刻で済んでいる（見た目だけ）。
+    const stop = result === "homerun" ? fx?.hitStopMs() || 0 : 0;
+    flight = { ...shape, from, start: now + stop, scale0: 1, quality: result };
+    trailFrame = 0;
     audio.playBatHit?.(result, prefs().sound);
     setWord(`baseball.word.${result}`);
+    // ② 起きたこと: 当たった場所の火花。ホームランは揺れて、寄る。
+    fx?.batHit(fx.engine.pointOf(ballEl), { quality: result, stageEl: boardEl });
+    fx?.motion.stamp(wordEl, { delayMs: stop });
     if (result === "homerun") {
       stageEl.classList.add("is-homerun");
       audio.playApplause?.({ durationS: 1.4, sample: "homerun-cheer" });
@@ -219,6 +239,9 @@ export function createBaseballGame(ctx) {
     if (results.length >= BEGINNER_TARGET_PRESSES) {
       phase = "done";
       setWord("baseball.word.done");
+      // ⑤ フィナーレ（5本打てた）。
+      fx?.finale(boardEl, {});
+      fx?.motion.stamp(wordEl, {});
       schedule(() => {
         finishDelivered = true;
         const homeruns = results.filter((result) => result === "homerun").length;
@@ -249,6 +272,11 @@ export function createBaseballGame(ctx) {
     // 構えているあいだ・飛んでいるあいだの振りは、素振り（数えない）。押せば
     // バットは必ず動くので、「押したのに何も起きない」にはならない。
     audio.playSwing?.();
+    // ① 手応え: バットのところに小さな輪。
+    if (batEl && fx) {
+      const at = fx.engine.pointOf(batEl);
+      fx.engine.ring({ x: at.x, y: at.y, color: "#FFFFFF", r0: 8, r1: 46, width: 4, life: 0.32 });
+    }
   }
 
   return {
@@ -265,10 +293,10 @@ export function createBaseballGame(ctx) {
             <g class="bb-bat"><rect x="256" y="553" width="96" height="14" rx="7" fill="#A0622D" stroke="#1A1A1A" stroke-width="3"></rect><rect x="256" y="553" width="26" height="14" rx="6" fill="#1A1A1A"></rect></g>
             <g class="bb-ball"><circle r="13" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="3"></circle><path d="M-6 -9 Q 1 0 -6 9 M6 -9 Q -1 0 6 9" fill="none" stroke="#E0302D" stroke-width="2.4"></path></g>
           </svg>
-          <span class="bb-fireworks">${[0, 1, 2].map((index) => `<span class="bb-firework" style="--f:${index}">${burstSvg(["#FFC83D", "#FF4B00", "#4DC4FF"][index])}</span>`).join("")}</span>
           <span class="bb-slots"></span>
         </span>
       `;
+      boardEl = stageEl.querySelector(".bb-stage");
       ballEl = stageEl.querySelector(".bb-ball");
       batEl = stageEl.querySelector(".bb-bat");
       wordEl = stageEl.querySelector(".bb-word");
@@ -291,6 +319,7 @@ export function createBaseballGame(ctx) {
         stageEl.innerHTML = "";
       }
       stageEl = null;
+      boardEl = null;
       ballEl = null;
       batEl = null;
       wordEl = null;

@@ -288,7 +288,7 @@ export function endlessSweepMs(baseSweepMs, trialIndex) {
   );
 }
 
-function resolveCraneConfig(settings, readiness, requestedEndless) {
+function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = null) {
   // そくていの回は protocol 固定・アシスト無し・通過音無し、
   // れんしゅうの回は支援者の設定 → 既定の順（src/lib/difficultyMode.js）。
   // どちらの回だったかも config に残して、CSVと評価ログに出す。
@@ -303,6 +303,8 @@ function resolveCraneConfig(settings, readiness, requestedEndless) {
       ? ENDLESS_PROTOCOL_VERSION
       : null,
     difficultyMode: resolveDifficultyMode(settings),
+    // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
+    fxLevel,
     // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
     // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
     measurementReadiness: readiness || "n/a",
@@ -310,7 +312,7 @@ function resolveCraneConfig(settings, readiness, requestedEndless) {
 }
 
 export function createCraneGame(ctx) {
-  const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml } = ctx;
+  const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml, fx } = ctx;
 
   /**
    * 景品の名前。
@@ -330,7 +332,7 @@ export function createCraneGame(ctx) {
   // ルビは乗らない**。いまの景品名はすべてかな・カタカナなので問題ないが、
   // 漢字の名前を足すと静かにルビだけ落ちる。その線は
   // tests/i18n.test.mjs の「景品名に漢字を使わない」で縛ってある。
-  const config = resolveCraneConfig(ctx.settings, ctx.readiness, ctx.endless);
+  const config = resolveCraneConfig(ctx.settings, ctx.readiness, ctx.endless, ctx.fx?.level() ?? null);
   let stageEl = null;
   let sceneEl = null;
   let statusEl = null;
@@ -704,6 +706,8 @@ export function createCraneGame(ctx) {
       statusEl.innerHTML = tHtml("crane.gotPrize", { name: prizeName(prize) });
       clawEl.classList.add("is-holding");
       prizeEl.classList.add("is-lifted");
+      // つかんだ瞬間のきらきら（れんしゅうの回だけ。そくていの回は演出エンジンが何もしない）。
+      fx?.craneGrip(prizeEl);
       voiceFeedback(
         t("crane.voice.grip", { name: prizeName(prize) }),
         t("crane.voice.gripAnnounce", { name: prizeName(prize) })
@@ -942,6 +946,9 @@ export function createCraneGame(ctx) {
     badge.src = PRIZE_ART[currentPrize().asset];
     badge.alt = "";
     collectedEl.appendChild(badge);
+    // 受け口に落ちたら紙吹雪（れんしゅうの回だけ）。
+    fx?.craneWin(chuteEl);
+    fx?.motion.popIn(badge, { from: 0.4 });
     audio.playToneAt(cueTones.high, audio.scheduler.now(), FEEDBACK_GAIN);
     // 受け口に落ちる音。低くて短い「ぼとっ」で、掴んだ瞬間の金属音とは
     // 別の出来事だと分かるようにする。ここが1回の試行の終点なので、

@@ -27,6 +27,7 @@ import { resolveTextMode, translate, translateHtml } from "./i18n.js";
 import { loadState, createStateSaver, MAX_LOG_ENTRIES } from "./state.js";
 import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
+import { createFxSystem } from "./fx/index.js";
 import { SOUND_SAMPLE_URLS } from "./soundAssets.js";
 import { createScanEngine } from "./scan.js";
 import { createInputDeduper } from "./utils.js";
@@ -147,6 +148,9 @@ export function initNeuroNodeApp() {
 
   const audio = createAudio(() => state.settings, ctx.announce, { sampleUrls: SOUND_SAMPLE_URLS });
   ctx.audio = audio;
+  // 演出（粒・光・弾み）。docs/overall-design-2026-09-28.md。強さは設定と端末の
+  // 「動きを減らす」で毎回決まり、そくていの回の遊びでは何も足さない。
+  ctx.fx = createFxSystem({ getSettings: () => state.settings });
   ctx.speak = audio.speak;
   ctx.voiceFeedback = audio.speakOrAnnounce;
   ctx.playTone = audio.playTone;
