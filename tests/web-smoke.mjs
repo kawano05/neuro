@@ -76,6 +76,7 @@ const checks = [
   ["hits every pitch that is swung at and re-pitches a missed one in the baseball game", checkBaseballFlow],
   ["adds effects within the safety rules and never in a measured run", checkEffectsFollowSafetyRules],
   ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
+  ["speaks with the app's own natural voice, and with the device voice when asked to", checkAppVoiceSpeaks],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
   ["fills the screen with the practice reels without any of them spilling off it", checkPracticeReelsFillTheScreen],
@@ -387,6 +388,9 @@ async function checkStartToHomeToGameFlow(page) {
   // Pure tone owns the first ~0.2s. Spy on the actual app-TTS call and both
   // aria-live regions: checking #liveRegion text alone would miss immediate
   // speechSynthesis or the polite #gameProgress channel.
+  // アプリの読み上げは、アプリに入れた声（声のパック）でも端末の声でも
+  // neuronode:speech を出す（audio.js の reportSpeech）。どちらで読んだかに
+  // よらず、それを数える。端末の声は鳴らさない（speak を空にする）。
   await page.waitForTimeout(200);
   const logsBeforeTimedFeedback = await readLogCount(page);
   const earlyFeedback = await page.evaluate(async () => {
@@ -419,11 +423,16 @@ async function checkStartToHomeToGameFlow(page) {
     const cancelCalls = [];
     Object.defineProperty(synth, "speak", {
       configurable: true,
-      value: (utterance) => speechCalls.push({
-        text: utterance.text,
-        volume: utterance.volume,
+      value: () => {},
+    });
+    window.addEventListener("neuronode:speech", (event) => {
+      if (event.detail.fallback) return;
+      speechCalls.push({
+        text: event.detail.text,
+        volume: event.detail.volume,
+        via: event.detail.via,
         at: performance.now(),
-      }),
+      });
     });
     Object.defineProperty(synth, "cancel", {
       configurable: true,
@@ -500,8 +509,9 @@ async function checkStartToHomeToGameFlow(page) {
   //      次に見る人が同じ調査を最初からやり直すことになる。
   const speechCapable = await page.evaluate(
     () =>
-      typeof window.SpeechSynthesisUtterance === "function" &&
-      typeof window.speechSynthesis?.speak === "function"
+      Boolean(window.AudioContext || window.webkitAudioContext) ||
+      (typeof window.SpeechSynthesisUtterance === "function" &&
+        typeof window.speechSynthesis?.speak === "function")
   );
   if (!speechCapable) return SKIPPED;
 
@@ -1257,9 +1267,11 @@ async function checkBaseballFlow(page) {
  * ため。打ち合わせ「画面を見なくても、音なら届く」）。既定の「なし」では読まない。
  */
 async function checkScanFeedbackSpeaksNames(page) {
-  // 読み上げを横取りして、読んだ文を数える（音は出さない）。
+  // 読んだ文を数える（アプリの声でも端末の声でも neuronode:speech が出る）。
+  // 端末の声は鳴らさない。
   await page.addInitScript(() => {
     window.__spoken = [];
+    window.__spokenVia = [];
     if (typeof window.SpeechSynthesisUtterance !== "function") {
       window.SpeechSynthesisUtterance = class {
         constructor(text) {
@@ -1268,9 +1280,14 @@ async function checkScanFeedbackSpeaksNames(page) {
       };
     }
     const synth = window.speechSynthesis || {};
-    synth.speak = (utterance) => window.__spoken.push(utterance.text);
+    synth.speak = () => {};
     synth.cancel = () => {};
     if (!window.speechSynthesis) Object.defineProperty(window, "speechSynthesis", { value: synth });
+    window.addEventListener("neuronode:speech", (event) => {
+      if (event.detail.fallback) return;
+      window.__spoken.push(event.detail.text);
+      window.__spokenVia.push(event.detail.via);
+    });
   });
   // 枠を1つ進めて、そのあいだに読んだ文だけを返す（ホームへ入ったときの案内の
   // 声など、ほかの読み上げは数えない）。
@@ -1310,6 +1327,99 @@ async function checkScanFeedbackSpeaksNames(page) {
       `Moving the scan frame must speak the focused item's name ("${heard.focused}"), got ${JSON.stringify(heard.said)}`
     );
   }
+  // 名前はアプリに入れた声で読む（声のパックにある。鳴らせる環境なら）。
+  const canPlay = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (canPlay) {
+    const via = await page.evaluate(() => window.__spokenVia);
+    assert(
+      via.length > 0 && via.every((path) => path === "voice-pack"),
+      `Home item names must be read with the app's own voice, got ${JSON.stringify(via)}`
+    );
+  }
+}
+
+/**
+ * 読み上げは、アプリに入れた自然な声（声のパック。src/lib/voicePack.js）で鳴らす
+ * （2026-09-28「英語でも何でも棒読み」）。パックを読み込み、音にして鳴らし、
+ * 端末の声へ戻らないこと。英語の表記でも同じ。設定で「端末の声」を選べば端末の声。
+ */
+async function checkAppVoiceSpeaks(page) {
+  const canPlay = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!canPlay) return SKIPPED;
+  await page.addInitScript(() => {
+    window.__speech = [];
+    window.__voiceSourcesStarted = 0;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const original = Ctx.prototype.createBufferSource;
+    Ctx.prototype.createBufferSource = function createBufferSource() {
+      const source = original.call(this);
+      const start = source.start.bind(source);
+      source.start = (...args) => {
+        window.__voiceSourcesStarted += 1;
+        return start(...args);
+      };
+      return source;
+    };
+    const synth = window.speechSynthesis;
+    if (synth) {
+      synth.speak = () => {};
+    }
+    window.addEventListener("neuronode:speech", (event) => window.__speech.push(event.detail));
+  });
+  const playFirstGame = async () => {
+    await page.reload();
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+    await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
+    await page.waitForTimeout(250);
+    const sourcesBefore = await page.evaluate(() => window.__voiceSourcesStarted);
+    await page.locator("#gameStage").click();
+    await page.waitForFunction(() => window.__speech.length > 0, null, { timeout: 3_000 });
+    // 読み込み（はじめてのときはパックの取得）と音にするのを待つ。
+    await page.waitForTimeout(1_200);
+    return page.evaluate((before) => ({
+      speech: window.__speech,
+      started: window.__voiceSourcesStarted - before,
+      packs: performance.getEntriesByType("resource").map((entry) => entry.name).filter((name) => /\.bin(\?|$)/.test(name)),
+    }), sourcesBefore);
+  };
+  // 遊びの途中で書きかえると、遊びを閉じるときの保存で上書きされる。ホームへ戻ってから。
+  const setSettings = async (settings) => {
+    await page.keyboard.press("Escape");
+    await waitForClass(page, "#homeView", "is-active");
+    await page.evaluate(
+      ({ key, settings }) => {
+        const saved = JSON.parse(localStorage.getItem(key) || "{}");
+        saved.settings = { ...(saved.settings || {}), ...settings };
+        localStorage.setItem(key, JSON.stringify(saved));
+      },
+      { key: storageKey, settings }
+    );
+  };
+
+  const ja = await playFirstGame();
+  assert(ja.speech[0]?.via === "voice-pack", `Japanese speech must use the app voice, got ${JSON.stringify(ja.speech)}`);
+  assert(!ja.speech.some((detail) => detail.fallback), `The app voice fell back to the device voice: ${JSON.stringify(ja.speech)}`);
+  assert(ja.started >= 1, "The app voice must actually start a sound");
+  assert(ja.packs.length >= 1, "The voice pack must be loaded");
+
+  await setSettings({ textMode: "en" });
+  const en = await playFirstGame();
+  assert(en.speech[0]?.via === "voice-pack" && en.speech[0]?.lang === "en-US", `English speech must use the app voice, got ${JSON.stringify(en.speech)}`);
+  assert(!en.speech.some((detail) => detail.fallback), `The English app voice fell back: ${JSON.stringify(en.speech)}`);
+  assert(en.started >= 1, "The English app voice must actually start a sound");
+
+  await setSettings({ textMode: "ruby", speechVoice: "device" });
+  const device = await playFirstGame();
+  const deviceCapable = await page.evaluate(
+    () => typeof window.SpeechSynthesisUtterance === "function" && typeof window.speechSynthesis?.speak === "function"
+  );
+  if (deviceCapable) {
+    assert(device.speech[0]?.via === "device", `With "device voice" chosen, speech must use the device, got ${JSON.stringify(device.speech)}`);
+  }
+  assert(device.started === 0, "With \"device voice\" chosen, the app voice must stay silent");
 }
 
 /**
@@ -3314,9 +3424,12 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
       ({ key, value }) => localStorage.setItem(key, value),
       {
         key: storageKey,
+        // 読み上げは切っておく。読み上げはアプリに入れた声（声のパック）を
+        // createBufferSource で鳴らすので、効果音と同じ数え方に入ってしまう。
+        // 読み上げは「声で読み上げる」の設定で切るもので、効果音の設定とは別。
         value: JSON.stringify({
           version: 3,
-          settings: { soundEnabled, craneTargetTrials: 3, craneSweepMs: 800 },
+          settings: { soundEnabled, speechEnabled: false, craneTargetTrials: 3, craneSweepMs: 800 },
         }),
       }
     );

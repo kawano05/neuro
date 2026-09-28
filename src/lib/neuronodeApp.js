@@ -29,6 +29,7 @@ import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
 import { createFxSystem } from "./fx/index.js";
 import { SOUND_SAMPLE_URLS } from "./soundAssets.js";
+import { VOICE_PACK } from "./voiceAssets.js";
 import { createScanEngine } from "./scan.js";
 import { createInputDeduper } from "./utils.js";
 import { createGameHost } from "./games/gameHost.js";
@@ -146,7 +147,10 @@ export function initNeuroNodeApp() {
     ctx.announce("データの保存に失敗しました。端末の空き容量を確認してください。")
   );
 
-  const audio = createAudio(() => state.settings, ctx.announce, { sampleUrls: SOUND_SAMPLE_URLS });
+  const audio = createAudio(() => state.settings, ctx.announce, {
+    sampleUrls: SOUND_SAMPLE_URLS,
+    voicePack: VOICE_PACK,
+  });
   ctx.audio = audio;
   // 演出（粒・光・弾み）。docs/overall-design-2026-09-28.md。強さは設定と端末の
   // 「動きを減らす」で毎回決まり、そくていの回の遊びでは何も足さない。

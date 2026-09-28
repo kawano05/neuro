@@ -102,6 +102,7 @@ export function collectElements() {
     fxLevel: document.querySelector("#fxLevel"),
     speechEnabled: document.querySelector("#speechEnabled"),
     speechVolume: document.querySelector("#speechVolume"),
+    speechVoice: document.querySelector("#speechVoice"),
     speechVolumeValue: document.querySelector("#speechVolumeValue"),
     soundEnabled: document.querySelector("#soundEnabled"),
     largeText: document.querySelector("#largeText"),

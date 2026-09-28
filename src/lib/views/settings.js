@@ -153,6 +153,7 @@ export function initSettings(ctx) {
     elements.speechEnabled.checked = settings.speechEnabled;
     elements.speechVolume.value = settings.speechVolume;
     elements.speechVolumeValue.value = `${Math.round(settings.speechVolume * 100)}%`;
+    if (elements.speechVoice) elements.speechVoice.value = settings.speechVoice;
     elements.soundEnabled.checked = settings.soundEnabled;
     elements.largeText.checked = settings.largeText;
     elements.highContrast.checked = settings.highContrast;
@@ -184,9 +185,10 @@ export function initSettings(ctx) {
     setControlAvailable(elements.autoScan, !delegated);
   }
 
-  /** アプリTTSがOFFなら、効かない音量つまみを走査対象に残さない。 */
+  /** アプリTTSがOFFなら、効かない音量つまみ・声の選択を走査対象に残さない。 */
   function applySpeechSettings() {
     setControlAvailable(elements.speechVolume, Boolean(state.settings.speechEnabled));
+    setControlAvailable(elements.speechVoice, Boolean(state.settings.speechEnabled));
   }
 
   /**
@@ -324,6 +326,14 @@ export function initSettings(ctx) {
     state.settings.speechVolume = Number(event.target.value);
     elements.speechVolumeValue.value = `${Math.round(state.settings.speechVolume * 100)}%`;
     save();
+  });
+
+  // 読み上げの声を替えたら、その声で一言読む（支援者が聞いて選べるように）。
+  elements.speechVoice?.addEventListener("change", () => {
+    state.settings.speechVoice = elements.speechVoice.value === "device" ? "device" : "app";
+    save();
+    audio.prefetchVoice?.();
+    audio.speak(ctx.t("color.voice.cheer"));
   });
 
   elements.switchControlMode.addEventListener("change", () => {

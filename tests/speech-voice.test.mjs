@@ -55,15 +55,32 @@ test("prefers an enhanced or premium voice when one is installed", () => {
   assert.equal(pickVoice(enhancedOnly, "en-US").name, "Samantha (Enhanced)");
 });
 
-test("keeps to the language, and prefers voices that work offline", () => {
+test("prefers natural voices over the old Windows ones, and uses network voices only online", () => {
+  // Windows の Chrome・Edge で実際に並ぶ種類の声（2026-09-28 にこの PC で見た一覧から）。
   const desktop = [
+    voice("Microsoft Ayumi - Japanese (Japan)", "ja-JP", { default: true }),
     voice("Microsoft Haruka - Japanese (Japan)", "ja-JP"),
     voice("Google 日本語", "ja-JP", { localService: false }),
     voice("Microsoft Zira - English (United States)", "en-US"),
+    voice("Google US English", "en-US", { localService: false }),
   ];
-  // 病院・施設ではネットにつながらないことがあるので、端末の中の声を先に使う。
-  assert.equal(pickVoice(desktop, "ja-JP").name, "Microsoft Haruka - Japanese (Japan)");
-  assert.equal(pickVoice(desktop, "en-US").name, "Microsoft Zira - English (United States)");
+  // 以前は「オフラインでも鳴る」を最優先して、古い Ayumi を選んでいた（棒読み）。
+  assert.equal(pickVoice(desktop, "ja-JP").name, "Google 日本語");
+  assert.equal(pickVoice(desktop, "en-US").name, "Google US English");
+  // ネットにつながっていないときは、端末の中の声に戻る。
+  assert.match(pickVoice(desktop, "ja-JP", { online: false }).name, /^Microsoft (Haruka|Ayumi)/);
+  assert.equal(pickVoice(desktop, "en-US", { online: false }).name, "Microsoft Zira - English (United States)");
+  // Edge のニューラルの声（名前が漢字のもの）。
+  const edge = [
+    ...desktop,
+    voice("Microsoft 七海 Online (Natural) - Japanese (Japan)", "ja-JP", { localService: false }),
+    voice("Microsoft Ava Online (Natural) - English (United States)", "en-US", { localService: false }),
+  ];
+  assert.equal(pickVoice(edge, "ja-JP").name, "Microsoft 七海 Online (Natural) - Japanese (Japan)");
+  assert.equal(pickVoice(edge, "en-US").name, "Microsoft Ava Online (Natural) - English (United States)");
+  // Windows に入れた Natural の声（端末の中）は、オフラインでも使える。
+  const localNatural = [...desktop, voice("Microsoft Nanami (Natural) - Japanese (Japan)", "ja-JP")];
+  assert.equal(pickVoice(localNatural, "ja-JP", { online: false }).name, "Microsoft Nanami (Natural) - Japanese (Japan)");
   // 英語の声しか無い端末で、日本語に英語の声を当てない（既定に任せる）。
   assert.equal(pickVoice([voice("Samantha", "en-US")], "ja-JP"), null);
   assert.equal(pickVoice([], "ja-JP"), null);

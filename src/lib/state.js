@@ -56,6 +56,15 @@ import { sanitizeSlotSession } from "./games/slotState.js";
 export const SCAN_FEEDBACKS = new Set(["none", "tick", "speak"]);
 
 /**
+ * 読み上げの声（settings.speechVoice）。
+ *   app    … アプリに入れた声（既定。日本語は VOICEVOX:四国めたん、英語は Kokoro。
+ *              src/lib/voicePack.js）。入っていない文だけ端末の声で読む
+ *   device … いつも端末の読み上げの声（iPad の「読み上げコンテンツ」の声など）
+ * 読み上げは課題の合図が鳴る前に止めるので（gameHost）、測定の条件には入れない。
+ */
+export const SPEECH_VOICES = new Set(["app", "device"]);
+
+/**
  * 演出の強さ（settings.fxLevel。src/lib/fx/fxSafety.js の FX_LEVELS と同じ値）。
  * docs/overall-design-2026-09-28.md §4。光・揺れ・粒の上限は強さによらず同じ。
  *   none … 粒・揺れ・紙吹雪を出さない / subtle … ひかえめ / normal … ふつう（既定）/ big … はで
@@ -157,6 +166,8 @@ export const defaultState = {
     // speechSynthesisの相対音量。通常時は従来相当の1.0を維持し、
     // Switch Controlモードでは発話自体をいったんOFFにして比較する。
     speechVolume: 1,
+    // 読み上げの声（SPEECH_VOICES）。
+    speechVoice: "app",
     soundEnabled: true,
     largeText: true,
     highContrast: false,
@@ -1291,6 +1302,7 @@ export function sanitizeState(candidate) {
       ),
       showScreenSwitch: booleanOr(settings.showScreenSwitch, fallback.settings.showScreenSwitch),
       scanFeedback: enumOr(settings.scanFeedback, SCAN_FEEDBACKS, fallback.settings.scanFeedback),
+      speechVoice: enumOr(settings.speechVoice, SPEECH_VOICES, fallback.settings.speechVoice),
       fxLevel: enumOr(settings.fxLevel, FX_LEVELS, fallback.settings.fxLevel),
       playPrefs: sanitizePlayPrefs(settings.playPrefs),
       researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),

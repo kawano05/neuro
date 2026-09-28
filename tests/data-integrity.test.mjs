@@ -2060,7 +2060,12 @@ test("every recorded sound has a credit, and every credit is complete", () => {
       assert.ok(typeof credit[field] === "string" && credit[field].trim(), `${credit.title}: ${field} が空`);
     });
     assert.match(credit.source, /^https:\/\//);
-    assert.match(credit.licenseUrl, /^https:\/\/creativecommons\.org\//);
+    // 使ってよいと確かめたライセンスだけ（公開のリポジトリに置ける・再配布を禁じない）。
+    // CC のほかは、読み上げの声の2つ（VOICEVOX:四国めたん、Kokoro。docs §3.20）。
+    assert.match(
+      credit.licenseUrl,
+      /^https:\/\/(creativecommons\.org\/|zunko\.jp\/con_ongen_kiyaku\.html$|www\.apache\.org\/licenses\/LICENSE-2\.0$)/
+    );
   });
   // 置いてある録音は、どれも README の表に載っている（出典が追える）。
   const dir = fileURLToPath(new URL("../src/assets/sounds/", import.meta.url));

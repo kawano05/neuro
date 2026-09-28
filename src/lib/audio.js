@@ -22,6 +22,7 @@
 
 import { resolveTextMode, speechLangForText, toSpeechText } from "./i18n.js";
 import { pickVoice } from "./speechVoice.js";
+import { chunkGapS, planVoiceClips, splitSpeechChunks, voiceLang } from "./voicePack.js";
 
 /** ビート予約の既定包絡（sine, gain 0.05, 約0.18秒で減衰）。detailed-design.md §6.2。 */
 export const DEFAULT_TONE_GAIN = 0.05;
@@ -258,15 +259,29 @@ const CELEBRATION_SAMPLES = new Set(["laugh", "applause", "cheer", "homerun-chee
 /** ノイズ音源の長さ（秒）。使い回すので、いちばん長い効果音より長くする。 */
 const NOISE_BUFFER_S = 2;
 
+/** 端末の声の速さ（5巡目から。子どもにも聞き取りやすいよう少しゆっくり）。 */
+const DEVICE_SPEECH_RATE = 0.92;
+/**
+ * ネットの要る声（Edge の Natural、Chrome の Google の声）が、これだけ待っても
+ * 話しはじめなければ、鳴らないものとして端末の中の声で言い直す。
+ */
+const REMOTE_VOICE_START_TIMEOUT_MS = 2500;
+/** ネットの要る声が鳴らなかったあと、しばらく使わない（つながり直すまで）。 */
+const REMOTE_VOICE_RETRY_AFTER_MS = 60_000;
+/** 声のパックから作った音を、いくつまで手元に置いておくか。 */
+const VOICE_CLIP_CACHE = 48;
+
 /**
  * @param {() => {speechEnabled: boolean, soundEnabled: boolean}} getSettings
  *   設定の現在値を返す関数（state.settings への遅延参照）
  * @param {(message: string) => void} [announce]
- * @param {{sampleUrls?: Record<string, string>}} [options]
+ * @param {{sampleUrls?: Record<string, string>, voicePack?: {index: object, urls: Record<string, string>}|null}} [options]
  *   sampleUrls … 録音の差し替え（名前 → URL、soundAssets.js）。ある名前は
  *   合成の代わりに録音を鳴らす（laugh・boing・creature-dolphin など）。
+ *   voicePack … アプリに入れた読み上げの声（voiceAssets.js。src/lib/voicePack.js）。
+ *   無ければ、読み上げはいつも端末の声。
  */
-export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} } = {}) {
+export function createAudio(getSettings, announce = () => {}, { sampleUrls = {}, voicePack = null } = {}) {
   let audioContext;
   let scheduler;
   let noiseBuffer = null;
@@ -278,6 +293,16 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
   let profile = "play";
   // 少し遅らせて読み上げる文（おいわいの音のあと）。stopSpeech で取り消す。
   let pendingSpeech = null;
+  // 読み上げの番号。新しく読む・止めるたびに進む。読み込みや待ちのあとで、
+  // もう古くなった読み上げを鳴らさないために見る。
+  let speechToken = 0;
+  // 鳴っている（鳴る予定の）声のパックの音。
+  let voiceSources = [];
+  // 声のパック（言語 → 読み込み中の Promise<ArrayBuffer|null>）と、そこから作った音。
+  const voicePackData = new Map();
+  const voiceClips = new Map();
+  // ネットの要る声が鳴らなかった時刻（しばらく端末の中の声だけにする）。
+  let remoteVoiceFailedAt = -Infinity;
 
   function setProfile(next) {
     profile = next === "task" ? "task" : "play";
@@ -376,34 +401,202 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
   // 声の一覧は、最初に尋ねたときに読み込みが始まる端末がある。先に一度尋ねておく。
   if (typeof window !== "undefined") availableVoices(window.speechSynthesis);
 
-  /** 読み上げる（speechEnabled が ON のときのみ） */
-  function speak(text) {
-    const speechSettings = getSettings();
+  /**
+   * 読み上げたことを知らせる（テストと、あとから確かめるため）。
+   * via … "voice-pack"（アプリに入れた声）か "device"（端末の声）。
+   */
+  function reportSpeech(detail) {
+    try {
+      window.dispatchEvent(new CustomEvent("neuronode:speech", { detail }));
+    } catch {
+      // 知らせられなくても読み上げは止めない。
+    }
+  }
+
+  /** 声のパックを読み込む（1回だけ。失敗したら null で、端末の声に任せる）。 */
+  function loadVoicePack(lang) {
+    const key = voiceLang(lang);
+    if (voicePackData.has(key)) return voicePackData.get(key);
+    const url = voicePack?.urls?.[key];
+    const loading =
+      url && typeof fetch === "function"
+        ? fetch(url)
+            .then((response) => (response.ok ? response.arrayBuffer() : null))
+            .catch(() => null)
+        : Promise.resolve(null);
+    voicePackData.set(key, loading);
+    // 失敗したときは、次に読むときにもう一度試す（いっときの通信の失敗で、
+    // その後ずっと端末の声にならないように）。
+    loading.then((data) => {
+      if (!data && voicePackData.get(key) === loading) voicePackData.delete(key);
+    });
+    return loading;
+  }
+
+  /**
+   * 声のパックを先に読み込んでおく（スタートのひと押し。最初の読み上げを待たせない）。
+   * 日本語はいつも（英語の表記でも、ことばや文字は日本語で読む）、英語は英語の表記のとき。
+   */
+  function prefetchVoice() {
+    const settings = getSettings();
+    if (!voicePack || !settings.speechEnabled || settings.speechVoice === "device") return;
+    loadVoicePack("ja");
+    if (resolveTextMode(settings) === "en") loadVoicePack("en");
+  }
+
+  /** パックの中の1つの音を AudioBuffer にする（作ったものは少しのあいだ取っておく）。 */
+  function decodeVoiceClip(ctx, lang, [offset, length]) {
+    const key = `${voiceLang(lang)}:${offset}`;
+    const cached = voiceClips.get(key);
+    if (cached) {
+      voiceClips.delete(key);
+      voiceClips.set(key, cached);
+      return cached;
+    }
+    const decoding = loadVoicePack(lang)
+      .then((data) => (data ? ctx.decodeAudioData(data.slice(offset, offset + length)) : null))
+      .catch(() => null);
+    voiceClips.set(key, decoding);
+    decoding.then((buffer) => {
+      if (!buffer) voiceClips.delete(key);
+    });
+    while (voiceClips.size > VOICE_CLIP_CACHE) voiceClips.delete(voiceClips.keys().next().value);
+    return decoding;
+  }
+
+  /** 音の出口が動いているか（止まっていれば戻してみて、少しだけ待つ）。 */
+  function audioRunning(ctx) {
+    if (ctx.state === "running") return Promise.resolve(true);
+    if (ctx.state === "closed" || typeof ctx.resume !== "function") return Promise.resolve(false);
+    return Promise.race([
+      ctx.resume().then(
+        () => ctx.state === "running",
+        () => false
+      ),
+      new Promise((resolve) => window.setTimeout(() => resolve(ctx.state === "running"), 300)),
+    ]);
+  }
+
+  function stopVoiceClips() {
+    const sources = voiceSources;
+    voiceSources = [];
+    sources.forEach((source) => {
+      try {
+        source.stop();
+      } catch {
+        // 始まる前・終わったあとの stop は無視してよい。
+      }
+      try {
+        source.disconnect();
+      } catch {
+        /* noop */
+      }
+    });
+  }
+
+  /**
+   * いま読んでいるもの（声のパック・端末の声）を止め、番号を進める。
+   * 少し遅らせて読む文（おいわいの「やったー」）の待ちは、ここでは取り消さない
+   * ——けっかの画面で枠が動いて名前を読んでも、おいわいの声は消さない（前から
+   * そうだった）。待ちも取り消すのは stopSpeech。
+   */
+  function silenceSpeech() {
+    speechToken += 1;
+    stopVoiceClips();
+    try {
+      window.speechSynthesis?.cancel?.();
+    } catch {
+      /* noop */
+    }
+    return speechToken;
+  }
+
+  /**
+   * 声のパックの音を、文の切れ目に間を置いて順に鳴らす。読み込めなかったときは
+   * fallback（端末の声）で読む。
+   */
+  function playVoiceClips(ctx, token, lang, plan, chunks, volume, fallback) {
+    Promise.all([Promise.all(plan.map((range) => decodeVoiceClip(ctx, lang, range))), audioRunning(ctx)])
+      .then(([buffers, running]) => {
+        if (token !== speechToken) return;
+        // 音の出口が止まったまま（iOS で電話のあとなど。戻せるのは操作の中だけ）なら、
+        // 予約しても鳴らない。黙るより、端末の声で読む。
+        if (buffers.some((buffer) => !buffer) || !running) {
+          fallback();
+          return;
+        }
+        const out = ctx.createGain();
+        out.gain.value = volume;
+        out.connect(ctx.destination);
+        let at = ctx.currentTime + 0.02;
+        buffers.forEach((buffer, index) => {
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(out);
+          source.start(at);
+          voiceSources.push(source);
+          at += buffer.duration + (index < buffers.length - 1 ? chunkGapS(chunks[index]) : 0);
+        });
+      })
+      .catch(() => {
+        if (token === speechToken) fallback();
+      });
+  }
+
+  /**
+   * 端末の声で読む。ネットの要る声（Edge の Natural、Chrome の Google の声）を
+   * 使ったときは、鳴らなかったら端末の中の声で1回だけ言い直す——病院・施設では
+   * ネットにつながらないことがあり、そのまま黙ると伝えたいことが届かない。
+   */
+  function speakWithDevice(spokenText, lang, volume, token, { localOnly = false } = {}) {
     const synth = window.speechSynthesis;
-    if (
-      !speechSettings.speechEnabled ||
-      !synth ||
-      typeof synth.speak !== "function" ||
-      typeof globalThis.SpeechSynthesisUtterance !== "function"
-    ) {
+    if (!synth || typeof synth.speak !== "function" || typeof globalThis.SpeechSynthesisUtterance !== "function") {
       return false;
     }
     try {
-      if (typeof synth.cancel === "function") synth.cancel();
-      // 表記に合わせて読み上げの言語も変える。英語表記のまま日本語音声で
-      // 読ませると、意味の通らない発音になる（src/lib/i18n.js）。英語表記でも
-      // 文が日本語なら日本語の声で読む（speechLangForText）。
-      const lang = speechLangForText(text, resolveTextMode(speechSettings));
-      // 画面の文（分かち書き・かなの助数詞）を、声で読む文に整える（toSpeechText）。
-      const utterance = new SpeechSynthesisUtterance(toSpeechText(text, lang));
+      const online =
+        !localOnly &&
+        (typeof navigator === "undefined" || navigator.onLine !== false) &&
+        Date.now() - remoteVoiceFailedAt > REMOTE_VOICE_RETRY_AFTER_MS;
+      const utterance = new SpeechSynthesisUtterance(spokenText);
       // 声を選ぶ（src/lib/speechVoice.js）。選ばないと、iPhone / iPad では機械的な
       // 声になることがあった。合う声が無ければ端末の既定に任せる。
-      const voice = pickVoice(availableVoices(synth), lang);
+      const voice = pickVoice(availableVoices(synth), lang, { online });
       if (voice) utterance.voice = voice;
       utterance.lang = voice?.lang || lang;
-      utterance.rate = 0.92;
+      utterance.rate = DEVICE_SPEECH_RATE;
       // 合図音・効果音を増量せず、相対的に大きかったTTS側を先に調整する。
-      utterance.volume = clampSpeechVolume(speechSettings.speechVolume);
+      utterance.volume = volume;
+      if (voice && voice.localService === false) {
+        let settled = false;
+        const retry = () => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          remoteVoiceFailedAt = Date.now();
+          if (token !== speechToken) return;
+          try {
+            synth.cancel();
+          } catch {
+            /* noop */
+          }
+          speakWithDevice(spokenText, lang, volume, token, { localOnly: true });
+        };
+        const timer = window.setTimeout(retry, REMOTE_VOICE_START_TIMEOUT_MS);
+        utterance.onstart = () => {
+          settled = true;
+          window.clearTimeout(timer);
+        };
+        utterance.onerror = (event) => {
+          // 止めた（cancel）ときの知らせは、鳴らなかったことではない。
+          if (event?.error === "interrupted" || event?.error === "canceled") {
+            settled = true;
+            window.clearTimeout(timer);
+            return;
+          }
+          retry();
+        };
+      }
       synth.speak(utterance);
       return true;
     } catch {
@@ -411,6 +604,45 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
       // その場合は所有権をlive regionへ戻し、通知自体を失わない。
       return false;
     }
+  }
+
+  /**
+   * 読み上げる（speechEnabled が ON のときのみ）。
+   *
+   * アプリに入れた声（声のパック）にその文の音があれば、それを鳴らす。無ければ
+   * （または設定で「端末の声」を選んでいれば）端末の読み上げで読む。
+   * どちらでも、前の読み上げは止めてから読む。
+   */
+  function speak(text) {
+    const speechSettings = getSettings();
+    if (!speechSettings.speechEnabled) return false;
+    // 表記に合わせて読み上げの言語も変える。英語表記のまま日本語音声で
+    // 読ませると、意味の通らない発音になる（src/lib/i18n.js）。英語表記でも
+    // 文が日本語なら日本語の声で読む（speechLangForText）。
+    const lang = speechLangForText(text, resolveTextMode(speechSettings));
+    // 画面の文（分かち書き・かなの助数詞）を、声で読む文に整える（toSpeechText）。
+    const spokenText = toSpeechText(text, lang);
+    if (!spokenText) return false;
+    const volume = clampSpeechVolume(speechSettings.speechVolume);
+    if (voicePack && speechSettings.speechVoice !== "device") {
+      const chunks = splitSpeechChunks(spokenText, lang);
+      const plan = planVoiceClips(voicePack.index, lang, chunks);
+      const ctx = plan ? ensureContext() : null;
+      if (plan && ctx) {
+        const token = silenceSpeech();
+        playVoiceClips(ctx, token, lang, plan, chunks, volume, () => {
+          if (speakWithDevice(spokenText, lang, volume, token)) {
+            reportSpeech({ text: spokenText, lang, via: "device", fallback: true });
+          }
+        });
+        reportSpeech({ text: spokenText, lang, via: "voice-pack", chunks, volume });
+        return true;
+      }
+    }
+    const token = silenceSpeech();
+    if (!speakWithDevice(spokenText, lang, volume, token)) return false;
+    reportSpeech({ text: spokenText, lang, via: "device", volume });
+    return true;
   }
 
   /** アプリTTSかlive regionの一方だけに、その回の音声所有権を与える。 */
@@ -459,8 +691,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
    */
   function stopSpeech() {
     cancelPendingSpeech();
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
+    silenceSpeech();
   }
 
   /**
@@ -1089,6 +1320,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
    */
   function unlock() {
     preferPlaybackSession();
+    prefetchVoice();
     const ctx = ensureContext();
     if (!ctx) return;
     if (ctx.state === "suspended") {
@@ -1166,6 +1398,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {} 
     speakOrAnnounce,
     speakOrAnnounceLater,
     stopSpeech,
+    prefetchVoice,
     setProfile,
     /** いまの場面（テスト・記録用）。 */
     profile: () => profile,

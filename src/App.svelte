@@ -545,6 +545,21 @@
           <output id="speechVolumeValue" for="speechVolume">100%</output>
         </label>
 
+        <!-- 読み上げの声（settings.speechVoice。src/lib/voicePack.js）。 -->
+        <label class="setting-row">
+          <span>
+            <strong>読み上げの声</strong>
+            <small>
+              「アプリの声」は、このアプリに入れた自然な声です（日本語・英語とも、ネットが無くても同じ声）。
+              「端末の声」は、iPad の設定「読み上げコンテンツ」の声です
+            </small>
+          </span>
+          <select id="speechVoice" data-scan>
+            <option value="app">アプリの声</option>
+            <option value="device">端末の声</option>
+          </select>
+        </label>
+
         <label class="setting-row toggle-row">
           <span>
             <strong>効果音</strong>
@@ -612,6 +627,7 @@
       <details class="settings-guide settings-credits" id="soundCredits">
         <summary>このアプリで使っている音の素材</summary>
         <p class="settings-credits-note">
+          読み上げの「アプリの声」も、ここにある声で作っています。
           ほかの効果音は、このアプリの中で作っています（録音ではありません）。
         </p>
         <ul class="settings-credits-list" id="soundCreditsList"></ul>
