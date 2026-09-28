@@ -720,11 +720,15 @@ const STRINGS = {
     kana: "おしい！ つぎは つれるよ",
     en: "So close! You'll catch the next one.",
   },
+  // 声では「あわせて ○センチ」を言わない（2026-09-28）。読み上げはアプリに入れた
+  // 声の音で鳴らすので（src/lib/voicePack.js）、合計の長さのように取りうる数が
+  // 多すぎる文は作りきれない。合計は、けっかの画面と画面読み上げ機能向けの文
+  // （fishing.voice.finishAnnounce）には残る。
   "fishing.voice.finish": {
-    ruby: "できた！ {n}ひき つれたよ。あわせて {cm}センチ",
-    kanji: "できた！ {n}ひき つれたよ。あわせて {cm}センチ",
-    kana: "できた！ {n}ひき つれたよ。あわせて {cm}センチ",
-    en: "You did it! You caught {n} fish, {cm} centimeters in all!",
+    ruby: "できた！ {n}ひき つれたよ",
+    kanji: "できた！ {n}ひき つれたよ",
+    kana: "できた！ {n}ひき つれたよ",
+    en: "You did it! You caught {n} fish!",
   },
   "fishing.voice.finishNone": {
     ruby: "できた！ つぎは つれるよ",
@@ -1074,7 +1078,9 @@ const STRINGS = {
   "slot.progress.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
   "slot.voice.round": { ruby: "{total}回[かい]のうち {current}回目[かいめ]です", kanji: "{total}回のうち {current}回目です", kana: "{total}かいの うち {current}かいめです", en: "Round {current} of {total}." },
   "slot.voice.nextReel": { ruby: "次[つぎ]は {current}ばんめ", kanji: "次は {current}ばんめ", kana: "つぎは {current}ばんめ", en: "Now reel number {current}." },
-  "slot.voice.finish": { ruby: "できた！ {total}回[かい]のうち {hits}回[かい] ぴったり！", kanji: "できた！ {total}回のうち {hits}回 ぴったり！", kana: "できた！ {total}かいの うち {hits}かい ぴったり！", en: "You did it! {hits} out of {total} were right on!" },
+  // 声では「○回のうち」を言わない（2026-09-28。fishing.voice.finish と同じ理由で、
+  // 回数の組み合わせが多すぎる）。何回のうちかは、けっかの画面に出る。
+  "slot.voice.finish": { ruby: "できた！ {hits}回[かい] ぴったり！", kanji: "できた！ {hits}回 ぴったり！", kana: "できた！ {hits}かい ぴったり！", en: "You did it! Right on {hits} {hits:time|times}!" },
   "slot.voice.finishNone": {
     ruby: "できた！ 最後[さいご]まで 止[と]められたね",
     kanji: "できた！ 最後まで 止められたね",
