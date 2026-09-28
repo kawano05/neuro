@@ -78,6 +78,7 @@ const checks = [
   ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
+  ["fills the screen with the practice reels without any of them spilling off it", checkPracticeReelsFillTheScreen],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
   ["counts up instead of counting down in endless fishing", checkEndlessFishingHasNoClock],
   ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
@@ -2087,6 +2088,64 @@ async function checkSlotL1GameFlow(page) {
  * 1件ずつ追い、1入力が2本以上を止めないこと、左→右、ラウンド遷移、
  * 300msガード、完了結果のすべてを実ブラウザで固定する。
  */
+/**
+ * れんしゅうの回のリールは、画面いっぱいに出て、どの画面でもはみ出さない。
+ *
+ * 利用者側から「スロットとかのゲームを画面全部に見えるように」と言われた
+ * （2026-09-28）。直す前は、iPad の横向きでリール（ひとつ）が画面の 34%×55% しか
+ * 使っておらず、スマホの横向きではリールの下が切れ、縦向きでは3本がはみ出して
+ * スクロールが要った。1コマの高さを、リールの入る場所の縦横に収まるいちばん
+ * 大きい値にした（theme-hakkiri.css、engineVersion 4）。
+ *
+ * 見ること: リールの面がスクロールしない・どのリールも画面の中・3本の窓を
+ * 合わせた大きさが、画面の縦か横のどちらかをほとんど使い切っている。
+ */
+async function checkPracticeReelsFillTheScreen(page) {
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  for (const [tileKey, reels] of [["tile.slot-l2.title", 3], ["tile.slot-l1.title", 1]]) {
+    await openActivity(page, t("tile.slot-corner.title"));
+    await waitForActivityChoices(page, 3);
+    await openActivity(page, t(tileKey));
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator(".game-ready").waitFor({ state: "visible" });
+    await page.locator("#gameStage").click();
+    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await page.locator(".slot-task[data-difficulty-mode='practice']").waitFor({ state: "visible" });
+    await page.waitForTimeout(150);
+    const fit = await page.evaluate(() => {
+      const stage = document.querySelector("#gameStageContent");
+      const windows = [...document.querySelectorAll(".slot-reel-window")].map((el) => el.getBoundingClientRect());
+      const reels = [...document.querySelectorAll(".slot-reel")].map((el) => el.getBoundingClientRect());
+      const left = Math.min(...windows.map((r) => r.left));
+      const right = Math.max(...windows.map((r) => r.right));
+      const top = Math.min(...windows.map((r) => r.top));
+      const bottom = Math.max(...windows.map((r) => r.bottom));
+      return {
+        supportsContainerUnits: CSS.supports("height", "1cqh"),
+        scrolls: stage.scrollHeight > stage.clientHeight + 1 || stage.scrollWidth > stage.clientWidth + 1,
+        outside: reels.filter((r) => r.left < -1 || r.top < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1).length,
+        usedWidth: (right - left) / innerWidth,
+        usedHeight: (bottom - top) / innerHeight,
+        count: windows.length,
+      };
+    });
+    if (!fit.supportsContainerUnits) return SKIPPED;
+    assert(fit.count === reels, `Expected ${reels} reel(s), found ${fit.count}`);
+    assert(!fit.scrolls, "The practice reels must fit the screen without scrolling");
+    assert(fit.outside === 0, `${fit.outside} reel(s) spill off the screen`);
+    // 縦か横のどちらかを、ほとんど使い切っている（余白ばかりの小さなリールにしない）。
+    assert(
+      fit.usedHeight >= 0.5 || fit.usedWidth >= 0.7,
+      `The practice reels must fill the screen, used ${Math.round(fit.usedWidth * 100)}% x ${Math.round(fit.usedHeight * 100)}%`
+    );
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+  }
+}
+
 async function checkSlotSequentialFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();

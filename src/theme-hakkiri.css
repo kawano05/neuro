@@ -2136,6 +2136,218 @@ body.result-mode.user-world #resultHome::before {
   display: none;
 }
 
+/* ---------------------------------------------------------------------
+   リール（れんしゅうの回）を画面いっぱいに（2026-09-28）
+   利用者側から「スロットとかのゲームを画面全部に見えるように」と言われた。
+   測ると、iPad の横向きでリール（ひとつ）は画面の 34%×55% しか使っておらず、
+   スマホの横向きではリールの下が切れ、スマホの縦向きでは3本のリールが
+   はみ出してスクロールが要った（1コマの高さが 94px などの決まった値だった）。
+
+   リールの入る場所（.slot-reels）を大きさの容器（container-type: size）にして、
+   その縦と横の両方に収まるいちばん大きい1コマの高さを、コンテナの単位
+   （cqh / cqw）で決める。どの画面でも、はみ出さずにいちばん大きく出る。
+     - 縦長の画面: 目標の札 → ことば → リール（残りの高さ全部）
+     - 横長の画面: 左に目標の札とことば、右にリール（高さ全部）
+   そくていの回は変えない（刺激の条件、§3.3）。れんしゅうの回の見え方が
+   大きく変わるので、engineVersion を 4 に上げた（slotJudge.js の履歴に書いた）。
+   コンテナの単位が無い古い端末（iOS 16 より前）は、これまでの大きさのまま。
+   --------------------------------------------------------------------- */
+@supports (height: 1cqh) {
+  /* 遊びの面の余白（styles.css の .game-stage-content の 32px）は外す。上の帯の
+     ぶんの余白と重なって、リールに使える高さが削られていた（スマホの横向きで
+     254px しか残らなかった）。上は帯の下端（68px）の少し下から、下と左右は少しだけ。 */
+  .game-stage-content.slot-stage.is-practice {
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .slot-task[data-difficulty-mode="practice"] {
+    /* 上の帯（のこり・この遊びの設定・おわる）の下から使う。 */
+    --slot-top-reserve: 76px;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: var(--slot-top-reserve) clamp(10px, 2vw, 24px) clamp(10px, 2vh, 20px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-content: stretch;
+    justify-items: center;
+    gap: clamp(6px, 1.4vh, 14px);
+  }
+
+  .slot-task[data-difficulty-mode="practice"] .slot-reels {
+    /* リールの本数と、リールの中の決まった高さ・幅（番号・札・余白・枠）。
+       窓の横幅は、1コマの高さの min〜max 倍（絵をいちばん大きくしてから、余った
+       横幅のぶんだけ広げる）。 */
+    --slot-reel-count: 3;
+    --slot-reel-chrome: 118px;
+    --slot-reel-chrome-w: 34px;
+    --slot-reels-gap: clamp(8px, 1.6vw, 20px);
+    --slot-min-aspect: 1.25;
+    --slot-max-aspect: 1.8;
+    container-type: size;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--slot-reels-gap);
+  }
+
+  .slot-task[data-difficulty-mode="practice"] .slot-reels.is-1-reel {
+    --slot-reel-count: 1;
+    /* 1本のときは番号を出さないぶん低い。窓は横に広め。 */
+    --slot-reel-chrome: 76px;
+    --slot-min-aspect: 1.5;
+    --slot-max-aspect: 2.4;
+    width: 100%;
+  }
+
+  /* リール1本の幅は、並ぶ場所を本数で割った幅まで（中の札の字で押し広げない）。 */
+  .slot-task[data-difficulty-mode="practice"] .slot-reel {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: calc((100cqw - (var(--slot-reel-count) - 1) * var(--slot-reels-gap)) / var(--slot-reel-count));
+  }
+
+  .slot-task[data-difficulty-mode="practice"] .slot-reel-badge {
+    max-width: 100%;
+    padding: 0.15rem 0.45rem;
+    font-size: clamp(0.68rem, 2.4cqw, 1.05rem);
+    white-space: normal;
+    /* 語の途中で折らない（「いま 止め／る」にしない）。空白のところで折る。 */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+
+  .slot-task[data-difficulty-mode="practice"] .slot-reel-window {
+    /* 1本ぶんの窓に使える横幅。 */
+    --slot-per-reel: calc(
+      (100cqw - (var(--slot-reel-count) - 1) * var(--slot-reels-gap)) / var(--slot-reel-count) - var(--slot-reel-chrome-w)
+    );
+    /* 1コマの高さ: 縦に3コマが入る高さと、窓を最も細くしたときの横幅の、小さいほう。 */
+    --slot-cell-size: min(
+      calc((100cqh - var(--slot-reel-chrome)) / 3),
+      calc(var(--slot-per-reel) / var(--slot-min-aspect))
+    );
+    /* 窓の横幅: 余った横幅のぶんだけ広げる（1コマの max 倍まで）。 */
+    width: min(var(--slot-per-reel), calc(var(--slot-cell-size) * var(--slot-max-aspect)));
+    min-width: 0;
+    height: calc(var(--slot-cell-size) * 3);
+    border-width: max(4px, calc(var(--slot-cell-size) * 0.035));
+    border-radius: max(14px, calc(var(--slot-cell-size) * 0.12));
+  }
+
+  .slot-task[data-difficulty-mode="practice"] .slot-stop-line {
+    height: max(7px, calc(var(--slot-cell-size) * 0.06));
+  }
+
+  .slot-task[data-difficulty-mode="practice"] .slot-stop-line.is-bottom {
+    top: calc(50% + var(--slot-cell-size) / 2 - max(7px, calc(var(--slot-cell-size) * 0.06)));
+  }
+
+  .slot-task[data-difficulty-mode="practice"] .slot-reel .slot-symbol {
+    border-width: max(4px, calc(var(--slot-cell-size) * 0.045));
+  }
+
+  /* 目標の札とことばも、リールに合わせて大きく。 */
+  .slot-task[data-difficulty-mode="practice"] .slot-target {
+    min-height: 0;
+    padding: clamp(6px, 1.2vh, 14px) clamp(14px, 2vw, 28px);
+  }
+
+  .slot-task[data-difficulty-mode="practice"] .slot-target .slot-symbol {
+    width: clamp(56px, 10vmin, 104px);
+    height: clamp(56px, 10vmin, 104px);
+    font-size: clamp(2.3rem, 6vmin, 4rem);
+  }
+
+  .slot-task[data-difficulty-mode="practice"] .slot-status {
+    min-height: 0;
+    font-size: clamp(1.1rem, 3.2vmin, 1.9rem);
+  }
+
+  /* 横長の画面（スマホの横向き・iPad の横向き）: 左に目標、右にリールを高さいっぱい。 */
+  @media (min-aspect-ratio: 5/4) {
+    .slot-task[data-difficulty-mode="practice"] {
+      grid-template-columns: minmax(180px, 30%) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto auto minmax(0, 1fr);
+      column-gap: clamp(12px, 2.4vw, 32px);
+    }
+
+    .slot-task[data-difficulty-mode="practice"] .slot-target {
+      grid-column: 1;
+      grid-row: 2;
+      flex-direction: column;
+    }
+
+    .slot-task[data-difficulty-mode="practice"] .slot-status {
+      grid-column: 1;
+      grid-row: 3;
+    }
+
+    .slot-task[data-difficulty-mode="practice"] .slot-reels {
+      grid-column: 2;
+      grid-row: 1 / -1;
+    }
+
+  }
+
+  @media (max-width: 620px) {
+    .slot-task[data-difficulty-mode="practice"] .slot-reels {
+      --slot-reel-chrome-w: 18px;
+    }
+  }
+
+  /* 背の低い横向き（スマホ 844x390）: 上の帯のぶんを詰める。 */
+  @media (max-height: 520px) and (min-aspect-ratio: 5/4) {
+    .slot-task[data-difficulty-mode="practice"] {
+      --slot-top-reserve: 72px;
+      padding-bottom: 8px;
+    }
+
+    .slot-task[data-difficulty-mode="practice"] .slot-reels {
+      --slot-reel-chrome: 96px;
+    }
+
+    .slot-task[data-difficulty-mode="practice"] .slot-reels.is-1-reel {
+      --slot-reel-chrome: 64px;
+    }
+
+    .slot-task[data-difficulty-mode="practice"] .slot-reel {
+      padding: 0.3rem;
+      gap: 0.25rem;
+    }
+
+    .slot-task[data-difficulty-mode="practice"] .slot-reel-number {
+      width: 1.6rem;
+      height: 1.6rem;
+    }
+
+    /* 目標の札は横長の小さい形に（縦に積むと上の帯の下へ入りきらない）。 */
+    .slot-task[data-difficulty-mode="practice"] .slot-target {
+      flex-direction: row;
+      gap: 0.5rem;
+      padding: 6px 12px;
+    }
+
+    .slot-task[data-difficulty-mode="practice"] .slot-target .slot-symbol {
+      width: clamp(40px, 13vh, 58px);
+      height: clamp(40px, 13vh, 58px);
+      font-size: clamp(1.6rem, 8vh, 2.3rem);
+    }
+
+    .slot-task[data-difficulty-mode="practice"] .slot-status {
+      font-size: clamp(0.95rem, 4.4vh, 1.2rem);
+    }
+  }
+}
+
 /* リール: 下の「この6つの絵が動きます」を、れんしゅうの回では出さない。
    打ち合わせで「リールの周りの余計なものは要らない」と言われた（§1.5）。
    しかもこの一覧は生成画像で、リールに回っている絵とは描き方も色も違う

@@ -17,7 +17,13 @@ export const SLOT_PROTOCOL_VERSION = "slot-v1";
 //       「おしい！」、明るい台と紫の枠（まわりの見た目）を足した
 //       （2026-09-27、docs/design-renewal-2026-09-25.md §3.10）。そくていの回の
 //       見え方と音は 2 と同じ。どちらの回かは difficultyMode で分かる。
-export const SLOT_ENGINE_VERSION = 3;
+//   4 … れんしゅうの回だけ、リールを画面いっぱいにした（2026-09-28）。1コマの高さを
+//       決まった値（最大 136px）ではなく、リールの入る場所の縦と横に収まるいちばん
+//       大きい値にし（iPad の横向きで約 217px）、横長の画面では目標の札を左へ置いた。
+//       スマホの横向きでリールの下が切れ、縦向きで3本がはみ出していたのも直った。
+//       当たりの星は演出エンジン（src/lib/fx/）へ移し、続けて当てると大きくなる。
+//       そくていの回の見え方と音は 2・3 と同じ。
+export const SLOT_ENGINE_VERSION = 4;
 
 export const SLOT_SYMBOL_IDS = Object.freeze([
   "circle",
