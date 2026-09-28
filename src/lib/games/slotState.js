@@ -74,6 +74,9 @@ function sanitizeConfig(gameId, rawConfig) {
     textMode: TEXT_MODES.has(value.textMode) ? value.textMode : "ruby",
     // 演出の強さ（れんしゅうの回の「ぴったり！」の星）。無い古い記録は null。
     fxLevel: FX_LEVELS.has(value.fxLevel) ? value.fxLevel : null,
+    // 画面に出した1コマの高さ（px、games/slotFit.js）。そくていの回でも、画面に
+    // 入りきらないときは決まった大きさより小さい。無い古い記録は null。
+    reelCellPx: nullable(value.reelCellPx, 1, 2_000),
     measurementReadiness: READINESS_STATES.has(value.measurementReadiness)
       ? value.measurementReadiness
       : "n/a",
@@ -153,6 +156,8 @@ function sanitizeTrial(trial, rowIndex, config) {
     judgment: judged.judgment,
     inputSource: typeof trial.inputSource === "string" ? trial.inputSource.slice(0, 64) : "",
     ignoredDuplicateInputs: bounded(trial.ignoredDuplicateInputs, 0, 0, 10_000, true),
+    // 止めたときに画面に出ていた1コマの高さ（px）。無い古い記録は null。
+    reelCellPx: nullable(trial.reelCellPx, 1, 2_000),
   };
 }
 

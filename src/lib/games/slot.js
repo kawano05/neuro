@@ -19,6 +19,7 @@ import {
   summarizeSlotTrials,
 } from "./slotJudge.js";
 import { slotSymbolHtml, slotSymbolStripUrl } from "./slotArt.js";
+import { fitMeasuredReels, reelCellPx } from "./slotFit.js";
 
 const INPUT_GUARD_MS = 300;
 const ROUND_HOLD_MS = 560;
@@ -87,6 +88,10 @@ export function createSlotGame(gameId) {
     let finishTimer = null;
     let destroyed = false;
     let finishing = false;
+    let resizeFrame = null;
+    // 画面に出している1コマの高さ（px）。始めたときと、向きを変えたときに測る
+    // （押したときに測ると、押した直後にレイアウトの計算が走る）。
+    let shownCellPx = null;
 
     const toRelativeMs = (absoluteMs) => Math.max(0, absoluteMs - sessionStartPerfMs);
 
@@ -298,6 +303,8 @@ export function createSlotGame(gameId) {
         judgment: result.judgment,
         inputSource: source,
         ignoredDuplicateInputs: 0,
+        // このとき画面に出ていた1コマの高さ（px）。途中で向きを変えると変わる。
+        reelCellPx: shownCellPx,
       };
       session.trials.push(row);
       reelViews[reelIndex].stoppedPhase = result.stoppedPhase;
@@ -410,6 +417,26 @@ export function createSlotGame(gameId) {
       if (!destroyed && !session.finished) rafId = window.requestAnimationFrame(loop);
     }
 
+    /**
+     * そくていの回で、決まった大きさのリールが画面に入りきらないときだけ、収める
+     * 見え方にする（games/slotFit.js）。れんしゅうの回はいつも画面いっぱい
+     * （theme-hakkiri.css）なので、ここでは何もしない。
+     */
+    function fitReels() {
+      if (stageEl && config?.difficultyMode === "measure") fitMeasuredReels(stageEl);
+    }
+
+    // 向きを変えたとき（スマホを横にした、など）に測り直す。1フレームに1回まで。
+    function onResize() {
+      if (resizeFrame !== null) return;
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = null;
+        if (destroyed) return;
+        fitReels();
+        shownCellPx = reelCellPx(stageEl);
+      });
+    }
+
     function mount(el) {
       stageEl = el;
       const difficultyMode = resolveDifficultyMode(settings);
@@ -492,13 +519,23 @@ export function createSlotGame(gameId) {
           textMode: config.textMode,
           measurementReadiness: config.measurementReadiness,
           visualGuidance: false,
+          // 1コマの高さ（px）。下で、画面に出した実際の大きさを入れる。
+          reelCellPx: null,
         },
         device: audio.getDeviceInfo(),
         trials: [],
         summary: null,
       };
-      logTrial(session);
       beginRound(0, sessionStartPerfMs);
+      // 目標の札とことばが入ってから測る（札の大きさも見え方に入る）。
+      fitReels();
+      // 画面に出した1コマの高さを記録に残す。そくていの回は、収める見え方に
+      // なったときだけ決まった大きさ（94px、幅 620px 以下は 82px）と違う値になる。
+      // れんしゅうの回は画面の大きさで決まる。止めた1回ごとにも残す（trial.reelCellPx）。
+      shownCellPx = reelCellPx(stageEl);
+      session.config.reelCellPx = shownCellPx;
+      logTrial(session);
+      window.addEventListener("resize", onResize);
       rafId = window.requestAnimationFrame(loop);
     }
 
@@ -526,6 +563,9 @@ export function createSlotGame(gameId) {
       if (destroyed) return;
       destroyed = true;
       stopLoop();
+      window.removeEventListener("resize", onResize);
+      if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = null;
       window.clearTimeout(transitionTimer);
       window.clearTimeout(finishTimer);
       transitionTimer = null;
@@ -542,7 +582,7 @@ export function createSlotGame(gameId) {
         logTrial(session);
       }
       if (stageEl) {
-        stageEl.classList.remove("slot-stage", "is-practice");
+        stageEl.classList.remove("slot-stage", "is-practice", "is-fitted", "is-whole");
         stageEl.innerHTML = "";
       }
       reelViews = [];

@@ -9,6 +9,7 @@ import {
   summarizeSlotTrials,
 } from "../src/lib/games/slotJudge.js";
 import { sanitizeSlotSession } from "../src/lib/games/slotState.js";
+import { buildSlotCsvRows } from "../src/lib/slotCsv.js";
 
 let passed = 0;
 let failed = 0;
@@ -176,6 +177,37 @@ test("an interrupted session keeps valid rows but never becomes completed", () =
   assert.equal(restored.aborted, true);
   assert.equal(restored.summary.trials, 2);
   assert.equal(restored.summary.extraInputCount, 1);
+});
+
+test("the shown reel cell size survives config -> sanitize -> CSV", () => {
+  // 画面に出した1コマの高さ（games/slotFit.js）は刺激の大きさ。そくていの回でも、
+  // 画面に入りきらないときは決まった大きさより小さくなる。sanitize が落とすと、
+  // 再読み込みしただけで消える（このリポジトリで何度も踏んだ形）。
+  const source = makeSession();
+  source.config.reelCellPx = 62.7;
+  source.trials.forEach((trial) => {
+    trial.reelCellPx = 62.7;
+  });
+  // 途中で向きを変えると、そのあとの回は大きさが変わる。止めた1回ごとの値を出す。
+  source.trials.at(-1).reelCellPx = 75.3;
+  const restored = sanitizeSlotSession(JSON.parse(JSON.stringify(source)));
+  assert.equal(restored.config.reelCellPx, 62.7);
+  assert.equal(restored.trials.at(-1).reelCellPx, 75.3);
+  const rows = buildSlotCsvRows([restored]);
+  assert.equal(rows[0].at(-1), "reelCellPx");
+  assert.ok(rows.slice(1, -1).every((row) => row.at(-1) === 62.7));
+  assert.equal(rows.at(-1).at(-1), 75.3);
+  // 1回ごとの値を持たない記録は、回の始めの値で埋める。
+  const startOnly = makeSession();
+  startOnly.config.reelCellPx = 82;
+  assert.ok(buildSlotCsvRows([sanitizeSlotSession(startOnly)]).slice(1).every((row) => row.at(-1) === 82));
+  // 無い値・おかしな値は null（分からない）。0 や負の値を大きさとして残さない。
+  assert.equal(sanitizeSlotSession(makeSession()).config.reelCellPx, null);
+  for (const bogus of [0, -5, Number.NaN, "94", 1e9]) {
+    const session = makeSession();
+    session.config.reelCellPx = bogus;
+    assert.equal(sanitizeSlotSession(session).config.reelCellPx, null, `reelCellPx ${bogus}`);
+  }
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

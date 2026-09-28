@@ -23,7 +23,16 @@ export const SLOT_PROTOCOL_VERSION = "slot-v1";
 //       スマホの横向きでリールの下が切れ、縦向きで3本がはみ出していたのも直った。
 //       当たりの星は演出エンジン（src/lib/fx/）へ移し、続けて当てると大きくなる。
 //       そくていの回の見え方と音は 2・3 と同じ。
-export const SLOT_ENGINE_VERSION = 4;
+//   5 … そくていの回も、画面に入りきらないときだけ収めるようにした（2026-09-28、
+//       games/slotFit.js）。それまでは入りきらない分が上下へはみ出し、上の分は
+//       スクロールしても戻せなかった（スマホの横向きで目標の札が画面の外、縦向きで
+//       上の帯の裏）。収まる画面（iPad の縦・横）の見え方は 2〜4 と 1px も同じ。
+//       収めるときも 1コマは決まった大きさ（94px、幅 620px 以下は 82px）より
+//       大きくせず、縮めるだけ。画面に出した1コマの高さを config.reelCellPx に
+//       残し、リールCSVの最後の列に出す。あわせて、背の低い横向き（スマホ）では
+//       上の帯を上へ寄せた（16px → 6px）ので、れんしゅうの回のリールもそのぶん
+//       大きい。
+export const SLOT_ENGINE_VERSION = 5;
 
 export const SLOT_SYMBOL_IDS = Object.freeze([
   "circle",

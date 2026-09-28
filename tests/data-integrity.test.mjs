@@ -1002,10 +1002,13 @@ test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
     "deviceInputMethod",
     // 演出の強さ（2026-09-28、src/lib/fx/）。いちばん後ろに足す。
     "fxLevel",
+    // 画面に出した1コマの高さ（2026-09-28、games/slotFit.js）。その後ろ。
+    "reelCellPx",
   ]);
-  assert.equal(rows[0].length, 32);
-  assert.equal(rows[1].length, 32);
-  // 演出の強さを持たない古い記録は空欄（分からないことを空欄で表す）。
+  assert.equal(rows[0].length, 33);
+  assert.equal(rows[1].length, 33);
+  // 演出の強さ・1コマの高さを持たない古い記録は空欄（分からないことを空欄で表す）。
+  assert.equal(rows[1].at(-2), "");
   assert.equal(rows[1].at(-1), "");
   assert.equal(rows[1][22], JSON.stringify(["circle", "fish", "star", "flower", "bird", "square"]));
   // 遅延を持たない端末の記録は空欄（0にしない——測っていないことと、

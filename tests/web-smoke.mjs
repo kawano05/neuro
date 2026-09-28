@@ -79,6 +79,7 @@ const checks = [
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
   ["fills the screen with the practice reels without any of them spilling off it", checkPracticeReelsFillTheScreen],
+  ["keeps the measured reels at their fixed size and shrinks them only when they cannot fit", checkMeasuredReelsStayOnScreen],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
   ["counts up instead of counting down in endless fishing", checkEndlessFishingHasNoClock],
   ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
@@ -2140,6 +2141,102 @@ async function checkPracticeReelsFillTheScreen(page) {
     assert(
       fit.usedHeight >= 0.5 || fit.usedWidth >= 0.7,
       `The practice reels must fill the screen, used ${Math.round(fit.usedWidth * 100)}% x ${Math.round(fit.usedHeight * 100)}%`
+    );
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+  }
+}
+
+/**
+ * そくていの回のリールは、決まった大きさ（1コマ 94px、幅 620px 以下は 82px）で出し、
+ * 画面に入りきらないときだけ縮めて収める（games/slotFit.js、engineVersion 5）。
+ *
+ * 直す前は、入りきらない分が上下へはみ出し、上の分はスクロールしても戻せなかった
+ * （2026-09-28 に実測: スマホの横向きで目標の札が丸ごと画面の外、縦向きで札が
+ * 上の帯の裏）。
+ *
+ * 見ること: 目標の札・ことば・リール・6つの絵が、どれも画面の中にあって上の帯の
+ * 裏に入っていない / 収めたときはスクロールしない / 収めていないときの1コマは
+ * 決まった大きさのまま（iPad などの見え方を変えていない）/ 収めたときも決まった
+ * 大きさより大きくしない / 画面に出した1コマの高さが回の記録と、止めた1回ごとの
+ * 記録に残る。
+ */
+async function checkMeasuredReelsStayOnScreen(page) {
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    saved.settings = { ...(saved.settings || {}), difficultyMode: "measure" };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, storageKey);
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  for (const tileKey of ["tile.slot-l2.title", "tile.slot-l1.title"]) {
+    await openActivity(page, t("tile.slot-corner.title"));
+    await waitForActivityChoices(page, 3);
+    await openActivity(page, t(tileKey));
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator(".game-ready").waitFor({ state: "visible" });
+    await page.locator("#gameStage").click();
+    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await page.locator(".slot-task[data-difficulty-mode='measure']").waitFor({ state: "visible" });
+    await page.waitForTimeout(150);
+    const seen = await page.evaluate((key) => {
+      const stage = document.querySelector("#gameStageContent");
+      const bars = [...document.querySelectorAll(".game-progress, .game-actions > :not([hidden])")]
+        .map((el) => el.getBoundingClientRect())
+        .filter((b) => b.width > 0 && b.height > 0);
+      const parts = [".slot-target", ".slot-status", ".slot-reel", ".slot-symbol-guide"]
+        .flatMap((selector) => [...document.querySelectorAll(selector)])
+        .map((el) => ({ name: el.className, b: el.getBoundingClientRect() }))
+        .filter(({ b }) => b.width > 0 && b.height > 0);
+      const outside = parts.filter(({ b }) => b.left < -1 || b.top < -1 || b.right > innerWidth + 1 || b.bottom > innerHeight + 1);
+      const underBar = parts.filter(({ b }) =>
+        bars.some((bar) => b.left < bar.right - 1 && bar.left < b.right - 1 && b.top < bar.bottom - 1 && bar.top < b.bottom - 1)
+      );
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = (saved.sessions || []).filter((item) => item.taskType === "slot").at(-1);
+      return {
+        supportsContainerUnits: CSS.supports("height", "1cqh"),
+        fitted: stage.classList.contains("is-fitted"),
+        scrolls: stage.scrollHeight > stage.clientHeight + 1 || stage.scrollWidth > stage.clientWidth + 1,
+        outside: outside.map(({ name }) => name),
+        underBar: underBar.map(({ name }) => name),
+        cell: document.querySelector(".slot-reel-window").getBoundingClientRect().height / 3,
+        fixedCell: innerWidth <= 620 ? 82 : 94,
+        recordedCellPx: session?.config?.reelCellPx ?? null,
+      };
+    }, storageKey);
+    if (!seen.supportsContainerUnits) return SKIPPED;
+    assert(seen.outside.length === 0, `Measured reels: ${seen.outside.join(", ")} must stay on the screen`);
+    assert(seen.underBar.length === 0, `Measured reels: ${seen.underBar.join(", ")} must not hide under the top bar`);
+    if (seen.fitted) {
+      assert(!seen.scrolls, "The fitted measured reels must not need scrolling");
+      assert(seen.cell <= seen.fixedCell + 0.5, `A fitted reel cell must never grow past ${seen.fixedCell}px, got ${seen.cell}`);
+    } else {
+      assert(Math.abs(seen.cell - seen.fixedCell) < 0.5, `Where the reels fit, the cell must stay ${seen.fixedCell}px, got ${seen.cell}`);
+    }
+    assert(
+      typeof seen.recordedCellPx === "number" && Math.abs(seen.recordedCellPx - seen.cell) <= 0.1,
+      `The run must record the shown cell size (${seen.cell}), got ${JSON.stringify(seen.recordedCellPx)}`
+    );
+    // 止めた1回ごとにも、そのとき出ていた大きさが残る（途中で向きを変えると変わる）。
+    await page.waitForTimeout(400);
+    await page.locator("#gameStage").click();
+    const stopped = await page.waitForFunction(
+      (key) => {
+        const saved = JSON.parse(localStorage.getItem(key) || "{}");
+        const session = (saved.sessions || []).filter((item) => item.taskType === "slot").at(-1);
+        return session?.trials?.length ? session.trials.at(-1).reelCellPx ?? "missing" : null;
+      },
+      storageKey,
+      { timeout: 4000 }
+    );
+    const trialCellPx = await stopped.jsonValue();
+    assert(
+      typeof trialCellPx === "number" && Math.abs(trialCellPx - seen.cell) <= 0.1,
+      `Each stop must record the shown cell size (${seen.cell}), got ${JSON.stringify(trialCellPx)}`
     );
     await page.locator("#gameExit").click();
     await waitForClass(page, "#homeView", "is-active");
