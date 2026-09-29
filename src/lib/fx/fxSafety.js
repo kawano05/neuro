@@ -92,6 +92,39 @@ export function createGlowLimiter(now = () => (typeof performance !== "undefined
   };
 }
 
+/** 花火どうしの間（秒）。1発ごとに明るくはじけるので、1秒に3回に収まる間をあける。 */
+export const MIN_FIREWORK_GAP_S = 0.4;
+
+/**
+ * 明るい出来事（やわらかい光・花火）をまとめて数える回数制限。どの1秒をとっても
+ * MAX_GLOWS_PER_SECOND 回まで。花火のように少し先にはじけるものは、その時刻で予約する。
+ * 以前は光だけを数えていて、フィナーレで光と花火4発（0.25秒おき）が重なると、
+ * 1秒に5回の明るい出来事になっていた。
+ * @param {() => number} [now] ミリ秒の時計（テストで差し替える）
+ */
+export function createBrightLimiter(now = () => (typeof performance !== "undefined" ? performance.now() : Date.now())) {
+  let events = [];
+  return {
+    /** atMs の時刻に1回足してよいか（よければ数える）。 */
+    allowAt(atMs) {
+      const t = now();
+      events = events.filter((at) => at > t - 1000);
+      const trial = [...events, atMs].sort((a, b) => a - b);
+      for (let i = 0; i < trial.length; i += 1) {
+        let inWindow = 0;
+        for (let j = i; j < trial.length && trial[j] - trial[i] < 1000; j += 1) inWindow += 1;
+        if (inWindow > MAX_GLOWS_PER_SECOND) return false;
+      }
+      events.push(atMs);
+      return true;
+    },
+    /** いま1回足してよいか。 */
+    allow() {
+      return this.allowAt(now());
+    },
+  };
+}
+
 /** 光の設定を上限の中へ（明るさ・消える速さ）。 */
 export function clampGlow({ alpha = 0.4, lifeMs = 400 } = {}) {
   return {

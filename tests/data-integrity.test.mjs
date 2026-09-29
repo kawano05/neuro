@@ -191,7 +191,25 @@ test("the redesign's settings survive a reload and fall back on unknown values",
     // 打ち合わせで「笑い声があるとすごくいい」と言われた。既定で拍手と笑い声。
     assert.equal(prefs.cheer, "both");
   });
-  assert.equal(defaults.playPrefs["color-legacy"].background, "dark", "真っ暗な画面から出てくる");
+  // 押すと 出てくる の背景は海が既定。「黒い画面から絵が出る」形（暗い）も選べるまま残す
+  // （見えにくさのある子には、黒い地のほうが絵を見つけやすいことがある）。海はこの遊びだけ。
+  assert.equal(defaults.playPrefs["color-legacy"].background, "sea", "海の中で動物が出てくる");
+  assert.equal(
+    sanitizeState({ settings: { playPrefs: { "color-legacy": { background: "dark" } } } }).settings.playPrefs["color-legacy"].background,
+    "dark"
+  );
+  assert.equal(
+    sanitizeState({ settings: { playPrefs: { balloon: { background: "sea" } } } }).settings.playPrefs.balloon.background,
+    "light",
+    "海は押すと 出てくる だけ"
+  );
+  // おおさわぎの、その日のキラキラと服。知らない服・壊れた日付は捨てる。記録を消しても残る（研究の記録ではない）。
+  assert.deepEqual(sanitizeState({}).party, { day: "", sparkles: 0, outfits: [] });
+  assert.deepEqual(
+    sanitizeState({ party: { day: "2026-09-29", sparkles: 12.4, outfits: ["crown", "cape", "hat", "hat"] } }).party,
+    { day: "2026-09-29", sparkles: 12, outfits: ["hat", "crown"] }
+  );
+  assert.deepEqual(sanitizeState({ party: { day: "yesterday", sparkles: 99, outfits: "hat" } }).party, { day: "", sparkles: 0, outfits: [] });
 
   const chosen = sanitizeState({
     settings: {

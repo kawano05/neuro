@@ -8,6 +8,8 @@ import { resolveTextMode, toSpeechText, translate } from "../src/lib/i18n.js";
 import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
 import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLegacy.js";
 import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
+import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS } from "../src/lib/games/partyStage.js";
+import { PARTY_FINAL_BONUS, PARTY_SPARKLES, formatSparkles } from "../src/lib/party.js";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
 // 持つと、辞書を直したときにテストだけが古い文言を主張して落ちる——あるいは
@@ -75,6 +77,7 @@ const checks = [
   ["plays the balloon and coloring games to the end, with live per-game settings", checkBeginnerGamesFlow],
   ["hits every pitch that is swung at and re-pitches a missed one in the baseball game", checkBaseballFlow],
   ["adds effects within the safety rules and never in a measured run", checkEffectsFollowSafetyRules],
+  ["plays the party atmosphere: otter, sparkles, crowd, reward, and a frame that waits", checkPartyAtmosphere],
   ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
   ["speaks with the app's own natural voice, and with the device voice when asked to", checkAppVoiceSpeaks],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
@@ -875,6 +878,94 @@ async function checkColorCompletionFlow(page) {
   await page.locator("#resultHome").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
+}
+
+/**
+ * 遊びの雰囲気「おおさわぎ」（演出の強さ big。src/lib/party.js・games/partyStage.js）。
+ *
+ *   - 押すと 出てくる に、ラッコ・キラキラ・観客・旗が重なり、押すたびに増える
+ *   - 5回目のあと、けっかにキラキラ（ボーナス込み）ともらった服が出る
+ *   - けっかでは、お祝いが終わるまで枠を動かさない（紙吹雪の下で枠を進めない）
+ *   - その日の合計と服が保存される（研究の記録ではない）
+ * 音楽の中身は Web Audio なので、デスクトップの Chromium だけで見る。
+ */
+async function checkPartyAtmosphere(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  await page.evaluate(
+    ({ key }) => {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      saved.settings = { ...(saved.settings || {}), fxLevel: "big" };
+      delete saved.party;
+      localStorage.setItem(key, JSON.stringify(saved));
+    },
+    { key: storageKey }
+  );
+  await page.reload();
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, t("tile.color-legacy.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator("#gameStageContent.module-pop.is-party .party-otter").waitFor({ state: "attached" });
+  const mode = await page.evaluate(() => document.documentElement.lang === "en" ? "en" : "ruby");
+  const snapshot = () =>
+    page.evaluate(() => ({
+      counter: document.querySelector(".party-counter-num")?.textContent || "",
+      fans: document.querySelectorAll(".party-fan.is-on").length,
+      bunting: Boolean(document.querySelector(".party-bunting.is-on")),
+      sea: document.querySelector("#gameStageContent")?.classList.contains("is-sea") || false,
+    }));
+  const start = await snapshot();
+  assert(start.sea, "The pop game must start in the sea by default");
+  assert(start.counter === formatSparkles(0, mode), "The sparkle counter must start at zero");
+  assert(start.fans === 0 && !start.bunting, "The crowd and bunting must arrive only after pressing");
+
+  for (let press = 1; press <= 3; press += 1) {
+    await page.locator("#gameStage").click();
+    await page.waitForTimeout(1000);
+  }
+  const third = await snapshot();
+  assert(third.counter === formatSparkles(PARTY_SPARKLES[2], mode), `After three presses the counter must read ${PARTY_SPARKLES[2]}, got "${third.counter}"`);
+  assert(third.fans >= 4, "The crowd must grow with each press");
+  assert(third.bunting, "The bunting must be up by the third press");
+
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(1000);
+  await page.locator("#gameStage").click();
+  // フィナーレとパレードを見せてから けっかへ進む（PARTY_FINISH_DELAY_MS）。ふだんの待ち（5秒）より長い。
+  await page.waitForFunction(() => document.querySelector("#resultView")?.classList.contains("is-active"), null, {
+    timeout: PARTY_FINISH_DELAY_MS + 4000,
+  });
+  const final = PARTY_SPARKLES.at(-1) * PARTY_FINAL_BONUS;
+  const result = await page.evaluate(() => {
+    const root = document.querySelector("#resultStats .party-result");
+    return {
+      sparkles: Number(root?.dataset.sparkles || 0),
+      reward: root?.querySelector(".party-result-reward")?.textContent || "",
+      hat: Boolean(root?.querySelector(".party-result-otter.has-hat")),
+      focus: Boolean(document.querySelector("#resultView .scan-focus")),
+    };
+  });
+  assert(result.sparkles === final, `The result must show the final sparkles with the bonus, got ${result.sparkles}`);
+  assert(result.reward.includes(t("party.outfit.hat").replace(/\[.*?\]/g, "")), "The first finished play must give the party hat");
+  assert(result.hat, "The otter on the result must wear the new hat");
+  assert(!result.focus, "The frame must wait until the celebration is over");
+  await page.waitForTimeout(PARTY_RESULT_SCAN_DELAY_MS + 600);
+  const scanning = await page.evaluate(() => Boolean(document.querySelector("#resultView .scan-focus")));
+  const autoScan = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").settings?.autoScan !== false, storageKey);
+  if (autoScan) assert(scanning, "The frame must move again after the celebration");
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").party, storageKey);
+  assert(saved?.sparkles === final && saved?.outfits?.join(",") === "hat", `The day's sparkles and the outfit must be saved, got ${JSON.stringify(saved)}`);
+
+  // 元の強さへ戻す（あとの確かめに持ち越さない）。
+  await page.evaluate(
+    ({ key }) => {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      saved.settings = { ...(saved.settings || {}), fxLevel: "normal" };
+      delete saved.party;
+      localStorage.setItem(key, JSON.stringify(saved));
+    },
+    { key: storageKey }
+  );
 }
 
 /**

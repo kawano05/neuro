@@ -17,8 +17,9 @@
 
 import {
   MAX_PARTICLES,
+  MIN_FIREWORK_GAP_S,
   clampGlow,
-  createGlowLimiter,
+  createBrightLimiter,
   fxScale,
 } from "./fxSafety.js";
 import {
@@ -67,6 +68,15 @@ function pathSparkle(g, r) {
   g.quadraticCurveTo(inner * 0.35, inner * 0.35, 0, r);
   g.quadraticCurveTo(-inner * 0.35, inner * 0.35, -r, 0);
   g.quadraticCurveTo(-inner * 0.35, -inner * 0.35, 0, -r);
+  g.closePath();
+}
+
+/** ハート（おおさわぎの粒）。 */
+function pathHeart(g, r) {
+  g.beginPath();
+  g.moveTo(0, r * 0.9);
+  g.bezierCurveTo(-r * 1.25, r * 0.05, -r * 0.6, -r * 0.95, 0, -r * 0.35);
+  g.bezierCurveTo(r * 0.6, -r * 0.95, r * 1.25, r * 0.05, 0, r * 0.9);
   g.closePath();
 }
 
@@ -168,6 +178,7 @@ function drawParticle(g, p) {
     }
   } else {
     if (p.shape === "star") pathStar(g, s * 0.5);
+    else if (p.shape === "heart") pathHeart(g, s * 0.5);
     else pathSparkle(g, s * 0.5);
     g.fill();
     if (s >= OUTLINE_MIN_SIZE) {
@@ -195,7 +206,8 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
   let rafId = null;
   let lastT = 0;
   let emitted = 0;
-  const glowLimiter = createGlowLimiter();
+  // やわらかい光と花火をまとめて数える（どの1秒をとっても3回まで。fxSafety.js）。
+  const brightLimiter = createBrightLimiter();
 
   function resize() {
     if (!canvas) return;
@@ -290,7 +302,7 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
     /** やわらかい光。回数・明るさ・消える速さは安全の上限の中へ。 */
     glow({ x, y, radius = 140, color = "#FFFFFF", alpha = 0.4, lifeMs = 420, delay = 0 } = {}) {
       const s = scale();
-      if (!s.glow || !glowLimiter.allow()) return;
+      if (!s.glow || !brightLimiter.allowAt(doc.defaultView.performance.now() + Math.max(0, delay) * 1000)) return;
       const safe = clampGlow({ alpha: alpha * s.glow, lifeMs });
       emit([spawnGlow({ x, y, radius, color, alpha: safe.alpha, life: safe.lifeMs / 1000, delay })]);
     },
@@ -305,10 +317,13 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
     fireworks({ colors, bursts = 3 } = {}) {
       const s = scale();
       if (!s.fireworks || !ensureCanvas()) return;
+      const t0 = doc.defaultView.performance.now();
       for (let i = 0; i < bursts; i += 1) {
         const x = width * (0.2 + 0.6 * ((i + 0.5) / bursts)) + (Math.random() - 0.5) * width * 0.1;
         const y = height * (0.18 + Math.random() * 0.2);
-        const delay = 0.25 * i;
+        const delay = MIN_FIREWORK_GAP_S * i;
+        // 1発ごとに明るい出来事として数える。上限に当たった発は上げない。
+        if (!brightLimiter.allowAt(t0 + delay * 1000)) continue;
         emit(
           spawnBurst({
             x,

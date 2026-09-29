@@ -14,6 +14,8 @@ export const PALETTES = Object.freeze({
   gold: Object.freeze(["#FFC83D", "#F6AA00", "#FFE9A8", "#FFFFFF"]),
   sea: Object.freeze(["#4DC4FF", "#1FA2E0", "#D8F3FF", "#FFFFFF"]),
   night: Object.freeze(["#FFC83D", "#FFFFFF"]),
+  // おおさわぎ（games/partyStage.js）。黄色（走査の枠の色）を入れない。
+  party: Object.freeze(["#FF8082", "#03AF7A", "#F6AA00", "#4DC4FF", "#D65DB1", "#FF4B00", "#FFFFFF"]),
 });
 
 /** 回ごとに色が増える: 1回目は黄と白、5回目は虹（§3.1）。 */
@@ -267,6 +269,79 @@ export function createFxPresets({ engine, motion }) {
       const { x, y } = engine.pointOf(el);
       engine.ring({ x, y, color, r0: 12, r1: 80, width: 6, life: 0.4 });
       engine.burst({ x, y, count: 12, shapes: ["sparkle", "dot"], colors: [color, "#FFFFFF"], size: [8, 14], gravity: 100 });
+    },
+
+    /**
+     * おおさわぎ: 押したら動物がポンと出る（popAppear の代わり）。輪を2つ、ハートと星。
+     * 回を追うごとに大きく、色が増える。黄色は使わない。
+     */
+    partyPress(figureEl, { k = 0 } = {}) {
+      if (!figureEl) return;
+      const art = figureEl.querySelector("svg") || figureEl;
+      const { x, y } = engine.pointOf(art);
+      const e = escalation(k);
+      const colors = ["#FFFFFF", "#D8F6FF", ...PALETTES.party.slice(0, Math.min(PALETTES.party.length, 2 + k * 2))];
+      engine.ring({ x, y, color: "#FFFFFF", r0: 24, r1: 120 + 28 * k, width: 8, life: 0.5 });
+      engine.ring({ x, y, color: "#D8F6FF", r0: 16, r1: 160 + 26 * k, width: 5, life: 0.6, delay: 0.06 });
+      engine.burst({
+        x,
+        y,
+        count: 22 * e,
+        speed: [340 * Math.sqrt(e), 800 * Math.sqrt(e)],
+        shapes: ["sparkle", "star", "star", "heart", "heart"],
+        colors,
+        size: [18, 34],
+        life: [0.8, 1.4],
+        gravity: 170,
+        drag: 2.6,
+        twinkle: 0.18,
+      });
+      engine.glow({ x, y, radius: 180 + 30 * k, alpha: 0.28 + 0.04 * k, lifeMs: 460 });
+      motion.squash(art, { power: e * 0.7, delayMs: 240 });
+    },
+
+    /** おおさわぎ: キラキラが節目を越えた（数の上ではじける）。 */
+    partyCheer(counterEl) {
+      if (!counterEl) return;
+      const { x, y, rect } = engine.pointOf(counterEl);
+      engine.burst({
+        x,
+        y: y + (rect ? rect.height / 2 : 0),
+        count: 24,
+        speed: [260, 620],
+        angle: Math.PI / 2,
+        spread: Math.PI * 1.2,
+        shapes: ["star", "heart", "sparkle"],
+        colors: PALETTES.party,
+        size: [14, 26],
+        life: [0.7, 1.2],
+        gravity: 320,
+        drag: 2.2,
+      });
+    },
+
+    /** おおさわぎ: 5回目のお祝い（紙吹雪の雨と花火。花火の回数は光の上限の中）。 */
+    partyFinale() {
+      engine.confettiRain({ count: 140, colors: PALETTES.party });
+      engine.fireworks({ colors: PALETTES.party, bursts: 4 });
+    },
+
+    /** おおさわぎ: けっかで、ラッコが服をもらった。 */
+    partyReward(otterEl) {
+      if (!otterEl) return;
+      const { x, y, rect } = engine.pointOf(otterEl);
+      engine.burst({
+        x,
+        y: y - (rect ? rect.height * 0.25 : 0),
+        count: 30,
+        speed: [260, 640],
+        shapes: ["star", "heart", "sparkle"],
+        colors: PALETTES.party,
+        size: [14, 26],
+        life: [0.8, 1.3],
+        gravity: 300,
+        drag: 2.2,
+      });
     },
 
     /**

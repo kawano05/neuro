@@ -28,11 +28,12 @@ import { DIFFICULTY_MODES } from "./difficultyMode.js";
 import { READINESS_STATES } from "./readinessCheck.js";
 import { SELECTABLE_TEXT_MODES, TEXT_MODES } from "./i18n.js";
 import { sanitizeSlotSession } from "./games/slotState.js";
+import { DEFAULT_PARTY, sanitizeParty } from "./party.js";
 
 /**
  * はじめの遊び（失敗の無い遊び）の、遊びごとの見え方と音（settings.playPrefs）。
  *
- *   background … "dark"（真っ暗な画面から出てくる）| "light"
+ *   background … "sea"（海。押すと 出てくる だけ）| "dark"（真っ暗な画面から出てくる）| "light"
  *   sound      … "instrument"（楽器の音）| "pop"（明るい効果音）| "boing"（ボヨーン）
  *                | "creature"（生きものの声。生きものが出る遊びだけ）
  *                | "boom"（びっくりする音。強いので既定にはしない）| "none"
@@ -67,13 +68,24 @@ export const SPEECH_VOICES = new Set(["app", "device"]);
 /**
  * 演出の強さ（settings.fxLevel。src/lib/fx/fxSafety.js の FX_LEVELS と同じ値）。
  * docs/overall-design-2026-09-28.md §4。光・揺れ・粒の上限は強さによらず同じ。
- *   none … 粒・揺れ・紙吹雪を出さない / subtle … ひかえめ / normal … ふつう（既定）/ big … はで
+ *   none … 粒・揺れ・紙吹雪を出さない / subtle … すっきり / normal … にぎやか（既定）/ big … おおさわぎ
+ * 設定の画面では「遊びの雰囲気」として見せる（おおさわぎの中身は src/lib/party.js）。
  * れんしゅうの回のタイミングの遊びでは測定の条件になりうるので、実際に効いていた
  * 強さを session.config.fxLevel に残す（sanitize → CSV まで）。
  */
 export const FX_LEVELS = new Set(["none", "subtle", "normal", "big"]);
 
-export const PLAY_BACKGROUNDS = new Set(["dark", "light"]);
+export const PLAY_BACKGROUNDS = new Set(["sea", "dark", "light"]);
+/**
+ * 遊びごとに選べる背景（並びは設定の画面に出す順）。海は「押すと 出てくる」だけ
+ * （出てくる動物が海の生きもの）。「黒い画面から絵が出る」形も選べるように残す——
+ * 見えにくさのある子には、黒い地のほうが絵を見つけやすいことがある。
+ */
+export const PLAY_BACKGROUNDS_BY_GAME = {
+  "color-legacy": ["sea", "dark", "light"],
+  balloon: ["dark", "light"],
+  coloring: ["dark", "light"],
+};
 export const PLAY_CHEERS = new Set(["both", "applause", "laugh", "none"]);
 /** ボールを打つ遊びの、ボールの速さ（games/baseball.js の PITCH_MS）。 */
 export const PLAY_SPEEDS = new Set(["slow", "normal", "fast"]);
@@ -88,7 +100,7 @@ export const PLAY_SOUNDS_BY_GAME = {
   baseball: ["bat", "instrument", "boing", "none"],
 };
 export const DEFAULT_PLAY_PREFS = {
-  "color-legacy": { background: "dark", sound: "instrument", cheer: "both" },
+  "color-legacy": { background: "sea", sound: "instrument", cheer: "both" },
   balloon: { background: "light", sound: "pop", cheer: "both" },
   coloring: { background: "light", sound: "instrument", cheer: "both" },
   baseball: { speed: "normal", sound: "bat", cheer: "both" },
@@ -104,7 +116,7 @@ function sanitizePlayPrefs(candidate) {
       const cheer =
         entry.cheer === true ? defaults.cheer : entry.cheer === false ? "none" : entry.cheer;
       const validators = {
-        background: (value) => enumOr(value, PLAY_BACKGROUNDS, defaults.background),
+        background: (value) => enumOr(value, new Set(PLAY_BACKGROUNDS_BY_GAME[gameId] || []), defaults.background),
         sound: (value) => enumOr(value, new Set(PLAY_SOUNDS_BY_GAME[gameId]), defaults.sound),
         cheer: () => enumOr(cheer, PLAY_CHEERS, defaults.cheer),
         speed: (value) => enumOr(value, PLAY_SPEEDS, defaults.speed),
@@ -292,6 +304,9 @@ export const defaultState = {
     deploymentNotes: "",
     readiness: readinessItems.reduce((items, item) => ({ ...items, [item.id]: false }), {}),
   },
+  // 遊びの雰囲気「おおさわぎ」の、その日のキラキラと、もらったラッコの服（src/lib/party.js）。
+  // 研究の記録ではない（記録を消しても残す）。
+  party: { ...DEFAULT_PARTY, outfits: [] },
   // 旧v3データとの読み書き互換用。中立UIでは新規付与・表示を行わない。
   arcade: {
     medals: 0,
@@ -1487,6 +1502,7 @@ export function sanitizeState(candidate) {
         return items;
       }, {}),
     },
+    party: sanitizeParty(candidate.party),
     arcade: {
       medals: numberInRange(
         arcade.medals,

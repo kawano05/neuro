@@ -12,6 +12,8 @@ import { displayOffsetMs } from "./rhythm.js";
 import { PRIZE_ART } from "./craneArt.js";
 import { slotSymbolHtml } from "./slotArt.js";
 import { POP_ANIMALS, artSvg, burstSvg } from "../art/hakkiriArt.js";
+import { otterSvg, outfitClasses } from "../art/partyArt.js";
+import { formatSparkles } from "../party.js";
 
 /** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
 export function formatSignedMs(value) {
@@ -367,6 +369,8 @@ function renderCompletionResult(summary, context = {}) {
     summaryText = t("result.completion.summary", { n: presses, m: animals.length });
   }
 
+  if (summary?.party) return renderPartyResult(summary.party, items, summaryText, context);
+
   return `
     <div class="hk-result completion-result">
       <div class="hk-result-items" aria-hidden="true">
@@ -374,6 +378,36 @@ function renderCompletionResult(summary, context = {}) {
         ${items}
       </div>
       <strong class="hk-result-title completion-result-title">${t("result.completion.title")}</strong>
+      <p class="hk-result-summary completion-result-summary">${summaryText}</p>
+    </div>
+  `;
+}
+
+/**
+ * 遊びの雰囲気「おおさわぎ」のけっか（押すと 出てくる）。キラキラの数（数え上げは
+ * games/partyStage.js の revealPartyResult）、その日の合計、もらったラッコの服、会えた動物。
+ * 数は「すごさ」の手ざわりで、点数ではない（何回押しても同じ数になる。失敗が無い）。
+ */
+function renderPartyResult(party, items, summaryText, context = {}) {
+  const t = context.t;
+  const mode = context.mode || "ruby";
+  const sparkles = Number.isFinite(party.sparkles) ? party.sparkles : 0;
+  const dayTotal = Number.isFinite(party.dayTotal) ? party.dayTotal : sparkles;
+  const reward = party.unlocked
+    ? t("party.result.reward", { item: t(`party.outfit.${party.unlocked}`) })
+    : t("party.result.rewardDone");
+  return `
+    <div class="hk-result completion-result party-result" data-sparkles="${sparkles}" data-mode="${mode}">
+      <div class="party-result-main">
+        <span class="party-result-otter is-cheering ${outfitClasses(party.outfits)}" aria-hidden="true">${otterSvg()}</span>
+        <div class="party-result-side">
+          <span class="party-result-label">${t("party.counter")}</span>
+          <strong class="party-result-num">${formatSparkles(sparkles, mode)}</strong>
+          <span class="party-result-today">${t("party.result.today", { n: formatSparkles(dayTotal, mode) })}</span>
+          <span class="party-result-reward">${reward}</span>
+        </div>
+      </div>
+      <div class="hk-result-items" aria-hidden="true">${items}</div>
       <p class="hk-result-summary completion-result-summary">${summaryText}</p>
     </div>
   `;
