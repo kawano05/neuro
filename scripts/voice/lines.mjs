@@ -27,6 +27,7 @@ import { PHRASE_EN, cranePrizes, gameHowTo, letterTasks, matchingTasks, phraseCa
 import { BEGINNER_TARGET_PRESSES } from "../../src/lib/games/beginnerKit.js";
 import { COLOR_TARGET_PRESSES } from "../../src/lib/games/colorLegacy.js";
 import { allStringKeys, joinSpeech, speechLangForText, toSpeechText, translate } from "../../src/lib/i18n.js";
+import { PARTY_OUTFITS } from "../../src/lib/party.js";
 import { splitSpeechChunks, voiceLang } from "../../src/lib/voicePack.js";
 
 /** 表記（利用者が選べるもの）。ふりがな付き漢字は日本語、English は英語で読む。 */
@@ -111,6 +112,16 @@ export function spokenTexts(mode) {
     range(1, COLOR_TARGET_PRESSES - 1).forEach((n) => say(t("color.voice.progress", { name, n }), "color.voice.progress"))
   );
   celebrateWith(t("color.voice.finish", { n: COLOR_TARGET_PRESSES }), "color.voice.finish");
+  // おおさわぎ（games/partyStage.js）: 押した回の「名前！ ほめる言葉」、節目・ボーナス・フィナーレ、
+  // けっかの「やったー！ ○○を もらったよ！」（celebrate）。
+  animalNames(t).forEach((name) =>
+    range(0, 3).forEach((i) => say(t("party.voice.press", { name, praise: t(`party.praise.${i}`) }), "party.voice.press"))
+  );
+  keys
+    .filter((key) => key.startsWith("party.voice.") && key !== "party.voice.press" && !key.startsWith("party.voice.outfit."))
+    .forEach((key) => say(t(key), key));
+  PARTY_OUTFITS.forEach((id) => celebrateWith(t(`party.voice.outfit.${id}`), `party.voice.outfit.${id}`));
+  celebrateWith(t("party.voice.full"), "party.voice.full");
   keys.filter((key) => key.startsWith("baseball.word.")).forEach((key) => say(t(key), key));
   range(1, BEGINNER_TARGET_PRESSES).forEach((h) => celebrateWith(t("baseball.voice.finish", { h }), "baseball.voice.finish"));
   celebrateWith(t("baseball.voice.finishNoHomerun"), "baseball.voice.finishNoHomerun");

@@ -240,6 +240,33 @@ const STRINGS = {
   // 「できたときの声」がありのときだけ言う（この遊びの設定）。
   // 周りが家族だけでも盛り上がるように、と頼まれている（同 §1.7）。
   "color.voice.cheer": { ruby: "やったー！", kanji: "やったー！", kana: "やったー！", en: "Hooray!" },
+  // --- 遊びの雰囲気「おおさわぎ」（src/lib/party.js・games/partyStage.js）。
+  // 押すたびに なかま・音楽・キラキラびん（星がたまる）・観客が重なっていく。
+  // ほめる言葉は前向きなものだけ（はずれの言葉は無い）。
+  "party.half": { ruby: "はんぶん！", kanji: "はんぶん！", kana: "はんぶん！", en: "Half full!" },
+  "party.full": { ruby: "いっぱい！", kanji: "いっぱい！", kana: "いっぱい！", en: "Full!" },
+  "party.voice.half": { ruby: "キラキラ はんぶん！", kanji: "キラキラ はんぶん！", kana: "きらきら はんぶん！", en: "Half a jar!" },
+  "party.voice.overflow": { ruby: "キラキラが あふれた！", kanji: "キラキラが あふれた！", kana: "きらきらが あふれた！", en: "It's overflowing!" },
+  "party.voice.everyone": { ruby: "みんなで おおさわぎ！", kanji: "みんなで おおさわぎ！", kana: "みんなで おおさわぎ！", en: "Party time, everyone!" },
+  "party.result.today": { ruby: "きょうの キラキラびん", kanji: "きょうの キラキラびん", kana: "きょうの きらきらびん", en: "Today's sparkle jars" },
+  "party.nameStamp": { ruby: "{name}！", kanji: "{name}！", kana: "{name}！", en: "{name}!" },
+  "party.oneMore": { ruby: "あと 1つ！", kanji: "あと 1つ！", kana: "あと ひとつ！", en: "Just one more!" },
+  "party.bigParty": { ruby: "おおさわぎ！", kanji: "おおさわぎ！", kana: "おおさわぎ！", en: "Big party!" },
+  "party.praise.0": { ruby: "すごい！", kanji: "すごい！", kana: "すごい！", en: "Amazing!" },
+  "party.praise.1": { ruby: "やったね！", kanji: "やったね！", kana: "やったね！", en: "Well done!" },
+  "party.praise.2": { ruby: "いいね！", kanji: "いいね！", kana: "いいね！", en: "Nice!" },
+  "party.praise.3": { ruby: "さいこう！", kanji: "さいこう！", kana: "さいこう！", en: "Awesome!" },
+  "party.voice.press": { ruby: "{name}！ {praise}", kanji: "{name}！ {praise}", kana: "{name}！ {praise}", en: "{name}! {praise}" },
+  "party.voice.oneMore": { ruby: "あと ひとつ！", kanji: "あと ひとつ！", kana: "あと ひとつ！", en: "Just one more!" },
+  "party.voice.full": { ruby: "キラキラが いっぱい！", kanji: "キラキラが いっぱい！", kana: "きらきらが いっぱい！", en: "The jar is full!" },
+  "party.voice.outfit.hat": { ruby: "ぼうしを もらったよ！", kanji: "ぼうしを もらったよ！", kana: "ぼうしを もらったよ！", en: "You got a party hat!" },
+  "party.voice.outfit.bow": { ruby: "リボンを もらったよ！", kanji: "リボンを もらったよ！", kana: "りぼんを もらったよ！", en: "You got a bow!" },
+  "party.voice.outfit.crown": { ruby: "おうかんを もらったよ！", kanji: "おうかんを もらったよ！", kana: "おうかんを もらったよ！", en: "You got a crown!" },
+  "party.outfit.hat": { ruby: "ぼうし", kanji: "ぼうし", kana: "ぼうし", en: "party hat" },
+  "party.outfit.bow": { ruby: "リボン", kanji: "リボン", kana: "りぼん", en: "bow" },
+  "party.outfit.crown": { ruby: "おうかん", kanji: "おうかん", kana: "おうかん", en: "crown" },
+  "party.result.reward": { ruby: "ごほうび：{item}", kanji: "ごほうび：{item}", kana: "ごほうび：{item}", en: "Reward: {item}" },
+  "party.result.rewardDone": { ruby: "ごほうび ぜんぶ そろった！", kanji: "ごほうび ぜんぶ そろった！", kana: "ごほうび ぜんぶ そろった！", en: "Full set of rewards!" },
   "tile.rhythm-l1.title": { ruby: "リズム 練習[れんしゅう]", kanji: "リズム 練習", kana: "リズム れんしゅう", en: "Rhythm: practice" },
   "tile.rhythm-l1.desc": { ruby: "音[おと]の合図[あいず]に合[あ]わせて押[お]そう",
     kanji: "音の合図に合わせて押そう",

@@ -29,7 +29,7 @@
 // =====================================================================
 
 import { isMeasurementMode } from "../difficultyMode.js";
-import { PLAY_SOUNDS_BY_GAME } from "../state.js";
+import { PLAY_BACKGROUNDS_BY_GAME, PLAY_SOUNDS_BY_GAME } from "../state.js";
 
 /** 音の選択肢の名前（支援者の画面の言葉）。 */
 const SOUND_LABELS = {
@@ -71,15 +71,15 @@ function soundGroup(gameId, label) {
  * 音は遊びごとに選べる、と打ち合わせで言われた（docs/design-renewal-2026-09-25.md §1.7）。
  * key は settings の中の場所（"playPrefs.balloon.sound" のような点つなぎ）。
  */
+// 海は「押すと 出てくる」だけ（state.js の PLAY_BACKGROUNDS_BY_GAME）。
+const BACKGROUND_LABELS = { sea: "海", dark: "暗い", light: "明るい" };
+
 function beginnerGroups(gameId) {
   return [
     {
       key: `playPrefs.${gameId}.background`,
       label: "遊ぶ画面の背景",
-      options: [
-        ["dark", "暗い"],
-        ["light", "明るい"],
-      ],
+      options: PLAY_BACKGROUNDS_BY_GAME[gameId].map((value) => [value, BACKGROUND_LABELS[value]]),
     },
     soundGroup(gameId, "押したときの音"),
     cheerGroup(gameId),

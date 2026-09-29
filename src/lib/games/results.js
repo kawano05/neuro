@@ -12,6 +12,8 @@ import { displayOffsetMs } from "./rhythm.js";
 import { PRIZE_ART } from "./craneArt.js";
 import { slotSymbolHtml } from "./slotArt.js";
 import { POP_ANIMALS, artSvg, burstSvg } from "../art/hakkiriArt.js";
+import { otterSvg, outfitClasses } from "../art/partyArt.js";
+import { fullJarHtml, todayJarsHtml } from "./partyStage.js";
 
 /** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
 export function formatSignedMs(value) {
@@ -367,6 +369,8 @@ function renderCompletionResult(summary, context = {}) {
     summaryText = t("result.completion.summary", { n: presses, m: animals.length });
   }
 
+  if (summary?.party) return renderPartyResult(summary.party, items, summaryText, context);
+
   return `
     <div class="hk-result completion-result">
       <div class="hk-result-items" aria-hidden="true">
@@ -374,6 +378,35 @@ function renderCompletionResult(summary, context = {}) {
         ${items}
       </div>
       <strong class="hk-result-title completion-result-title">${t("result.completion.title")}</strong>
+      <p class="hk-result-summary completion-result-summary">${summaryText}</p>
+    </div>
+  `;
+}
+
+/**
+ * 遊びの雰囲気「おおさわぎ」のけっか（押すと 出てくる）。星でいっぱいのキラキラびん、
+ * その日にいっぱいにしたびんの並び、もらったラッコの服、会えた動物。
+ * 数ではなく、びんと星で見せる（数字を読まない子にも分かるように）。見せ方は
+ * games/partyStage.js の revealPartyResult。
+ */
+function renderPartyResult(party, items, summaryText, context = {}) {
+  const t = context.t;
+  const stars = Number.isFinite(party.stars) ? party.stars : 15;
+  const reward = party.unlocked
+    ? t("party.result.reward", { item: t(`party.outfit.${party.unlocked}`) })
+    : t("party.result.rewardDone");
+  return `
+    <div class="hk-result completion-result party-result" data-stars="${stars}">
+      <div class="party-result-main">
+        <span class="party-result-otter is-cheering ${outfitClasses(party.outfits)}" aria-hidden="true">${otterSvg()}</span>
+        ${fullJarHtml(stars)}
+        <div class="party-result-side">
+          <span class="party-result-label">${t("party.result.today")}</span>
+          <span class="party-today" aria-hidden="true">${todayJarsHtml(party.jarsToday)}</span>
+          <span class="party-result-reward">${reward}</span>
+        </div>
+      </div>
+      <div class="hk-result-items" aria-hidden="true">${items}</div>
       <p class="hk-result-summary completion-result-summary">${summaryText}</p>
     </div>
   `;

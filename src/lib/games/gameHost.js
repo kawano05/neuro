@@ -58,6 +58,8 @@ import {
 import { tileThemeFor } from "../homeTheme.js";
 import { createGameSettings } from "./gameSettings.js";
 import { resolveReadinessState } from "../readinessCheck.js";
+import { applyPartyResult, localDayKey } from "../party.js";
+import { PARTY_RESULT_SCAN_DELAY_MS, revealPartyResult } from "./partyStage.js";
 
 export function createGameHost(ctx) {
   const { state, elements, scan, announce, save, logEvent } = ctx;
@@ -214,6 +216,17 @@ export function createGameHost(ctx) {
         state.sessions || [],
         state.evaluation.participantId
       ),
+      // 遊びの雰囲気「おおさわぎ」の、もらったラッコの服と、その日にいっぱいにしたびんの数
+      // （src/lib/party.js）。遊び終えたとき（5回目）に claim して保存する。研究の記録には入れない。
+      party: {
+        outfits: () => [...(state.party?.outfits || [])],
+        claim() {
+          const outcome = applyPartyResult(state.party, localDayKey());
+          state.party = outcome.party;
+          save();
+          return outcome;
+        },
+      },
       setProgress(text) {
         elements.gameProgress.textContent = text;
       },
@@ -342,6 +355,7 @@ export function createGameHost(ctx) {
   function launch(gameId, options = {}) {
     const module = findGameModule(gameId);
     if (!module || module.enabled === false) return;
+    ctx.audio.music?.stop(0.3);
     // 効果音の場面（src/lib/audio.js の effectOutputGain）。合図のある遊び
     // （taskType あり）は今までどおりの大きさ、測定の課題でない遊びは持ち上げる。
     ctx.audio.setProfile?.(module.taskType ? "task" : "play");
@@ -406,7 +420,15 @@ export function createGameHost(ctx) {
     state.currentView = "result";
     save();
     ctx.renderAll();
-    scan.restartIfNeeded();
+    if (summary?.party) {
+      // おおさわぎのけっかは、数え上げ・ラッコ・ごほうび・花火を見せてから枠を動かす
+      // （紙吹雪の下で枠を進めない。docs/party-mode-2026-09-29.md）。
+      window.setTimeout(() => {
+        if (state.currentView === "result") scan.restartIfNeeded();
+      }, PARTY_RESULT_SCAN_DELAY_MS);
+    } else {
+      scan.restartIfNeeded();
+    }
   }
 
   /**
@@ -421,6 +443,7 @@ export function createGameHost(ctx) {
     // 保留を落とし、読み上げも黙らせる（ホームに戻ってから喋り続けない）。
     pendingModule = null;
     ctx.audio.stopSpeech();
+    ctx.audio.music?.stop(0.3);
     elements.gameStageContent.classList.remove("is-ready");
     destroyActive();
     ctx.audio.setProfile?.("play");
@@ -571,12 +594,16 @@ export function createGameHost(ctx) {
         if (revealPending && state.currentView === "result") {
           revealPending = false;
           // 描いた次のコマで、星を飛び込ませる（位置が決まってから）。
-          window.requestAnimationFrame(() =>
+          window.requestAnimationFrame(() => {
+            if (elements.resultStats.querySelector(".party-result")) {
+              revealPartyResult(elements.resultStats, { fx: ctx.fx, audio: ctx.audio });
+              return;
+            }
             ctx.fx?.revealResult(elements.resultStats, {
               playStar: (index, delayS) =>
                 ctx.audio.playChime(RESULT_STAR_NOTES[index] ?? RESULT_STAR_NOTES.at(-1), { delayS, durationS: 0.9 }),
-            })
-          );
+            });
+          });
         }
       } else if (lastResultSummary) {
         elements.resultStats.innerHTML = `<p class="panel-note">${ctx.tHtml("result.none")}</p>`;

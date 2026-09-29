@@ -1234,6 +1234,12 @@
    ]
   },
   {
+   "text": "あとひとつ！",
+   "from": [
+    "party.voice.oneMore"
+   ]
+  },
+  {
    "text": "ありがとう",
    "from": [
     "voca.phrase"
@@ -1249,6 +1255,12 @@
    "text": "いいえ",
    "from": [
     "voca.phrase"
+   ]
+  },
+  {
+   "text": "いいね！",
+   "from": [
+    "party.voice.press"
    ]
   },
   {
@@ -1285,6 +1297,13 @@
    "text": "お",
    "from": [
     "letters.option"
+   ]
+  },
+  {
+   "text": "おうかんをもらったよ！",
+   "from": [
+    "party.voice.outfit.crown",
+    "party.voice.outfit.crown + cheer"
    ]
   },
   {
@@ -1355,6 +1374,12 @@
    ]
   },
   {
+   "text": "さいこう！",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
    "text": "さかなつり",
    "from": [
     "tile.fishing-corner.title"
@@ -1382,6 +1407,12 @@
    "text": "しかく",
    "from": [
     "matching.option"
+   ]
+  },
+  {
+   "text": "すごい！",
+   "from": [
+    "party.voice.press"
    ]
   },
   {
@@ -1599,6 +1630,13 @@
    ]
   },
   {
+   "text": "ぼうしをもらったよ！",
+   "from": [
+    "party.voice.outfit.hat",
+    "party.voice.outfit.hat + cheer"
+   ]
+  },
+  {
    "text": "ま",
    "from": [
     "letters.option"
@@ -1614,6 +1652,12 @@
    "text": "み",
    "from": [
     "letters.option"
+   ]
+  },
+  {
+   "text": "みんなでおおさわぎ！",
+   "from": [
+    "party.voice.everyone"
    ]
   },
   {
@@ -1653,13 +1697,23 @@
    ]
   },
   {
+   "text": "やったね！",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
    "text": "やったー！",
    "from": [
     "balloon.voice.finish + cheer",
     "baseball.voice.finish + cheer",
     "baseball.voice.finishNoHomerun + cheer",
     "color.voice.finish + cheer",
-    "coloring.voice.finish + cheer"
+    "coloring.voice.finish + cheer",
+    "party.voice.full + cheer",
+    "party.voice.outfit.bow + cheer",
+    "party.voice.outfit.crown + cheer",
+    "party.voice.outfit.hat + cheer"
    ]
   },
   {
@@ -1744,7 +1798,8 @@
   {
    "text": "イルカ！",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
    ]
   },
   {
@@ -1757,7 +1812,8 @@
   {
    "text": "カニ！",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
    ]
   },
   {
@@ -1770,7 +1826,27 @@
   {
    "text": "カメ！",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "キラキラがあふれた！",
+   "from": [
+    "party.voice.overflow"
+   ]
+  },
+  {
+   "text": "キラキラがいっぱい！",
+   "from": [
+    "party.voice.full",
+    "party.voice.full + cheer"
+   ]
+  },
+  {
+   "text": "キラキラはんぶん！",
+   "from": [
+    "party.voice.half"
    ]
   },
   {
@@ -1783,7 +1859,8 @@
   {
    "text": "クジラ！",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
    ]
   },
   {
@@ -1796,7 +1873,8 @@
   {
    "text": "タコ！",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
    ]
   },
   {
@@ -1928,6 +2006,13 @@
    "text": "リズム練習。",
    "from": [
     "tile.rhythm-l1.title (ready)"
+   ]
+  },
+  {
+   "text": "リボンをもらったよ！",
+   "from": [
+    "party.voice.outfit.bow",
+    "party.voice.outfit.bow + cheer"
    ]
   },
   {
@@ -2971,6 +3056,18 @@
    ]
   },
   {
+   "text": "Amazing!",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "Awesome!",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
    "text": "Back",
    "from": [
     "home.back"
@@ -3040,13 +3137,15 @@
   {
    "text": "Crab!",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
    ]
   },
   {
    "text": "Dolphin!",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
    ]
   },
   {
@@ -3128,6 +3227,12 @@
    ]
   },
   {
+   "text": "Half a jar!",
+   "from": [
+    "party.voice.half"
+   ]
+  },
+  {
    "text": "Help",
    "from": [
     "voca.category"
@@ -3188,7 +3293,11 @@
     "baseball.voice.finish + cheer",
     "baseball.voice.finishNoHomerun + cheer",
     "color.voice.finish + cheer",
-    "coloring.voice.finish + cheer"
+    "coloring.voice.finish + cheer",
+    "party.voice.full + cheer",
+    "party.voice.outfit.bow + cheer",
+    "party.voice.outfit.crown + cheer",
+    "party.voice.outfit.hat + cheer"
    ]
   },
   {
@@ -3295,6 +3404,18 @@
    ]
   },
   {
+   "text": "It's overflowing!",
+   "from": [
+    "party.voice.overflow"
+   ]
+  },
+  {
+   "text": "Just one more!",
+   "from": [
+    "party.voice.oneMore"
+   ]
+  },
+  {
    "text": "Learn & tell",
    "from": [
     "tile.learning-corner.title"
@@ -3345,6 +3466,12 @@
    ]
   },
   {
+   "text": "Nice!",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
    "text": "No",
    "from": [
     "voca.phrase"
@@ -3353,7 +3480,8 @@
   {
    "text": "Octopus!",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
    ]
   },
   {
@@ -3379,6 +3507,12 @@
    "from": [
     "howto.endless.crane",
     "howto.endless.fishing"
+   ]
+  },
+  {
+   "text": "Party time, everyone!",
+   "from": [
+    "party.voice.everyone"
    ]
   },
   {
@@ -3780,6 +3914,13 @@
    ]
   },
   {
+   "text": "The jar is full!",
+   "from": [
+    "party.voice.full",
+    "party.voice.full + cheer"
+   ]
+  },
+  {
    "text": "Then one high note follows.",
    "from": [
     "howto.rhythm-l1.2"
@@ -3812,7 +3953,8 @@
   {
    "text": "Turtle!",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
    ]
   },
   {
@@ -3822,9 +3964,16 @@
    ]
   },
   {
+   "text": "Well done!",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
    "text": "Whale!",
    "from": [
-    "color.voice.progress"
+    "color.voice.progress",
+    "party.voice.press"
    ]
   },
   {
@@ -4037,6 +4186,27 @@
     "rhythm.voice.finish",
     "slot.voice.finish",
     "slot.voice.finishNone"
+   ]
+  },
+  {
+   "text": "You got a bow!",
+   "from": [
+    "party.voice.outfit.bow",
+    "party.voice.outfit.bow + cheer"
+   ]
+  },
+  {
+   "text": "You got a crown!",
+   "from": [
+    "party.voice.outfit.crown",
+    "party.voice.outfit.crown + cheer"
+   ]
+  },
+  {
+   "text": "You got a party hat!",
+   "from": [
+    "party.voice.outfit.hat",
+    "party.voice.outfit.hat + cheer"
    ]
   },
   {

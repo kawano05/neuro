@@ -21,6 +21,7 @@
 // =====================================================================
 
 import { resolveTextMode, speechLangForText, toSpeechText } from "./i18n.js";
+import { createPartyMusic } from "./partyMusic.js";
 import { pickVoice } from "./speechVoice.js";
 import { chunkGapS, planVoiceClips, splitSpeechChunks, voiceLang } from "./voicePack.js";
 
@@ -303,6 +304,12 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
   const voiceClips = new Map();
   // ネットの要る声が鳴らなかった時刻（しばらく端末の中の声だけにする）。
   let remoteVoiceFailedAt = -Infinity;
+  // おおさわぎの音楽（partyMusic.js）。効果音と同じ出口を通し、効果音を切れば鳴らない。
+  const music = createPartyMusic({
+    getContext: () => ensureContext(),
+    getOutput: (ctx) => effectOut(ctx),
+    enabled: () => getSettings().soundEnabled !== false,
+  });
 
   function setProfile(next) {
     profile = next === "task" ? "task" : "play";
@@ -537,6 +544,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
           voiceSources.push(source);
           at += buffer.duration + (index < buffers.length - 1 ? chunkGapS(chunks[index]) : 0);
         });
+        // 声のあいだは音楽を下げる（声が音楽に埋もれないように）。
+        music.duck(at - ctx.currentTime);
       })
       .catch(() => {
         if (token === speechToken) fallback();
@@ -641,6 +650,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     }
     const token = silenceSpeech();
     if (!speakWithDevice(spokenText, lang, volume, token)) return false;
+    // 端末の声は長さが分からないので、短い文ぶん下げる。
+    music.duck(1.8);
     reportSpeech({ text: spokenText, lang, via: "device", volume });
     return true;
   }
@@ -1395,6 +1406,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
 
   return {
     speak,
+    /** おおさわぎの音楽（partyMusic.js）。 */
+    music,
     speakOrAnnounce,
     speakOrAnnounceLater,
     stopSpeech,

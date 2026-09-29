@@ -167,10 +167,24 @@ export function celebrate(ctx, prefs, doneText) {
  * @param {() => string} options.finishSpeech
  * @param {() => object} options.finishSummary けっかへ渡す summary
  * @param {(pressIndex: number) => void} [options.onFinale] 5回目の大きな絵
+ * @param {(audio: object, style: string) => void} [options.finishSound] 5回目の音（既定はファンファーレ。
+ *   おおさわぎは音楽の調に合わせた音を鳴らすので、ここで差し替える）
  */
 export function createBeginnerFlow(
   ctx,
-  { gameId, target = BEGINNER_TARGET_PRESSES, ttsDelayMs, finishDelayMs, logLabel, onPress, progressSpeech, finishSpeech, finishSummary, onFinale = () => {} }
+  {
+    gameId,
+    target = BEGINNER_TARGET_PRESSES,
+    ttsDelayMs,
+    finishDelayMs,
+    logLabel,
+    onPress,
+    progressSpeech,
+    finishSpeech,
+    finishSummary,
+    onFinale = () => {},
+    finishSound = playFinishSound,
+  }
 ) {
   const { settings, audio, voiceFeedback, logEvent, finish } = ctx;
   let count = 0;
@@ -197,7 +211,7 @@ export function createBeginnerFlow(
         voiceFeedback(progressSpeech(remaining, pressIndex));
       }, ttsDelayMs);
     } else {
-      playFinishSound(audio, prefs.sound);
+      finishSound(audio, prefs.sound);
       onFinale(pressIndex);
       // 最後の絵とフィナーレを見せてから、けっかへ。けっかが出るのと同時に、
       // 歓声と拍手・笑い声・「やったー」（この遊びの設定で切れる）。
@@ -218,6 +232,8 @@ export function createBeginnerFlow(
     count: () => count,
     /** 最後の1回を押したあとか（けっかへ向かっている）。 */
     finishing: () => count >= target,
+    /** けっかへ進んだか（中断ではなく、最後まで遊んだ）。 */
+    delivered: () => finishDelivered,
     reset() {
       count = 0;
       finishDelivered = false;

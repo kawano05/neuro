@@ -19,13 +19,19 @@
 //   - 強制終了（おわる／Esc）は結果を経由せずホームへ戻る。
 //
 // 見え方と音は、遊びの中の「この遊びの設定」で変えられる（games/gameSettings.js、
-// settings.playPrefs["color-legacy"]）。はじめの遊び3つの共通部品は beginnerKit.js。
-// 測定の課題ではないので記録の条件には入れない。
+// settings.playPrefs["color-legacy"]）。背景は海（既定）・暗い・明るい。はじめの遊び3つの
+// 共通部品は beginnerKit.js。測定の課題ではないので記録の条件には入れない。
+//
+// 遊びの雰囲気が「おおさわぎ」（演出の強さ big）のときは、ラッコ・音楽・キラキラびん・観客を
+// 重ねる（games/partyStage.js）。押して出てくる動物と、押したときの音はいつもと同じ。
 // =====================================================================
 
 import { colorLegacyPreset, switchModules } from "../content.js";
 import { POP_ANIMALS, artSvg } from "../art/hakkiriArt.js";
+import { seaSceneHtml } from "../art/partyArt.js";
+import { isPartyLevel } from "../party.js";
 import { createBeginnerFlow, playPrefsFor, progressDotsHtml } from "./beginnerKit.js";
+import { PARTY_FINISH_DELAY_MS, createPartyStage } from "./partyStage.js";
 
 const GAME_ID = "color-legacy";
 
@@ -47,8 +53,14 @@ export function popAnimalFor(pressIndex) {
 export function createColorLegacyGame(ctx) {
   const { settings, t, tHtml, fx } = ctx;
   const legacyModule = switchModules.find((module) => module.id === "color") || switchModules[0];
+  // 遊びの雰囲気は遊びのあいだ変わらない（支援者の設定で変える）ので、始めに決める。
+  const party = isPartyLevel(fx?.level?.());
 
   let stageEl = null;
+  // 描き直すのは mainEl だけ。海の背景（seaEl）とおおさわぎの舞台は、押すたびに作り直さない。
+  let mainEl = null;
+  let seaEl = null;
+  let partyStage = null;
   // いま出ている動物（押した回の番号）。-1 なら真っ暗。
   let shownIndex = -1;
   let fading = false;
@@ -68,7 +80,7 @@ export function createColorLegacyGame(ctx) {
     gameId: GAME_ID,
     target: COLOR_TARGET_PRESSES,
     ttsDelayMs: COLOR_TTS_DELAY_MS,
-    finishDelayMs: COLOR_FINISH_DELAY_MS,
+    finishDelayMs: party ? PARTY_FINISH_DELAY_MS : COLOR_FINISH_DELAY_MS,
     // 既存の評価/ログ連動（views/evaluation.js の countEntry が entry.type を見て
     // 自動集計する仕組み）を維持するため、旧 switcher.js と同じ label を残す。
     logLabel: legacyModule.name,
@@ -79,7 +91,8 @@ export function createColorLegacyGame(ctx) {
       render();
       // ② 起きたこと: 動物がポンと出て、輪ときらきら（回を追うごとに大きく）。
       const figure = stageEl?.querySelector(".pop-figure");
-      fx?.popAppear(figure, { k: pressIndex });
+      if (partyStage) partyStage.press(pressIndex, figure, popAnimalFor(pressIndex).id);
+      else fx?.popAppear(figure, { k: pressIndex });
       fx?.motion.stamp(figure?.querySelector(".pop-word"), { delayMs: 150 });
       // ③ 進みぐあい: 埋まった点が弾む。
       const done = stageEl?.querySelectorAll(".pop-dot.is-done");
@@ -90,19 +103,39 @@ export function createColorLegacyGame(ctx) {
     // 動物の名前を言う（ことばを覚える入口にもなる）。読み上げが OFF なら
     // live region へ回る（audio.speakOrAnnounce）。
     progressSpeech: (remaining, pressIndex) =>
-      t("color.voice.progress", { name: t(`animal.${popAnimalFor(pressIndex).id}`), n: remaining }),
-    finishSpeech: () => t("color.voice.finish", { n: COLOR_TARGET_PRESSES }),
+      partyStage
+        ? partyStage.pressSpeech(pressIndex, popAnimalFor(pressIndex).id)
+        : t("color.voice.progress", { name: t(`animal.${popAnimalFor(pressIndex).id}`), n: remaining }),
+    finishSpeech: () => (partyStage ? partyStage.rewardSpeech() : t("color.voice.finish", { n: COLOR_TARGET_PRESSES })),
     finishSummary: () => ({
       presses: COLOR_TARGET_PRESSES,
       animals: Array.from({ length: COLOR_TARGET_PRESSES }, (_, index) => popAnimalFor(index).id),
+      ...(partyStage ? { party: partyStage.summary() } : {}),
     }),
-    // ⑤ フィナーレ: 最後の動物が跳ねて、星の輪と紙吹雪。
-    onFinale: () => fx?.finale(stageEl, { hero: stageEl?.querySelector(".pop-figure") }),
+    // ⑤ フィナーレ: 最後の動物が跳ねて、星の輪と紙吹雪。おおさわぎは、ラッコが大きくなって
+    // パレードと花火（ファンファーレも partyStage が音楽の調で鳴らす）。
+    onFinale: () => {
+      if (partyStage) partyStage.finale();
+      else fx?.finale(stageEl, { hero: stageEl?.querySelector(".pop-figure") });
+    },
+    ...(party ? { finishSound: () => {} } : {}),
   });
 
   function render() {
     if (!stageEl) return;
-    stageEl.classList.toggle("is-light", playPrefsFor(settings, GAME_ID).background === "light");
+    const background = playPrefsFor(settings, GAME_ID).background;
+    stageEl.classList.toggle("is-light", background === "light");
+    stageEl.classList.toggle("is-sea", background === "sea");
+    if (background === "sea" && !seaEl) {
+      seaEl = stageEl.ownerDocument.createElement("span");
+      seaEl.className = "pop-sea";
+      seaEl.setAttribute("aria-hidden", "true");
+      seaEl.innerHTML = seaSceneHtml();
+      stageEl.prepend(seaEl);
+    } else if (background !== "sea" && seaEl) {
+      seaEl.remove();
+      seaEl = null;
+    }
 
     const step = flow.count();
     let center;
@@ -127,7 +160,7 @@ export function createColorLegacyGame(ctx) {
       center = `<span class="pop-count">${tHtml("color.count", { n: step })}</span>`;
     }
 
-    stageEl.innerHTML = `
+    mainEl.innerHTML = `
       <span class="pop-stage" aria-hidden="true">${center}</span>
       ${progressDotsHtml(step, COLOR_TARGET_PRESSES)}
     `;
@@ -160,7 +193,26 @@ export function createColorLegacyGame(ctx) {
       shownIndex = -1;
       fading = false;
       stageEl.classList.add("module-pop");
+      stageEl.classList.toggle("is-party", party);
+      stageEl.innerHTML = "";
+      mainEl = stageEl.ownerDocument.createElement("span");
+      mainEl.className = "pop-main";
+      stageEl.append(mainEl);
       render();
+      if (party) {
+        partyStage = createPartyStage({
+          host: stageEl,
+          t,
+          tHtml,
+          fx,
+          audio: ctx.audio,
+          voiceFeedback: ctx.voiceFeedback,
+          outfits: ctx.party?.outfits?.() ?? [],
+          claim: ctx.party?.claim ?? null,
+        });
+        // 遊び始めたら静かな曲から（押すたびに楽器が重なっていく）。
+        ctx.audio?.music?.start(0);
+      }
     },
     handleInput,
     /**
@@ -172,14 +224,19 @@ export function createColorLegacyGame(ctx) {
     },
     destroy() {
       clearTimers();
+      // けっかへ進んだときは音楽を残す（けっかのお祝いのあとで止める）。中断ならすぐ止める。
+      partyStage?.destroy({ keepMusic: flow.delivered() });
+      partyStage = null;
       flow.destroy();
       // 出ていた動物も消す。中断（おわる／Esc）のあとに、見えない画面へ
       // 絵を残しておかない（次に開いたとき一瞬だけ前の絵が出る）。
       if (stageEl) {
-        stageEl.classList.remove("module-pop", "is-light");
+        stageEl.classList.remove("module-pop", "is-light", "is-sea", "is-party");
         stageEl.innerHTML = "";
       }
       stageEl = null;
+      mainEl = null;
+      seaEl = null;
     },
   };
 }
