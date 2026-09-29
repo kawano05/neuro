@@ -13,7 +13,7 @@ import { PRIZE_ART } from "./craneArt.js";
 import { slotSymbolHtml } from "./slotArt.js";
 import { POP_ANIMALS, artSvg, burstSvg } from "../art/hakkiriArt.js";
 import { otterSvg, outfitClasses } from "../art/partyArt.js";
-import { formatSparkles } from "../party.js";
+import { fullJarHtml, todayJarsHtml } from "./partyStage.js";
 
 /** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
 export function formatSignedMs(value) {
@@ -384,26 +384,25 @@ function renderCompletionResult(summary, context = {}) {
 }
 
 /**
- * 遊びの雰囲気「おおさわぎ」のけっか（押すと 出てくる）。キラキラの数（数え上げは
- * games/partyStage.js の revealPartyResult）、その日の合計、もらったラッコの服、会えた動物。
- * 数は「すごさ」の手ざわりで、点数ではない（何回押しても同じ数になる。失敗が無い）。
+ * 遊びの雰囲気「おおさわぎ」のけっか（押すと 出てくる）。星でいっぱいのキラキラびん、
+ * その日にいっぱいにしたびんの並び、もらったラッコの服、会えた動物。
+ * 数ではなく、びんと星で見せる（数字を読まない子にも分かるように）。見せ方は
+ * games/partyStage.js の revealPartyResult。
  */
 function renderPartyResult(party, items, summaryText, context = {}) {
   const t = context.t;
-  const mode = context.mode || "ruby";
-  const sparkles = Number.isFinite(party.sparkles) ? party.sparkles : 0;
-  const dayTotal = Number.isFinite(party.dayTotal) ? party.dayTotal : sparkles;
+  const stars = Number.isFinite(party.stars) ? party.stars : 15;
   const reward = party.unlocked
     ? t("party.result.reward", { item: t(`party.outfit.${party.unlocked}`) })
     : t("party.result.rewardDone");
   return `
-    <div class="hk-result completion-result party-result" data-sparkles="${sparkles}" data-mode="${mode}">
+    <div class="hk-result completion-result party-result" data-stars="${stars}">
       <div class="party-result-main">
         <span class="party-result-otter is-cheering ${outfitClasses(party.outfits)}" aria-hidden="true">${otterSvg()}</span>
+        ${fullJarHtml(stars)}
         <div class="party-result-side">
-          <span class="party-result-label">${t("party.counter")}</span>
-          <strong class="party-result-num">${formatSparkles(sparkles, mode)}</strong>
-          <span class="party-result-today">${t("party.result.today", { n: formatSparkles(dayTotal, mode) })}</span>
+          <span class="party-result-label">${t("party.result.today")}</span>
+          <span class="party-today" aria-hidden="true">${todayJarsHtml(party.jarsToday)}</span>
           <span class="party-result-reward">${reward}</span>
         </div>
       </div>

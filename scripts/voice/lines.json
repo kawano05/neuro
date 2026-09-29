@@ -7,27 +7,9 @@
    ]
   },
   {
-   "text": "1000まん！",
-   "from": [
-    "party.voice.finale"
-   ]
-  },
-  {
-   "text": "100まんとっぱ！",
-   "from": [
-    "party.voice.milestone.3"
-   ]
-  },
-  {
    "text": "100パーセント合ったよ",
    "from": [
     "rhythm.voice.finish"
-   ]
-  },
-  {
-   "text": "10まんとっぱ！",
-   "from": [
-    "party.voice.milestone.2"
    ]
   },
   {
@@ -268,12 +250,6 @@
    "text": "19回ぴったり！",
    "from": [
     "slot.voice.finish"
-   ]
-  },
-  {
-   "text": "1まんとっぱ！",
-   "from": [
-    "party.voice.milestone.1"
    ]
   },
   {
@@ -1331,12 +1307,6 @@
    ]
   },
   {
-   "text": "おおさわぎだ！",
-   "from": [
-    "party.voice.finale"
-   ]
-  },
-  {
    "text": "おしい！",
    "from": [
     "crane.voice.miss",
@@ -1685,6 +1655,12 @@
    ]
   },
   {
+   "text": "みんなでおおさわぎ！",
+   "from": [
+    "party.voice.everyone"
+   ]
+  },
+  {
    "text": "もういちど",
    "from": [
     "result.retry"
@@ -1855,10 +1831,22 @@
    ]
   },
   {
+   "text": "キラキラがあふれた！",
+   "from": [
+    "party.voice.overflow"
+   ]
+  },
+  {
    "text": "キラキラがいっぱい！",
    "from": [
     "party.voice.full",
     "party.voice.full + cheer"
+   ]
+  },
+  {
+   "text": "キラキラはんぶん！",
+   "from": [
+    "party.voice.half"
    ]
   },
   {
@@ -1964,12 +1952,6 @@
    "text": "ホームラン！",
    "from": [
     "baseball.word.homerun"
-   ]
-  },
-  {
-   "text": "ボーナス2ばい！",
-   "from": [
-    "party.voice.bonus"
    ]
   },
   {
@@ -3042,12 +3024,6 @@
    ]
   },
   {
-   "text": "A hundred thousand!",
-   "from": [
-    "party.voice.milestone.2"
-   ]
-  },
-  {
    "text": "A low note is a boot.",
    "from": [
     "howto.fishing-gonogo.3"
@@ -3173,12 +3149,6 @@
    ]
   },
   {
-   "text": "Double bonus!",
-   "from": [
-    "party.voice.bonus"
-   ]
-  },
-  {
    "text": "Each press stops one reel.",
    "from": [
     "howto.slot-l1.3"
@@ -3254,6 +3224,12 @@
    "text": "Game settings",
    "from": [
     "game.settings"
+   ]
+  },
+  {
+   "text": "Half a jar!",
+   "from": [
+    "party.voice.half"
    ]
   },
   {
@@ -3428,6 +3404,12 @@
    ]
   },
   {
+   "text": "It's overflowing!",
+   "from": [
+    "party.voice.overflow"
+   ]
+  },
+  {
    "text": "Just one more!",
    "from": [
     "party.voice.oneMore"
@@ -3521,16 +3503,16 @@
    ]
   },
   {
-   "text": "One million!",
-   "from": [
-    "party.voice.milestone.3"
-   ]
-  },
-  {
    "text": "One miss ends the run.",
    "from": [
     "howto.endless.crane",
     "howto.endless.fishing"
+   ]
+  },
+  {
+   "text": "Party time, everyone!",
+   "from": [
+    "party.voice.everyone"
    ]
   },
   {
@@ -3848,13 +3830,6 @@
    ]
   },
   {
-   "text": "So many sparkles!",
-   "from": [
-    "party.voice.full",
-    "party.voice.full + cheer"
-   ]
-  },
-  {
    "text": "Start",
    "from": [
     "start.begin"
@@ -3921,18 +3896,6 @@
    ]
   },
   {
-   "text": "Ten million!",
-   "from": [
-    "party.voice.finale"
-   ]
-  },
-  {
-   "text": "Ten thousand!",
-   "from": [
-    "party.voice.milestone.1"
-   ]
-  },
-  {
    "text": "Thank you",
    "from": [
     "voca.phrase"
@@ -3948,6 +3911,13 @@
    "text": "The claw moves across.",
    "from": [
     "howto.crane.1"
+   ]
+  },
+  {
+   "text": "The jar is full!",
+   "from": [
+    "party.voice.full",
+    "party.voice.full + cheer"
    ]
   },
   {
@@ -4004,12 +3974,6 @@
    "from": [
     "color.voice.progress",
     "party.voice.press"
-   ]
-  },
-  {
-   "text": "What a party!",
-   "from": [
-    "party.voice.finale"
    ]
   },
   {

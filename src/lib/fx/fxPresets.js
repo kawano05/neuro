@@ -300,10 +300,10 @@ export function createFxPresets({ engine, motion }) {
       motion.squash(art, { power: e * 0.7, delayMs: 240 });
     },
 
-    /** おおさわぎ: キラキラが節目を越えた（数の上ではじける）。 */
-    partyCheer(counterEl) {
-      if (!counterEl) return;
-      const { x, y, rect } = engine.pointOf(counterEl);
+    /** おおさわぎ: キラキラびんが「はんぶん」「いっぱい」になった（びんの下ではじける）。 */
+    partyCheer(jarEl) {
+      if (!jarEl) return;
+      const { x, y, rect } = engine.pointOf(jarEl);
       engine.burst({
         x,
         y: y + (rect ? rect.height / 2 : 0),
@@ -317,6 +317,26 @@ export function createFxPresets({ engine, motion }) {
         life: [0.7, 1.2],
         gravity: 320,
         drag: 2.2,
+      });
+    },
+
+    /** おおさわぎ: 5回目、びんのふたが飛んで星があふれる。 */
+    partyOverflow(jarEl) {
+      if (!jarEl) return;
+      const { x, y, rect } = engine.pointOf(jarEl);
+      engine.burst({
+        x,
+        y: y - (rect ? rect.height * 0.35 : 0),
+        count: 46,
+        speed: [420, 900],
+        angle: -Math.PI / 2,
+        spread: Math.PI * 0.9,
+        shapes: ["star", "star", "heart", "sparkle"],
+        colors: PALETTES.party,
+        size: [16, 30],
+        life: [1, 1.7],
+        gravity: 520,
+        drag: 1.6,
       });
     },
 

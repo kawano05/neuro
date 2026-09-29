@@ -22,14 +22,13 @@
 // settings.playPrefs["color-legacy"]）。背景は海（既定）・暗い・明るい。はじめの遊び3つの
 // 共通部品は beginnerKit.js。測定の課題ではないので記録の条件には入れない。
 //
-// 遊びの雰囲気が「おおさわぎ」（演出の強さ big）のときは、ラッコ・音楽・キラキラ・観客を
+// 遊びの雰囲気が「おおさわぎ」（演出の強さ big）のときは、ラッコ・音楽・キラキラびん・観客を
 // 重ねる（games/partyStage.js）。押して出てくる動物と、押したときの音はいつもと同じ。
 // =====================================================================
 
 import { colorLegacyPreset, switchModules } from "../content.js";
 import { POP_ANIMALS, artSvg } from "../art/hakkiriArt.js";
 import { seaSceneHtml } from "../art/partyArt.js";
-import { resolveTextMode } from "../i18n.js";
 import { isPartyLevel } from "../party.js";
 import { createBeginnerFlow, playPrefsFor, progressDotsHtml } from "./beginnerKit.js";
 import { PARTY_FINISH_DELAY_MS, createPartyStage } from "./partyStage.js";
@@ -205,7 +204,6 @@ export function createColorLegacyGame(ctx) {
           host: stageEl,
           t,
           tHtml,
-          mode: resolveTextMode(settings),
           fx,
           audio: ctx.audio,
           voiceFeedback: ctx.voiceFeedback,

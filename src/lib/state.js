@@ -304,7 +304,8 @@ export const defaultState = {
     deploymentNotes: "",
     readiness: readinessItems.reduce((items, item) => ({ ...items, [item.id]: false }), {}),
   },
-  // 遊びの雰囲気「おおさわぎ」の、その日のキラキラと、もらったラッコの服（src/lib/party.js）。
+  // 遊びの雰囲気「おおさわぎ」の、その日にいっぱいにしたキラキラびんの数と、もらったラッコの服
+  // （src/lib/party.js）。
   // 研究の記録ではない（記録を消しても残す）。
   party: { ...DEFAULT_PARTY, outfits: [] },
   // 旧v3データとの読み書き互換用。中立UIでは新規付与・表示を行わない。

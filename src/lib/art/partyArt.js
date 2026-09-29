@@ -44,6 +44,48 @@ export function outfitClasses(outfits) {
   return ["hat", "bow", "crown"].filter((id) => have.has(id)).map((id) => `has-${id}`).join(" ");
 }
 
+// --- キラキラびん（押すたびに星がたまる。数ではなく目で見て分かるように） ---
+
+/** びんの中の星の置き場（下の段から。びんの絵の中の %）。15個でいっぱい。 */
+const JAR_ROWS = [
+  [126, [30, 50, 70, 90]],
+  [106, [40, 60, 80]],
+  [86, [30, 50, 70, 90]],
+  [66, [40, 60, 80]],
+  [48, [60]],
+];
+export const JAR_SLOTS = Object.freeze(
+  JAR_ROWS.flatMap(([y, xs]) => xs.map((x) => Object.freeze({ left: (x / 120) * 100, top: (y / 150) * 100 })))
+);
+/** 星の色（黄色＝走査の枠の色は使わない）。 */
+export const STAR_COLORS = Object.freeze(["#F6AA00", "#FF8082", "#03AF7A", "#4DC4FF", "#D65DB1", "#FF4B00", "#FFFFFF"]);
+
+/** 星1つ（viewBox 24x24）。 */
+export function starSvg(color) {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="${color}" stroke="#1A1A1A" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+
+/** びん（viewBox 120x150）。ふた（jar-lid）は、あふれるときに飛ぶ。 */
+export function jarSvg() {
+  return `<svg class="party-jar-svg" viewBox="0 0 120 150" aria-hidden="true" focusable="false">
+    <path d="M30 34 L 90 34 Q 106 34 106 52 L 106 128 Q 106 146 88 146 L 32 146 Q 14 146 14 128 L 14 52 Q 14 34 30 34 Z" fill="rgba(255,255,255,0.32)" stroke="#1A1A1A" stroke-width="3.5"/>
+    <path d="M25 58 Q 22 92 26 126" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.75"/>
+    <g class="jar-lid"><rect x="26" y="15" width="68" height="20" rx="6" fill="#FF8082" stroke="#1A1A1A" stroke-width="3.5"/><rect x="36" y="7" width="48" height="10" rx="4" fill="#D65DB1" stroke="#1A1A1A" stroke-width="3"/></g>
+  </svg>`;
+}
+
+/** びんの中の星（先頭から count 個）。 */
+export function jarStarsHtml(count) {
+  return JAR_SLOTS.slice(0, count)
+    .map((slot, index) => `<span class="party-star" style="left:${slot.left.toFixed(2)}%;top:${slot.top.toFixed(2)}%">${starSvg(STAR_COLORS[index % STAR_COLORS.length])}</span>`)
+    .join("");
+}
+
+/** 星の入ったびん1つ（けっかの「きょうの びん」の並び）。 */
+export function miniJarHtml() {
+  return `<span class="party-mini-jar">${jarSvg()}<span class="party-jar-stars">${jarStarsHtml(15)}</span></span>`;
+}
+
 /** 観客の魚（左向き。viewBox 120x80）。 */
 export function fishSvg(color) {
   return `<svg viewBox="0 0 120 80" aria-hidden="true" focusable="false"><path d="M92 40 L 118 20 L 113 40 L 118 60 Z" fill="${color}" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/><ellipse cx="54" cy="40" rx="44" ry="30" fill="${color}" stroke="#1A1A1A" stroke-width="3"/><circle cx="34" cy="34" r="8" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2.5"/><circle cx="32" cy="34" r="4" fill="#1A1A1A"/><path d="M22 50 q 10 8 20 0" stroke="#1A1A1A" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M58 40 q 10 -16 22 -6" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linecap="round"/></svg>`;

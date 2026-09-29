@@ -203,13 +203,14 @@ test("the redesign's settings survive a reload and fall back on unknown values",
     "light",
     "海は押すと 出てくる だけ"
   );
-  // おおさわぎの、その日のキラキラと服。知らない服・壊れた日付は捨てる。記録を消しても残る（研究の記録ではない）。
-  assert.deepEqual(sanitizeState({}).party, { day: "", sparkles: 0, outfits: [] });
+  // おおさわぎの、その日にいっぱいにしたびんの数と服。知らない服・壊れた日付は捨てる。
+  // 記録を消しても残る（研究の記録ではない）。
+  assert.deepEqual(sanitizeState({}).party, { day: "", jars: 0, outfits: [] });
   assert.deepEqual(
-    sanitizeState({ party: { day: "2026-09-29", sparkles: 12.4, outfits: ["crown", "cape", "hat", "hat"] } }).party,
-    { day: "2026-09-29", sparkles: 12, outfits: ["hat", "crown"] }
+    sanitizeState({ party: { day: "2026-09-29", jars: 2.4, outfits: ["crown", "cape", "hat", "hat"] } }).party,
+    { day: "2026-09-29", jars: 2, outfits: ["hat", "crown"] }
   );
-  assert.deepEqual(sanitizeState({ party: { day: "yesterday", sparkles: 99, outfits: "hat" } }).party, { day: "", sparkles: 0, outfits: [] });
+  assert.deepEqual(sanitizeState({ party: { day: "yesterday", jars: 9, outfits: "hat" } }).party, { day: "", jars: 0, outfits: [] });
 
   const chosen = sanitizeState({
     settings: {

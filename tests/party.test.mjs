@@ -3,27 +3,26 @@
 //
 // おおさわぎは刺激を強める雰囲気なので、「強めても越えない線」をここで固定する:
 //   - 光（やわらかい光・花火）は、どの1秒をとっても3回まで
-//   - 数は増えるだけで減らない。服は取り上げない（失敗を罰しない）
+//   - びんの星は増えるだけで減らない。服は取り上げない（失敗を罰しない）
 //
 //   node tests/party.test.mjs
 
 import assert from "node:assert/strict";
+import { JAR_SLOTS } from "../src/lib/art/partyArt.js";
 import { MAX_GLOWS_PER_SECOND, MIN_FIREWORK_GAP_S, createBrightLimiter } from "../src/lib/fx/fxSafety.js";
 import {
-  PARTY_FINAL_BONUS,
-  PARTY_MILESTONES,
+  PARTY_JAR_CAPACITY,
   PARTY_MUSIC_LEVELS,
   PARTY_OUTFITS,
-  PARTY_SPARKLES,
+  PARTY_STARS,
   PARTY_TEMPOS,
   applyPartyResult,
-  crossedMilestones,
-  formatSparkles,
   isPartyLevel,
+  jarMomentAt,
   localDayKey,
   nextOutfit,
   sanitizeParty,
-  sparklesAfter,
+  starsAfter,
 } from "../src/lib/party.js";
 
 let passed = 0;
@@ -46,36 +45,30 @@ test("only the loudest atmosphere turns the party on", () => {
   ["none", "subtle", "normal", undefined, "party"].forEach((level) => assert.equal(isPartyLevel(level), false));
 });
 
-test("every press adds sparkles, the music builds, and the tempo only goes up", () => {
-  for (let i = 1; i < PARTY_SPARKLES.length; i += 1) {
-    assert.ok(PARTY_SPARKLES[i] > PARTY_SPARKLES[i - 1]);
+test("every press adds stars to the jar, the music builds, and the tempo only goes up", () => {
+  for (let i = 1; i < PARTY_STARS.length; i += 1) {
+    assert.ok(PARTY_STARS[i] > PARTY_STARS[i - 1]);
     assert.ok(PARTY_MUSIC_LEVELS[i] > PARTY_MUSIC_LEVELS[i - 1]);
     assert.ok(PARTY_TEMPOS[i] > PARTY_TEMPOS[i - 1]);
   }
   assert.equal(PARTY_MUSIC_LEVELS.at(-1), 9, "最後は全部の楽器");
-  assert.equal(sparklesAfter(-3), PARTY_SPARKLES[0]);
-  assert.equal(sparklesAfter(99), PARTY_SPARKLES.at(-1));
-  // 5回押しきると、ボーナスでちょうど最後の節目（1000まん）に届く。
-  assert.equal(PARTY_SPARKLES.at(-1) * PARTY_FINAL_BONUS, PARTY_MILESTONES.at(-1));
+  assert.equal(PARTY_STARS.at(-1), PARTY_JAR_CAPACITY, "5回目でちょうどいっぱい");
+  assert.equal(JAR_SLOTS.length, PARTY_JAR_CAPACITY, "びんの中の置き場は、いっぱいの数と同じ");
+  assert.equal(starsAfter(-3), PARTY_STARS[0]);
+  assert.equal(starsAfter(99), PARTY_JAR_CAPACITY);
 });
 
-test("milestones are celebrated once, on the press that crosses them", () => {
-  assert.deepEqual(crossedMilestones(0, 1500), []);
-  assert.deepEqual(crossedMilestones(1500, 20000), [10000]);
-  assert.deepEqual(crossedMilestones(300000, 5000000), [1000000]);
-  assert.deepEqual(crossedMilestones(0, 10000000), PARTY_MILESTONES);
-  assert.deepEqual(crossedMilestones(10000, 10000), []);
+test("the jar is celebrated when it is half full and when it is full", () => {
+  const moments = PARTY_STARS.map((_, index) => jarMomentAt(index));
+  assert.deepEqual(moments, [null, null, "half", null, "full"]);
 });
 
-test("big numbers read as まん in japanese and with separators in english", () => {
-  assert.equal(formatSparkles(1500, "ruby"), "1,500");
-  assert.equal(formatSparkles(20000, "ruby"), "2まん");
-  assert.equal(formatSparkles(10000000, "kana"), "1,000まん");
-  // 数え上げの途中も「まん」の単位だけ（端数まで出すと長くなり、上の帯にぶつかる）。
-  assert.equal(formatSparkles(8331654, "ruby"), "833まん");
-  assert.equal(formatSparkles(10000000, "en"), "10,000,000");
-  assert.equal(formatSparkles(-5, "en"), "0");
-  assert.equal(formatSparkles(Number.NaN, "ruby"), "0");
+test("the stars sit inside the jar, filling it from the bottom", () => {
+  JAR_SLOTS.forEach((slot) => {
+    assert.ok(slot.left > 10 && slot.left < 90, "横はびんの中");
+    assert.ok(slot.top > 25 && slot.top < 95, "縦はびんの中（ふたより下）");
+  });
+  for (let i = 1; i < JAR_SLOTS.length; i += 1) assert.ok(JAR_SLOTS[i].top <= JAR_SLOTS[i - 1].top, "下の段から");
 });
 
 test("each finished play gives the next outfit, and never takes one away", () => {
@@ -85,7 +78,7 @@ test("each finished play gives the next outfit, and never takes one away", () =>
   let party = sanitizeParty(null);
   const got = [];
   for (let i = 0; i < 4; i += 1) {
-    const outcome = applyPartyResult(party, 10000000, "2026-09-29");
+    const outcome = applyPartyResult(party, "2026-09-29");
     got.push(outcome.unlocked);
     party = outcome.party;
   }
@@ -93,23 +86,23 @@ test("each finished play gives the next outfit, and never takes one away", () =>
   assert.deepEqual(party.outfits, ["hat", "bow", "crown"]);
 });
 
-test("the day total adds up and starts again on a new day", () => {
-  const first = applyPartyResult({ day: "", sparkles: 0, outfits: [] }, 10000000, "2026-09-29");
-  assert.equal(first.dayTotal, 10000000);
-  const second = applyPartyResult(first.party, 10000000, "2026-09-29");
-  assert.equal(second.dayTotal, 20000000);
-  const nextDay = applyPartyResult(second.party, 10000000, "2026-09-30");
-  assert.equal(nextDay.dayTotal, 10000000, "日付が変わったら数え直す");
+test("the jars filled today add up and start again on a new day", () => {
+  const first = applyPartyResult({ day: "", jars: 0, outfits: [] }, "2026-09-29");
+  assert.equal(first.jarsToday, 1);
+  const second = applyPartyResult(first.party, "2026-09-29");
+  assert.equal(second.jarsToday, 2);
+  const nextDay = applyPartyResult(second.party, "2026-09-30");
+  assert.equal(nextDay.jarsToday, 1, "日付が変わったら数え直す");
   assert.deepEqual(nextDay.party.outfits, ["hat", "bow", "crown"], "服は日をまたいでも残る");
 });
 
 test("the saved party state is cleaned up", () => {
-  assert.deepEqual(sanitizeParty({ day: "2026-09-29", sparkles: -8, outfits: ["crown", "hat", "cape"] }), {
+  assert.deepEqual(sanitizeParty({ day: "2026-09-29", jars: -8, outfits: ["crown", "hat", "cape"] }), {
     day: "2026-09-29",
-    sparkles: 0,
+    jars: 0,
     outfits: ["hat", "crown"],
   });
-  assert.deepEqual(sanitizeParty({ sparkles: 500 }), { day: "", sparkles: 0, outfits: [] }, "日付の無い合計は捨てる");
+  assert.deepEqual(sanitizeParty({ jars: 5 }), { day: "", jars: 0, outfits: [] }, "日付の無い数は捨てる");
   assert.match(localDayKey(new Date(2026, 8, 9)), /^2026-09-09$/);
 });
 

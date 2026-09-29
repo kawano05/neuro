@@ -216,12 +216,12 @@ export function createGameHost(ctx) {
         state.sessions || [],
         state.evaluation.participantId
       ),
-      // 遊びの雰囲気「おおさわぎ」の、もらったラッコの服と、その日のキラキラ（src/lib/party.js）。
-      // 遊び終えたとき（5回目）に claim して保存する。研究の記録には入れない。
+      // 遊びの雰囲気「おおさわぎ」の、もらったラッコの服と、その日にいっぱいにしたびんの数
+      // （src/lib/party.js）。遊び終えたとき（5回目）に claim して保存する。研究の記録には入れない。
       party: {
         outfits: () => [...(state.party?.outfits || [])],
-        claim(sparkles) {
-          const outcome = applyPartyResult(state.party, sparkles, localDayKey());
+        claim() {
+          const outcome = applyPartyResult(state.party, localDayKey());
           state.party = outcome.party;
           save();
           return outcome;
@@ -572,8 +572,6 @@ export function createGameHost(ctx) {
           // aria-label と、textContent へ入る文字（自己最高の行）は
           // プレーン文でなければならない。同じ context に両方を入れておく。
           tPlain: ctx.t,
-          // 数の書き方（おおさわぎのキラキラ。日本語は「まん」、英語は桁区切り）。
-          mode: resolveTextMode(state.settings),
         };
         const detailed = resultRenderer(lastResultSummary, context);
         const score = resultScore(rendererType, lastResultSummary);
