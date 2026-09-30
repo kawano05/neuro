@@ -45,11 +45,15 @@
 
 .slot-task[data-difficulty-mode="practice"] .slot-world-symbol svg { display: block; width: 100%; height: 100%; overflow: visible; }
 
-.slot-stage.is-practice .slot-reel,
-.slot-stage.is-practice .slot-reel.is-stopped {
+.slot-stage.is-practice .slot-reel {
   background: linear-gradient(180deg, #A996DF 0%, #8069C3 18%, #6F5BB8 88%, #59439D 100%);
   border-color: #493578;
   box-shadow: inset 0 5px 0 #D7CAF4, inset 0 -5px 0 #493578, 0 5px 0 #493578;
+}
+
+/* 旧版と同じ明るい紫で、停止済みと待機中を文字に頼らず見分けられるようにする。 */
+.slot-stage.is-practice .slot-reel.is-stopped {
+  background: #8A79CC;
 }
 
 .slot-stage.is-practice .slot-reel.is-active {
