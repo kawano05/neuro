@@ -21,6 +21,7 @@
 
 import { BALL_FIELD_ART } from "../art/hakkiriArt.js";
 import { BEGINNER_TARGET_PRESSES, celebrate, playPrefsFor } from "./beginnerKit.js";
+import { PARTY_FINISH_DELAY_MS } from "./partyStage.js";
 
 const GAME_ID = "baseball";
 
@@ -127,6 +128,8 @@ export function createBaseballGame(ctx) {
     releaseAt = performance.now();
     arrivalAt = releaseAt + pitchMs;
     audio.playThrow?.();
+    // 投げる音が到着の手がかりなので、その1球のあいだは音楽を下げる。
+    if (ctx.party?.isBig()) audio.music?.duck?.(pitchMs / 1000 + 0.25);
     setWord(null);
     startLoop();
   }
@@ -225,6 +228,7 @@ export function createBaseballGame(ctx) {
     setWord(`baseball.word.${result}`);
     // ② 起きたこと: 当たった場所の火花。ホームランは揺れて、寄る。
     fx?.batHit(fx.engine.pointOf(ballEl), { quality: result, stageEl: boardEl });
+    ctx.party?.react({ index: results.length - 1, source: ballEl });
     fx?.motion.stamp(wordEl, { delayMs: stop });
     if (result === "homerun") {
       stageEl.classList.add("is-homerun");
@@ -240,7 +244,9 @@ export function createBaseballGame(ctx) {
       phase = "done";
       setWord("baseball.word.done");
       // ⑤ フィナーレ（5本打てた）。
-      fx?.finale(boardEl, {});
+      if (ctx.party?.isBig()) ctx.party.finale();
+      else fx?.finale(boardEl, {});
+      if (["none", "subtle"].includes(fx?.level?.())) audio.playChime(784, {durationS:0.24});
       fx?.motion.stamp(wordEl, {});
       schedule(() => {
         finishDelivered = true;
@@ -250,10 +256,10 @@ export function createBaseballGame(ctx) {
           ctx,
           prefs(),
           // ホームランが0回のときに「ホームランは 0かい」と言わない。
-          t(homeruns > 0 ? "baseball.voice.finish" : "baseball.voice.finishNoHomerun", { h: homeruns, k: hits })
+          ctx.party?.isBig() ? ctx.party.rewardSpeech() : t(homeruns > 0 ? "baseball.voice.finish" : "baseball.voice.finishNoHomerun", { h: homeruns, k: hits })
         );
         finish({ presses: results.length, baseball: { results: [...results], homeruns, hits } });
-      }, FINISH_DELAY_MS);
+      }, ctx.party?.isBig() ? PARTY_FINISH_DELAY_MS : FINISH_DELAY_MS);
       return;
     }
     schedule(windup, 500);

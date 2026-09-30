@@ -101,7 +101,7 @@ export function createColoringGame(ctx) {
         parts,
       });
       fx?.motion.stamp(stageEl?.querySelector(".coloring-word"), { delayMs: 90 });
-      return { creature: picture.id };
+      return { creature: picture.id, source: painted || stageEl?.querySelector(".coloring-card") };
     },
     progressSpeech: (remaining) => t("coloring.voice.progress", { n: remaining }),
     finishSpeech: () => t("coloring.voice.finish", { name: t(`animal.${picture.id}`) }),

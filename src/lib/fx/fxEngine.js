@@ -332,7 +332,11 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
     burst(options) {
       const s = scale();
       if (!s.particles) return;
-      emit(spawnBurst({ ...options, count: Math.round((options.count || 0) * s.particles) }));
+      const originalSize = options.size ?? [8, 16];
+      const size = getLevel() === "subtle"
+        ? (Array.isArray(originalSize) ? originalSize.map(value => value * 0.6) : originalSize * 0.6)
+        : options.size;
+      emit(spawnBurst({ ...options, size, count: Math.round((options.count || 0) * s.particles) }));
     },
     /** 広がる輪。粒を出さない強さ（なし）では出さない。 */
     ring(options) {

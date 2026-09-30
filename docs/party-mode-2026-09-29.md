@@ -52,8 +52,8 @@
 | `src/lib/partyMusic.js` | 音楽（Web Audio の合成。段・調・速さ・声のあいだ下げる） |
 | `src/lib/art/partyArt.js` | ラッコ・魚・旗・キラキラびんと星・海の背景の絵（SVG の文字列） |
 | `src/lib/games/partyStage.js` | 遊びの画面に重ねる舞台と、けっかの見せ方 |
-| `src/lib/games/colorLegacy.js` | 押すと 出てくる。雰囲気が big のとき partyStage を重ねる |
-| `src/lib/games/gameHost.js` | 服とその日のびんの数の保存（`state.party`）、けっかの枠を待たせる |
+| `src/lib/games/colorLegacy.js` | 押すと 出てくる。主役と出来事を共通舞台へ渡す |
+| `src/lib/games/gameHost.js` | 共通舞台の作成、服とその日のびんの保存（`state.party`）、研究と別のけっか、枠の待ち |
 | `src/lib/fx/*` | ハートの粒、おおさわぎの演出、光と花火をまとめて数える回数制限 |
 
 保存：`state.party = { day, jars, outfits }`。研究の記録ではないので、記録を消しても残す。
@@ -68,6 +68,6 @@
 
 ## 7. まだのもの
 
-- ほかの遊び（ふうせん・ぬりえ・ボールを打つ）へのおおさわぎ。ラッコと音楽は、ほかの遊びにも重ねられる作りにしてある
+- ほかの遊びへの共通舞台と4段階の違いは実装した（[全遊びの雰囲気](party-all-2026-09-30.md)）。
 - ホームの「きょうの キラキラびん」の表示
 - 既定の雰囲気は「にぎやか」のまま（おおさわぎは支援者が選ぶ）

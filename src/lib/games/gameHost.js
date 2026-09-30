@@ -1,5 +1,7 @@
 // =====================================================================
 // games/gameHost.js — ゲームの起動・入力振り分け・終了処理
+// お祝いはホストの一時的な表示情報で持つ。研究の summary を書き換えず、
+// ゲームが終了と判定して保存したあとにだけ、共通舞台のフィナーレを待つ。
 //
 // detailed-design.md §3.2 のライフサイクルを実装する:
 //   launch(id):    scan.stop(true) → currentView="game" → create → mount
@@ -50,7 +52,7 @@ import {
   candidateBaselineMsFromSummary,
   formatSignedMs,
   personalBest,
-  renderPraise,
+  renderPraise, renderPartyResult,
   resultRenderers,
   resultScore,
 } from "./results.js";
@@ -59,7 +61,7 @@ import { tileThemeFor } from "../homeTheme.js";
 import { createGameSettings } from "./gameSettings.js";
 import { resolveReadinessState } from "../readinessCheck.js";
 import { applyPartyResult, localDayKey } from "../party.js";
-import { PARTY_RESULT_SCAN_DELAY_MS, revealPartyResult } from "./partyStage.js";
+import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS, createPartyStage, revealPartyResult } from "./partyStage.js";
 
 export function createGameHost(ctx) {
   const { state, elements, scan, announce, save, logEvent } = ctx;
@@ -67,6 +69,11 @@ export function createGameHost(ctx) {
   let activeInstance = null;
   let activeGameId = null;
   let lastResultSummary = null;
+  let lastAtmosphereLevel = null;
+  let atmosphere = null;
+  let atmosphereFinishTimer = null;
+  let resultScanTimer = null;
+  let celebrationCompleting = false;
   // けっかの星を飛び込ませるのは、けっかへ来た最初の1回だけ（描き直しのたびに
   // 最初からやり直さない。docs/overall-design-2026-09-28.md §6.1）。
   let revealPending = false;
@@ -138,6 +145,14 @@ export function createGameHost(ctx) {
   /** instance.destroy() を安全に呼ぶ（例外を握りつぶし、activeInstance を必ずクリアする）。 */
   function destroyActive() {
     closeSwitchMenu();
+    window.clearTimeout(atmosphereFinishTimer);
+    window.clearTimeout(resultScanTimer);
+    atmosphereFinishTimer = resultScanTimer = null;
+    atmosphere?.destroy({ keepMusic: celebrationCompleting });
+    if (!celebrationCompleting) ctx.audio.music?.stop(0.4);
+    atmosphere = null;
+    delete elements.gameStageContent.dataset.atmosphere;
+    elements.gameStageContent.classList.remove("is-party");
     if (activeInstance) {
       try {
         activeInstance.destroy();
@@ -264,12 +279,17 @@ export function createGameHost(ctx) {
       // （src/lib/party.js）。遊び終えたとき（5回目）に claim して保存する。研究の記録には入れない。
       party: {
         outfits: () => [...(state.party?.outfits || [])],
-        claim() {
-          const outcome = applyPartyResult(state.party, localDayKey());
+        claim(jars = 1) {
+          const outcome = applyPartyResult(state.party, localDayKey(), jars);
           state.party = outcome.party;
           save();
           return outcome;
         },
+        react: (event) => atmosphere?.react(event),
+        isBig: () => atmosphere?.profile.liveCompanions || false,
+        pressSpeech: (index, name) => atmosphere?.pressSpeech(index, name),
+        rewardSpeech: () => atmosphere?.rewardSpeech(),
+        finale: () => atmosphere?.finale(),
       },
       setProgress(text) {
         elements.gameProgress.textContent = text;
@@ -285,6 +305,19 @@ export function createGameHost(ctx) {
         returnHome();
       },
     };
+  }
+
+  /** mountで主役を置いたあとに舞台を添える。測定では属性もDOMも音も足さない。 */
+  function mountAtmosphere(module) {
+    if (module.id === "calibration" || (module.taskType && isMeasurementMode(state.settings))) return;
+    const gameCtx = buildGameCtx();
+    atmosphere = createPartyStage({
+      host: elements.gameStageContent, t: ctx.t, tHtml: ctx.tHtml, fx: ctx.fx, audio: ctx.audio,
+      voiceFeedback: ctx.voiceFeedback, outfits: gameCtx.party.outfits(), claim: gameCtx.party.claim,
+      kind: module.taskType ? "timing" : "beginner", legacy: module.id === "color-legacy",
+    });
+    elements.gameStageContent.dataset.atmosphere = atmosphere.profile.level;
+    elements.gameStageContent.classList.toggle("is-party", atmosphere.profile.liveCompanions);
   }
 
   /**
@@ -395,6 +428,7 @@ export function createGameHost(ctx) {
     elements.gameStageContent.classList.remove("is-ready");
     activeInstance = module.create(buildGameCtx());
     activeInstance.mount(elements.gameStageContent);
+    mountAtmosphere(module);
     armExitChoice();
   }
 
@@ -419,9 +453,11 @@ export function createGameHost(ctx) {
     );
     requestedEndless = options.endless === true;
     destroyActive(); // 多重起動防止（MUST）: 前回 instance の destroy() を必ず呼ぶ
+    ctx.fx?.clear(); // 前の画面の粒を、次の合図より前へ持ち越さない。
     scan.stop(true);
     activeGameId = gameId;
     lastResultSummary = null;
+    lastAtmosphereLevel = null;
     pendingModule = null;
     calibrationOffsetSaved = false;
     state.currentView = "game";
@@ -443,6 +479,7 @@ export function createGameHost(ctx) {
     announce(ctx.t("voice.gameStart", { name: moduleTitle(module) }));
     activeInstance = module.create(buildGameCtx());
     activeInstance.mount(elements.gameStageContent);
+    mountAtmosphere(module);
     armExitChoice();
   }
 
@@ -452,10 +489,29 @@ export function createGameHost(ctx) {
    * リズム系ゲームの summary（judge.js の分類を集計した §9.2 の summary
    * サブスキーマ、goHitRate 等を持つ）が渡された場合のみ、evaluation 連動
    * （detailed-design.md §9.4、失敗系のみ）・操作ログ・読み上げを行う。
-   * color-legacy のように finish() を呼ばないゲームはこのブロックには来ない。
    */
   function finishGame(summary) {
-    lastResultSummary = summary || null;
+    if (atmosphereFinishTimer !== null) return;
+    if (atmosphere && !atmosphere.finishing() && (atmosphere.profile.reward || (atmosphere.profile.kind === "timing" && atmosphere.profile.level !== "none"))) {
+      atmosphere.finale();
+      if (!atmosphere.profile.reward) {
+        ctx.fx?.finale(elements.gameStageContent, {});
+        if (atmosphere.profile.level === "subtle") {
+          ctx.audio.playChime(784, {durationS:0.24});
+          ctx.audio.playApplause({durationS:0.35});
+        }
+      }
+      atmosphereFinishTimer = window.setTimeout(() => {
+        atmosphereFinishTimer = null;
+        finishGame(summary);
+      }, atmosphere.profile.reward ? PARTY_FINISH_DELAY_MS : atmosphere.profile.level === "subtle" ? 650 : 1600);
+      return;
+    }
+    const party = atmosphere?.profile.resultCompanions ? atmosphere.summary() : null;
+    lastAtmosphereLevel = atmosphere?.profile.level ?? null;
+    if (atmosphere?.profile.kind === "timing" && atmosphere.profile.reward) ctx.voiceFeedback(atmosphere.rewardSpeech());
+    if (atmosphere?.profile.kind === "timing" && ["none", "subtle"].includes(atmosphere.profile.level)) ctx.voiceFeedback(ctx.t("color.voice.cheer"));
+    lastResultSummary = party ? { ...summary, party } : summary || null;
     const activeModule = activeGameId ? findGameModule(activeGameId) : null;
     const taskType = activeModule?.taskType;
     if (summary && taskType) {
@@ -467,19 +523,23 @@ export function createGameHost(ctx) {
         label: `${activeGameId} 終了 taskType=${taskType}`,
       });
     }
+    if (atmosphere?.profile.kind === "timing" && atmosphere.profile.level === "none") ctx.audio.playChime(784, { durationS: 0.24 });
+    celebrationCompleting = true;
     destroyActive();
+    celebrationCompleting = false;
     ctx.audio.setProfile?.("play");
     ctx.fx?.setMeasurement(false);
     revealPending = true;
     state.currentView = "result";
     save();
     ctx.renderAll();
-    if (summary?.party) {
+    if (party) {
       // おおさわぎのけっかは、数え上げ・ラッコ・ごほうび・花火を見せてから枠を動かす
       // （紙吹雪の下で枠を進めない。docs/party-mode-2026-09-29.md）。
-      window.setTimeout(() => {
+      resultScanTimer = window.setTimeout(() => {
+        resultScanTimer = null;
         if (state.currentView === "result") scan.restartIfNeeded();
-      }, PARTY_RESULT_SCAN_DELAY_MS);
+      }, party.level === "normal" ? 1400 : PARTY_RESULT_SCAN_DELAY_MS);
     } else {
       scan.restartIfNeeded();
     }
@@ -619,12 +679,16 @@ export function createGameHost(ctx) {
         "is-completion-result",
         rendererType === "completion"
       );
+      elements.resultStats.classList.toggle("has-party-result", Boolean(lastResultSummary?.party));
+      if (lastAtmosphereLevel) elements.resultStats.dataset.atmosphere = lastAtmosphereLevel;
+      else delete elements.resultStats.dataset.atmosphere;
       const resultRenderer = rendererType
         ? resultRenderers[rendererType]
         : null;
       if (lastResultSummary && resultRenderer) {
         const session = currentSession();
         const context = {
+          gameId: activeGameId,
           best: bestBeforeCurrentSession(),
           trials: session?.trials,
           config: session?.config,
@@ -647,7 +711,7 @@ export function createGameHost(ctx) {
           // キャリブレーションは支援者と一緒に使う測定なので、開いたまま出す。
           const open = activeGameId === "calibration" ? " open" : "";
           elements.resultStats.innerHTML = `
-            ${renderPraise(score, context)}
+            ${renderPartyResult(lastResultSummary.party, renderPraise(score, context), context)}
             <details class="result-details"${open}>
               <summary>${ctx.tHtml("result.details")}</summary>
               ${detailed}
@@ -658,11 +722,14 @@ export function createGameHost(ctx) {
         }
         if (revealPending && state.currentView === "result") {
           revealPending = false;
+          const shownSummary = lastResultSummary;
           // 描いた次のコマで、星を飛び込ませる（位置が決まってから）。
           window.requestAnimationFrame(() => {
             if (elements.resultStats.querySelector(".party-result")) {
-              revealPartyResult(elements.resultStats, { fx: ctx.fx, audio: ctx.audio });
-              return;
+              revealPartyResult(elements.resultStats, { fx: ctx.fx, audio: ctx.audio,
+                isCurrent: () => state.currentView === "result" && lastResultSummary === shownSummary,
+              });
+              if (!elements.resultStats.querySelector(".party-result.is-added")) return;
             }
             ctx.fx?.revealResult(elements.resultStats, {
               playStar: (index, delayS) =>

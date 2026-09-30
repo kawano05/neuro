@@ -1534,6 +1534,39 @@ body.user-world .game-stage-content.is-ready {
   font-family: var(--font-round);
 }
 
+/* 主役の版面を維持するため、追加の遊びでは角の仲間を小さくする。 */
+.party-layer.is-beginner .party-otter { width: clamp(64px, 12vmin, 110px); bottom: 12px; left: 14px; }
+.party-layer.is-beginner .party-jar { width: clamp(54px, 10vmin, 90px); top: 70px; right: 14px; }
+.party-layer.is-beginner .party-fan { width: clamp(34px, 6vmin, 58px); right: 14px !important; bottom: calc(12px + var(--fan-i) * clamp(28px, 5vmin, 46px)) !important; }
+.party-layer.is-beginner .party-bunting { top: 56px; height: 10px; }
+.party-layer.is-timing .party-otter { width: 64px; bottom: 12px; }
+.party-layer.is-timing .party-jar { width: 64px; top: auto; bottom: 12px; right: auto; }
+.party-layer.is-timing .o-all { animation: none; }
+.party-layer.is-timing .party-stamp.is-short { padding: 1px 5px; border-width: 2px; font-size: 14px; }
+.party-layer.is-hidden-live:not(.is-finale) { display: none; }
+.party-layer.is-timing.is-finale .party-otter { left: 20px !important; width: 100px; }
+.party-layer.is-timing.is-finale .party-jar { left: auto !important; right: 18px; top: 76px; bottom: auto; width: 90px; }
+
+/* 動く世界はにぎやかから。測定画面にはこの属性を付けない。 */
+[data-atmosphere="none"] .pop-sea *,
+[data-atmosphere="subtle"] .pop-sea * { animation: none !important; }
+[data-atmosphere="none"] .pop-sea .sea-bubbles,
+[data-atmosphere="subtle"] .pop-sea .sea-bubbles { display: none; }
+/* 割れる動きは手応えなので残し、待っているふうせんの浮遊だけを止める。 */
+[data-atmosphere="none"] .balloon:not(.is-popped),
+[data-atmosphere="subtle"] .balloon:not(.is-popped) { animation: none; }
+.party-result[data-level="normal"] .o-all { animation: none; }
+
+@media (max-height: 500px) {
+  .party-layer.is-beginner .party-jar { top: 52px; width: 48px; }
+  .party-layer.is-beginner .party-otter { width: 56px; }
+  .party-layer.is-beginner .party-stamp:not(.is-big) { font-size: 1.4rem; padding: 2px 10px; border-width: 4px; }
+  .party-result .party-result-main { gap: 12px; }
+  .party-result .party-result-otter { width: 68px; }
+  .party-result .party-result-jar { width: 64px; }
+  .party-result .party-result-side { max-width: 45vw; }
+}
+
 .party-otter {
   position: absolute;
   left: max(3vw, env(safe-area-inset-left));
@@ -1847,6 +1880,21 @@ body.user-world .game-stage-content.is-ready {
 .party-result .hk-result-item {
   width: clamp(64px, 9vw, 96px);
 }
+
+/* 一言と星を先頭に保ち、仲間は小さく下へ添える。既存のポップの版面には適用しない。 */
+.party-result.is-added {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+.party-result.is-added .party-result-main { gap: 14px; }
+.party-result.is-added .hk-result-items { align-items: center; }
+.party-result.is-added .party-result-otter { width: 76px; }
+.party-result.is-added .party-result-jar { width: 68px; }
+.party-result.is-added .party-result-label,
+.party-result.is-added .party-result-reward { font-size: 1rem; }
+.party-result.is-added .party-mini-jar { width: 26px; }
 
 @media (prefers-reduced-motion: reduce) {
   .pop-sea .sea-rays i,
@@ -3333,4 +3381,50 @@ body.result-mode.user-world #resultHome::before {
   .coloring-art .cl-part {
     transition: none;
   }
+}
+
+/* 横向きスマホでは、作品とびんを縦に積むと操作ボタンを押し出す。
+   お祝いのあるけっかだけを横に並べ、測定のけっかの版面を変えない。 */
+@media (max-height: 500px) {
+  .result-stats[data-atmosphere] .hk-result { gap: 6px; }
+  .result-stats[data-atmosphere] .hk-result-picture { width: 100px; }
+  .result-stats[data-atmosphere] .hk-result-title { font-size: 1.8rem; }
+  .result-stats[data-atmosphere] .hk-result-summary { margin: 0; }
+  .result-stats[data-atmosphere] .result-details > summary { padding-block: 4px; min-height: 28px; }
+  body.result-mode.user-world #resultView:has(.result-stats[data-atmosphere]) { gap: 8px; }
+  body.result-mode.user-world #resultView:has(.result-stats[data-atmosphere]) .action-row button { min-height: 64px; padding-block: 6px; }
+  body.user-world .hk-result.party-result {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas: "main items" "title title" "summary summary";
+    align-items: center;
+    justify-content: center;
+    gap: 4px 16px;
+  }
+  .party-result .party-result-main { grid-area: main; flex-wrap: nowrap; gap: 10px; }
+  .party-result .hk-result-items { grid-area: items; margin: 0; gap: 5px; }
+  .party-result .hk-result-items:empty { display: none; }
+  .party-result .hk-result-title { grid-area: title; margin: 0; font-size: 1.8rem; line-height: 1.1; }
+  .party-result .hk-result-summary { grid-area: summary; margin: 0; font-size: 1rem; line-height: 1.2; }
+  .party-result .hk-result-picture { width: 100px; padding: 4px; border-radius: 12px; }
+  .party-result .hk-result-item { width: 42px; }
+  .party-result .party-result-label { font-size: 1rem; }
+  .party-result .party-result-reward { font-size: 1rem; padding: 2px 8px; }
+  .party-result .party-mini-jar { width: 22px; }
+  .has-party-result .result-details { margin-top: 2px; }
+  .has-party-result .result-details > summary { padding-block: 4px; min-height: 28px; }
+  body.result-mode.user-world #resultView:has(.has-party-result) { gap: 8px; }
+  body.result-mode.user-world #resultView:has(.has-party-result) .action-row button { min-height: 64px; padding-block: 6px; }
+  .party-result.is-added {
+    flex-direction: row;
+    justify-content: center;
+    gap: 24px;
+  }
+  .party-result.is-added > .hk-result { min-width: 0; }
+  .party-result.is-added .party-result-main { flex-shrink: 0; gap: 8px; }
+  .party-result.is-added .party-result-otter { width: 52px; }
+  .party-result.is-added .party-result-jar { width: 46px; }
+  .party-result.is-added .party-result-side { max-width: 160px; }
+  .party-result.is-added .party-today { max-width: 160px; }
+  .party-result.is-added .party-mini-jar { width: 20px; }
 }
