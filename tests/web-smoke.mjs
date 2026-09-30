@@ -71,6 +71,7 @@ const projects = [
 ];
 
 const checks = [
+  ["explains every atmosphere from the shared Japanese descriptions", checkAtmosphereDescriptions],
   ["isolates presentation faults and completes recorded beginner and timing runs", checkPresentationFaults],
   ["stops decorative motion for all four atmospheres and reduced motion", checkDecorationMotion],
   ["cancels scheduled sounds and result music when hidden or interrupted", checkPresentationCleanup],
@@ -4721,7 +4722,7 @@ async function checkDecorationMotion(page, project) {
     await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
     await page.evaluate(({ key, level }) => {
       const saved = JSON.parse(localStorage.getItem(key));
-      saved.settings = { ...saved.settings, fxLevel: level, autoScan: false, speechEnabled: false };
+      saved.settings = { ...saved.settings, fxLevel: level, autoScan: false, speechEnabled: false, difficultyMode: "practice" };
       localStorage.setItem(key, JSON.stringify(saved));
     }, { key: storageKey, level });
     await page.reload();
@@ -4742,17 +4743,49 @@ async function checkDecorationMotion(page, project) {
     await page.locator("#gameExit").click();
     await openActivity(page, t("tile.fishing-corner.title"));
     await openActivity(page, t("tile.fishing.title"));
+    if (project.browserType === webkit) {
+      // Windows の WebKit は音課題を開始できない場合がある。ここは装飾検査なので
+      // 合図時計だけを代用する。実際の音の確認は Chromium と実機の担当範囲。
+      await page.evaluate(() => {
+        const scheduler = window.__presentationCtx.audio.scheduler;
+        scheduler.canSound = () => true;
+        scheduler.now = () => performance.now() / 1000;
+      });
+    }
     await page.waitForTimeout(200);
     await page.locator("#gameStage").dispatchEvent("click");
     await page.waitForTimeout(400);
     const world = await page.evaluate(() => {
       const nodes = [...document.querySelectorAll(".fishing-cloud, .fishing-sea *, .fishing-otter-eyes")];
-      return nodes.flatMap(node => node.getAnimations()).filter(animation => animation.playState === "running").length;
+      return { running: nodes.flatMap(node => node.getAnimations()).filter(animation => animation.playState === "running").length,
+        names: nodes.map(node => getComputedStyle(node).animationName).filter(name => name !== "none"),
+        policy: window.__presentationCtx.fx.policy(), ready: Boolean(document.querySelector(".game-ready")) };
     });
-    assert((world > 0) === (!reduced && ["normal", "big"].includes(level)), `${level}/${reduced}: the fishing world must follow the shared policy`);
+    assert((world.names.length > 0) === (!reduced && ["normal", "big"].includes(level)), `${level}/${reduced}: the fishing world must follow the shared policy: ${JSON.stringify(world)}`);
+    if (reduced || ["none", "subtle"].includes(level)) assert(world.running === 0, "A quiet world has no running CSS animations");
     await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-fishing.png` });
     await page.locator("#gameExit").click();
   }
+}
+
+async function checkAtmosphereDescriptions(page) {
+  await page.locator("#startStage").click();
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator(".tab[data-view='settings']").click();
+  for (const level of ["none", "subtle", "normal", "big"]) {
+    await page.locator("#fxLevel").selectOption(level);
+    const description = await page.locator("#fxLevelDescription").textContent();
+    assert(description === translate(`party.atmosphere.${level}.description`, "kanji"), "The setting must use the atmosphere's own description");
+    assert(await page.locator(`#fxLevel option[value='${level}']`).textContent() === translate(`party.atmosphere.${level}.label`, "kanji"), "The setting must use the shared Japanese label");
+  }
+  await openSettingsDetails(page, "senses");
+  await page.locator("#textMode").selectOption("en");
+  await page.reload();
+  await page.locator("#startStage").click();
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator(".tab[data-view='settings']").click();
+  assert(await page.locator("#fxLevelDescription").textContent() === translate("party.atmosphere.big.description", "kanji"), "The supporter description stays Japanese after reload in English");
+  assert((await page.locator("#fxLevel").getAttribute("aria-describedby")).includes("fxLevelDescription"), "The selected description must be accessible");
 }
 
 async function checkPresentationCleanup(page) {

@@ -17,12 +17,19 @@
         <input id={field.id} type="range" min={field.min} max={field.max} step={field.step} aria-describedby={`${field.id}Hint`} />
         <output id={`${field.id}Value`} for={field.id}></output>
       {:else}
-        <select id={field.id} aria-describedby={`${field.id}Hint`}>
+        <select id={field.id} aria-describedby={`${field.id}Hint${field.description ? ` ${field.id}Description` : ''}`}>
           {#each field.options as [value, label]}
             <option {value}>{label}</option>
           {/each}
         </select>
+        {#if field.description}
+          <small class="setting-option-description" id={`${field.id}Description`} aria-live="polite"></small>
+        {/if}
       {/if}
     </div>
   {/each}
 </div>
+
+<style>
+  .setting-option-description { grid-column: 1 / -1; }
+</style>
