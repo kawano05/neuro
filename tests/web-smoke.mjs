@@ -975,7 +975,7 @@ async function checkTimingParty(page, project) {
   await page.reload();
   await page.locator("#startStage").click();
   await openActivity(page,t("tile.gonogo.title"));
-  await page.locator("#gameStage").click();
+  await finishReady(page);
   await page.waitForTimeout(300);
   const waiting=await page.evaluate(()=>({
     flyers:document.querySelectorAll(".party-star-flyer").length,

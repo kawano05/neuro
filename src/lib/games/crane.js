@@ -62,6 +62,7 @@ import {
   craneRoomHtml,
   craneWorldHtml,
 } from "../art/craneWorldArt.js";
+import { shownArtVersion } from "../artVersion.js";
 
 const FEEDBACK_GAIN = 0.05;
 const MISS_GAIN = 0.018;
@@ -105,6 +106,12 @@ const RESULT_HOLD_MS = 650;
  * 次の軸が即座に確定してしまうのを防ぐ。捨てるのではなく合図を返す。
  */
 const INPUT_GUARD_MS = 320;
+/**
+ * 受け皿に並べる取れた景品の数（れんしゅうの回。新しいものから）。それより多いぶんは
+ * 「+n」にまとめる。エンドレスで長く続くと受け皿が伸び、狭い横画面では状態の札を
+ * 上の帯の裏へ押し上げていた。そくていの回は5回なので、ここまで並ばない。
+ */
+const MAX_TRAY_ITEMS = 8;
 
 /**
  * 降下・上昇・搬送の緩急。
@@ -316,7 +323,7 @@ function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = nul
     fxLevel,
     // 見え方の版（art/craneWorldArt.js）。れんしゅうの回の景品やアームの絵が変わった
     // 前後を分けるため。
-    artVersion: CRANE_ART_VERSION,
+    artVersion: shownArtVersion(resolveDifficultyMode(settings), CRANE_ART_VERSION),
     // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
     // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
     measurementReadiness: readiness || "n/a",
@@ -385,6 +392,8 @@ export function createCraneGame(ctx) {
   let prizes = [];
   let judgment = null;
   let collected = [];
+  /** 受け皿からはみ出してまとめた景品の数（「+n」）。 */
+  let trayOverflow = 0;
   /** 直近で連続して掴めなかった回数。掴めたら 0 に戻る（アシストの入力）。 */
   let consecutiveFailures = 0;
   /** この試行で実際に適用する許容半径。試行ごとに記録する。 */
@@ -507,6 +516,7 @@ export function createCraneGame(ctx) {
     prizeEl = stageEl.querySelector(".crane-prize");
     chuteEl = stageEl.querySelector(".crane-chute");
     collectedEl = stageEl.querySelector(".crane-collected");
+    trayOverflow = 0;
     guideXEl = stageEl.querySelector(".crane-guide-x");
     guideYEl = stageEl.querySelector(".crane-guide-y");
     guideShadeXEl = stageEl.querySelector(".crane-guide-shade-x");
@@ -996,6 +1006,22 @@ export function createCraneGame(ctx) {
   }
 
   /** 景品口へ落として、取れたことを確定させる。 */
+  /** 受け皿は新しい順に MAX_TRAY_ITEMS まで。古いものは「+n」にまとめる。 */
+  function trimTray() {
+    const items = [...collectedEl.querySelectorAll(".crane-collected-item")];
+    const extra = items.length - MAX_TRAY_ITEMS;
+    if (extra <= 0) return;
+    items.slice(0, extra).forEach((item) => item.remove());
+    trayOverflow += extra;
+    let more = collectedEl.querySelector(".crane-collected-more");
+    if (!more) {
+      more = document.createElement("span");
+      more.className = "crane-collected-more";
+      collectedEl.prepend(more);
+    }
+    more.textContent = `+${trayOverflow}`;
+  }
+
   function dropIntoChute() {
     setClawClosed(false);
     clawEl.classList.remove("is-holding");
@@ -1016,6 +1042,7 @@ export function createCraneGame(ctx) {
       badge.alt = "";
     }
     collectedEl.appendChild(badge);
+    if (practice) trimTray();
     // 受け口に落ちたら紙吹雪（れんしゅうの回だけ）。
     fx?.craneWin(chuteEl);
     fx?.motion.popIn(badge, { from: 0.4 });

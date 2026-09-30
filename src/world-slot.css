@@ -113,3 +113,58 @@
 @media (max-height: 500px) and (min-aspect-ratio: 5/4) {
   .slot-stage.is-practice .slot-world .slot-world-tent { display: none; }
 }
+
+/* --- くっきり表示 ---------------------------------------------------------
+   アーム・さかなつりの世界と同じく、世界を隠して白黒と太い線だけにする。台・札・
+   止まったリールの色も くっきり表示の決まり（styles.css の body.high-contrast .slot-*）へ戻す。
+   以前は空だけ黒くなり、白い雲・淡い丘・紫の台が残って、ちぐはぐな場面になっていた。 */
+body.high-contrast .slot-stage.is-practice {
+  background: #000;
+}
+
+body.high-contrast .slot-stage.is-practice .slot-world,
+body.high-contrast .slot-stage.is-practice .slot-reel::before,
+body.high-contrast .slot-stage.is-practice .slot-reel::after {
+  display: none;
+}
+
+body.high-contrast .slot-stage.is-practice .slot-reel,
+body.high-contrast .slot-stage.is-practice .slot-reel.is-stopped {
+  border-color: #fff;
+  background: #000;
+  box-shadow: none;
+}
+
+/* 止まったリールは、色の代わりに点線で見分ける。 */
+body.high-contrast .slot-stage.is-practice .slot-reel.is-stopped {
+  border-style: dashed;
+}
+
+body.high-contrast .slot-stage.is-practice .slot-reel.is-active {
+  border-color: #ffeb3b;
+  box-shadow: none;
+}
+
+body.high-contrast .slot-stage.is-practice .slot-reel-number {
+  color: #000;
+  background: #fff;
+  box-shadow: none;
+}
+
+body.high-contrast .slot-stage.is-practice .slot-reel-badge {
+  color: #fff;
+  background: #000;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+body.high-contrast .slot-task[data-difficulty-mode="practice"] .slot-target {
+  border-color: #fff;
+  background: #fff;
+  box-shadow: none;
+}
+
+body.high-contrast .slot-stage.is-practice .slot-status {
+  color: #fff;
+  background: #000;
+  box-shadow: 0 0 0 3px #fff;
+}

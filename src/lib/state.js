@@ -7,6 +7,7 @@
 //   失敗時は console.error と onError コールバック（連続失敗の初回のみ）で通知する。
 // =====================================================================
 
+import { sanitizeArtVersion } from "./artVersion.js";
 import {
   storageKey,
   readinessItems,
@@ -923,7 +924,7 @@ function sanitizeScanSession(session) {
     fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
     // 見え方の版（art/craneWorldArt.js・art/fishingWorldArt.js）。落とすと再読み込みで
     // 消え、絵が変わる前後の回を分けられない。持たない古い記録は null（分からない）。
-    artVersion: Number.isInteger(config.artVersion) && config.artVersion >= 1 ? config.artVersion : null,
+    artVersion: sanitizeArtVersion(config.artVersion),
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
     textMode: enumOr(config.textMode, TEXT_MODES, "kana"),
@@ -1086,7 +1087,7 @@ function sanitizeReactionSession(session) {
     fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
     // 見え方の版（art/craneWorldArt.js・art/fishingWorldArt.js）。落とすと再読み込みで
     // 消え、絵が変わる前後の回を分けられない。持たない古い記録は null（分からない）。
-    artVersion: Number.isInteger(config.artVersion) && config.artVersion >= 1 ? config.artVersion : null,
+    artVersion: sanitizeArtVersion(config.artVersion),
     // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
     measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
   };

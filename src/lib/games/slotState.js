@@ -1,6 +1,7 @@
 // slot セッションの防御的サニタイズ。
 // 保存済み summary は信用せず、検証済み trials を正本として再計算する。
 
+import { sanitizeArtVersion } from "../artVersion.js";
 import {
   SLOT_ENGINE_VERSION,
   SLOT_JUDGMENTS,
@@ -75,7 +76,7 @@ function sanitizeConfig(gameId, rawConfig) {
     // 演出の強さ（れんしゅうの回の「ぴったり！」の星）。無い古い記録は null。
     fxLevel: FX_LEVELS.has(value.fxLevel) ? value.fxLevel : null,
     // 絵が変わる前後の回を分けられるよう保つ。持たない古い記録は null。
-    artVersion: Number.isInteger(value.artVersion) && value.artVersion >= 1 ? value.artVersion : null,
+    artVersion: sanitizeArtVersion(value.artVersion),
     // 画面に出した1コマの高さ（px、games/slotFit.js）。そくていの回でも、画面に
     // 入りきらないときは決まった大きさより小さい。無い古い記録は null。
     reelCellPx: nullable(value.reelCellPx, 1, 2_000),

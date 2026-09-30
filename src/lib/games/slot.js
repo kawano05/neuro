@@ -22,6 +22,7 @@ import { slotSymbolHtml, slotSymbolStripUrl } from "./slotArt.js";
 import { SLOT_ART_VERSION, slotPracticeSymbolHtml, slotWorldHtml } from "../art/slotWorldArt.js";
 import { presentation } from "../presentation.js";
 import { atmosphereFor } from "../atmosphere.js";
+import { shownArtVersion } from "../artVersion.js";
 import { fitMeasuredReels, reelCellPx } from "./slotFit.js";
 
 const INPUT_GUARD_MS = 300;
@@ -541,7 +542,7 @@ export function createSlotGame(gameId) {
           difficultyMode: config.difficultyMode,
           // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
           fxLevel: ctx.fx?.level() ?? null,
-          artVersion: SLOT_ART_VERSION,
+          artVersion: shownArtVersion(config.difficultyMode, SLOT_ART_VERSION),
           textMode: config.textMode,
           measurementReadiness: config.measurementReadiness,
           visualGuidance: false,

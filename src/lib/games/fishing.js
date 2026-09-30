@@ -39,6 +39,7 @@ import { FISHING_ART_VERSION, fishingBoatSvg, fishingCatchSvg, fishingSeaHtml, f
 import { generateGoNoGoSequence } from "./judge.js";
 import { generateForeperiods, judgeReaction } from "./reaction.js";
 import { renderAudioUnavailable } from "./unavailableScreen.js";
+import { shownArtVersion } from "../artVersion.js";
 
 // 素材の URL。`import boat from "...png"` ではなく new URL(...) を使う。
 // 前者だと Vite は解決できるが、素の Node が .png を読めずに落ちる
@@ -1012,7 +1013,7 @@ export function createFishingGame(gameId) {
         fxLevel: ctx.fx?.level() ?? null,
         // 見え方の版（art/fishingWorldArt.js）。れんしゅうの回の釣り人・魚・長靴の絵が
         // 変わった前後を分けるため。
-        artVersion: FISHING_ART_VERSION,
+        artVersion: shownArtVersion(resolveDifficultyMode(ctx.settings), FISHING_ART_VERSION),
         // 成立確認の状態（met / overridden / n/a）。他の課題と同じ意味。
         measurementReadiness: ctx.readiness || "n/a",
       },

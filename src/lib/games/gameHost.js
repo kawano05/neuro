@@ -123,6 +123,41 @@ export function createGameHost(ctx) {
   const modeKey = () => activeGameId === "calibration" || isMeasurementMode(state.settings) ? "session.measure" : "session.practice";
   const modeText = () => ctx.t(`${modeKey()}Short`);
 
+  /**
+   * 段階を変える（phase を書き換えるのはここだけ）。「この遊びの設定」のボタンを出すかは
+   * 段階で決まるので、ここで合わせる（画面の描き直しを待つと、段階が変わったあとも
+   * 前の段階の見え方が残った）。
+   */
+  function setPhase(next) {
+    phase = next;
+    syncSettingsButton();
+  }
+
+  /** 変えられる項目のある遊びで、開いてよい段階のときだけ出す。 */
+  function syncSettingsButton() {
+    elements.gameSettings.hidden = !(
+      state.currentView === "game" &&
+      activeGameId &&
+      SETTINGS_PHASES.has(phase) &&
+      gameSettings.available(activeGameId)
+    );
+  }
+
+  /**
+   * 上の帯の進みぐあい。回の種類（そくてい／れんしゅう）と、のこり・遊びの名前を別の
+   * 部品にする。狭い画面では2段に積み、のこりの数を省略記号で切らない（以前は
+   * 「れんしゅう · の…」になって、のこりが読めなかった）。
+   */
+  function renderProgress(text) {
+    const mode = document.createElement("span");
+    mode.className = "game-progress-mode";
+    mode.textContent = modeText();
+    const body = document.createElement("span");
+    body.className = "game-progress-text";
+    body.textContent = text;
+    elements.gameProgress.replaceChildren(mode, body);
+  }
+
   const {
     gameSwitchMenu: switchMenu,
     gameSwitchMenuTitle: switchMenuTitle,
@@ -177,7 +212,7 @@ export function createGameHost(ctx) {
     switchAgain.innerHTML = ctx.tHtml("result.retry");
     switchEnd.innerHTML = ctx.tHtml("game.exit");
     switchMenu.hidden = false;
-    phase = "exitChoice";
+    setPhase("exitChoice");
     // 出た瞬間のひと押し（待っていた最中の押下が遅れて届いたもの）で選ばない。
     exitChoiceGuardUntil = performance.now() + READY_GUARD_MS;
     elements.gameSettings.hidden = true;
@@ -374,7 +409,7 @@ export function createGameHost(ctx) {
         finale: () => atmosphere?.finale(),
       },
       setProgress(text) {
-        elements.gameProgress.textContent = `${modeText()} · ${text}`;
+        renderProgress(text);
       },
       logTrial(session) {
         persistSession(session);
@@ -389,7 +424,7 @@ export function createGameHost(ctx) {
       /** 音が出せず、この回を始められない画面を出した（次のひと押しでホームへ）。 */
       markUnavailable() {
         if (phase !== "playing") return;
-        phase = "unavailable";
+        setPhase("unavailable");
         armExitChoice();
       },
     };
@@ -427,7 +462,7 @@ export function createGameHost(ctx) {
 
   /** 課題を始める（説明の画面のあと・説明の無い遊びは開いてすぐ）。 */
   function startPlaying(module) {
-    phase = "playing";
+    setPhase("playing");
     activeInstance = module.create(buildGameCtx());
     activeInstance.mount(elements.gameStageContent);
     mountAtmosphere(module);
@@ -531,7 +566,7 @@ export function createGameHost(ctx) {
       hint.innerHTML = ctx.tHtml("ready.endlessExit", { n: Math.round(EXIT_CHOICE_IDLE_MS / 1000) });
       elements.gameStageContent.querySelector(".game-ready-go").append(hint);
     }
-    phase = "ready";
+    setPhase("ready");
     ctx.voiceFeedback(spoken);
     readyScreen.open();
   }
@@ -577,7 +612,7 @@ export function createGameHost(ctx) {
     destroyActive(); // 多重起動防止（MUST）: 前回 instance の destroy() を必ず呼ぶ
     ctx.fx?.clear(); // 前の画面の粒を、次の合図より前へ持ち越さない。
     scan.stop(true);
-    phase = "idle";
+    setPhase("idle");
     activeGameId = gameId;
     lastResultSummary = null;
     lastAtmosphereLevel = null;
@@ -625,9 +660,8 @@ export function createGameHost(ctx) {
     const hostFinale =
       profile && !atmosphere.finishing() && (profile.reward || (profile.kind === "timing" && profile.finaleWaitMs > 0));
     if (hostFinale) {
-      phase = "finale";
+      setPhase("finale");
       armExitChoice();
-      elements.gameSettings.hidden = true;
       atmosphere.finale();
       if (!profile.reward) ctx.fx?.finale(elements.gameStageContent, {});
       finaleTimer = window.setTimeout(() => {
@@ -658,7 +692,7 @@ export function createGameHost(ctx) {
       });
     }
     destroyActive({ keepCelebration: true });
-    phase = "idle";
+    setPhase("idle");
     ctx.audio.setProfile?.("play");
     ctx.fx?.setMeasurement(false);
     revealPending = true;
@@ -696,7 +730,7 @@ export function createGameHost(ctx) {
     elements.gameStageContent.classList.remove("is-ready");
     delete elements.gameStageContent.dataset.readyWorld;
     destroyActive();
-    phase = "idle";
+    setPhase("idle");
     ctx.audio.setProfile?.("play");
     ctx.fx?.setMeasurement(false);
     ctx.fx?.clear();
@@ -804,18 +838,14 @@ export function createGameHost(ctx) {
       // 始まっていないので「のこり」は書けない）。名前は辞書から引く
       // ——registry の title は日本語のままなので、直に出すと英語表記でも
       // ここだけ日本語になる。
-      elements.gameProgress.textContent = activeModule ? `${modeText()} · ${moduleTitle(activeModule)}` : "";
+      if (activeModule) renderProgress(moduleTitle(activeModule));
+      else elements.gameProgress.replaceChildren();
       elements.resultMode.innerHTML = activeModule?.taskType ? ctx.tHtml(modeKey()) : "";
       elements.resultMode.hidden = !activeModule?.taskType;
       elements.resultView.dataset.world = tileThemeFor(activeGameId)?.palette || "pop";
       // 変えられる項目のある遊びでだけ出す（そくていの回で速さしか無い遊びは出さない）。
       // お祝いの待ち・終わりの選択では出さない（開くと、けっかを飛ばしてしまう）。
-      elements.gameSettings.hidden = !(
-        state.currentView === "game" &&
-        activeGameId &&
-        SETTINGS_PHASES.has(phase) &&
-        gameSettings.available(activeGameId)
-      );
+      syncSettingsButton();
 
       // 正常終了の要約をアプリTTSが所有する場合、同じ遷移で結果DOMまで
       // VoiceOverへ読ませない。TTSがOFFなら従来どおりpolite live regionが所有する。

@@ -2,6 +2,7 @@ import { createRecordBackup } from "../src/lib/recordBackup.js";
 // state復元・CSV安全化・評価結果重複除去の回帰テスト。
 // npm run test:unit に含まれる。単独では次で実行できる:
 //   node tests/data-integrity.test.mjs
+import { ORIGINAL_ART_VERSION, shownArtVersion } from "../src/lib/artVersion.js";
 
 import assert from "node:assert/strict";
 import {
@@ -2066,6 +2067,15 @@ test("the effect level survives config -> sanitize -> CSV for every timing game"
   // 設定そのものも保存をまたいで残り、知らない値は既定（ふつう）へ戻る。
   assert.equal(sanitizeState({ settings: { fxLevel: "subtle" } }).settings.fxLevel, "subtle");
   assert.equal(sanitizeState({ settings: { fxLevel: "strobe" } }).settings.fxLevel, "normal");
+});
+
+test("the recorded art version is the art that was shown: measured runs always show version 1", () => {
+  // そくていの回は元の絵のまま。「その版のアプリで遊んだ」ではなく「見せた絵」を残す
+  // （src/lib/artVersion.js）。見え方の変わらないそくていの記録を、版の列で分けないため。
+  assert.equal(shownArtVersion("measure", CRANE_ART_VERSION), ORIGINAL_ART_VERSION);
+  assert.equal(shownArtVersion("measure", FISHING_ART_VERSION), ORIGINAL_ART_VERSION);
+  assert.equal(shownArtVersion("practice", CRANE_ART_VERSION), CRANE_ART_VERSION);
+  assert.equal(shownArtVersion("practice", FISHING_ART_VERSION), FISHING_ART_VERSION);
 });
 
 test("the art version survives config -> sanitize -> CSV for the arm and fishing games", () => {

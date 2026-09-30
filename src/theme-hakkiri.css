@@ -845,6 +845,11 @@ body.user-world #gameTileGrid[data-paged="true"] .hk-tile .hk-tile-badge {
    ゲーム画面の上の帯（進みぐあい・この遊びの設定・おわる）
    --------------------------------------------------------------------- */
 
+/* 回の種類とのこりの区切り（狭い画面では2段に積むので出さない）。 */
+.game-progress-mode::after {
+  content: " · ";
+}
+
 body.game-mode.user-world .game-progress {
   top: max(16px, env(safe-area-inset-top));
   left: max(16px, env(safe-area-inset-left));
@@ -923,11 +928,23 @@ body.game-mode .game-actions .game-exit {
     font-size: 1.15rem;
   }
 
+  /* 狭い画面では回の種類を上の段に小さく、のこりを下の段に。どちらも切らない。 */
   body.game-mode.user-world .game-progress {
+    display: flex;
+    flex-direction: column;
     max-width: calc(100vw - 212px);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    padding-block: 4px;
+    line-height: 1.15;
     white-space: nowrap;
+  }
+
+  body.game-mode.user-world .game-progress-mode {
+    font-size: 0.72em;
+    opacity: 0.85;
+  }
+
+  body.game-mode.user-world .game-progress-mode::after {
+    content: none;
   }
 
   /* さかなつりの点数（「0 cm」）が、上の帯の「のこり」とぶつかっていた（390px）。

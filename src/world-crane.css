@@ -37,16 +37,35 @@
 .module-crane.is-practice .crane-console { padding: 12px 16px; gap: 10px; z-index: 1; min-width: 0; }
 .module-crane.is-practice .crane-status { white-space: normal; overflow-wrap: anywhere; text-align: center; max-width: 100%; }
 .module-crane.is-practice .crane-tray { min-height: 64px; padding: 8px 12px; }
+/* つかんだ景品がアームから下がる量は、箱の幅を基準にする。styles.css の 6% は箱の
+   高さが基準で、れんしゅうの縦長の箱では、景品が閉じた爪の下へ離れてぶら下がって
+   見えた。4:3 の箱なら 6%（高さ）＝ 4.5%（幅）で、横画面とそくていの見え方と同じ。 */
+.module-crane.is-practice .crane-stage { container-type: size; }
+.module-crane.is-practice .crane-prize { --prize-hang: 4.5cqw; }
 @media (min-aspect-ratio: 5/4) {
   /* 横画面はガラスを4:3に保ち、状態と受け皿を右に移す。 */
   .module-crane.is-practice .crane-cabinet {
     grid-template-columns: minmax(0, 1fr) minmax(150px, 22%);
-    grid-template-rows: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "stage marquee"
+      "stage console";
     justify-content: center;
     align-items: center;
     gap: 16px;
   }
-  .module-crane.is-practice .crane-marquee { display: none; }
+  .module-crane.is-practice .crane-stage { grid-area: stage; }
+  .module-crane.is-practice .crane-console { grid-area: console; }
+  /* 看板は右の列の上に小さく置き、得点（つかんだ N）を見せる。題名は上の帯に
+     遊びの名前が出ているので省く（以前は看板ごと隠していて、得点が見えなかった）。 */
+  .module-crane.is-practice .crane-marquee {
+    grid-area: marquee;
+    justify-content: center;
+    padding: 6px 8px;
+    border-width: 3px;
+    border-radius: 14px;
+  }
+  .module-crane.is-practice .crane-marquee-title { display: none; }
   .module-crane.is-practice .crane-stage {
     width: min(100%, calc((100dvh - 96px) * 4 / 3));
     height: auto;
@@ -371,4 +390,17 @@ body.high-contrast .module-crane.is-practice .crane-tray {
 
 body.high-contrast .module-crane.is-practice .crane-tray-label {
   color: #ffffff;
+}
+
+/* 受け皿からはみ出した景品の数（games/crane.js の trimTray）。 */
+.module-crane.is-practice .crane-collected-more {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  padding: 2px 8px;
+  border: 2px solid #1a1a1a;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1a1a1a;
+  font-weight: 800;
 }

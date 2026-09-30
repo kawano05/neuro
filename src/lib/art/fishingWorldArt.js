@@ -26,7 +26,9 @@ import { SEA_RAYS_HTML, seaBubblesHtml, seaSurfaceSvg, seaWeedsHtml } from "./pa
  * 同じ考え方。測定条件は禁止せず記録する）。この列を持たない古い記録は空欄。
  *   1 … 画像ファイル（PNG）の絵。そくていの回は今もこの見え方
  *   2 … れんしゅうの回だけ、このファイルの SVG の絵と世界にした（2026-09-30）。
- *       位置・大きさ・時刻は 1 と同じ。そくていの回の見え方は 1 と同じ
+ *       れんしゅうの回の主役の大きさは画面の大きさに合わせて変わる（画面の大きさは記録の
+ *       deviceViewportWidth / Height）。判定・時刻は 1 と同じ。
+ *   記録するのは見せた絵の版: そくていの回は、いつでも 1（src/lib/artVersion.js）。
  */
 export const FISHING_ART_VERSION = 2;
 
