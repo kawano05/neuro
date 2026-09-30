@@ -1,6 +1,7 @@
 import { chromium, devices, webkit } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { mkdir } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { colorLegacyPreset, rhythmPresets, storageKey } from "../src/lib/content.js";
@@ -71,6 +72,7 @@ const projects = [
 
 const checks = [
   ["isolates presentation faults and completes recorded beginner and timing runs", checkPresentationFaults],
+  ["stops decorative motion for all four atmospheres and reduced motion", checkDecorationMotion],
   ["loads the main learning app", checkMainApp],
   ["keeps the start press from falling through into a home activity", checkStartInputGuard],
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
@@ -170,7 +172,7 @@ try {
     try {
       for (const [name, check] of selectedChecks) {
         const context = await browser.newContext({ ...project.contextOptions,
-          serviceWorkers: check === checkPresentationFaults ? "block" : "allow",
+          serviceWorkers: [checkPresentationFaults, checkDecorationMotion].includes(check) ? "block" : "allow",
         });
         await context.addInitScript(() => {
           const marker = "neuro-smoke-initialized";
@@ -4707,6 +4709,48 @@ async function checkPresentationFaults(page) {
     await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, { timeout: 12000 });
     const session = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).sessions.at(-1), storageKey);
     assert(session.finished === true && session.trials.length === 3, "Timing faults must preserve completion and all trial records");
+  }
+}
+
+async function checkDecorationMotion(page, project) {
+  const output = "output/playwright/ud2-motion";
+  await mkdir(output, { recursive: true });
+  await exposePresentationContext(page);
+  for (const reduced of [false, true]) for (const level of ["none", "subtle", "normal", "big"]) {
+    await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
+    await page.evaluate(({ key, level }) => {
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.settings = { ...saved.settings, fxLevel: level, autoScan: false, speechEnabled: false };
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, { key: storageKey, level });
+    await page.reload();
+    await page.locator("#startStage").click();
+    await openActivity(page, t("tile.balloon.title"));
+    await page.locator("#gameStage").dispatchEvent("click");
+    await page.waitForTimeout(120);
+    const balloon = await page.evaluate(() => ({
+      animations: document.querySelector("#gameStageContent").getAnimations({ subtree: true }).length,
+      particles: Number(document.querySelector("#fxLayer")?.dataset.emitted || 0),
+      mark: getComputedStyle(document.querySelector(".balloon.is-popping .balloon-mark")).opacity,
+    }));
+    if (reduced || level === "none") {
+      assert(balloon.animations === 0 && balloon.particles === 0, `${level}/${reduced}: balloon decorations must remain still`);
+      assert(balloon.mark === "1", "A press must show a static burst shape immediately");
+    } else assert(balloon.particles > 0, `${level}: enabled effects must still work`);
+    await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-balloon.png` });
+    await page.locator("#gameExit").click();
+    await openActivity(page, t("tile.fishing-corner.title"));
+    await openActivity(page, t("tile.fishing.title"));
+    await page.waitForTimeout(200);
+    await page.locator("#gameStage").dispatchEvent("click");
+    await page.waitForTimeout(400);
+    const world = await page.evaluate(() => {
+      const nodes = [...document.querySelectorAll(".fishing-cloud, .fishing-sea *, .fishing-otter-eyes")];
+      return nodes.flatMap(node => node.getAnimations()).filter(animation => animation.playState === "running").length;
+    });
+    assert((world > 0) === (!reduced && ["normal", "big"].includes(level)), `${level}/${reduced}: the fishing world must follow the shared policy`);
+    await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-fishing.png` });
+    await page.locator("#gameExit").click();
   }
 }
 

@@ -60,6 +60,13 @@ export function fxScale(level) {
   return FX_LEVELS.includes(level) ? FX_SCALE[level] : FX_SCALE.none;
 }
 
+/** 装飾の動きの唯一の判定。課題に必要な移動と、記録する強さとは分ける。 */
+export function resolveDecorationPolicy(settings, context = {}) {
+  const level = resolveFxLevel(settings, context);
+  const motion = !context.reducedMotion && !context.measurement && level !== "none";
+  return { level, motion, worldMotion: motion && ["normal", "big"].includes(level), scale: fxScale(motion ? level : "none") };
+}
+
 /**
  * だんだん盛り上がる係数（docs/overall-design §3.1）。回の番号 k（0 から）で
  * 1 + 0.35k。5回目（k=4）で 2.4 倍。上は 8 回目で止める。

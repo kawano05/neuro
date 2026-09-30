@@ -58,6 +58,7 @@ export const PARTY_COLORS = Object.freeze(["#FF8082", "#03AF7A", "#F6AA00", "#4D
 
 function animate(el, frames, options) {
   if (!el || typeof el.animate !== "function") return null;
+  if (el.ownerDocument?.body?.dataset.decorationMotion === "off") return null;
   try {
     return el.animate(frames, options);
   } catch {
@@ -567,6 +568,7 @@ export function fullJarHtml(count = PARTY_JAR_CAPACITY) {
  * @returns {number} 見せ終わるまで（ms）。この間は枠を動かさない（gameHost）。
  */
 export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
+  if (fx?.policy?.().motion === false) return 0;
   const root = container?.querySelector?.(".party-result");
   if (!root) return 0;
   const win = root.ownerDocument.defaultView;

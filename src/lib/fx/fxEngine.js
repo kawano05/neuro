@@ -205,7 +205,7 @@ function drawParticle(g, p) {
  * @param {() => string} options.getLevel いまの強さ（fxSafety の resolveFxLevel）
  * @param {Document} [options.doc]
  */
-export function createFxEngine({ getLevel = () => "normal", doc = typeof document !== "undefined" ? document : null } = {}) {
+export function createFxEngine({ getLevel = () => "normal", getScale = () => fxScale(getLevel()), doc = typeof document !== "undefined" ? document : null } = {}) {
   let canvas = null;
   let g = null;
   let dpr = 1;
@@ -321,7 +321,7 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
   }
 
   function scale() {
-    return fxScale(level());
+    return getScale();
   }
 
   /** 要素の真ん中（画面の座標）。要素が無ければ画面の真ん中。 */

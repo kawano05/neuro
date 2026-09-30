@@ -21,6 +21,7 @@ import {
   escalation,
   fxScale,
   resolveFxLevel,
+  resolveDecorationPolicy,
 } from "../src/lib/fx/fxSafety.js";
 import {
   alphaOf,
@@ -80,6 +81,19 @@ test("the device's reduce-motion setting caps the strength at subtle", () => {
   }
   assert.equal(fxScale("none").particles, 0, "なし では粒を出さない");
   assert.equal(fxScale("none").finale, "none");
+});
+
+test("decorative motion is separate from the recorded level and task motion", () => {
+  for (const fxLevel of FX_LEVELS) {
+    for (const reducedMotion of [false, true]) {
+      const policy = resolveDecorationPolicy({ fxLevel }, { reducedMotion });
+      assert.equal(policy.level, resolveFxLevel({ fxLevel }, { reducedMotion }));
+      assert.equal(policy.motion, !reducedMotion && fxLevel !== "none");
+      assert.equal(policy.worldMotion, !reducedMotion && ["normal", "big"].includes(fxLevel));
+      if (reducedMotion || fxLevel === "none") assert.equal(policy.scale, fxScale("none"));
+      assert.equal(resolveDecorationPolicy({ fxLevel }, { reducedMotion, measurement: true }).motion, false);
+    }
+  }
 });
 
 test("shakes and glows stay inside the safety limits", () => {

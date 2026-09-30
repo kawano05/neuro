@@ -228,6 +228,7 @@ export function initNeuroNodeApp() {
    * 読み上げ名（sr-only の見出し）はプレーン文、目で読む文字はルビ付き。
    */
   function renderUserWorldText() {
+    ctx.fx.syncPolicy();
     const set = (el, key, html = true) => {
       if (!el) return;
       if (html) el.innerHTML = ctx.tHtml(key);

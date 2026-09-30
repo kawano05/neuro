@@ -1,0 +1,30 @@
+/* 共通の装飾判定だけを見る。課題の移動・測定画面・配置は変更しない。 */
+body[data-world-motion="off"] :is(.pop-sea, .module-fishing.is-practice .fishing-sea) *,
+body[data-world-motion="off"] .module-fishing.is-practice :is(.fishing-cloud, .fishing-otter-eyes, .fishing-shaft, .fishing-far),
+body[data-world-motion="off"] .balloon {
+  animation: none !important;
+}
+
+body[data-world-motion="off"] .module-fishing.is-practice .fishing-cloud {
+  translate: var(--rest) 0;
+}
+
+body[data-world-motion="off"] :is(.pop-sea, .module-fishing.is-practice .fishing-sea) .sea-bubbles {
+  display: none;
+}
+
+body[data-decoration-motion="off"] :is(.module-pop, .module-balloon, .module-coloring, .module-baseball, .party-layer, #resultStats) *,
+body[data-decoration-motion="off"] .slot-stage.is-practice :is(.slot-cheer-word, .slot-cheer-streak),
+body[data-decoration-motion="off"] .module-crane.is-practice :is(.crane-collected-item, .crane-prize.is-lifted, .crane-prize.is-slipped),
+body[data-decoration-motion="off"] .module-fishing.is-practice :is(.fishing-bite-mark, .fishing-catch) {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* 割れたことは、移動せずに形を変えて即時に示す。 */
+body[data-decoration-motion="off"] .balloon.is-popping .balloon-svg {
+  opacity: 0;
+}
+body[data-decoration-motion="off"] .balloon.is-popping .balloon-mark {
+  opacity: 1;
+}

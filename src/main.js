@@ -16,6 +16,7 @@ import "./world-slot.css";
 import "./world-crane.css";
 // さかなつり（押すと 出てくる とつながる海）。
 import "./world-fishing.css";
+import "./decoration-motion.css";
 
 const app = mount(App, {
   target: document.getElementById("app"),
