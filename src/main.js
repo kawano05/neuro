@@ -9,7 +9,11 @@ import "@fortawesome/fontawesome-free/css/regular.min.css";
 import "./styles.css";
 // 利用者の世界のデザイン（はっきりした色）。styles.css より後に読む。
 import "./theme-hakkiri.css";
+// タイミングの遊びの、れんしゅうの回の世界。theme-hakkiri.css の後に読む。
+// リールを 止める（昼の ゆうえんち）。
 import "./world-slot.css";
+// アームで つかむ（おもちゃ屋さん）。
+import "./world-crane.css";
 
 const app = mount(App, {
   target: document.getElementById("app"),

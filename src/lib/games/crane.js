@@ -53,6 +53,13 @@ import {
   project,
 } from "./craneGeometry.js";
 import { PRIZE_ART, clawClosedUrl, clawOpenUrl } from "./craneArt.js";
+import {
+  clawHtml,
+  cranePrizeSvg,
+  craneMatHtml,
+  craneRoomHtml,
+  craneWorldHtml,
+} from "../art/craneWorldArt.js";
 
 const FEEDBACK_GAIN = 0.05;
 const MISS_GAIN = 0.018;
@@ -333,6 +340,9 @@ export function createCraneGame(ctx) {
   // 漢字の名前を足すと静かにルビだけ落ちる。その線は
   // tests/i18n.test.mjs の「景品名に漢字を使わない」で縛ってある。
   const config = resolveCraneConfig(ctx.settings, ctx.readiness, ctx.endless, ctx.fx?.level() ?? null);
+  // れんしゅうの回だけ、おもちゃ屋さんの世界（src/lib/art/craneWorldArt.js）の絵を使う。
+  // そくていの回は、刺激の見え方も測定の条件なので、いまの PNG のまま動かさない。
+  const practice = config.difficultyMode !== "measure";
   let stageEl = null;
   let sceneEl = null;
   let statusEl = null;
@@ -349,6 +359,9 @@ export function createCraneGame(ctx) {
   let collectedEl = null;
   let guideXEl = null;
   let guideYEl = null;
+  // れんしゅうの回だけ、走査の線の下に黒い太線を敷く（色のついた床の上でも線が読める）。
+  let guideShadeXEl = null;
+  let guideShadeYEl = null;
   let rafId = null;
   let destroyed = false;
   let finished = false;
@@ -391,6 +404,10 @@ export function createCraneGame(ctx) {
     return DECOR_SPOTS.map((spot, index) => {
       const prize = cranePrizes[index % cranePrizes.length];
       const at = project(spot.x, spot.y);
+      if (practice) {
+        return `<div class="crane-decor" aria-hidden="true"
+          style="left:${at.left}%;top:${at.top}%;--prize-scale:${at.scale.toFixed(3)}">${cranePrizeSvg(prize.asset)}</div>`;
+      }
       return `<img class="crane-decor" src="${PRIZE_ART[prize.asset]}" alt=""
         style="left:${at.left}%;top:${at.top}%;--prize-scale:${at.scale.toFixed(3)}" />`;
     }).join("");
@@ -406,28 +423,44 @@ export function createCraneGame(ctx) {
     // marquee（台の看板）、下に本体と景品の取り出し口を置くと、画面全体が
     // 「1台の筐体が立っている」構図になり、空きが消える。中身の幾何は
     // 一切さわっていない。
-    stageEl.innerHTML = `
+    //
+    // れんしゅうの回だけ、店内（台の外）と箱の中の部屋・床のマットを足す。
+    // 世界は始めに1回だけ作る（試行ごとには作り直さない）。景品とアームは
+    // PNG ではなく SVG を入れる（同じクラスなので、位置と大きさの CSS はそのまま効く）。
+    const worldHtml = practice ? craneWorldHtml() : "";
+    const roomHtml = practice ? craneRoomHtml() : "";
+    const shadeHtml = practice
+      ? `<line class="crane-guide-shade crane-guide-shade-x" vector-effect="non-scaling-stroke" /><line class="crane-guide-shade crane-guide-shade-y" vector-effect="non-scaling-stroke" />`
+      : "";
+    const matHtml = practice ? `${craneMatHtml()}<div class="crane-tint" aria-hidden="true"></div>` : "";
+    const prizeHtml = practice
+      ? `<div class="crane-prize" aria-hidden="true"></div>`
+      : `<img class="crane-prize" src="" alt="" />`;
+    const clawMarkup = practice
+      ? `<div class="crane-claw" aria-hidden="true">${clawHtml()}</div>`
+      : `<img class="crane-claw" src="${clawOpenUrl}" alt="" />`;
+    stageEl.innerHTML = `${worldHtml}
       <div class="crane-cabinet" aria-hidden="true">
         <div class="crane-marquee">
           <span class="crane-marquee-title">${tHtml("tile.crane-corner.title")}</span>
           <div class="crane-score">${tHtml("crane.score", { n: 0 })}</div>
         </div>
         <div class="crane-stage">
-          <div class="crane-back"></div>
-          <div class="crane-floor"></div>
+          <div class="crane-back"></div>${roomHtml}
+          <div class="crane-floor"></div>${matHtml}
           ${decorMarkup()}
           <div class="crane-chute"><span class="crane-chute-mouth"></span></div>
           <div class="crane-rail"></div>
           <div class="crane-trolley"></div>
           <div class="crane-cable"></div>
-          <svg class="crane-guides" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <svg class="crane-guides" viewBox="0 0 100 100" preserveAspectRatio="none">${shadeHtml}
             <line class="crane-guide crane-guide-x" vector-effect="non-scaling-stroke" />
             <line class="crane-guide crane-guide-y" vector-effect="non-scaling-stroke" />
           </svg>
           <span class="crane-ring"></span>
           <span class="crane-shadow"></span>
-          <img class="crane-prize" src="" alt="" />
-          <img class="crane-claw" src="${clawOpenUrl}" alt="" />
+          ${prizeHtml}
+          ${clawMarkup}
           <div class="crane-glass"></div>
           <div class="crane-streak"></div>
         </div>
@@ -466,6 +499,15 @@ export function createCraneGame(ctx) {
     collectedEl = stageEl.querySelector(".crane-collected");
     guideXEl = stageEl.querySelector(".crane-guide-x");
     guideYEl = stageEl.querySelector(".crane-guide-y");
+    guideShadeXEl = stageEl.querySelector(".crane-guide-shade-x");
+    guideShadeYEl = stageEl.querySelector(".crane-guide-shade-y");
+  }
+
+  /** 下敷きの線を、本線と同じ位置・同じ表示にそろえる（れんしゅうの回だけ）。 */
+  function syncGuideShade(line, shade) {
+    if (!shade) return;
+    ["x1", "y1", "x2", "y2"].forEach((name) => shade.setAttribute(name, line.getAttribute(name) ?? "0"));
+    shade.classList.toggle("is-shown", line.classList.contains("is-shown"));
   }
 
   /**
@@ -505,6 +547,8 @@ export function createCraneGame(ctx) {
     // 走査中の軸だけを明るくする。確定済みの軸は「もう決めた線」として残す。
     guideXEl.classList.toggle("is-active", phase === "x");
     guideYEl.classList.toggle("is-active", phase === "y");
+    syncGuideShade(guideXEl, guideShadeXEl);
+    syncGuideShade(guideYEl, guideShadeYEl);
   }
 
   /** 景品と「掴める範囲」のリングを、いまの目標に合わせて置き直す。 */
@@ -512,7 +556,8 @@ export function createCraneGame(ctx) {
     const target = currentTarget();
     const prize = currentPrize();
     const at = project(target.x, target.y);
-    prizeEl.src = PRIZE_ART[prize.asset];
+    if (practice) prizeEl.innerHTML = cranePrizeSvg(prize.asset);
+    else prizeEl.src = PRIZE_ART[prize.asset];
     prizeEl.style.left = `${at.left}%`;
     prizeEl.style.top = `${at.top}%`;
     prizeEl.style.setProperty("--prize-scale", at.scale.toFixed(3));
@@ -528,6 +573,16 @@ export function createCraneGame(ctx) {
     ringEl.style.top = `${at.top}%`;
     ringEl.style.width = `${ring.width}%`;
     ringEl.style.height = `${ring.height}%`;
+  }
+
+  /**
+   * アームを開く／閉じる。れんしゅうの回は SVG を2枚重ねて持っているので、
+   * 切り替えは class だけ（画像の読み込み待ちで一瞬消えることが無い）。
+   * 2枚は下端（つかむ点）をそろえてあるので、切り替えてもアームは跳ねない。
+   */
+  function setClawClosed(closed) {
+    if (practice) clawEl.classList.toggle("is-closed", closed);
+    else clawEl.src = closed ? clawClosedUrl : clawOpenUrl;
   }
 
   /** アームと、そこにぶら下がる索・台車・影の位置を1フレームぶん更新する。 */
@@ -624,7 +679,7 @@ export function createCraneGame(ctx) {
     );
     statusEl.innerHTML = tHtml("crane.movingX");
     sceneEl.classList.remove("is-grip", "is-slip", "is-miss");
-    clawEl.src = clawOpenUrl;
+    setClawClosed(false);
     clawEl.classList.remove("is-holding");
     placeTarget();
     placeClaw(0, 50, 0);
@@ -692,7 +747,7 @@ export function createCraneGame(ctx) {
     logTrial(session);
 
     const now = audio.scheduler.now();
-    clawEl.src = clawClosedUrl;
+    setClawClosed(true);
     sceneEl.classList.add(`is-${judgment}`);
     // 音でも3つの結果を describe する。以前は高さの違うサイン波が1つ鳴るだけで、
     // 掴んだ・すべった・届かなかったの区別が音からはつきにくかった。
@@ -931,7 +986,7 @@ export function createCraneGame(ctx) {
 
   /** 景品口へ落として、取れたことを確定させる。 */
   function dropIntoChute() {
-    clawEl.src = clawOpenUrl;
+    setClawClosed(false);
     clawEl.classList.remove("is-holding");
     prizeEl.classList.remove("is-lifted");
     prizeEl.classList.add("is-dropped");
@@ -941,10 +996,14 @@ export function createCraneGame(ctx) {
     window.setTimeout(() => chuteEl?.classList.remove("is-filled"), 600);
     // 取れた景品を筐体の外に並べていく。数字の「つかんだ N」だけだと、
     // 何を取ったのかも、増えていくことも見えない。
-    const badge = document.createElement("img");
+    const badge = document.createElement(practice ? "div" : "img");
     badge.className = "crane-collected-item";
-    badge.src = PRIZE_ART[currentPrize().asset];
-    badge.alt = "";
+    if (practice) {
+      badge.innerHTML = cranePrizeSvg(currentPrize().asset);
+    } else {
+      badge.src = PRIZE_ART[currentPrize().asset];
+      badge.alt = "";
+    }
     collectedEl.appendChild(badge);
     // 受け口に落ちたら紙吹雪（れんしゅうの回だけ）。
     fx?.craneWin(chuteEl);
@@ -994,9 +1053,10 @@ export function createCraneGame(ctx) {
   function mount(el) {
     stageEl = el;
     stageEl.classList.add("module-crane");
-    // れんしゅうの回だけの見た目（明るい色の筐体。theme-hakkiri.css）。ガラスの箱
-    // （床と景品・狙い）は、そくていの回と同じ。
-    stageEl.classList.toggle("is-practice", config.difficultyMode !== "measure");
+    // れんしゅうの回だけの見た目（おもちゃ屋さんの世界。theme-hakkiri.css と
+    // world-crane.css）。ガラスの箱の中の床・景品・狙いの位置と大きさ、アームの
+    // 動く範囲は、そくていの回と同じ。
+    stageEl.classList.toggle("is-practice", practice);
     renderMarkup();
     railEl.dataset.top = "8";
 
@@ -1102,6 +1162,8 @@ export function createCraneGame(ctx) {
     collectedEl = null;
     guideXEl = null;
     guideYEl = null;
+    guideShadeXEl = null;
+    guideShadeYEl = null;
   }
 
   return { mount, handleInput, destroy };
