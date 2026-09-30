@@ -2289,9 +2289,18 @@ async function checkSlotL1GameFlow(page) {
   // 6つの絵の一覧は、そくていの回にだけ出す（れんしゅうでは「リールの周りの
   // 余計なもの」として外した。docs/design-renewal-2026-09-25.md §1.5）。
   // 画像そのものは そくていの回で使うので、読み込めることは見ておく。
-  const imageReady = await page.locator(".slot-symbol-guide img").evaluate(
-    (image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
-  );
+  // 読み込みを待ってから見る。すぐ見ると、読み込み中のときに落ちる（前からあった
+  // タイミング次第の失敗。変更の前後どちらでも起きた）。
+  const imageReady = await page
+    .waitForFunction(
+      () => {
+        const image = document.querySelector(".slot-symbol-guide img");
+        return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+      },
+      null,
+      { timeout: 5000 }
+    )
+    .then(() => true, () => false);
   assert(imageReady, "Generated six-symbol guide PNG must load in the actual game");
   assert(
     !(await page.locator(".slot-symbol-guide").isVisible()),
