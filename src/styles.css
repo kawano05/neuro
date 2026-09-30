@@ -480,14 +480,10 @@ body.high-contrast .settings-guide {
   color: #000000;
 }
 
-/* 音の素材のクレジット（App.svelte の #soundCredits）。見た目は「つかいかた」と同じ。 */
-.settings-credits {
-  margin: 18px 0 0;
-}
-
+/* 音の素材のクレジット（SettingsView.svelte の #soundCredits）。 */
 .settings-credits-note {
   margin: 0;
-  padding: 0 20px 8px 44px;
+  padding: 0 0 8px;
   line-height: 1.6;
 }
 
@@ -495,7 +491,7 @@ body.high-contrast .settings-guide {
   display: grid;
   gap: 10px;
   margin: 0;
-  padding: 4px 20px 18px 44px;
+  padding: 4px 0 0 1.5em;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -572,61 +568,27 @@ body.high-contrast .supporter-message {
   display: none;
 }
 
-/* 設定のタブ。目的の項目をスクロールで探さずに済むよう、面を分ける。 */
-.settings-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0 0 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-}
-
-.settings-tab {
-  /* 44px 未満のタップ標的を作らない（このアプリの全体規則）。 */
-  min-height: 44px;
-  padding: 10px 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--muted);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.settings-tab:hover {
-  border-color: var(--line-strong);
-  color: var(--ink);
-}
-
-.settings-tab.is-active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-/* いま測定の回であることは、別の面を見ていても分かる必要がある。
-   色だけで運ばない——読み上げ名にも状態を入れてある（settings.js）。 */
-.settings-tab.is-measuring::after {
-  content: "●";
-  margin-left: 8px;
-  color: var(--accent-warm);
-  font-size: 0.7em;
-}
-
-.settings-tab.is-measuring.is-active::after {
-  color: var(--accent-ink);
-}
-
-/* display を当てた要素には必ず [hidden] を添える（このファイルの他の
-   注記と同じ理由。忘れると、隠したはずの面が全部出たままになる）。 */
-.settings-panel {
-  display: block;
-}
-
-.settings-panel[hidden] {
-  display: none;
+/* 常設6項目とネイティブ折り畳み。業務画面の色と、44px以上の操作標的を保つ。 */
+/* 支援者設定ではドックの操作は無効。隠して設定のタップ標的を覆わないようにする。 */
+body.supporter-menu-mode .switch-dock { display: none; }
+.settings-status { margin: 0 0 14px; color: var(--muted); font-size: 0.95rem; }
+.settings-status.is-measuring { color: var(--accent-strong); font-weight: 700; }
+#settings .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.settings-details-list { display: grid; gap: 10px; margin-top: 22px; }
+.settings-details { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); min-width: 0; }
+.settings-details > summary { min-height: 48px; padding: 12px 16px; cursor: pointer; font-weight: 700; }
+.settings-details > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.settings-details[open] > summary { border-bottom: 1px solid var(--line); }
+.settings-details-body { padding: 16px; }
+.settings-details-body > .settings-group-title:first-child { margin-top: 0; }
+#settings .setting-row { min-width: 0; }
+#settings .setting-row:not(.toggle-row) > span { grid-column: 1 / -1; }
+#settings .setting-row output { grid-column: 2; min-width: 3.5em; text-align: right; }
+#settings .setting-row label { cursor: pointer; }
+#settings .setting-row select { grid-column: 1 / -1; width: 100%; min-width: 0; max-width: 100%; }
+@media (max-width: 700px) {
+  #settings .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .settings-details-body { padding: 12px; }
 }
 
 /* そくていに入る前の成立確認（src/lib/readinessCheck.js）。
@@ -6482,7 +6444,7 @@ body.high-contrast .module-color .color-progress-dot.is-done {
 
 .setting-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(220px, 420px) 96px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
   padding: 16px;
@@ -6505,10 +6467,6 @@ body.high-contrast .module-color .color-progress-dot.is-done {
   margin-top: 3px;
   color: var(--muted);
   font-weight: 500;
-}
-
-.toggle-row {
-  grid-template-columns: 1fr auto;
 }
 
 input[type="range"] {
@@ -6869,8 +6827,7 @@ input[type="checkbox"]:checked::before {
 
   .field-row,
   .scale-row,
-  .note-row,
-  .setting-row {
+  .note-row {
     grid-template-columns: 1fr;
   }
 

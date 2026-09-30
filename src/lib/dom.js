@@ -1,5 +1,6 @@
 // =====================================================================
-// dom.js — App.svelte が描画したマークアップへの参照を一括取得する
+// dom.js — Svelte が描画したマークアップへの参照を一括取得する
+// 設定は共通の項目定義から収集する（docs/settings-simple-2026-09-30.md）。
 //
 // id を変更・追加した場合はここに追記する。各ビューは elements 経由でのみ
 // DOM に触れる（直接 querySelector しない）ことで、参照箇所を追いやすくする。
@@ -7,8 +8,15 @@
 // document.querySelector を併用している。
 // =====================================================================
 
+import { SETTINGS_FIELDS } from "./settingsFields.js";
+
 export function collectElements() {
   return {
+    // 設定UIと同じ定義からIDを収集し、手書きの項目一覧を重複させない。
+    ...Object.fromEntries(SETTINGS_FIELDS.flatMap(field => [
+      [field.id, document.getElementById(field.id)],
+      ...(field.type === "range" ? [[field.id + "Value", document.getElementById(field.id + "Value")]] : []),
+    ])),
     scanState: document.querySelector("#scanState"),
     homeSupporterMenu: document.querySelector("#homeSupporterMenu"),
     liveRegion: document.querySelector("#liveRegion"),
@@ -92,53 +100,13 @@ export function collectElements() {
     trendTabs: document.querySelector("#trendTabs"),
     exportCsv: document.querySelector("#exportCsv"),
     clearLog: document.querySelector("#clearLog"),
-    scanInterval: document.querySelector("#scanInterval"),
-    scanIntervalValue: document.querySelector("#scanIntervalValue"),
-    switchControlMode: document.querySelector("#switchControlMode"),
     switchControlModeNotice: document.querySelector("#switchControlModeNotice"),
-    autoScan: document.querySelector("#autoScan"),
-    showScreenSwitch: document.querySelector("#showScreenSwitch"),
-    scanFeedback: document.querySelector("#scanFeedback"),
-    fxLevel: document.querySelector("#fxLevel"),
-    speechEnabled: document.querySelector("#speechEnabled"),
-    speechVolume: document.querySelector("#speechVolume"),
-    speechVoice: document.querySelector("#speechVoice"),
-    speechVolumeValue: document.querySelector("#speechVolumeValue"),
-    soundEnabled: document.querySelector("#soundEnabled"),
-    largeText: document.querySelector("#largeText"),
-    highContrast: document.querySelector("#highContrast"),
     supporterMessage: document.querySelector("#supporterMessage"),
-    rhythmBpm: document.querySelector("#rhythmBpm"),
-    rhythmTargetBeats: document.querySelector("#rhythmTargetBeats"),
-    visualGuidance: document.querySelector("#visualGuidance"),
-    slotCycleMs: document.querySelector("#slotCycleMs"),
-    slotCycleMsValue: document.querySelector("#slotCycleMsValue"),
-    slotToleranceMs: document.querySelector("#slotToleranceMs"),
-    slotToleranceMsValue: document.querySelector("#slotToleranceMsValue"),
-    slotL1Rounds: document.querySelector("#slotL1Rounds"),
-    slotL1RoundsValue: document.querySelector("#slotL1RoundsValue"),
-    slotL2Rounds: document.querySelector("#slotL2Rounds"),
-    slotL2RoundsValue: document.querySelector("#slotL2RoundsValue"),
-    difficultyMode: document.querySelector("#difficultyMode"),
-    textMode: document.querySelector("#textMode"),
     measureModeNotice: document.querySelector("#measureModeNotice"),
-    // 設定のタブと、その中身の面。
-    settingsTabs: [...document.querySelectorAll(".settings-tab")],
-    settingsPanels: [...document.querySelectorAll(".settings-panel")],
     // そくていに入る前の成立確認（src/lib/readinessCheck.js）。
     readinessCheck: document.querySelector("#readinessCheck"),
     readinessLead: document.querySelector("#readinessLead"),
     readinessList: document.querySelector("#readinessList"),
-    craneSweepMs: document.querySelector("#craneSweepMs"),
-    craneSweepMsValue: document.querySelector("#craneSweepMsValue"),
-    craneToleranceR: document.querySelector("#craneToleranceR"),
-    craneToleranceRValue: document.querySelector("#craneToleranceRValue"),
-    craneTargetTrials: document.querySelector("#craneTargetTrials"),
-    craneTargetTrialsValue: document.querySelector("#craneTargetTrialsValue"),
-    craneAudioGuidance: document.querySelector("#craneAudioGuidance"),
-    fishingLimitMs: document.querySelector("#fishingLimitMs"),
-    hideVisualTasks: document.querySelector("#hideVisualTasks"),
-    researcherMode: document.querySelector("#researcherMode"),
     startCalibration: document.querySelector("#startCalibration"),
     toggleScan: document.querySelector("#toggleScan"),
     toggleScanLabel: document.querySelector("#toggleScanLabel"),

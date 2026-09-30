@@ -93,7 +93,7 @@ const checks = [
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
-  ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
+  ["shows six common settings and preserves values through accessible details", checkSettingsDetails],
   ["keeps the supporter menu itself out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
   ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
   ["moves between visible feature tabs", checkFeatureTabs],
@@ -1659,15 +1659,6 @@ async function checkKeyboardAndSwitchInput(page) {
 }
 
 /**
- * 設定はタブに分かれている（src/App.svelte の .settings-tab）。
- *
- * 守りたいのは2つ:
- *   1. 開いていない面の操作子が走査の輪に残らないこと。効かない（届かない）
- *      操作子を輪に置くと、利用者がそこで止まって押しても何も起きない。
- *   2. 支援者編集ロックを廃止したあと、操作子がそのまま押せること。
- *      「無効化されているが輪には居る」状態を作り直さない。
- */
-/**
  * 書き出しボタンが本当に書き出すこと。
  *
  * リールCSVのボタンは、押しても何も起きない状態で出荷されていた
@@ -1855,52 +1846,71 @@ async function checkTrendTabsCoverEveryGame(page) {
   }
 }
 
-async function checkSettingsTabs(page) {
+// 初期表示・ネイティブ開閉・ラベル・保存を通して検証する。表示定義をテストに複製しない。
+async function checkSettingsDetails(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-
-  const tabs = page.locator(".settings-tab");
-  assert((await tabs.count()) === 4, `Expected four settings tabs, got ${await tabs.count()}`);
-  assert(
-    (await tabs.first().getAttribute("aria-selected")) === "true",
-    "The first settings tab must start selected"
-  );
-  // 最初の面の項目は見えていて、他の面の項目は見えていない。
-  await page.locator("#scanInterval").waitFor({ state: "visible" });
-  await page.locator("#researcherMode").waitFor({ state: "hidden" });
-
-  const hiddenScannable = async () =>
-    page.evaluate(
-      () =>
-        [...document.querySelectorAll(".settings-panel[hidden] [data-scan]")].filter(
-          (el) => el.getBoundingClientRect().width > 0
-        ).length
-    );
-  assert(
-    (await hiddenScannable()) === 0,
-    "Hidden settings panels must leave the scan ring"
-  );
-
-  // 面を切り替えると入れ替わる。
-  await openSettingsTab(page, "measure");
-  await page.locator("#researcherMode").waitFor({ state: "visible" });
-  await page.locator("#scanInterval").waitFor({ state: "hidden" });
-  assert(
-    (await hiddenScannable()) === 0,
-    "Hidden settings panels must leave the scan ring after switching"
-  );
-
-  // 支援者編集ロックは廃止した（2026-08-17）。開いた面の操作子はそのまま押せる。
-  assert(
-    !(await page.locator("#researcherMode").isDisabled()),
-    "Settings controls must be usable without an editing lock"
-  );
-  assert(
-    (await page.locator("#supporterEditToggle").count()) === 0,
-    "The supporter editing lock must be gone, not merely hidden"
-  );
+  const savedSettings = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)).settings, storageKey);
+  const original = await savedSettings();
+  const visibleIds = await page.locator("#settings input:visible, #settings select:visible").evaluateAll(nodes => nodes.map(node => node.id).sort());
+  assert(JSON.stringify(visibleIds) === JSON.stringify(["fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"].sort()), "Only six common settings should be visible initially");
+  assert(await page.locator("#settings details[open]").count() === 0, "Details should start collapsed");
+  const summary = page.locator("#settingsSwitch > summary");
+  await page.locator("#hideVisualTasks").focus();
+  await page.keyboard.press("Tab");
+  assert(await summary.evaluate(node => document.activeElement === node), "Tab must reach the next details summary");
+  await page.keyboard.press("Enter");
+  await page.locator("#autoScan").waitFor({ state: "visible" });
+  await page.keyboard.press("Space");
+  await page.locator("#autoScan").waitFor({ state: "hidden" });
+  assert(JSON.stringify(await savedSettings()) === JSON.stringify(original), "Opening and closing must never change settings");
+  for (const name of ["switch", "senses", "play", "research", "credits"]) await openSettingsDetails(page, name);
+  const unnamed = await page.locator("#settings input, #settings select").evaluateAll(nodes => nodes.filter(node => !node.labels?.length || ![...node.labels].some(label => label.textContent.trim())).map(node => node.id));
+  assert(unnamed.length === 0, "Every control must have a readable label: " + unnamed.join(", "));
+  assert(await page.locator("#settings input, #settings select").count() === 28, "All 28 settings must remain reachable");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert(overflow <= 2, `Expanded settings must stay within the viewport, overflow ${overflow}px`);
+  await page.locator("#fxLevel").selectOption("subtle");
+  await page.locator("#speechEnabled").uncheck();
+  await page.locator("#soundEnabled").uncheck();
+  await page.locator("#largeText").uncheck();
+  await page.locator("#hideVisualTasks").check();
+  for (const [id, value] of [["scanInterval", "2200"], ["slotCycleMs", "4800"], ["craneSweepMs", "3200"]]) {
+    await page.locator("#" + id).evaluate((node, next) => {
+      node.value = next;
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+    }, value);
+  }
+  await page.locator("#rhythmBpm").selectOption("40");
+  await page.locator("#rhythmTargetBeats").selectOption("10");
+  await page.locator("#fishingLimitMs").selectOption("3000");
+  await page.locator("#visualGuidance").uncheck();
+  await page.locator("#craneAudioGuidance").check();
+  const changed = await savedSettings();
+  assert(changed.targetBeats === 10 && changed.craneSweepMs === 3200 && changed.fishingLimitMs === 3000, "Typed values and the targetBeats alias must save correctly");
+  await page.locator("#difficultyMode").selectOption("measure");
+  await page.locator("#settingsResearch > summary").click();
+  assert((await page.locator("#settingsModeStatus").textContent()).includes("測定の回"), "Measurement status must remain visible with research collapsed");
+  assert(await page.locator("#slotCycleMs").isDisabled(), "Measured settings must remain locked");
+  await openSettingsDetails(page, "research");
+  await page.locator("#readinessCheck").waitFor({ state: "visible" });
+  await page.locator("#difficultyMode").selectOption("practice");
+  assert(!(await page.locator("#slotCycleMs").isDisabled()), "Practice must unlock adjustments");
+  assert(JSON.stringify(await savedSettings()) === JSON.stringify(changed), "Measurement mode must preserve the saved practice values");
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await savedSettings();
+  for (const key of Object.keys(changed)) {
+    assert(JSON.stringify(restored[key]) === JSON.stringify(changed[key]), `Setting ${key} must survive reload: expected ${JSON.stringify(changed[key])}, got ${JSON.stringify(restored[key])}`);
+  }
+  await page.locator("#startStage").click();
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  for (const [id, expected] of [["fxLevel", "subtle"], ["scanInterval", "2200"]]) assert(await page.locator("#" + id).inputValue() === expected, "Restored UI value for " + id);
+  assert(await page.locator("#settings details[open]").count() === 0, "Reload must collapse details without resetting values");
+  assert(await page.locator("#supporterEditToggle").count() === 0, "The obsolete editing lock must be gone");
 }
 
 /**
@@ -2008,6 +2018,7 @@ async function checkIpadSwitchControlMode(page, project) {
   // isSupporterMenu()）。委譲を用意する画面そのものが、もう走っていない。
   await waitForText(page, "#scanState", "枠は止まっています");
 
+  await openSettingsDetails(page, "switch");
   const mode = page.locator("#switchControlMode");
   assert(!(await mode.isChecked()), "Switch Control mode must be explicit and default off");
   assert((await mode.getAttribute("data-scan")) === null, "App scan must not let a user disable their only scan owner");
@@ -2124,7 +2135,7 @@ async function checkIpadSwitchControlMode(page, project) {
   await waitForClass(page, "#settings", "is-active");
 
   // 2x2比較用に、モード中でも支援者がアプリTTSを明示的にONへ戻せる。
-  await openSettingsTab(page, "senses");
+  await openSettingsDetails(page, "senses");
   await page.locator("#speechEnabled").click();
   assert(await page.locator("#speechEnabled").isChecked(), "Supporter must be able to enable app TTS for A-B testing");
   assert(!(await page.locator("#speechVolume").isDisabled()), "TTS volume must unlock with app TTS");
@@ -2139,10 +2150,10 @@ async function checkIpadSwitchControlMode(page, project) {
   assert(speechVolume === 0.3, `Expected adjustable TTS volume 0.3, got ${speechVolume}`);
 
   // 解除しても自前走査を勝手に再開しない。支援者が明示的にONにしたときだけ再開。
-  await openSettingsTab(page, "basic");
+  await openSettingsDetails(page, "switch");
   await mode.click();
   await page.waitForFunction(() => !document.body.classList.contains("switch-control-mode"));
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
   assert(!(await page.locator("#autoScan").isDisabled()), "Auto scan control must unlock after delegation ends");
   assert(!(await page.locator("#autoScan").isChecked()), "Auto scan must remain stopped until explicitly enabled");
   await page.locator("#autoScan").click();
@@ -2169,7 +2180,7 @@ async function checkIpadSwitchControlMode(page, project) {
   );
 
   // autoScan=true を保ったまま委譲へ切り替えても、ハンドラは no-op にならない。
-  await openSettingsTab(page, "basic");
+  await openSettingsDetails(page, "switch");
   assert(await page.locator("#autoScan").isChecked(), "Auto scan must still be ON before forcing delegation");
   await mode.click();
   await page.waitForFunction(() => document.body.classList.contains("switch-control-mode"));
@@ -3052,7 +3063,7 @@ async function checkRhythmVisualProfiles(page, project) {
   // calibrationは支援者画面から起動する専用手順。設定値に関係なくinstrument。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await openSettingsTab(page, "measure");
+  await openSettingsDetails(page, "research");
   await page.locator("#startCalibration").click();
   await startReadyRhythm();
   const calibrationTheme = await rhythmSnapshot("instrument", "calibration");
@@ -3186,21 +3197,11 @@ async function checkFishingGameFlow(page) {
   assert(session?.aborted === true, "Expected fishing exit to persist aborted=true");
 }
 
-// 関数宣言にしているのは、このファイルがトップレベル await でテスト本体を
-/**
- * 設定の指定タブを開く。
- *
- * 設定は4つの面に分かれている（src/App.svelte の .settings-tab）。全部を
- * 1ページに並べると 3.4画面ぶんになり、目的の項目を毎回スクロールで探す
- * ことになるため。研究者モードなどは「そくてい」の面にある。
- *
- * 見えていない面の操作子は走査の輪からも外れる（scan.js は rect.width > 0 で
- * 絞る）ので、テストも支援者と同じくまず面を開く。
- */
-async function openSettingsTab(page, name) {
-  const tab = page.locator(`.settings-tab[data-settings-tab="${name}"]`);
-  await tab.click();
-  await page.locator(`.settings-panel[data-settings-panel="${name}"]`).waitFor({ state: "visible" });
+// 畳まれた設定は、支援者と同じく見出しから開く。値に影響せず複数開ける。
+async function openSettingsDetails(page, name) {
+  const ids = { switch: "settingsSwitch", senses: "settingsSenses", play: "settingsPlay", research: "settingsResearch", credits: "soundCredits" };
+  const details = page.locator("#" + ids[name]);
+  if (!(await details.evaluate(node => node.open))) await details.locator(":scope > summary").click();
 }
 
 // 走らせるため。const だと宣言位置より前に実行されて TDZ に落ちる。
@@ -3611,12 +3612,13 @@ async function checkDockStepsAsideForTextEntry(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
 
   // 支援者が文字を打つ欄は、いまは評価ログの参加者IDだけ（観察メモは
   // 効果測定セッションごと別紙へ移した。2026-08-29）。
   await page.locator('.tab[data-view="log"]').click();
   await waitForClass(page, "#log", "is-active");
+  await page.locator(".switch-dock").waitFor({ state: "visible" });
 
   await page.locator("#participantId").focus();
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
@@ -3919,7 +3921,7 @@ async function checkEmptyExportIsExplained(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await openSettingsTab(page, "measure");
+  await openSettingsDetails(page, "research");
   await page.locator("#researcherMode").click();
   await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
 
@@ -3956,7 +3958,7 @@ async function checkResearcherModeTabsNoRegression(page) {
   // researcherMode は設定の面（そくてい）の出し分けに使う。効果測定・操作訓練・
   // 研究の3タブは 2026-08-29 に削除したので、ここで確かめるのは「支援者の
   // データ画面が評価ログ1枚にまとまっていること」。
-  await openSettingsTab(page, "measure");
+  await openSettingsDetails(page, "research");
   await page.locator("#researcherMode").click();
   await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
 
@@ -3991,10 +3993,10 @@ async function checkResearcherModeTabsNoRegression(page) {
   // 設定そのものは、researcherMode を入れたあとも動く。
   await page.locator('.tab[data-view="settings"]').click();
   await waitForClass(page, "#settings", "is-active");
-  await openSettingsTab(page, "measure");
+  await openSettingsDetails(page, "research");
   await page.locator("#researcherMode").waitFor({ state: "visible" });
-  // 「ホームに出す遊び」は「スイッチ」の面にある（設定はタブ分けされている）。
-  await openSettingsTab(page, "basic");
+  // ホームに出す遊びは、常設の「よく使う設定」で調整する。
+  await openSettingsDetails(page, "switch");
   await page.locator("#hideVisualTasks").click();
 
   await page.locator("#homeReturn").click();
@@ -4202,7 +4204,7 @@ async function checkLayoutInvariants(page) {
     const found = await page.evaluate(() => {
       const doc = document.documentElement;
       const visible = (el) => el.getClientRects().length > 0;
-      const controls = [...document.querySelectorAll("button, select, input, [data-scan]")].filter(
+      const controls = [...document.querySelectorAll("button, select, input, summary, [data-scan]")].filter(
         visible
       );
       const describe = (el) => {
@@ -4287,7 +4289,7 @@ async function checkLayoutInvariants(page) {
   await waitForClass(page, "#settings", "is-active");
   await inspect("settings (locked)");
 
-  await openSettingsTab(page, "measure");
+  await openSettingsDetails(page, "research");
   await page.locator("#researcherMode").click();
   await inspect("settings (unlocked)");
 
@@ -4348,8 +4350,8 @@ async function checkIpadAccessibilityLayout(page, project) {
   // 既定は ON（state.js）なので、クリックは OFF にする操作だった——
   // 「大きい文字で読めること」を確かめる検査が、大きい文字を切った状態を
   // 見ていた。検査名と中身が逆を向いていても、テストは緑のまま通る。
-  // 「見え方」は senses の面にある（設定はタブ分けされている）。
-  await openSettingsTab(page, "senses");
+  // 見え方と声の詳細を見出しから開く。
+  await openSettingsDetails(page, "senses");
   const ensureChecked = async (id) => {
     const box = page.locator(`#${id}`);
     if (!(await box.isChecked())) await box.click();
