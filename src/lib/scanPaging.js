@@ -59,6 +59,17 @@ export const SCAN_PAGE_SIZE_MIN = 2;
 export const SCAN_OVERLAP_TOLERANCE_PX = 24;
 
 /**
+ * この幅以上ではホームをグリッドで並べる（src/theme-hakkiri.css と同じ値）。
+ *
+ * グリッドはタイルが画面の高さに合わせて縮むので、「この高さなら入らない」
+ * という先読みが当たらない。横長の画面（ノートPCのブラウザで 1366x650 など）
+ * では6つとも1画面に入るのに、先読みがページに分けていた——打ち合わせの
+ * 画面共有で実際に「次のページ」が出て、「ページをめくらせないでほしい」と
+ * 言われた（docs/design-renewal-2026-09-25.md §3.6）。
+ */
+export const GRID_LAYOUT_MIN_WIDTH = 700;
+
+/**
  * この画面高さでページ分割するか。
  *
  * 高さで決めるのは、問題が「縦に入りきらないこと」だから。iPad 縦
@@ -85,6 +96,8 @@ export const SCAN_OVERLAP_TOLERANCE_PX = 24;
  *   走査を委譲しているか（settings.switchControlMode）。
  * @param {boolean} [options.forcedByOverflow] 描いた結果はみ出したことが
  *   すでに分かっているか（views/home.js の overflowPaginate）。
+ * @param {boolean} [options.gridLayout] グリッドで並べる幅か
+ *   （GRID_LAYOUT_MIN_WIDTH 以上）。先読みでは分けず、描いた結果だけで決める。
  */
 export function shouldPaginate(viewportHeight, itemCount, pageSize = SCAN_PAGE_SIZE, options = {}) {
   // 走査をOS（iPad Switch Control）へ渡しているあいだは分けない。
@@ -101,6 +114,9 @@ export function shouldPaginate(viewportHeight, itemCount, pageSize = SCAN_PAGE_S
   // 普通のスクロールとOS走査に任せられる。
   if (options.delegatedToOsScanning) return false;
   if (options.forcedByOverflow) return true;
+  // グリッドは高さに合わせて縮むので、先読みの当ては使わない。本当に
+  // 入らなかったときは、描いたあとの実測（forcedByOverflow）で分かれる。
+  if (options.gridLayout) return false;
   if (typeof viewportHeight !== "number" || !Number.isFinite(viewportHeight)) return false;
   if (itemCount <= pageSize) return false;
   return viewportHeight <= 740;

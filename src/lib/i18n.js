@@ -108,17 +108,35 @@ export function rubyToPlain(text) {
 const STRINGS = {
   // --- ホームの見出し ---
   "home.eyebrow": { ruby: "ホーム", kanji: "ホーム", kana: "ホーム", en: "Home" },
-  "home.title": { ruby: "アクティビティ", kanji: "アクティビティ", kana: "アクティビティ", en: "Activities" },
-  "home.guide": { ruby: "やりたいことを選[えら]びます",
-    kanji: "やりたいことを選びます",
-    kana: "やりたいことを えらびます",
-    en: "Choose what to do",
+  // 見出しは「何をする画面か」だけを言う（docs/design-renewal-2026-09-25.md §1.3）。
+  // 以前の「アクティビティ」は支援者の言葉で、利用者にもお母さんにも伝わらなかった。
+  "home.title": { ruby: "遊[あそ]びを選[えら]ぼう", kanji: "遊びを選ぼう", kana: "あそびを えらぼう", en: "Pick a game" },
+  "home.guide": { ruby: "遊[あそ]びたい絵[え]を押[お]してね",
+    kanji: "遊びたい絵を押してね",
+    kana: "あそびたい えを おしてね",
+    en: "Press the picture you want to play",
   },
-  "home.back": { ruby: "アクティビティへ戻[もど]る",
-    kanji: "アクティビティへ戻る",
-    kana: "アクティビティへ もどる",
-    en: "Back to activities",
+  // 並び順の意味を画面に書く。打ち合わせで「どれから始めればいいのか、
+  // どれが難しいのか分からない」と言われた（同 §1.3）。
+  // {last} は丸数字（①…）、{n} はその数（英語用）。遊びの数は設定で変わる
+  // （「画面をよく見る遊びを隠す」）ので、views/home.js が並べた数から入れる。
+  "home.orderNote": { ruby: "①から{last}へ、だんだん難[むずか]しくなるよ",
+    kanji: "①から{last}へ、だんだん難しくなるよ",
+    kana: "①から{last}へ、だんだん むずかしく なるよ",
+    en: "From 1 to {n}, the games get harder",
   },
+  "home.back": { ruby: "戻[もど]る",
+    kanji: "戻る",
+    kana: "もどる",
+    en: "Back",
+  },
+  // タイルの札（難しさ）。数字の順番と同じことを、ことばでも言う。
+  "level.first": { ruby: "はじめは ここから", kanji: "はじめは ここから", kana: "はじめは ここから", en: "Start here" },
+  "level.easy": { ruby: "かんたん", kanji: "かんたん", kana: "かんたん", en: "Easy" },
+  "level.used": { ruby: "なれたら", kanji: "なれたら", kana: "なれたら", en: "Next step" },
+  "level.challenge": { ruby: "チャレンジ", kanji: "チャレンジ", kana: "チャレンジ", en: "Challenge" },
+  "level.endless": { ruby: "ずっと つづく", kanji: "ずっと つづく", kana: "ずっと つづく", en: "Keeps going" },
+  "level.other": { ruby: "べつの 遊[あそ]び", kanji: "べつの 遊び", kana: "べつの あそび", en: "Something else" },
   "home.nextPage": { ruby: "次[つぎ]のページ", kanji: "次のページ", kana: "つぎの ページ", en: "Next page" },
   "home.pageOf": { ruby: "{n} / {total} ページ目[め]", kanji: "{n} / {total} ページ目", kana: "{n} / {total} ページ目", en: "Page {n} of {total}" },
   "home.scanning": { ruby: "いま選[えら]んでいます",
@@ -128,48 +146,129 @@ const STRINGS = {
   },
 
   // --- あそびの名前と説明（content.js の gameTiles と対応） ---
-  "tile.color-legacy.title": { ruby: "色[いろ]と音[おと]", kanji: "色と音", kana: "いろと おと", en: "Colour & Sound" },
-  "tile.color-legacy.desc": { ruby: "5回[かい]押[お]して色[いろ]と音[おと]を変[か]えよう",
-    kanji: "5回押して色と音を変えよう",
-    kana: "5かい おして いろと おとを かえよう",
-    en: "Press 5 times to change colour and sound",
+  // 旧「色と音」。押すと真っ暗な画面から絵が出てくる、失敗の無い遊びに
+  // 作り直した（games/colorLegacy.js、docs/design-renewal-2026-09-25.md §1.4）。
+  // gameId は color-legacy のまま——記録（logEvent の switch）をつなげるため。
+  // 名前は遊びの名前にそろえる（2026-09-30 の打ち合わせ。「押すと 出てくる」のような
+  // 動作の名前では、何の遊びか分かりにくい）。
+  "tile.color-legacy.title": { ruby: "いないいない ばあ", kanji: "いないいない ばあ", kana: "いないいない ばあ", en: "Peekaboo" },
+  "tile.color-legacy.desc": { ruby: "押[お]すと 絵[え]と 音[おと]が 出[で]るよ",
+    kanji: "押すと 絵と 音が 出るよ",
+    kana: "おすと えと おとが でるよ",
+    en: "Press to make a picture and a sound",
   },
-  "color.changed": {
-    ruby: "色[いろ]が変[か]わった",
-    kanji: "色が変わった",
-    kana: "いろが かわった",
-    en: "Colour changed",
+  // --- はじめの遊び（失敗の無い遊び）の2つめと3つめ -------------------
+  "tile.balloon.title": { ruby: "ふうせん わり", kanji: "ふうせん わり", kana: "ふうせん わり", en: "Pop the balloons" },
+  "tile.balloon.desc": { ruby: "押[お]すと ふうせんが われるよ", kanji: "押すと ふうせんが われるよ", kana: "おすと ふうせんが われるよ", en: "Press to pop a balloon" },
+  "tile.coloring.title": { ruby: "ぬりえ", kanji: "ぬりえ", kana: "ぬりえ", en: "Colouring" },
+  "tile.coloring.desc": { ruby: "押[お]すと 色[いろ]が ぬれるよ", kanji: "押すと 色が ぬれるよ", kana: "おすと いろが ぬれるよ", en: "Press to colour in the picture" },
+  "balloon.pop": { ruby: "パン！", kanji: "パン！", kana: "パン！", en: "Pop!" },
+  "balloon.complete": { ruby: "ぜんぶ われた！", kanji: "ぜんぶ われた！", kana: "ぜんぶ われた！", en: "All popped!" },
+  "balloon.voice.progress": { ruby: "パン！ あと {n}こ", kanji: "パン！ あと {n}こ", kana: "パン！ あと {n}こ", en: "Pop! {n} left" },
+  "balloon.voice.finish": {
+    ruby: "ふうせんが {n}こ われたよ",
+    kanji: "ふうせんが {n}こ われたよ",
+    kana: "ふうせんが {n}こ われたよ",
+    en: "You popped {n} {n:balloon|balloons}!",
   },
-  "color.complete": {
-    ruby: "できた！",
-    kanji: "できた！",
-    kana: "できた！",
-    en: "All done!",
+  "coloring.word.0": { ruby: "色[いろ]が ついた！", kanji: "色が ついた！", kana: "いろが ついた！", en: "Colorful!" },
+  "coloring.word.1": { ruby: "いいね！", kanji: "いいね！", kana: "いいね！", en: "Nice!" },
+  "coloring.word.2": { ruby: "きれい！", kanji: "きれい！", kana: "きれい！", en: "Pretty!" },
+  "coloring.word.3": { ruby: "もう すこし！", kanji: "もう すこし！", kana: "もう すこし！", en: "Almost!" },
+  "coloring.word.4": { ruby: "できあがり！", kanji: "できあがり！", kana: "できあがり！", en: "All done!" },
+  "coloring.voice.progress": {
+    ruby: "色[いろ]が ついたよ。あと {n}回[かい]",
+    kanji: "色が ついたよ。あと {n}回",
+    kana: "いろが ついたよ。あと {n}かい",
+    en: "Nice color! {n} more to go.",
   },
-  "color.progress": {
-    ruby: "あと {n}回[かい]",
-    kanji: "あと {n}回",
-    kana: "あと {n}かい",
-    en: "{n} left",
+  "coloring.voice.finish": { ruby: "{name}が できたよ", kanji: "{name}が できたよ", kana: "{name}が できたよ", en: "Your {name} is all done!" },
+  "baseball.word.ready": { ruby: "くるよ…", kanji: "くるよ…", kana: "くるよ…", en: "Here it comes..." },
+  "baseball.word.again": { ruby: "もう いっかい なげるよ", kanji: "もう いっかい なげるよ", kana: "もう いっかい なげるよ", en: "Here comes another one" },
+  "baseball.word.homerun": { ruby: "ホームラン！", kanji: "ホームラン！", kana: "ホームラン！", en: "Home run!" },
+  "baseball.word.hit": { ruby: "ヒット！", kanji: "ヒット！", kana: "ヒット！", en: "Hit!" },
+  "baseball.word.bunt": { ruby: "あたった！", kanji: "あたった！", kana: "あたった！", en: "You hit it!" },
+  "baseball.word.done": { ruby: "ぜんぶ 打[う]てた！", kanji: "ぜんぶ 打てた！", kana: "ぜんぶ うてた！", en: "All done!" },
+  "baseball.voice.finish": {
+    ruby: "5回[かい] 打[う]てたよ。ホームランは {h}かい！",
+    kanji: "5回 打てたよ。ホームランは {h}かい！",
+    kana: "5かい うてたよ。ホームランは {h}かい！",
+    en: "You hit the ball five times, with {h} {h:home run|home runs}!",
   },
-  "color.progressComplete": {
-    ruby: "ぜんぶ できた！",
-    kanji: "ぜんぶ できた！",
-    kana: "ぜんぶ できた！",
-    en: "All 5 done!",
+  "baseball.voice.finishNoHomerun": {
+    ruby: "5回[かい] 打[う]てたよ！",
+    kanji: "5回 打てたよ！",
+    kana: "5かい うてたよ！",
+    en: "You hit the ball five times!",
   },
+  "result.baseball.summary": {
+    ruby: "ホームラン {h}かい・ヒット {k}かい",
+    kanji: "ホームラン {h}かい・ヒット {k}かい",
+    kana: "ホームラン {h}かい・ヒット {k}かい",
+    en: "{h} {h:home run|home runs}, {k} {k:hit|hits}",
+  },
+  "result.balloon.summary": { ruby: "ふうせんが {n}こ われたよ", kanji: "ふうせんが {n}こ われたよ", kana: "ふうせんが {n}こ われたよ", en: "You popped {n} {n:balloon|balloons}" },
+  "result.coloring.summary": { ruby: "{name}の ぬりえが できたよ", kanji: "{name}の ぬりえが できたよ", kana: "{name}の ぬりえが できたよ", en: "Your {name} picture is done" },
+
+  // 押す前の1行だけ。言葉の説明は要らない、絵と音で分かるように、と
+  // 言われている（docs/design-renewal-2026-09-25.md §1.4）。
+  "color.prompt": { ruby: "押[お]してみよう", kanji: "押してみよう", kana: "おしてみよう", en: "Give it a press" },
+  // 動物が消えて真っ暗に戻ったときに、うすく出しておく。
+  "color.count": { ruby: "{n}回[かい] 遊[あそ]んだよ", kanji: "{n}回 遊んだよ", kana: "{n}かい あそんだよ", en: "Played {n} times" },
+  // 出てきた絵に添える一言。何回目でも前向きなことしか言わない。
+  "color.pop.0": { ruby: "出[で]てきた！", kanji: "出てきた！", kana: "でてきた！", en: "Here it is!" },
+  "color.pop.1": { ruby: "変[か]わった！", kanji: "変わった！", kana: "かわった！", en: "It changed!" },
+  "color.pop.2": { ruby: "いいね！", kanji: "いいね！", kana: "いいね！", en: "Nice!" },
+  "color.pop.3": { ruby: "もう いっかい！", kanji: "もう いっかい！", kana: "もう いっかい！", en: "One more!" },
+  "color.pop.4": { ruby: "できた！", kanji: "できた！", kana: "できた！", en: "You did it!" },
+  // 出てくる動物の名前。読み上げで名前を言う（ことばを覚える入口にもなる）。
+  "animal.dolphin": { ruby: "イルカ", kanji: "イルカ", kana: "いるか", en: "Dolphin" },
+  "animal.turtle": { ruby: "カメ", kanji: "カメ", kana: "かめ", en: "Turtle" },
+  "animal.octopus": { ruby: "タコ", kanji: "タコ", kana: "たこ", en: "Octopus" },
+  "animal.crab": { ruby: "カニ", kanji: "カニ", kana: "かに", en: "Crab" },
+  "animal.whale": { ruby: "クジラ", kanji: "クジラ", kana: "くじら", en: "Whale" },
   "color.voice.progress": {
-    ruby: "色[いろ]が変[か]わった。あと {n}回[かい]",
-    kanji: "色が変わった。あと {n}回",
-    kana: "いろが かわった。あと {n}かい",
-    en: "Colour changed. {n} left",
+    ruby: "{name}！ あと {n}回[かい]",
+    kanji: "{name}！ あと {n}回",
+    kana: "{name}！ あと {n}かい",
+    en: "{name}! {n} more to go.",
   },
   "color.voice.finish": {
-    ruby: "{n}回[かい]できたよ。おしまいです",
-    kanji: "{n}回できたよ。おしまいです",
-    kana: "{n}かい できたよ。おしまいです",
-    en: "All done. You made {n} changes",
+    ruby: "{n}回[かい]できたよ",
+    kanji: "{n}回できたよ",
+    kana: "{n}かい できたよ",
+    en: "You did it {n} times!",
   },
+  // 「できたときの声」がありのときだけ言う（この遊びの設定）。
+  // 周りが家族だけでも盛り上がるように、と頼まれている（同 §1.7）。
+  "color.voice.cheer": { ruby: "やったー！", kanji: "やったー！", kana: "やったー！", en: "Hooray!" },
+  // --- 遊びの雰囲気「おおさわぎ」（src/lib/party.js・games/partyStage.js）。
+  // 押すたびに なかま・音楽・キラキラびん（星がたまる）・観客が重なっていく。
+  // ほめる言葉は前向きなものだけ（はずれの言葉は無い）。
+  "party.half": { ruby: "はんぶん！", kanji: "はんぶん！", kana: "はんぶん！", en: "Half full!" },
+  "party.full": { ruby: "いっぱい！", kanji: "いっぱい！", kana: "いっぱい！", en: "Full!" },
+  "party.voice.half": { ruby: "キラキラ はんぶん！", kanji: "キラキラ はんぶん！", kana: "きらきら はんぶん！", en: "Half a jar!" },
+  "party.voice.overflow": { ruby: "キラキラが あふれた！", kanji: "キラキラが あふれた！", kana: "きらきらが あふれた！", en: "It's overflowing!" },
+  "party.voice.everyone": { ruby: "みんなで おおさわぎ！", kanji: "みんなで おおさわぎ！", kana: "みんなで おおさわぎ！", en: "Party time, everyone!" },
+  "party.result.today": { ruby: "きょうの キラキラびん", kanji: "きょうの キラキラびん", kana: "きょうの きらきらびん", en: "Today's sparkle jars" },
+  "party.nameStamp": { ruby: "{name}！", kanji: "{name}！", kana: "{name}！", en: "{name}!" },
+  "party.oneMore": { ruby: "あと 1つ！", kanji: "あと 1つ！", kana: "あと ひとつ！", en: "Just one more!" },
+  "party.bigParty": { ruby: "おおさわぎ！", kanji: "おおさわぎ！", kana: "おおさわぎ！", en: "Big party!" },
+  "party.praise.0": { ruby: "すごい！", kanji: "すごい！", kana: "すごい！", en: "Amazing!" },
+  "party.praise.1": { ruby: "やったね！", kanji: "やったね！", kana: "やったね！", en: "Well done!" },
+  "party.praise.2": { ruby: "いいね！", kanji: "いいね！", kana: "いいね！", en: "Nice!" },
+  "party.praise.3": { ruby: "さいこう！", kanji: "さいこう！", kana: "さいこう！", en: "Awesome!" },
+  "party.voice.press": { ruby: "{name}！ {praise}", kanji: "{name}！ {praise}", kana: "{name}！ {praise}", en: "{name}! {praise}" },
+  "party.voice.oneMore": { ruby: "あと ひとつ！", kanji: "あと ひとつ！", kana: "あと ひとつ！", en: "Just one more!" },
+  "party.voice.full": { ruby: "キラキラが いっぱい！", kanji: "キラキラが いっぱい！", kana: "きらきらが いっぱい！", en: "The jar is full!" },
+  "party.voice.outfit.hat": { ruby: "ぼうしを もらったよ！", kanji: "ぼうしを もらったよ！", kana: "ぼうしを もらったよ！", en: "You got a party hat!" },
+  "party.voice.outfit.bow": { ruby: "リボンを もらったよ！", kanji: "リボンを もらったよ！", kana: "りぼんを もらったよ！", en: "You got a bow!" },
+  "party.voice.outfit.crown": { ruby: "おうかんを もらったよ！", kanji: "おうかんを もらったよ！", kana: "おうかんを もらったよ！", en: "You got a crown!" },
+  "party.outfit.hat": { ruby: "ぼうし", kanji: "ぼうし", kana: "ぼうし", en: "party hat" },
+  "party.outfit.bow": { ruby: "リボン", kanji: "リボン", kana: "りぼん", en: "bow" },
+  "party.outfit.crown": { ruby: "おうかん", kanji: "おうかん", kana: "おうかん", en: "crown" },
+  "party.result.reward": { ruby: "ごほうび：{item}", kanji: "ごほうび：{item}", kana: "ごほうび：{item}", en: "Reward: {item}" },
+  "party.result.rewardDone": { ruby: "ごほうび ぜんぶ そろった！", kanji: "ごほうび ぜんぶ そろった！", kana: "ごほうび ぜんぶ そろった！", en: "Full set of rewards!" },
   "tile.rhythm-l1.title": { ruby: "リズム 練習[れんしゅう]", kanji: "リズム 練習", kana: "リズム れんしゅう", en: "Rhythm: practice" },
   "tile.rhythm-l1.desc": { ruby: "音[おと]の合図[あいず]に合[あ]わせて押[お]そう",
     kanji: "音の合図に合わせて押そう",
@@ -182,11 +281,19 @@ const STRINGS = {
     kana: "おとに あわせて つづけて おそう",
     en: "Keep pressing with every beat",
   },
-  "tile.gonogo.title": { ruby: "高[たか]い音[おと]だけ", kanji: "高い音だけ", kana: "たかいおとだけ", en: "High notes only" },
+  "tile.gonogo.title": { ruby: "音[おと]あそび", kanji: "音あそび", kana: "おとあそび", en: "Sound game" },
   "tile.gonogo.desc": { ruby: "高[たか]い音[おと]のときだけ押[お]す",
     kanji: "高い音のときだけ押す",
     kana: "たかいおとのとき だけ おそう",
     en: "Press only on the high note",
+  },
+  // ボールを打つ遊び（games/baseball.js）
+  "tile.baseball.title": { ruby: "野球[やきゅう]", kanji: "野球", kana: "やきゅう", en: "Baseball" },
+  "tile.baseball.desc": {
+    ruby: "ボールが 来[き]たら 押[お]して 打[う]とう",
+    kanji: "ボールが 来たら 押して 打とう",
+    kana: "ボールが きたら おして うとう",
+    en: "Press when the ball comes, and hit it",
   },
   "tile.crane.title": { ruby: "アームを止[と]める", kanji: "アームを止める", kana: "アームを とめる", en: "Stop the claw" },
   "tile.crane.desc": { ruby: "画面[がめん]を見[み]てアームを止[と]めよう",
@@ -224,12 +331,13 @@ const STRINGS = {
   },
   // コーナー名は中の課題名（「アームを止める」）と別にする。同じ名前だと、
   // 選んだ先に同じ名前が出て、入ったのか押し損ねたのかが分からない。
-  // ゲームセンターの語（UFOキャッチャー等）は既定表示しない方針なので中立に。
+  // 「UFOキャッチャー」は他社の登録商標なので使わない。「クレーンゲーム」は
+  // 一般の呼び名で、何の遊びかがすぐ分かる。
   "tile.crane-corner.title": {
-    ruby: "アームで つかむ",
-    kanji: "アームで つかむ",
-    kana: "アームで つかむ",
-    en: "Claw grab",
+    ruby: "クレーンゲーム",
+    kanji: "クレーンゲーム",
+    kana: "クレーンゲーム",
+    en: "Claw machine",
   },
   "tile.crane-corner.desc": {
     ruby: "2つの あそびかたから選[えら]ぶ",
@@ -280,19 +388,21 @@ const STRINGS = {
     kana: "3つの アクティビティから えらぶ",
     en: "Three activities",
   },
-  "tile.matching.title": { ruby: "マッチング", kanji: "マッチング", kana: "マッチング", en: "Matching" },
+  // 「学ぶ・伝える」の中の3つ。以前は「マッチング」「VOCA」「文字学習」で、支援の
+  // 専門の言葉がそのまま出ていた（打ち合わせで言われた「難しい言葉」、§1.2）。
+  "tile.matching.title": { ruby: "どれかな？", kanji: "どれかな？", kana: "どれかな？", en: "Which one?" },
   "tile.matching.desc": { ruby: "お題[だい]に合[あ]うものを選[えら]ぼう",
     kanji: "お題に合うものを選ぼう",
     kana: "おだいに あうものを えらぼう",
     en: "Pick the one that matches",
   },
-  "tile.voca.title": { ruby: "VOCA", kanji: "VOCA", kana: "VOCA", en: "VOCA" },
+  "tile.voca.title": { ruby: "ことばで 伝[つた]える", kanji: "ことばで 伝える", kana: "ことばで つたえる", en: "Say it with words" },
   "tile.voca.desc": { ruby: "ことばを選[えら]んで伝[つた]えよう",
     kanji: "ことばを選んで伝えよう",
     kana: "ことばを えらんで つたえよう",
     en: "Choose a phrase to say",
   },
-  "tile.letters.title": { ruby: "文字[もじ]学習[がくしゅう]", kanji: "文字学習", kana: "文字学習", en: "Letters" },
+  "tile.letters.title": { ruby: "文字[もじ]を えらぶ", kanji: "文字を えらぶ", kana: "もじを えらぶ", en: "Pick a letter" },
   "tile.letters.desc": { ruby: "文字[もじ]を読[よ]んで選[えら]ぼう",
     kanji: "文字を読んで選ぼう",
     kana: "もじを よんで えらぼう",
@@ -338,16 +448,6 @@ const STRINGS = {
   //
   // 書き方の決まり: 利用者向けにひらがな主体・1行1動作。読み上げ
   // （audio.speak）にもそのまま渡すので、記号や英字を入れない。
-  "howto.color-legacy.1": { ruby: "画面[がめん]を押[お]すと、色[いろ]と音[おと]が変[か]わります。",
-    kanji: "画面を押すと、色と音が変わります。",
-    kana: "がめんを おすと、いろと おとが かわります。",
-    en: "Press the screen to change the colour and sound.",
-  },
-  "howto.color-legacy.2": { ruby: "5回[かい]押[お]すと、おしまいの画面[がめん]が出[で]ます。",
-    kanji: "5回押すと、おしまいの画面が出ます。",
-    kana: "5かい おすと、おしまいの がめんが でます。",
-    en: "After 5 presses, the result screen appears.",
-  },
   // 「2かい」は rhythmPresets["rhythm-l1"].countInBeats と揃えてある。
   // 以前は 3かい と書いてあり、実際に鳴る回数と食い違っていた。
   "howto.rhythm-l1.1": { ruby: "低[ひく]い音[おと]が2回[かい]鳴[な]ります。",
@@ -438,6 +538,21 @@ const STRINGS = {
     kana: "つづけるほど むずかしく なります。1かい しっぱいすると おわりです。",
     en: "It gets harder as you go. One miss ends the run.",
   },
+  "howto.baseball.1": { ruby: "ボールが 転[ころ]がって 来[き]ます。",
+    kanji: "ボールが 転がって 来ます。",
+    kana: "ボールが ころがって きます。",
+    en: "A ball comes rolling toward you.",
+  },
+  "howto.baseball.2": { ruby: "バットの ところに 来[き]たら 押[お]します。",
+    kanji: "バットの ところに 来たら 押します。",
+    kana: "バットの ところに きたら おします。",
+    en: "Press when it reaches the bat.",
+  },
+  "howto.baseball.3": { ruby: "ぴったりだと ホームラン！ 5回[かい] 打[う]ったら おしまい。",
+    kanji: "ぴったりだと ホームラン！ 5回 打ったら おしまい。",
+    kana: "ぴったりだと ホームラン！ 5かい うったら おしまい。",
+    en: "Right on time makes a home run! Five hits and you are done.",
+  },
   "howto.fishing.1": { ruby: "魚[さかな]が右[みぎ]から泳[およ]いできます。",
     kanji: "魚が右から泳いできます。",
     kana: "さかなが みぎから およいで きます。",
@@ -447,6 +562,13 @@ const STRINGS = {
     kanji: "「アタリ」の音が鳴ったらすぐ押します。",
     kana: "「アタリ」の おとが なったら すぐ おします。",
     en: "Press as soon as you hear the bite.",
+  },
+  // れんしゅうの回は、アタリと同時に大きな「！」が出る（games/fishing.js）。打ち合わせで
+  // 「ビックリマークが出たら押すんだと分かると最高」と言われた。
+  "howto.fishing.2.practice": { ruby: "「アタリ」の音[おと]が鳴[な]って大[おお]きな「！」が出[で]たら、すぐ押[お]します。",
+    kanji: "「アタリ」の音が鳴って大きな「！」が出たら、すぐ押します。",
+    kana: "「アタリ」の おとが なって おおきな「！」が でたら、すぐ おします。",
+    en: "Press as soon as you hear the bite and see the big \u201c!\u201d.",
   },
   "howto.fishing.3": { ruby: "早[はや]く押[お]せるとボーナスがつきます。",
     kanji: "早く押せるとボーナスがつきます。",
@@ -527,108 +649,128 @@ const STRINGS = {
 
   // --- UFOキャッチャーの音声（成功・失敗をその場で返す） ---
   "crane.voice.grip": {
-    ruby: "{name}を つかみました",
-    kanji: "{name}を つかみました",
-    kana: "{name}を つかみました",
-    en: "You got {name}",
+    ruby: "{name}を つかんだ！",
+    kanji: "{name}を つかんだ！",
+    kana: "{name}を つかんだ！",
+    en: "You grabbed {name}!",
   },
   "crane.voice.gripAnnounce": {
     ruby: "{name}を しっかり つかみました",
     kanji: "{name}を しっかり つかみました",
     kana: "{name}を しっかり つかみました",
-    en: "You got {name} firmly",
+    en: "You have a firm grip on {name}.",
   },
   "crane.voice.slip": {
-    ruby: "惜[お]しい。つかんだけど すべりました",
-    kanji: "惜しい。つかんだけど すべりました",
-    kana: "おしい。つかんだけど すべりました",
-    en: "So close. You had it but it slipped",
+    ruby: "惜[お]しい！ つかんだけど すべっちゃった",
+    kanji: "惜しい！ つかんだけど すべっちゃった",
+    kana: "おしい！ つかんだけど すべっちゃった",
+    en: "So close! You had it, but it slipped.",
   },
   "crane.voice.slipAnnounce": {
     ruby: "つかみましたが すべりました",
     kanji: "つかみましたが すべりました",
     kana: "つかみましたが すべりました",
-    en: "Gripped it, but it slipped",
+    en: "You grabbed it, but it slipped.",
   },
   "crane.voice.miss": {
-    ruby: "つぎは だいじょうぶ",
-    kanji: "つぎは だいじょうぶ",
-    kana: "つぎは だいじょうぶ",
-    en: "Next one will be fine",
+    ruby: "おしい！ つぎは とれるよ",
+    kanji: "おしい！ つぎは とれるよ",
+    kana: "おしい！ つぎは とれるよ",
+    en: "So close! You'll get it next time.",
   },
   "crane.voice.missAnnounce": {
-    ruby: "アームが 景品[けいひん]から はずれました",
-    kanji: "アームが 景品から はずれました",
-    kana: "アームが けいひんから はずれました",
-    en: "The claw missed the prize",
+    ruby: "おしい。アームは 景品[けいひん]の そばに おりました",
+    kanji: "おしい。アームは 景品の そばに おりました",
+    kana: "おしい。アームは けいひんの そばに おりました",
+    en: "So close. The claw came down next to the prize.",
   },
+  // 終わったときの声は「おわりました」ではなく「できた！」（打ち合わせで「終わりました
+  // は ちょっと硬い。できた、でいい」と言われた。docs/design-renewal-2026-09-25.md §1.6）。
   "crane.voice.finish": {
-    ruby: "おわりました。{n}こ とれました",
-    kanji: "おわりました。{n}こ とれました",
-    kana: "おわりました。{n}こ とれました",
-    en: "Finished. You caught {n}",
+    ruby: "できた！ {n}こ とれたよ",
+    kanji: "できた！ {n}こ とれたよ",
+    kana: "できた！ {n}こ とれたよ",
+    en: "You did it! You won {n} {n:prize|prizes}!",
+  },
+  "crane.voice.finishNone": {
+    ruby: "できた！ つぎは とれるよ",
+    kanji: "できた！ つぎは とれるよ",
+    kana: "できた！ つぎは とれるよ",
+    en: "You did it! You'll win one next time!",
   },
   "crane.voice.finishAnnounce": {
-    ruby: "アームを 止[と]めるが おわりました。{n}こ とれました",
-    kanji: "アームを 止めるが おわりました。{n}こ とれました",
-    kana: "アームを とめるが おわりました。{n}こ とれました",
-    en: "Stop the claw is finished. You caught {n}",
+    ruby: "クレーンゲーム、おしまい。{n}こ とれました",
+    kanji: "クレーンゲーム、おしまい。{n}こ とれました",
+    kana: "クレーンゲーム、おしまい。{n}こ とれました",
+    en: "The claw machine is over. You won {n} {n:prize|prizes}.",
   },
   "crane.voice.wait": {
     ruby: "待[ま]ってね",
     kanji: "待ってね",
     kana: "まってね",
-    en: "Wait a moment",
+    en: "Wait a moment.",
   },
 
   // --- さかなつりの音声 ---
   "fishing.voice.caught": {
-    ruby: "{n}センチの 魚[さかな]が つれました",
-    kanji: "{n}センチの 魚が つれました",
-    kana: "{n}センチの さかなが つれました",
-    en: "You caught a {n} centimetre fish",
+    ruby: "{n}センチの 魚[さかな]が つれたよ",
+    kanji: "{n}センチの 魚が つれたよ",
+    kana: "{n}センチの さかなが つれたよ",
+    en: "You caught a {n} centimeter fish!",
   },
   "fishing.voice.caughtFast": {
-    ruby: "すばやい。{n}センチの 魚[さかな]が つれました",
-    kanji: "すばやい。{n}センチの 魚が つれました",
-    kana: "すばやい。{n}センチの さかなが つれました",
-    en: "Quick! You caught a {n} centimetre fish",
+    ruby: "すばやい！ {n}センチの 魚[さかな]が つれたよ",
+    kanji: "すばやい！ {n}センチの 魚が つれたよ",
+    kana: "すばやい！ {n}センチの さかなが つれたよ",
+    en: "Super quick! You caught a {n} centimeter fish!",
   },
   "fishing.voice.goodWait": {
-    ruby: "にせアタリを 見分[みわ]けました",
-    kanji: "にせアタリを 見分けました",
-    kana: "にせアタリを みわけました",
-    en: "You spotted the false bite",
+    ruby: "にせアタリ、よく 見分[みわ]けたね",
+    kanji: "にせアタリ、よく 見分けたね",
+    kana: "にせアタリ、よく みわけたね",
+    en: "Good job spotting the fake bite!",
   },
   "fishing.voice.tooEarly": {
-    ruby: "まだ アタリではありません",
-    kanji: "まだ アタリではありません",
-    kana: "まだ アタリではありません",
-    en: "Not a bite yet",
+    ruby: "まだだよ。アタリを 待[ま]とう",
+    kanji: "まだだよ。アタリを 待とう",
+    kana: "まだだよ。アタリを まとう",
+    en: "Not yet. Wait for the bite.",
   },
   "fishing.voice.boot": {
-    ruby: "長靴[ながぐつ]が かかりました",
-    kanji: "長靴が かかりました",
-    kana: "ながぐつが かかりました",
-    en: "You hooked a boot",
+    ruby: "長靴[ながぐつ]が かかったよ",
+    kanji: "長靴が かかったよ",
+    kana: "ながぐつが かかったよ",
+    en: "Oops! You hooked a boot.",
   },
+  // 逃げたときも へこませない（打ち合わせで「逃げられた、みたいな失敗」を減らしたいと
+  // 言われた。§1.4）。
   "fishing.voice.lost": {
-    ruby: "魚[さかな]に にげられました",
-    kanji: "魚に にげられました",
-    kana: "さかなに にげられました",
-    en: "The fish got away",
+    ruby: "おしい！ つぎは つれるよ",
+    kanji: "おしい！ つぎは つれるよ",
+    kana: "おしい！ つぎは つれるよ",
+    en: "So close! You'll catch the next one.",
   },
+  // 声では「あわせて ○センチ」を言わない（2026-09-28）。読み上げはアプリに入れた
+  // 声の音で鳴らすので（src/lib/voicePack.js）、合計の長さのように取りうる数が
+  // 多すぎる文は作りきれない。合計は、けっかの画面と画面読み上げ機能向けの文
+  // （fishing.voice.finishAnnounce）には残る。
   "fishing.voice.finish": {
-    ruby: "おわりました。{n}ひき、あわせて {cm}センチでした",
-    kanji: "おわりました。{n}ひき、あわせて {cm}センチでした",
-    kana: "おわりました。{n}ひき、あわせて {cm}センチでした",
-    en: "Finished. {n} fish, {cm} centimetres in total",
+    ruby: "できた！ {n}ひき つれたよ",
+    kanji: "できた！ {n}ひき つれたよ",
+    kana: "できた！ {n}ひき つれたよ",
+    en: "You did it! You caught {n} fish!",
+  },
+  "fishing.voice.finishNone": {
+    ruby: "できた！ つぎは つれるよ",
+    kanji: "できた！ つぎは つれるよ",
+    kana: "できた！ つぎは つれるよ",
+    en: "You did it! You'll catch one next time!",
   },
   "fishing.voice.finishAnnounce": {
-    ruby: "さかなつりが おわりました。{n}ひき、あわせて {cm}センチ",
-    kanji: "さかなつりが おわりました。{n}ひき、あわせて {cm}センチ",
-    kana: "さかなつりが おわりました。{n}ひき、あわせて {cm}センチ",
-    en: "Fishing is finished. {n} fish, {cm} centimetres",
+    ruby: "さかなつり、おしまい。{n}ひき、あわせて {cm}センチ",
+    kanji: "さかなつり、おしまい。{n}ひき、あわせて {cm}センチ",
+    kana: "さかなつり、おしまい。{n}ひき、あわせて {cm}センチ",
+    en: "Fishing is over. {n} fish, {cm} centimeters in all.",
   },
 
   // --- リズム系のゲーム表示と音声 ---
@@ -705,36 +847,48 @@ const STRINGS = {
     en: "Try the next one",
   },
   "rhythm.voice.start": {
-    ruby: "リズムの 練習[れんしゅう]を はじめます",
-    kanji: "リズムの 練習を はじめます",
-    kana: "リズムの れんしゅうを はじめます",
-    en: "Starting the rhythm practice",
+    ruby: "リズムの 練習[れんしゅう]を はじめるよ",
+    kanji: "リズムの 練習を はじめるよ",
+    kana: "リズムの れんしゅうを はじめるよ",
+    en: "Let's start the rhythm practice.",
   },
   "rhythm.voice.finish": {
-    ruby: "おわりました。達成率[たっせいりつ] {n}パーセント",
-    kanji: "おわりました。達成率 {n}パーセント",
-    kana: "おわりました。たっせいりつ {n}パーセント",
-    en: "Finished. {n} percent",
+    ruby: "できた！ {n}パーセント 合[あ]ったよ",
+    kanji: "できた！ {n}パーセント 合ったよ",
+    kana: "できた！ {n}パーセント あったよ",
+    en: "You did it! {n} percent on the beat!",
   },
 
 
   "result.completion.title": {
-    ruby: "できた！",
-    kanji: "できた！",
-    kana: "できた！",
-    en: "All done!",
+    ruby: "できた！ 楽[たの]しかったね",
+    kanji: "できた！ 楽しかったね",
+    kana: "できた！ たのしかったね",
+    en: "You did it! That was fun",
   },
   "result.completion.summary": {
-    ruby: "色[いろ]と音[おと]を {n}回[かい]変[か]えました",
-    kanji: "色と音を {n}回変えました",
-    kana: "いろと おとを {n}かい かえました",
-    en: "You changed colour and sound {n} times",
+    ruby: "{n}回[かい]遊[あそ]んで、{m}ひきに会[あ]えたよ",
+    kanji: "{n}回遊んで、{m}ひきに会えたよ",
+    kana: "{n}かい あそんで、{m}ひきに あえたよ",
+    en: "You played {n} times and met {m} {m:friend|friends}",
   },
-  "result.completion.colors": {
-    ruby: "{n}つの色[いろ]",
-    kanji: "{n}つの色",
-    kana: "{n}つの いろ",
-    en: "Colours shown: {n}",
+  // 点のある遊びのけっか。一言は前向きなものだけにする——「つぎは もうちょっと」
+  // のような言い方も、へこませない、という要望に合わない（同 §1.5, §1.6）。
+  "result.praise.great": { ruby: "すごい！ きみは プロだ！", kanji: "すごい！ きみは プロだ！", kana: "すごい！ きみは プロだ！", en: "Amazing! You're a pro!" },
+  "result.praise.good": { ruby: "よく できました！", kanji: "よく できました！", kana: "よく できました！", en: "Well done!" },
+  "result.praise.tried": { ruby: "がんばったね！", kanji: "がんばったね！", kana: "がんばったね！", en: "Nice try!" },
+  "result.score": {
+    ruby: "{total}回[かい]のうち {n}回[かい] できたよ",
+    kanji: "{total}回のうち {n}回 できたよ",
+    kana: "{total}かいの うち {n}かい できたよ",
+    en: "{n} out of {total}",
+  },
+  // 数値の表は支援者のためのもの。利用者の画面では畳んでおく。
+  "result.details": {
+    ruby: "支援者[しえんしゃ]むけ：くわしい けっか",
+    kanji: "支援者むけ：くわしい けっか",
+    kana: "しえんしゃむけ：くわしい けっか",
+    en: "For supporters: details",
   },
   // --- リザルトの見出し（課題ごと） ---
   "result.gonogo.goHit": { ruby: "Go せいこう", kanji: "Go せいこう", kana: "Go せいこう", en: "Go correct" },
@@ -747,7 +901,7 @@ const STRINGS = {
   "result.scan.outOf": { ruby: "{n}かい ちゅう", kanji: "{n}かい ちゅう", kana: "{n}かい ちゅう", en: "out of {n}" },
   "result.scan.slips": { ruby: "おしかった（すべった）", kanji: "おしかった（すべった）", kana: "おしかった（すべった）", en: "So close (slipped)" },
   "result.scan.distance": { ruby: "ねらいの ずれ", kanji: "ねらいの ずれ", kana: "ねらいの ずれ", en: "Aim error" },
-  "result.scan.prizes": { ruby: "とれた けいひん {n}こ", kanji: "とれた けいひん {n}こ", kana: "とれた けいひん {n}こ", en: "{n} prizes won" },
+  "result.scan.prizes": { ruby: "とれた けいひん {n}こ", kanji: "とれた けいひん {n}こ", kana: "とれた けいひん {n}こ", en: "{n} {n:prize|prizes} won" },
 
   "result.rt.score": { ruby: "スコア", kanji: "スコア", kana: "スコア", en: "Score" },
   "result.rt.longest": { ruby: "いちばん おおきい", kanji: "いちばん おおきい", kana: "いちばん おおきい", en: "Biggest" },
@@ -770,10 +924,10 @@ const STRINGS = {
   "corner.rhythm.guide": { ruby: "おとの アクティビティを えらびます", kanji: "おとの アクティビティを えらびます", kana: "おとの アクティビティを えらびます", en: "Choose a sound activity" },
   "corner.crane.eyebrow": { ruby: "Crane", kanji: "Crane", kana: "Crane", en: "Crane" },
   "corner.crane.title": {
-    ruby: "アームで つかむ",
-    kanji: "アームで つかむ",
-    kana: "アームで つかむ",
-    en: "Claw grab",
+    ruby: "クレーンゲーム",
+    kanji: "クレーンゲーム",
+    kana: "クレーンゲーム",
+    en: "Claw machine",
   },
   "corner.crane.guide": {
     ruby: "あそびかたを えらびます",
@@ -786,13 +940,37 @@ const STRINGS = {
   "corner.fishing.guide": { ruby: "つりかたを えらびます", kanji: "つりかたを えらびます", kana: "つりかたを えらびます", en: "Choose how to fish" },
   "corner.learning.eyebrow": { ruby: "Learn", kanji: "Learn", kana: "Learn", en: "Learn" },
   "corner.learning.title": { ruby: "学[まな]ぶ・伝[つた]える", kanji: "学ぶ・伝える", kana: "まなぶ・つたえる", en: "Learn & tell" },
-  "corner.learning.guide": { ruby: "アクティビティを えらびます", kanji: "アクティビティを えらびます", kana: "アクティビティを えらびます", en: "Choose an activity" },
+  "corner.learning.guide": { ruby: "やりたいものを えらぼう", kanji: "やりたいものを えらぼう", kana: "やりたいものを えらぼう", en: "Choose what you want to do" },
+
+  // --- 「学ぶ・伝える」の中の画面（views/matching.js・voca.js・letters.js） ---
+  "learn.next": { ruby: "つぎ", kanji: "つぎ", kana: "つぎ", en: "Next" },
+  "learn.again": { ruby: "もう いちど 読[よ]む", kanji: "もう いちど 読む", kana: "もう いちど よむ", en: "Say it again" },
+  "learn.question": { ruby: "もんだい", kanji: "もんだい", kana: "もんだい", en: "Question" },
+  "learn.saying": { ruby: "伝[つた]えたい ことば", kanji: "伝えたい ことば", kana: "つたえたい ことば", en: "What I want to say" },
+  "learn.nothingYet": { ruby: "まだ えらんでいません", kanji: "まだ えらんでいません", kana: "まだ えらんでいません", en: "Nothing chosen yet" },
+  "learn.correct": { ruby: "せいかい！", kanji: "せいかい！", kana: "せいかい！", en: "Correct!" },
+  "learn.tryNext": { ruby: "おしい！ つぎも やってみよう", kanji: "おしい！ つぎも やってみよう", kana: "おしい！ つぎも やってみよう", en: "So close! Try the next one" },
 
   // --- 画面の切り替えを伝える読み上げ ---
-  "voice.start": { ruby: "はじめます", kanji: "はじめます", kana: "はじめます", en: "Starting" },
-  "voice.enterCorner": { ruby: "{name}を えらびます", kanji: "{name}を えらびます", kana: "{name}を えらびます", en: "Choosing {name}" },
-  "voice.pageOf": { ruby: "{n}ページ目[め]です", kanji: "{n}ページ目です", kana: "{n}ページ目です", en: "Page {n}" },
-  "voice.gameStart": { ruby: "{name}を はじめます", kanji: "{name}を はじめます", kana: "{name}を はじめます", en: "Starting {name}" },
+  "voice.start": {
+    ruby: "はじめるよ",
+    kanji: "はじめるよ",
+    kana: "はじめるよ",
+    en: "Let's start!",
+  },
+  "voice.enterCorner": {
+    ruby: "{name}を えらんだよ",
+    kanji: "{name}を えらんだよ",
+    kana: "{name}を えらんだよ",
+    en: "You picked {name}.",
+  },
+  "voice.pageOf": { ruby: "{n}ページ目[め]です", kanji: "{n}ページ目です", kana: "{n}ページ目です", en: "Page {n}." },
+  "voice.gameStart": {
+    ruby: "{name}を はじめるよ",
+    kanji: "{name}を はじめるよ",
+    kana: "{name}を はじめるよ",
+    en: "Let's play {name}!",
+  },
   "voice.pressed": { ruby: "{name}に入力[にゅうりょく]しました", kanji: "{name}に入力しました", kana: "{name}に入力しました", en: "Pressed {name}" },
 
 
@@ -804,11 +982,14 @@ const STRINGS = {
   "start.srTitle": { ruby: "スタート画面[がめん]", kanji: "スタート画面", kana: "スタートがめん", en: "Start screen" },
   "start.begin": { ruby: "はじめる", kanji: "はじめる", kana: "はじめる", en: "Start" },
   "start.settings": { ruby: "せってい", kanji: "せってい", kana: "せってい", en: "Settings" },
+  "start.lead": { ruby: "押[お]して、はじめよう。", kanji: "押して、はじめよう。", kana: "おして、はじめよう。", en: "Press to start." },
   "game.srTitle": { ruby: "ゲーム画面[がめん]", kanji: "ゲーム画面", kana: "ゲームがめん", en: "Activity screen" },
   "game.exit": { ruby: "おわる", kanji: "おわる", kana: "おわる", en: "Finish" },
+  // 遊びの中の設定（支援者がその場で変える）。docs/design-renewal-2026-09-25.md §1.8
+  "game.settings": { ruby: "この遊[あそ]びの設定[せってい]", kanji: "この遊びの設定", kana: "この あそびの せってい", en: "Game settings" },
   "result.title": { ruby: "けっか", kanji: "けっか", kana: "けっか", en: "Result" },
   "result.retry": { ruby: "もういちど", kanji: "もういちど", kana: "もういちど", en: "Again" },
-  "result.home": { ruby: "メニューへ", kanji: "メニューへ", kana: "メニューへ", en: "Back to menu" },
+  "result.home": { ruby: "遊[あそ]びを選[えら]ぶ", kanji: "遊びを選ぶ", kana: "あそびを えらぶ", en: "Pick a game" },
 
   // ずれの目盛り
   "scale.early": { ruby: "はやい", kanji: "はやい", kana: "はやい", en: "Early" },
@@ -835,7 +1016,8 @@ const STRINGS = {
   "crane.movingY": { ruby: "奥[おく]に動[うご]きます", kanji: "奥に動きます", kana: "おくに うごきます", en: "Moving back" },
   "crane.dropping": { ruby: "アームが下[お]りるよ", kanji: "アームが下りるよ", kana: "アームが おりるよ", en: "The claw is coming down" },
   "crane.slip": { ruby: "惜[お]しい！ すべった", kanji: "惜しい！ すべった", kana: "おしい！ すべった", en: "So close — it slipped" },
-  "crane.miss": { ruby: "届[とど]かなかった", kanji: "届かなかった", kana: "とどかなかった", en: "Just missed" },
+  // 外れたときも へこませない（打ち合わせ §1.5「あっさり次へ」「前向きな言葉」）。
+  "crane.miss": { ruby: "もう すこし！", kanji: "もう すこし！", kana: "もう すこし！", en: "Almost!" },
   "crane.lifted": { ruby: "持[も]ち上[あ]げた", kanji: "持ち上げた", kana: "もちあげた", en: "Lifted it" },
   "crane.carrying": { ruby: "景品口[けいひんぐち]へ", kanji: "景品口へ", kana: "けいひんぐちへ", en: "To the chute" },
   "crane.got": { ruby: "取[と]れた！", kanji: "取れた！", kana: "とれた！", en: "Got it!" },
@@ -857,7 +1039,7 @@ const STRINGS = {
   "fishing.tooEarly": { ruby: "まだ待[ま]とう", kanji: "まだ待とう", kana: "まだ まとう", en: "Not yet" },
   "fishing.goodWait": { ruby: "よく待[ま]てたね", kanji: "よく待てたね", kana: "よく まてたね", en: "Well held" },
   "fishing.boot": { ruby: "長靴[ながぐつ]だった", kanji: "長靴だった", kana: "ながぐつ だった", en: "It was a boot" },
-  "fishing.lost": { ruby: "逃[に]げられた", kanji: "逃げられた", kana: "にげられた", en: "It got away" },
+  "fishing.lost": { ruby: "おしい！", kanji: "おしい！", kana: "おしい！", en: "So close!" },
   // 釣れたときの表示。長さ（cm）を差し込む。
   "fishing.caught": { ruby: "{n}cm 釣[つ]れた！", kanji: "{n}cm 釣れた！", kana: "{n}cm つれた！", en: "Caught {n}cm!" },
   "fishing.fast": { ruby: "すばやい！ {n}cm", kanji: "すばやい！ {n}cm", kana: "すばやい！ {n}cm", en: "Quick! {n}cm" },
@@ -888,7 +1070,9 @@ const STRINGS = {
   "tile.slot-l1.desc": { ruby: "同[おな]じ絵[え]が真[ま]ん中[なか]に来[き]たら押[お]そう", kanji: "同じ絵が真ん中に来たら押そう", kana: "おなじ えが まんなかに きたら おそう", en: "Press when the matching shape reaches the centre" },
   "tile.slot-l2.title": { ruby: "3つ 止[と]める", kanji: "3つ 止める", kana: "3つ とめる", en: "Stop three reels" },
   "tile.slot-l2.desc": { ruby: "3つのリールを左[ひだり]から順番[じゅんばん]に止[と]めよう", kanji: "3つのリールを左から順番に止めよう", kana: "3つの リールを ひだりから じゅんばんに とめよう", en: "Stop three reels from left to right" },
-  "tile.slot-corner.title": { ruby: "リールを 止[と]める", kanji: "リールを 止める", kana: "リールを とめる", en: "Stop the reels" },
+  // 「スロット」は利用者の画面で使わない（賭博を連想させる。docs/slot-game-replacement-plan.md）。
+  // 絵をそろえる中身に合う、昔からある遊びの名前にする。
+  "tile.slot-corner.title": { ruby: "絵[え]あわせ", kanji: "絵あわせ", kana: "えあわせ", en: "Picture match" },
   "tile.slot-corner.desc": { ruby: "動[うご]く絵[え]を真[ま]ん中[なか]で止[と]めよう", kanji: "動く絵を真ん中で止めよう", kana: "うごく えを まんなかで とめよう", en: "Stop moving shapes at the centre" },
 
   "howto.slot-l1.1": { ruby: "上[うえ]の目標[もくひょう]の絵[え]を見[み]ます。", kanji: "上の目標の絵を見ます。", kana: "うえの もくひょうの えを みます。", en: "Look at the target shape above." },
@@ -907,18 +1091,34 @@ const STRINGS = {
   "slot.symbol.square": { ruby: "四角[しかく]", kanji: "四角", kana: "しかく", en: "square" },
   "slot.symbolGuide.alt": { ruby: "丸[まる]、魚[さかな]、星[ほし]、花[はな]、鳥[とり]、四角[しかく]の絵[え]", kanji: "丸、魚、星、花、鳥、四角の絵", kana: "まる、さかな、ほし、はな、とり、しかくの え", en: "Circle, fish, star, flower, bird and square shapes" },
   "slot.symbolGuide.caption": { ruby: "この6つの絵[え]が動[うご]きます", kanji: "この6つの絵が動きます", kana: "この6つの えが うごきます", en: "These six shapes move on each reel" },
-  "slot.reel.label": { ruby: "{n}本目[ほんめ]のリール", kanji: "{n}本目のリール", kana: "{n}ほんめの リール", en: "Reel {n}" },
+  "slot.reel.label": { ruby: "{n}ばんめの リール", kanji: "{n}ばんめの リール", kana: "{n}ばんめの リール", en: "Reel {n}" },
   "slot.reel.active": { ruby: "いま 止[と]める", kanji: "いま 止める", kana: "いま とめる", en: "Stop this one" },
   "slot.reel.waiting": { ruby: "待[ま]っています", kanji: "待っています", kana: "まっています", en: "Waiting" },
   "slot.reel.stopped": { ruby: "止[と]まりました", kanji: "止まりました", kana: "とまりました", en: "Stopped" },
-  "slot.status.stopReel": { ruby: "{total}本[ほん]のうち {current}本目[ほんめ]を止[と]めよう", kanji: "{total}本のうち {current}本目を止めよう", kana: "{total}ほんの うち {current}ほんめを とめよう", en: "Stop reel {current} of {total}" },
+  // れんしゅうの回で、目標の絵で止めたときに出る一言（slot.js の cheerReel）。
+  "slot.cheer": { ruby: "ぴったり！", kanji: "ぴったり！", kana: "ぴったり！", en: "Right on!" },
+  // 「本」「本目」は数で読みが変わる（1本＝いっぽん、3本＝さんぼん）ので、ふりがな
+  // 「ほん」が合わない。「ばんめ」「かい」は数で変わらない。
+  "slot.status.stopReel": { ruby: "{current}ばんめを 止[と]めよう", kanji: "{current}ばんめを 止めよう", kana: "{current}ばんめを とめよう", en: "Stop reel {current}" },
+  "slot.status.stopOne": { ruby: "目標[もくひょう]の 絵[え]で 止[と]めよう", kanji: "目標の 絵で 止めよう", kana: "もくひょうの えで とめよう", en: "Stop on the target picture" },
   "slot.status.roundComplete": { ruby: "ぜんぶ 止[と]まりました", kanji: "ぜんぶ 止まりました", kana: "ぜんぶ とまりました", en: "All reels stopped" },
   "slot.status.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
-  "slot.progress": { ruby: "{current} / {total}本目[ほんめ]", kanji: "{current} / {total}本目", kana: "{current} / {total}ほんめ", en: "Stop {current} of {total}" },
+  "slot.progress": { ruby: "のこり {n}かい", kanji: "のこり {n}かい", kana: "のこり {n}かい", en: "{n} to go" },
+  // 外したときの一言（れんしゅうの回だけ。slot.js の nudgeReel）。
+  "slot.streak": { ruby: "{n}かい れんぞく！", kanji: "{n}かい れんぞく！", kana: "{n}かい れんぞく！", en: "{n} in a row!" },
+  "slot.nudge": { ruby: "おしい！", kanji: "おしい！", kana: "おしい！", en: "So close!" },
   "slot.progress.complete": { ruby: "ぜんぶ できた！", kanji: "ぜんぶ できた！", kana: "ぜんぶ できた！", en: "All done!" },
-  "slot.voice.round": { ruby: "{total}回[かい]のうち {current}回目[かいめ]です", kanji: "{total}回のうち {current}回目です", kana: "{total}かいの うち {current}かいめです", en: "Round {current} of {total}" },
-  "slot.voice.nextReel": { ruby: "次[つぎ]は {current}本目[ほんめ]です", kanji: "次は {current}本目です", kana: "つぎは {current}ほんめです", en: "Next is reel {current}" },
-  "slot.voice.finish": { ruby: "終[お]わりました。{total}本[ほん]のうち {hits}本[ほん]合[あ]いました", kanji: "終わりました。{total}本のうち {hits}本合いました", kana: "おわりました。{total}ほんの うち {hits}ほん あいました", en: "Finished. {hits} of {total} stops matched" },
+  "slot.voice.round": { ruby: "{total}回[かい]のうち {current}回目[かいめ]です", kanji: "{total}回のうち {current}回目です", kana: "{total}かいの うち {current}かいめです", en: "Round {current} of {total}." },
+  "slot.voice.nextReel": { ruby: "次[つぎ]は {current}ばんめ", kanji: "次は {current}ばんめ", kana: "つぎは {current}ばんめ", en: "Now reel number {current}." },
+  // 声では「○回のうち」を言わない（2026-09-28。fishing.voice.finish と同じ理由で、
+  // 回数の組み合わせが多すぎる）。何回のうちかは、けっかの画面に出る。
+  "slot.voice.finish": { ruby: "できた！ {hits}回[かい] ぴったり！", kanji: "できた！ {hits}回 ぴったり！", kana: "できた！ {hits}かい ぴったり！", en: "You did it! Right on {hits} {hits:time|times}!" },
+  "slot.voice.finishNone": {
+    ruby: "できた！ 最後[さいご]まで 止[と]められたね",
+    kanji: "できた！ 最後まで 止められたね",
+    kana: "できた！ さいごまで とめられたね",
+    en: "You did it! You made it all the way to the end!",
+  },
 
   "result.slot.title": { ruby: "ぜんぶ 止[と]められました", kanji: "ぜんぶ 止められました", kana: "ぜんぶ とめられました", en: "All reels stopped" },
   "result.slot.hitRate": { ruby: "合[あ]った割合[わりあい]", kanji: "合った割合", kana: "あった わりあい", en: "Matched" },
@@ -929,7 +1129,7 @@ const STRINGS = {
   "result.slot.lastRound": { ruby: "最後[さいご]に止[と]まった絵[え]", kanji: "最後に止まった絵", kana: "さいごに とまった え", en: "Shapes stopped in the last round" },
 
   "corner.slot.eyebrow": { ruby: "Reel stop", kanji: "Reel stop", kana: "Reel stop", en: "Reel stop" },
-  "corner.slot.title": { ruby: "リールを 止[と]める", kanji: "リールを 止める", kana: "リールを とめる", en: "Stop the reels" },
+  "corner.slot.title": { ruby: "絵[え]あわせ", kanji: "絵あわせ", kana: "えあわせ", en: "Picture match" },
   "corner.slot.guide": { ruby: "止[と]める本数[ほんすう]を選[えら]びます", kanji: "止める本数を選びます", kana: "とめる ほんすうを えらびます", en: "Choose how many reels to stop" },
 };
 
@@ -968,7 +1168,15 @@ export function resolveTextMode(settings) {
 function fill(text, values, transform = (value) => String(value)) {
   if (!values) return text;
   return Object.entries(values).reduce(
-    (out, [name, value]) => out.replaceAll(`{${name}}`, () => transform(value)),
+    (out, [name, value]) =>
+      out
+        // 数で変わる言い方: `{n:prize|prizes}` は n が 1 のとき前、ほかは後ろ。
+        // 英語の単数・複数のため（読み上げで「1 prizes」と言わせない）。
+        // 選ぶ言葉は辞書の一部なので、値のようにエスケープはしない。
+        .replace(new RegExp(`\\{${name}:([^{}|]*)\\|([^{}]*)\\}`, "g"), (_, one, other) =>
+          Number(value) === 1 ? one : other
+        )
+        .replaceAll(`{${name}}`, () => transform(value)),
     text
   );
 }
@@ -1013,6 +1221,77 @@ export function translateHtml(key, mode, values) {
 /** 読み上げに渡す言語コード。 */
 export function speechLangFor(mode) {
   return SPEECH_LANG[mode] ?? SPEECH_LANG[DEFAULT_TEXT_MODE];
+}
+
+const JAPANESE_TEXT = /[ぁ-ゖァ-ヺー一-龠々]/;
+
+/**
+ * その文を読む言語。英語表記でも、文が日本語なら日本語の声で読む
+ * （「ことばで伝える」の元の文字や、学ぶ画面の答えの言葉など）。英語の声に
+ * 日本語を読ませると、意味の通らない音になる。
+ */
+export function speechLangForText(text, mode) {
+  const lang = speechLangFor(mode);
+  if (!lang.startsWith("ja") && JAPANESE_TEXT.test(String(text ?? ""))) return SPEECH_LANG.ruby;
+  return lang;
+}
+
+// 数のあとの助数詞（かな → 漢字）。画面では、読みが数で変わる字（1本＝いっぽん、
+// 3匹＝さんびき）に一つのふりがなを付けられないので、かなで書いている。
+// 読み上げはかなのままだと「1かい」を「いちかい」、「3ひき」を「さんひき」と
+// 読んでしまうので、声に渡すときだけ漢字へ戻す（漢字なら正しく読む）。
+const SPOKEN_COUNTERS = [
+  [/(\d+)[ \u3000]*ばんめ/g, "$1番目"],
+  [/(\d+)[ \u3000]*かい(?![ぁ-ゖ])/g, "$1回"],
+  [/(\d+)[ \u3000]*[ひびぴ]き(?![ぁ-ゖ])/g, "$1匹"],
+  [/(\d+)[ \u3000]*[ほぼぽ]ん(?![ぁ-ゖ])/g, "$1本"],
+  [/(\d+)[ \u3000]*こ(?![ぁ-ゖ])/g, "$1個"],
+  [/(\d+)[ \u3000]*にん(?![ぁ-ゖ])/g, "$1人"],
+  [/(\d+)[ \u3000]*まい(?![ぁ-ゖ])/g, "$1枚"],
+];
+
+// 分かち書きの空白を外す範囲（日本語の字・数字・日本語の句読点のあいだ）。
+const JA_JOIN = "ぁ-ゖァ-ヺー一-龠々〆ヵヶ0-9０-９、。！？「」『』（）・";
+// 後読み（(?<=…)）は古い iPad（iOS 16.3 まで）で読み込みごと失敗するので使わない。
+const WAKACHI_SPACE = new RegExp(`([${JA_JOIN}])[ \u3000]+(?=[${JA_JOIN}])`, "g");
+
+/**
+ * 画面の文を、声で読む文に整える（audio.js の speak）。
+ *
+ * 画面の日本語は、子どもが読みやすいように語のあいだを空けて書いてある
+ * （分かち書き）。そのまま読み上げに渡すと、空白のたびに声が切れて、
+ * たどたどしく聞こえる（2026-09-27 に指摘された）。声に渡すときだけ:
+ *   - 分かち書きの空白を外す（日本語の字どうしのあいだだけ。英字の前後は残す）
+ *   - 数のあとの助数詞を漢字にする（上の SPOKEN_COUNTERS）
+ *   - 「…」は読点にする（「てんてんてん」と読まれないように）
+ * 英語は、空白をまとめるだけ。
+ *
+ * @param {string} text
+ * @param {string} lang "ja-JP" | "en-US"（speechLangForText）
+ */
+export function toSpeechText(text, lang) {
+  let out = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!String(lang).startsWith("ja")) return out;
+  for (const [pattern, replacement] of SPOKEN_COUNTERS) out = out.replace(pattern, replacement);
+  out = out.replace(/(…+|\.{3,})(?=\s*\S)/g, "、").replace(/(…+|\.{3,})$/g, "");
+  return out.replace(WAKACHI_SPACE, "$1").trim();
+}
+
+/**
+ * いくつかの文を、ひと続きの読み上げにする（題名と説明など）。
+ * 文の終わりに句点が無ければ足す——無いまま空白でつなぐと、分かち書きを
+ * 外したときに「アームでつかむアームが横に動きます」と1語のように読まれる。
+ *
+ * @param {string[]} parts
+ * @param {string} mode 表記（"ruby" / "en" など）
+ */
+export function joinSpeech(parts, mode) {
+  const ja = speechLangFor(mode).startsWith("ja");
+  return parts
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .map((part) => (/[。．.!！?？…」]$/.test(part) ? part : `${part}${ja ? "。" : "."}`))
+    .join(ja ? "" : " ");
 }
 
 /** テストと点検のために、表の中身を読めるようにしておく。 */

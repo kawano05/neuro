@@ -1,8 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="neuro">
-  <rect width="512" height="512" rx="64" fill="#0f8b8d"/>
-  <circle cx="256" cy="256" r="152" fill="#d7f0ef"/>
-  <path d="M166 266c48-92 132-92 180 0" fill="none" stroke="#0a6668" stroke-width="36" stroke-linecap="round"/>
-  <circle cx="184" cy="304" r="34" fill="#0a6668"/>
-  <circle cx="256" cy="224" r="42" fill="#0a6668"/>
-  <circle cx="328" cy="304" r="34" fill="#0a6668"/>
+  <!-- アプリのアイコン（2026-09-27）。ホームの①「押すと 出てくる」の絵（src/lib/art/hakkiriArt.js の
+       SCENE_ART.pop）から作った。角は丸めない（iOS とアンドロイドが自分で丸める）。
+       絵は中心から半径 205 の円（maskable の安全域、80%）の中に収めてある。 -->
+  <rect width="512" height="512" fill="#12305E"/>
+  <g transform="translate(74.2 109.5) scale(1.22)">
+    <path d="M40 150 C 60 80, 150 50, 225 85 C 250 97, 268 112, 282 124 C 262 124, 250 126, 240 132 C 234 162, 200 186, 150 188 C 110 190, 80 182, 60 172 C 45 190, 30 204, 16 210 C 22 190, 28 172, 40 150 Z" fill="#4DC4FF"/>
+    <path d="M138 72 C 148 46, 168 36, 186 32 C 178 50, 176 66, 180 82 Z" fill="#1FA2E0"/>
+    <path d="M92 166 C 130 180, 186 174, 228 140 C 206 170, 160 188, 120 186 C 106 185, 98 177, 92 166 Z" fill="#D8F3FF"/>
+    <path d="M150 172 C 150 196, 140 210, 124 218 C 128 200, 130 186, 136 174 Z" fill="#1FA2E0"/>
+    <circle cx="222" cy="104" r="8" fill="#10222E"/>
+    <circle cx="225" cy="101" r="2.5" fill="#FFFFFF"/>
+    <path d="M240 126 C 248 131, 257 130, 266 125" fill="none" stroke="#10222E" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <path d="M128 120 L 135.5 142.5 L 158 150 L 135.5 157.5 L 128 180 L 120.5 157.5 L 98 150 L 120.5 142.5 Z" fill="#FFC83D"/>
+  <path d="M392 98 L 397.5 114.5 L 414 120 L 397.5 125.5 L 392 142 L 386.5 125.5 L 370 120 L 386.5 114.5 Z" fill="#FFC83D"/>
+  <path d="M376 356 L 380 368 L 392 372 L 380 376 L 376 388 L 372 376 L 360 372 L 372 368 Z" fill="#FFFFFF"/>
 </svg>

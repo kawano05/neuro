@@ -54,6 +54,11 @@ export const MEASUREMENT_PROTOCOL = {
     "slot-l2": { cycleMs: 3200, toleranceMs: 220, rounds: 4, seed: "slot-measure-01" },
   },
   crane: { sweepMs: 2200, toleranceR: 15, targetTrials: 5 },
+  // さかなつりは、アタリが続く長さ（受付時間）だけを支援者が変えられる。測定では固定。
+  fishing: {
+    fishing: { limitMs: 2000 },
+    "fishing-gonogo": { limitMs: 2000 },
+  },
 };
 
 /** 設定値から、いまどちらの回かを決める。 */
@@ -206,6 +211,23 @@ export function resolveCraneDifficulty(settings, preset) {
     targetTrials: settings?.craneTargetTrials ?? preset.targetTrials,
     audioGuidance: settings?.craneAudioGuidance === true,
   };
+}
+
+/**
+ * さかなつりの実効パラメータ。
+ *
+ * れんしゅうの回だけ、アタリが続く長さ（食いついてから逃げるまで。limitMs）を
+ * 支援者が変えられる（2026-09-27）。打ち合わせで「ゲームの中で、速いねと
+ * 思ったら その場で調整したい」と言われ、リール・アーム・高い音だけには速さの
+ * 設定があったが、さかなつりだけ何も変えられなかった。変えた値は試行ごとの
+ * limitMs と session.config に残り、CSV にも出る（state.js / dataExport.js）。
+ * そくていでは protocol 固定。
+ */
+export function resolveFishingDifficulty(gameId, settings, preset) {
+  if (isMeasurementMode(settings)) {
+    return { ...preset, ...MEASUREMENT_PROTOCOL.fishing[gameId] };
+  }
+  return { ...preset, limitMs: settings?.fishingLimitMs ?? preset.limitMs };
 }
 
 /**

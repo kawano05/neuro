@@ -35,6 +35,7 @@
 // =====================================================================
 
 import { cranePresets, cranePrizes, cueTones } from "../content.js";
+import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
   ENDLESS_PROTOCOL_VERSION,
   endlessDifficultyStep,
@@ -54,10 +55,11 @@ import {
 } from "./craneGeometry.js";
 import { PRIZE_ART, clawClosedUrl, clawOpenUrl } from "./craneArt.js";
 
-const FEEDBACK_GAIN = 0.05;
-const MISS_GAIN = 0.018;
+// 合図と当たりの音は合図の大きさ、外れは小さく（audio.js の CUE_TONE_GAIN / CUE_SOFT_GAIN）。
+const FEEDBACK_GAIN = CUE_TONE_GAIN;
+const MISS_GAIN = CUE_SOFT_GAIN;
 /** 走査カーソルが目標を通過した合図。目で追いにくい利用者への補助なので控えめに。 */
-const PASS_GAIN = 0.016;
+const PASS_GAIN = CUE_TONE_GAIN * 0.32;
 
 const COUNT_IN_STEP_S = 0.55;
 
@@ -288,7 +290,7 @@ export function endlessSweepMs(baseSweepMs, trialIndex) {
   );
 }
 
-function resolveCraneConfig(settings, readiness, requestedEndless) {
+function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = null) {
   // そくていの回は protocol 固定・アシスト無し・通過音無し、
   // れんしゅうの回は支援者の設定 → 既定の順（src/lib/difficultyMode.js）。
   // どちらの回だったかも config に残して、CSVと評価ログに出す。
@@ -303,6 +305,8 @@ function resolveCraneConfig(settings, readiness, requestedEndless) {
       ? ENDLESS_PROTOCOL_VERSION
       : null,
     difficultyMode: resolveDifficultyMode(settings),
+    // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
+    fxLevel,
     // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
     // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
     measurementReadiness: readiness || "n/a",
@@ -310,7 +314,7 @@ function resolveCraneConfig(settings, readiness, requestedEndless) {
 }
 
 export function createCraneGame(ctx) {
-  const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml } = ctx;
+  const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml, fx } = ctx;
 
   /**
    * 景品の名前。
@@ -330,7 +334,7 @@ export function createCraneGame(ctx) {
   // ルビは乗らない**。いまの景品名はすべてかな・カタカナなので問題ないが、
   // 漢字の名前を足すと静かにルビだけ落ちる。その線は
   // tests/i18n.test.mjs の「景品名に漢字を使わない」で縛ってある。
-  const config = resolveCraneConfig(ctx.settings, ctx.readiness, ctx.endless);
+  const config = resolveCraneConfig(ctx.settings, ctx.readiness, ctx.endless, ctx.fx?.level() ?? null);
   let stageEl = null;
   let sceneEl = null;
   let statusEl = null;
@@ -407,7 +411,7 @@ export function createCraneGame(ctx) {
     stageEl.innerHTML = `
       <div class="crane-cabinet" aria-hidden="true">
         <div class="crane-marquee">
-          <span class="crane-marquee-title">UFO CATCHER</span>
+          <span class="crane-marquee-title">${tHtml("tile.crane-corner.title")}</span>
           <div class="crane-score">${tHtml("crane.score", { n: 0 })}</div>
         </div>
         <div class="crane-stage">
@@ -704,6 +708,8 @@ export function createCraneGame(ctx) {
       statusEl.innerHTML = tHtml("crane.gotPrize", { name: prizeName(prize) });
       clawEl.classList.add("is-holding");
       prizeEl.classList.add("is-lifted");
+      // つかんだ瞬間のきらきら（れんしゅうの回だけ。そくていの回は演出エンジンが何もしない）。
+      fx?.craneGrip(prizeEl);
       voiceFeedback(
         t("crane.voice.grip", { name: prizeName(prize) }),
         t("crane.voice.gripAnnounce", { name: prizeName(prize) })
@@ -759,7 +765,8 @@ export function createCraneGame(ctx) {
     audio.scheduler.stop();
     const grips = session.summary.grips ?? 0;
     voiceFeedback(
-      t("crane.voice.finish", { n: grips }),
+      // 1こも取れなかった回に「0こ とれたよ」と言わない。
+      t(grips > 0 ? "crane.voice.finish" : "crane.voice.finishNone", { n: grips }),
       t("crane.voice.finishAnnounce", { n: grips })
     );
     finish(session.summary);
@@ -941,6 +948,9 @@ export function createCraneGame(ctx) {
     badge.src = PRIZE_ART[currentPrize().asset];
     badge.alt = "";
     collectedEl.appendChild(badge);
+    // 受け口に落ちたら紙吹雪（れんしゅうの回だけ）。
+    fx?.craneWin(chuteEl);
+    fx?.motion.popIn(badge, { from: 0.4 });
     audio.playToneAt(cueTones.high, audio.scheduler.now(), FEEDBACK_GAIN);
     // 受け口に落ちる音。低くて短い「ぼとっ」で、掴んだ瞬間の金属音とは
     // 別の出来事だと分かるようにする。ここが1回の試行の終点なので、
@@ -986,6 +996,9 @@ export function createCraneGame(ctx) {
   function mount(el) {
     stageEl = el;
     stageEl.classList.add("module-crane");
+    // れんしゅうの回だけの見た目（明るい色の筐体。theme-hakkiri.css）。ガラスの箱
+    // （床と景品・狙い）は、そくていの回と同じ。
+    stageEl.classList.toggle("is-practice", config.difficultyMode !== "measure");
     renderMarkup();
     railEl.dataset.top = "8";
 
@@ -1020,6 +1033,9 @@ export function createCraneGame(ctx) {
       finished: false,
       config: {
         ...config,
+        // 合図音の大きさ（audio.js の CUE_TONE_GAIN）。2026-09-30 に 0.05 から上げたので、
+        // どちらの大きさで取った記録かを分けられるように残す。
+        cueGain: FEEDBACK_GAIN,
         targetSequence: targets.map((target) => ({ x: target.x, y: target.y })),
       },
       device: audio.getDeviceInfo(),
@@ -1072,7 +1088,7 @@ export function createCraneGame(ctx) {
       logTrial(session);
     }
     if (stageEl) {
-      stageEl.classList.remove("module-crane");
+      stageEl.classList.remove("module-crane", "is-practice");
       stageEl.innerHTML = "";
     }
     stageEl = null;

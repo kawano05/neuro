@@ -10,7 +10,10 @@
 
 import { gameModules } from "../games/registry.js";
 import { isMeasurementMode } from "../difficultyMode.js";
+import { POP_ANIMALS, SCENE_ART, artSvg } from "../art/hakkiriArt.js";
+import { tileThemeFor } from "../homeTheme.js";
 import {
+  GRID_LAYOUT_MIN_WIDTH,
   SCAN_OVERLAP_TOLERANCE_PX,
   SCAN_PAGE_SIZE,
   SCAN_PAGE_SIZE_MIN,
@@ -26,6 +29,11 @@ import {
   learningCornerTile,
   slotCornerTile,
 } from "../content.js";
+
+/** 丸数字（①〜⑳）。範囲外はふつうの数字。 */
+export function circledNumber(n) {
+  return Number.isInteger(n) && n >= 1 && n <= 20 ? String.fromCodePoint(0x245f + n) : String(n);
+}
 
 export function initHome(ctx) {
   const { state, elements, save, announce, logEvent, scan } = ctx;
@@ -61,6 +69,19 @@ export function initHome(ctx) {
 
   function gameById(id) {
     return gameModules.find((game) => game.id === id);
+  }
+
+  /**
+   * グリッドで並べるか（先読みでページに分けない並べ方か）。
+   *
+   * デザイン改修（theme-hakkiri.css）では、スマホの幅でもホームは2列のグリッドで、
+   * 行の高さが画面の残りに合わせて伸び縮みする。画面の高さからの当て（740px）で
+   * 分けると、入るはずの iPhone でもページに分かれていた——打ち合わせで
+   * 「1画面にすべて並べる」「ページをめくらせない」と言われている（§1.3）。
+   * どの幅でも、描いたあとの実測で入らなかったときだけ分ける。
+   */
+  function usesGridLayout() {
+    return true;
   }
 
   /** 走査順が視覚的にも分かる、横長アクティビティ行を生成する。 */
@@ -104,16 +125,53 @@ export function initHome(ctx) {
       ? ctx.tHtml(`tile.${tileKey}.desc`)
       : tile.descriptionHtml || tile.description;
     const descriptionId = descText ? `tile-desc-${tileKey}` : "";
-    if (descriptionId) button.setAttribute("aria-describedby", descriptionId);
     const description = descriptionId
       ? `<span class="tile-description" id="${descriptionId}">${descHtml}</span>`
       : "";
+
+    // 遊びのタイルは絵・色・難しさの札を持つ（homeTheme.js）。戻る・ページ送りは
+    // 遊びではないので持たない——同じ見た目にすると、選ぶ対象に見えてしまう。
+    const theme = tileThemeFor(tileKey);
+    if (!theme) {
+      if (descriptionId) button.setAttribute("aria-describedby", descriptionId);
+      button.innerHTML = `
+        <span class="scan-order" aria-hidden="true">${index + 1}</span>
+        ${icon}
+        <span class="tile-text">
+          <strong>${shownHtml}</strong>
+          ${description}
+        </span>
+        <span class="scan-current-label" aria-hidden="true">${ctx.t("home.scanning")}</span>
+      `;
+      return button;
+    }
+
+    button.classList.add("hk-tile");
+    button.dataset.palette = theme.palette;
+    button.style.setProperty("--tile-band", theme.colors.band);
+    button.style.setProperty("--tile-band-ink", theme.colors.ink);
+    button.style.setProperty("--tile-thumb", theme.colors.thumb);
+    // 札（はじめは ここから／なれたら／チャレンジ）は、名前の次に読む説明へ入れる。
+    // 名前（aria-label）は識別子なので短いまま。
+    const levelKey = theme.level ? `level.${theme.level}` : null;
+    const levelId = levelKey ? `tile-level-${tileKey}` : "";
+    const describedBy = [levelId, descriptionId].filter(Boolean).join(" ");
+    if (describedBy) button.setAttribute("aria-describedby", describedBy);
+    const badge = levelKey
+      ? `<span class="hk-tile-badge" id="${levelId}">${ctx.tHtml(levelKey)}</span>`
+      : "";
     button.innerHTML = `
-      <span class="scan-order" aria-hidden="true">${index + 1}</span>
-      ${icon}
-      <span class="tile-text">
-        <strong>${shownHtml}</strong>
-        ${description}
+      <span class="hk-tile-art" aria-hidden="true">${artSvg(SCENE_ART[theme.art])}</span>
+      <span class="hk-tile-tags">
+        <span class="scan-order" aria-hidden="true">${index + 1}</span>
+        ${badge}
+      </span>
+      <span class="hk-tile-band">
+        <span class="tile-text">
+          <strong>${shownHtml}</strong>
+          ${description}
+        </span>
+        <i class="fa-solid fa-chevron-right hk-tile-go" aria-hidden="true"></i>
       </span>
       <span class="scan-current-label" aria-hidden="true">${ctx.t("home.scanning")}</span>
     `;
@@ -205,6 +263,7 @@ export function initHome(ctx) {
       {
         delegatedToOsScanning: Boolean(state.settings.switchControlMode),
         forcedByOverflow: overflowPaginate,
+        gridLayout: usesGridLayout(),
       }
     );
     const slice = paginate
@@ -214,10 +273,30 @@ export function initHome(ctx) {
     // おかないと、次の描画でまた範囲外の値から始まる。
     pageIndex = slice.pageIndex;
 
+    // 並べ方はCSSが決める（theme-hakkiri.css）。ページに分けたときは1列の
+    // リスト、分けないときはグリッド。グリッドのロビーでは、いちばん簡単な
+    // 遊びを大きく左上に、「べつの遊び」を横長で下に置く（簡単→難しいが
+    // 左上→右下に並ぶ。docs/design-renewal-2026-09-25.md §1.3）。
+    const layout = elements.gameTileGrid.dataset.layout;
+    elements.gameTileGrid.dataset.paged = String(paginate);
+    elements.gameTileGrid.dataset.count = String(slice.visible.length);
+
+    // 番号は一覧全体での順番（①〜）。ページに分けても振り直さない——
+    // 「①から⑦へ、だんだん難しくなる」の番号と、画面の番号を食い違わせない。
+    const numberOffset = paginate ? slice.pageIndex * pageSize : 0;
     slice.visible.forEach((item, index) => {
-      const button = createTileButton(item, index);
+      const button = createTileButton(item, numberOffset + index);
+      const key = item.id || item.view;
+      // 「べつの遊び」は難しさの段に入らないので、枠を破線にして分ける。
+      if (key === "learning-corner") button.dataset.hkKind = "other";
+      if (layout === "lobby" && !paginate && index === 0 && key === "color-legacy") {
+        button.dataset.hkSlot = "hero";
+      }
       button.addEventListener("click", (event) => {
         if (homeClickIsGuarded(event)) return;
+        // 選んだタイルから輪ときらきら（① 手応え。docs/overall-design-2026-09-28.md §7）。
+        // 画面が遊びへ切り替わっても、粒はキャンバスの上で流れて消える。
+        celebrateChoice(button);
         onSelect(item);
       });
       elements.gameTileGrid.append(button);
@@ -346,6 +425,9 @@ export function initHome(ctx) {
   /** 利用者ホームまたは二階層目を、同じ5項目以内の走査リストで描画する。 */
   function renderTiles() {
     elements.gameTileGrid.innerHTML = "";
+    elements.gameTileGrid.dataset.layout = activeCorner ? "corner" : "lobby";
+    // 並び順の注記（①から⑤へ…）はロビーだけのもの。コーナーの中では意味が違う。
+    if (elements.homeOrderNote) elements.homeOrderNote.hidden = Boolean(activeCorner);
 
     /**
      * エンドレスの選択肢を引く。
@@ -424,14 +506,28 @@ export function initHome(ctx) {
     const visibleSlotGames = ["slot-l1", "slot-l2"]
       .map(gameById)
       .filter((game) => game && (!state.settings.hideVisualTasks || !game.visualRequired));
+    // 左上（1番）から右下へ、簡単な順。はじめの3つは失敗の無い遊び
+    // （docs/design-renewal-2026-09-25.md §1.4）。
     const homeTiles = [
       gameById("color-legacy"),
+      gameById("balloon"),
+      gameById("coloring"),
+      gameById("baseball"),
       visibleSlotGames.length ? slotCornerTile : null,
       gameById("gonogo"),
       !state.settings.hideVisualTasks ? craneCornerTile : null,
       fishingCornerTile,
       learningCornerTile,
     ].filter(Boolean);
+    // 「①から⑦へ」の数は、いま並べた遊びの数（べつの遊びは段に入れない）。
+    // 画面をよく見る遊びを隠すと減る。
+    const gameCount = homeTiles.filter((tile) => tile.id !== "learning-corner").length;
+    if (elements.homeOrderNote) {
+      elements.homeOrderNote.innerHTML = ctx.tHtml("home.orderNote", {
+        last: circledNumber(gameCount),
+        n: gameCount,
+      });
+    }
 
     /** 二階層目のコーナーへ入る。ページ番号は持ち越さない。 */
     function enterCorner(corner, spoken) {
@@ -459,8 +555,32 @@ export function initHome(ctx) {
    * AudioContext アンロック＋確認音（880Hz）＋ログ記録＋home 遷移＋announce。
    * この1押しは L0（反応確認）を兼ねるため logEvent({type:"switch"}) を記録する。
    */
+  /** 選んだものから、輪ときらきら。 */
+  function celebrateChoice(el) {
+    const fx = ctx.fx;
+    if (!fx || !el) return;
+    const art = el.querySelector(".hk-tile-art, .game-tile-art, svg") || el;
+    const { x, y } = fx.engine.pointOf(art);
+    fx.engine.ring({ x, y, color: "#FFC83D", r0: 18, r1: 150, width: 7, life: 0.5 });
+    fx.engine.burst({
+      x,
+      y,
+      count: 16,
+      speed: [320, 720],
+      shapes: ["sparkle", "star", "dot"],
+      colors: ["#FFC83D", "#FFFFFF", "#4DC4FF", "#FF8082"],
+      size: [16, 28],
+      life: [0.6, 1.1],
+      gravity: 200,
+      drag: 2.6,
+      twinkle: 0.2,
+    });
+  }
+
   function leaveStart(/* t */) {
     if (state.currentView !== "start") return;
+    // 「はじめる」から、きらきらが広がってホームへ。
+    celebrateChoice(elements.startArt || elements.startStage);
     // pointerdown で画面が切り替わった直後、同じ物理操作の pointerup/click が
     // 新しく現れたホーム行へ落ちるのを防ぐ。入力ファネルのdedupeを通らない
     // 通常ボタンのclickにも効く、画面遷移側のガード。
@@ -475,10 +595,10 @@ export function initHome(ctx) {
     scan.restartIfNeeded();
   }
 
-  elements.startSettingsLink.addEventListener("click", (event) => {
-    event.stopPropagation(); // ファネルに入れない（走査対象外・タップ専用、§2.2）
-    ctx.switchView("settings");
-  });
+
+  // スタート画面の絵。はじめの遊び（おすと でてくる）に出てくる子と同じにして、
+  // 「押すと、この子が出てくる」という最初の約束を画面で見せる。
+  if (elements.startArt) elements.startArt.innerHTML = artSvg(POP_ANIMALS[0]);
 
   function showLobby() {
     activeCorner = null;
@@ -518,6 +638,8 @@ export function initHome(ctx) {
   if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
     const layoutBreakpoints = [
       window.matchMedia("(max-height: 740px)"),
+      // グリッドとリストの境目。ここをまたぐと並べ方も先読みも変わる。
+      window.matchMedia(`(min-width: ${GRID_LAYOUT_MIN_WIDTH}px)`),
       // iPad full width→Split Viewでは高さが変わらない。幅側のCSS境界も
       // 監視しないと、広い画面で決めたページ構成をそのまま持ち越す。
       window.matchMedia("(max-width: 820px)"),

@@ -15,9 +15,11 @@ import {
   judgeSlotStop,
   positiveModulo,
   reelPhaseAt,
+  reelTrackOffset,
   summarizeSlotTrials,
 } from "./slotJudge.js";
 import { slotSymbolHtml, slotSymbolStripUrl } from "./slotArt.js";
+import { fitMeasuredReels, reelCellPx } from "./slotFit.js";
 
 const INPUT_GUARD_MS = 300;
 const ROUND_HOLD_MS = 560;
@@ -61,9 +63,12 @@ export function createSlotGame(gameId) {
       setProgress,
       t,
       tHtml,
+      fx,
     } = ctx;
 
     let stageEl = null;
+    // れんしゅうの回で、続けて「ぴったり」だった数（演出だけに使う。記録はしない）。
+    let hitStreak = 0;
     let reelsEl = null;
     let targetEl = null;
     let statusEl = null;
@@ -83,6 +88,10 @@ export function createSlotGame(gameId) {
     let finishTimer = null;
     let destroyed = false;
     let finishing = false;
+    let resizeFrame = null;
+    // 画面に出している1コマの高さ（px）。始めたときと、向きを変えたときに測る
+    // （押したときに測ると、押した直後にレイアウトの計算が走る）。
+    let shownCellPx = null;
 
     const toRelativeMs = (absoluteMs) => Math.max(0, absoluteMs - sessionStartPerfMs);
 
@@ -119,14 +128,15 @@ export function createSlotGame(gameId) {
         symbolCount: config.symbolCount,
         initialPhase: reelPlan.initialPhase,
       });
-      const centeredIndex = positiveModulo(Math.floor(phase + 0.5), config.symbolCount);
+      const { centeredIndex, offsetCells } = reelTrackOffset(phase, config.symbolCount);
       if (view.centeredIndex !== centeredIndex || view.orderKey !== reelPlan.symbolOrder.join("|")) {
         view.track.innerHTML = buildTrackSymbols(reelPlan.symbolOrder, centeredIndex);
         view.centeredIndex = centeredIndex;
         view.orderKey = reelPlan.symbolOrder.join("|");
       }
-      const fractionalOffset = centeredIndex - phase;
-      view.track.style.setProperty("--slot-track-offset", `${(fractionalOffset * 94).toFixed(2)}px`);
+      // ずれはコマ数で渡し、1コマの高さは CSS の --slot-cell-size が決める
+      // （以前は 94px 決め打ちで、スマホの 82px のコマとずれていた）。
+      view.track.style.setProperty("--slot-track-offset", offsetCells.toFixed(4));
     }
 
     function updateReelClasses() {
@@ -160,12 +170,13 @@ export function createSlotGame(gameId) {
       if (!session || finishing) return;
       const completed = session.trials.length;
       const total = config.rounds * config.reelCount;
-      setProgress(t("slot.progress", { current: Math.min(completed + 1, total), total }));
+      // ほかの遊びと同じ「のこり ○かい」（さかなつり・アーム）。
+      setProgress(t("slot.progress", { n: Math.max(0, total - completed) }));
       if (statusEl && activeReelIndex !== null) {
-        statusEl.textContent = t("slot.status.stopReel", {
-          current: activeReelIndex + 1,
-          total: config.reelCount,
-        });
+        statusEl.textContent =
+          config.reelCount === 1
+            ? t("slot.status.stopOne")
+            : t("slot.status.stopReel", { current: activeReelIndex + 1, total: config.reelCount });
       }
     }
 
@@ -186,6 +197,71 @@ export function createSlotGame(gameId) {
         lastTrial.ignoredDuplicateInputs = (lastTrial.ignoredDuplicateInputs || 0) + 1;
       }
       persist();
+    }
+
+    /**
+     * 目標の絵で止められたときの演出（れんしゅうの回だけ）。
+     *
+     * 打ち合わせで「止まったときに当たったと分かる派手な演出がほしい」と
+     * 言われた（docs/design-renewal-2026-09-25.md §1.5）。例に出たのは
+     * 「メダルがパーンと出る」だったが、リールの遊びでメダルを出すと
+     * スロットの払い出しに見える——この遊びは賭博の表現を使わない
+     * （detailed-design.md §0A.5）。App Store の年齢区分でも「ギャンブルを
+     * 模した表現」に数えられうる。星がはじけて「ぴったり！」と出し、明るい
+     * 和音を鳴らす（同 §3.4, §3.10）。
+     *
+     * そくていの回は出さない。止めたあとの演出でも、次のリールを止める
+     * ときに目に入る（L2 は3本を続けて止める）。刺激の見え方は測定の条件。
+     */
+    function cheerReel(reelIndex) {
+      if (config.difficultyMode === "measure") return;
+      const view = reelViews[reelIndex];
+      if (!view) return;
+      const burst = document.createElement("span");
+      burst.className = "slot-cheer";
+      burst.setAttribute("aria-hidden", "true");
+      // 続けて当てたら「2かい れんぞく！」。続くほど星が大きく、多くなる
+      // （だんだん盛り上がる。docs/overall-design-2026-09-28.md §3.1）。
+      const streak =
+        hitStreak >= 2 ? `<span class="slot-cheer-streak">${tHtml("slot.streak", { n: hitStreak })}</span>` : "";
+      burst.innerHTML = `<span class="slot-cheer-word">${tHtml("slot.cheer")}</span>${streak}`;
+      view.root.append(burst);
+      // 星は演出エンジン（src/lib/fx/ の reelHit）が描く。以前は Font Awesome の星
+      // 12個を DOM に並べていた（技術負債の返済）。
+      fx?.reelHit(view.root, { streak: hitStreak });
+      window.setTimeout(() => burst.remove(), 1100);
+    }
+
+    /**
+     * 外したときの一言（れんしゅうの回だけ）。「おしい！」とだけ出して、すぐ次へ。
+     * 打ち合わせで「間違っているときも、へこませずに、あっさり次のチャレンジが
+     * できるように」「もう一回頑張ろう、のような前向きな言葉がいい」と言われた
+     * （docs/design-renewal-2026-09-25.md §1.5）。押さずに止まったとき（時間切れ）は
+     * 出さない——押していないのに「おしい」は合わない。
+     */
+    function nudgeReel(reelIndex) {
+      if (config.difficultyMode === "measure") return;
+      const view = reelViews[reelIndex];
+      if (!view) return;
+      const nudge = document.createElement("span");
+      nudge.className = "slot-cheer is-nudge";
+      nudge.setAttribute("aria-hidden", "true");
+      nudge.innerHTML = `<span class="slot-cheer-word">${tHtml("slot.nudge")}</span>`;
+      view.root.append(nudge);
+      window.setTimeout(() => nudge.remove(), 1000);
+    }
+
+    /** 止めたときの音。れんしゅうで当たったときは、明るい和音（ソ・シ・レ）。 */
+    function playStopSound(judgment) {
+      if (judgment === "hit" && config.difficultyMode !== "measure") {
+        // 続けて当てるほど、和音が全音ずつ高くなる（大きさは変えない）。
+        const lift = Math.pow(2, (2 * Math.min(Math.max(hitStreak - 1, 0), 4)) / 12);
+        [784, 987.77, 1174.66].forEach((frequency, index) => {
+          audio.playChime(frequency * lift, { delayS: index * 0.07, durationS: 0.8 });
+        });
+        return;
+      }
+      audio.playTone(judgment === "hit" ? 660 : 440);
     }
 
     function recordStop({ inputMs, timeoutAtMs = null, source = "timeout" }) {
@@ -227,11 +303,16 @@ export function createSlotGame(gameId) {
         judgment: result.judgment,
         inputSource: source,
         ignoredDuplicateInputs: 0,
+        // このとき画面に出ていた1コマの高さ（px）。途中で向きを変えると変わる。
+        reelCellPx: shownCellPx,
       };
       session.trials.push(row);
       reelViews[reelIndex].stoppedPhase = result.stoppedPhase;
       paintReel(reelIndex, stoppedAtMs);
-      audio.playTone(result.judgment === "hit" ? 660 : 440);
+      hitStreak = result.judgment === "hit" ? hitStreak + 1 : 0;
+      playStopSound(result.judgment);
+      if (result.judgment === "hit") cheerReel(reelIndex);
+      else if (source !== "timeout") nudgeReel(reelIndex);
       persist();
       return row;
     }
@@ -264,7 +345,8 @@ export function createSlotGame(gameId) {
       finishTimer = window.setTimeout(() => {
         finishTimer = null;
         if (destroyed) return;
-        voiceFeedback(t("slot.voice.finish", {
+        // ぴったりが0回のときに「0回 ぴったり」と言わない。
+        voiceFeedback(t(session.summary.hits > 0 ? "slot.voice.finish" : "slot.voice.finishNone", {
           hits: session.summary.hits,
           total: session.summary.trials,
         }));
@@ -335,6 +417,26 @@ export function createSlotGame(gameId) {
       if (!destroyed && !session.finished) rafId = window.requestAnimationFrame(loop);
     }
 
+    /**
+     * そくていの回で、決まった大きさのリールが画面に入りきらないときだけ、収める
+     * 見え方にする（games/slotFit.js）。れんしゅうの回はいつも画面いっぱい
+     * （theme-hakkiri.css）なので、ここでは何もしない。
+     */
+    function fitReels() {
+      if (stageEl && config?.difficultyMode === "measure") fitMeasuredReels(stageEl);
+    }
+
+    // 向きを変えたとき（スマホを横にした、など）に測り直す。1フレームに1回まで。
+    function onResize() {
+      if (resizeFrame !== null) return;
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = null;
+        if (destroyed) return;
+        fitReels();
+        shownCellPx = reelCellPx(stageEl);
+      });
+    }
+
     function mount(el) {
       stageEl = el;
       const difficultyMode = resolveDifficultyMode(settings);
@@ -354,8 +456,10 @@ export function createSlotGame(gameId) {
       });
 
       stageEl.classList.add("slot-stage");
+      // れんしゅうの回だけの見た目（明るい色の台。theme-hakkiri.css）。
+      stageEl.classList.toggle("is-practice", config.difficultyMode !== "measure");
       stageEl.innerHTML = `
-        <section class="slot-task" data-game-id="${gameId}">
+        <section class="slot-task" data-game-id="${gameId}" data-difficulty-mode="${config.difficultyMode}">
           <div class="slot-target" data-slot-target></div>
           <p class="slot-status" data-slot-status aria-live="polite"></p>
           <div class="slot-reels is-${config.reelCount}-reel" data-slot-reels></div>
@@ -389,6 +493,7 @@ export function createSlotGame(gameId) {
       }));
 
       sessionStartPerfMs = performance.now();
+      hitStreak = 0;
       session = {
         sessionId: generateSessionId(),
         taskType: "slot",
@@ -409,16 +514,28 @@ export function createSlotGame(gameId) {
           maxCyclesPerReel: config.maxCyclesPerReel,
           seed: config.seed,
           difficultyMode: config.difficultyMode,
+          // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
+          fxLevel: ctx.fx?.level() ?? null,
           textMode: config.textMode,
           measurementReadiness: config.measurementReadiness,
           visualGuidance: false,
+          // 1コマの高さ（px）。下で、画面に出した実際の大きさを入れる。
+          reelCellPx: null,
         },
         device: audio.getDeviceInfo(),
         trials: [],
         summary: null,
       };
-      logTrial(session);
       beginRound(0, sessionStartPerfMs);
+      // 目標の札とことばが入ってから測る（札の大きさも見え方に入る）。
+      fitReels();
+      // 画面に出した1コマの高さを記録に残す。そくていの回は、収める見え方に
+      // なったときだけ決まった大きさ（94px、幅 620px 以下は 82px）と違う値になる。
+      // れんしゅうの回は画面の大きさで決まる。止めた1回ごとにも残す（trial.reelCellPx）。
+      shownCellPx = reelCellPx(stageEl);
+      session.config.reelCellPx = shownCellPx;
+      logTrial(session);
+      window.addEventListener("resize", onResize);
       rafId = window.requestAnimationFrame(loop);
     }
 
@@ -446,6 +563,9 @@ export function createSlotGame(gameId) {
       if (destroyed) return;
       destroyed = true;
       stopLoop();
+      window.removeEventListener("resize", onResize);
+      if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = null;
       window.clearTimeout(transitionTimer);
       window.clearTimeout(finishTimer);
       transitionTimer = null;
@@ -462,7 +582,7 @@ export function createSlotGame(gameId) {
         logTrial(session);
       }
       if (stageEl) {
-        stageEl.classList.remove("slot-stage");
+        stageEl.classList.remove("slot-stage", "is-practice", "is-fitted", "is-whole");
         stageEl.innerHTML = "";
       }
       reelViews = [];

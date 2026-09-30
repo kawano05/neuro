@@ -6,7 +6,7 @@
 // 中断した回は試行数が足りず不利になる。
 
 import assert from "node:assert/strict";
-import { bestRecordLine, personalBest } from "../src/lib/games/gameHost.js";
+import { bestRecordLine, personalBest, praiseFor, resultScore } from "../src/lib/games/results.js";
 import { resolveTextMode, translate } from "../src/lib/i18n.js";
 
 // 文言は表記モードで変わるので、テスト側も辞書を通して引く。
@@ -192,6 +192,36 @@ test("personal best is scoped to the participant in front of the device", () => 
   assert.equal(personalBest(history, { gameId: "crane", config, pick, participantId: "P1" }), 5);
   // IDが空のときは絞らない（1人しか使わない端末の運用を壊さない）。
   assert.equal(personalBest(history, { gameId: "crane", config, pick }), 5);
+});
+
+test("the result's one-liner is always positive and always earns a star", () => {
+  // けっかの一言（docs/design-renewal-2026-09-25.md §1.6）。へこませない、と
+  // 言われているので、0回でも「がんばったね！」と星1つ。下の段ほど言葉が
+  // 弱くなるだけで、否定の言葉は出さない。
+  assert.deepEqual(praiseFor(0, 8), { key: "result.praise.tried", stars: 1 });
+  assert.deepEqual(praiseFor(3, 8), { key: "result.praise.tried", stars: 1 });
+  assert.deepEqual(praiseFor(4, 8), { key: "result.praise.good", stars: 2 });
+  assert.deepEqual(praiseFor(7, 8), { key: "result.praise.great", stars: 3 });
+  assert.deepEqual(praiseFor(8, 8), { key: "result.praise.great", stars: 3 });
+  // 回数が0（途中で止めた回など）でも壊れない。
+  assert.deepEqual(praiseFor(0, 0), { key: "result.praise.tried", stars: 1 });
+  ["result.praise.great", "result.praise.good", "result.praise.tried"].forEach((key) => {
+    assert.ok(!/まちがい|だめ|ざんねん|もうちょっと/.test(t(key)), `前向きでない言葉: ${t(key)}`);
+  });
+});
+
+test("the result counts success the same way each game counts its streak", () => {
+  // さかなつりは長靴を見送れたのも成功（連続記録と同じ数え方）。
+  assert.deepEqual(resultScore("rt", { trials: 10, hits: 6, correctRejections: 2 }), { done: 8, total: 10 });
+  assert.deepEqual(resultScore("scan", { trials: 5, grips: 3 }), { done: 3, total: 5 });
+  assert.deepEqual(resultScore("slot", { trials: 8, hits: 5 }), { done: 5, total: 8 });
+  assert.deepEqual(
+    resultScore("gonogo", { hits: 9, misses: 3, commissions: 2, correctRejections: 6 }),
+    { done: 15, total: 20 }
+  );
+  assert.deepEqual(resultScore("sms", { hits: 12, misses: 4 }), { done: 12, total: 16 });
+  // 点の無い遊び（おすと でてくる）は一言を出さない。
+  assert.equal(resultScore("completion", { presses: 5 }), null);
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

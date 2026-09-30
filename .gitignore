@@ -20,3 +20,6 @@ artifacts/
 # Local presentation/video production intermediates
 _deck_build/
 _video_build/
+
+# 声を作るスクリプト（scripts/voice/generate.py）の Python のキャッシュ
+__pycache__/

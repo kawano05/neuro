@@ -114,6 +114,9 @@ export function createRhythmVisuals(options) {
     stageEl.classList.add("module-rhythm");
     stageEl.dataset.rhythmTheme = gameId;
     stageEl.dataset.rhythmProfile = profile;
+    // れんしゅうの回だけの見た目（明るい色・飾りを減らす。theme-hakkiri.css）。
+    // そくていの回（measurement）は今までの見た目のまま。
+    stageEl.dataset.rhythmMode = measurement ? "measure" : "practice";
     const icon = THEME_ICONS[gameId] || "fa-solid fa-music";
     stageEl.innerHTML = `
       <div class="rhythm-world" aria-hidden="true">
@@ -154,7 +157,7 @@ export function createRhythmVisuals(options) {
           <div class="rhythm-console">
             <div class="rhythm-score-panel">
               <span>${t("rhythm.score")}</span>
-              <strong>0000</strong>
+              <strong>0</strong>
             </div>
             <div class="rhythm-console-main">${offsetMarkup}</div>
             <div class="rhythm-profile-panel">
@@ -222,7 +225,7 @@ export function createRhythmVisuals(options) {
   }
 
   function setScore() {
-    if (scoreEl) scoreEl.textContent = String(score).padStart(4, "0");
+    if (scoreEl) scoreEl.textContent = String(score);
     if (comboEl) {
       comboEl.textContent = combo >= 2 ? t("rhythm.combo", { n: combo }) : "";
     }
@@ -320,6 +323,7 @@ export function createRhythmVisuals(options) {
       stageEl.classList.remove("module-rhythm");
       delete stageEl.dataset.rhythmTheme;
       delete stageEl.dataset.rhythmProfile;
+      delete stageEl.dataset.rhythmMode;
       delete stageEl.dataset.success;
       delete stageEl.dataset.combo;
     }

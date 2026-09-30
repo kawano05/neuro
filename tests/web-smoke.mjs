@@ -4,13 +4,20 @@ import { once } from "node:events";
 import { createServer as createNetServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { colorLegacyPreset, rhythmPresets, storageKey } from "../src/lib/content.js";
-import { resolveTextMode, translate } from "../src/lib/i18n.js";
+import { resolveTextMode, toSpeechText, translate } from "../src/lib/i18n.js";
 import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
+import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLegacy.js";
+import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
+import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS } from "../src/lib/games/partyStage.js";
+import { PARTY_JAR_CAPACITY, PARTY_STARS } from "../src/lib/party.js";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
 // 持つと、辞書を直したときにテストだけが古い文言を主張して落ちる——あるいは
 // 辞書の抜けを見逃す。既定の表記で辞書から引く。
 const t = (key, values) => translate(key, resolveTextMode({}), values);
+// 声に渡る形（分かち書きの空白を外し、かなの助数詞を漢字へ。src/lib/i18n.js の toSpeechText）。
+// 画面の文と読み上げの文は、2026-09-27 から意図して違う。
+const spokenJa = (text) => toSpeechText(text, "ja-JP");
 
 const port = await findAvailablePort();
 const basePath = "/neuro-smoke/";
@@ -67,8 +74,16 @@ const checks = [
   ["keeps the start press from falling through into a home activity", checkStartInputGuard],
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
   ["finishes color-legacy with progress, result, retry, and home", checkColorCompletionFlow],
+  ["plays the balloon and coloring games to the end, with live per-game settings", checkBeginnerGamesFlow],
+  ["hits every pitch that is swung at and re-pitches a missed one in the baseball game", checkBaseballFlow],
+  ["adds effects within the safety rules and never in a measured run", checkEffectsFollowSafetyRules],
+  ["plays the party atmosphere: otter, sparkles, crowd, reward, and a frame that waits", checkPartyAtmosphere],
+  ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
+  ["speaks with the app's own natural voice, and with the device voice when asked to", checkAppVoiceSpeaks],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
+  ["fills the screen with the practice reels without any of them spilling off it", checkPracticeReelsFillTheScreen],
+  ["keeps the measured reels at their fixed size and shrinks them only when they cannot fit", checkMeasuredReelsStayOnScreen],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
   ["counts up instead of counting down in endless fishing", checkEndlessFishingHasNoClock],
   ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
@@ -77,6 +92,7 @@ const checks = [
   ["keeps every scan target visible above the input dock", checkScanFocusStaysVisible],
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
+  ["starts a cue task once suspended sound comes back, and retries on the next press", checkCueTasksWaitForSuspendedSound],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
   ["keeps the supporter menu itself out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
@@ -85,6 +101,8 @@ const checks = [
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
   ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
+  ["takes any key as switch input on the start screen and inside a game", checkAnyKeyOnUserScreens],
+  ["shows the everyday settings first and folds the rest, with the measuring mark still visible", checkSupporterSettingsLayout],
   ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
@@ -96,6 +114,25 @@ const checks = [
   ["wires every export button to a real download", checkExportButtonsAreWired],
   ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
 ];
+
+// 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。
+//   SMOKE_PROJECTS=chromium-desktop SMOKE_CHECKS=color,result node tests/web-smoke.mjs
+// 実寸 × 検査の全部は重い（WebKit を4実寸立てる）。直した画面の周りだけを
+// 先に回して、全体は CI に任せる使い方のため。絞ったときは最後にそう書く
+// ——絞った緑を全体の緑と取り違えないように。
+const listFromEnv = (name) =>
+  (process.env[name] || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+const onlyProjects = listFromEnv("SMOKE_PROJECTS");
+const onlyChecks = listFromEnv("SMOKE_CHECKS");
+const selectedProjects = onlyProjects.length
+  ? projects.filter((project) => onlyProjects.includes(project.name))
+  : projects;
+const selectedChecks = onlyChecks.length
+  ? checks.filter(([name]) => onlyChecks.some((keyword) => name.includes(keyword)))
+  : checks;
 
 const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
   stdio: ["ignore", "pipe", "pipe"],
@@ -122,10 +159,10 @@ const SKIPPED = Symbol("skipped");
 try {
   await waitForServer();
 
-  for (const project of projects) {
+  for (const project of selectedProjects) {
     const browser = await project.browserType.launch({ headless: !headed });
     try {
-      for (const [name, check] of checks) {
+      for (const [name, check] of selectedChecks) {
         const context = await browser.newContext(project.contextOptions);
         await context.addInitScript(() => {
           const marker = "neuro-smoke-initialized";
@@ -196,8 +233,14 @@ if (failures.length) {
   // 多く見える。
   console.log(
     `\n${executed} smoke checks passed, ${skipped} skipped ` +
-      `(${projects.length} viewports x ${checks.length} checks).`
+      `(${selectedProjects.length} viewports x ${selectedChecks.length} checks).`
   );
+  if (selectedProjects.length < projects.length || selectedChecks.length < checks.length) {
+    console.log(
+      `NOTE: filtered run (SMOKE_PROJECTS / SMOKE_CHECKS). ` +
+        `Full suite is ${projects.length} viewports x ${checks.length} checks.`
+    );
+  }
 }
 
 async function findAvailablePort() {
@@ -259,9 +302,9 @@ async function checkMainApp(page) {
   // the start screen and the header badge would read "走査中". Confirm the
   // badge reads stopped and that no element ever gains .scan-focus even
   // after waiting past the default scanInterval (1600ms, state.js).
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
   await page.waitForTimeout(1900);
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
   const scanFocusCount = await page.locator(".scan-focus").count();
   assert(scanFocusCount === 0, `Expected no .scan-focus elements on the start screen, found ${scanFocusCount}`);
 }
@@ -274,7 +317,7 @@ async function checkStartInputGuard(page) {
   await page.mouse.down();
   await page.mouse.up();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 9);
   await page.waitForTimeout(600);
   assert(
     await page.locator("#homeView").evaluate((view) => view.classList.contains("is-active")),
@@ -299,7 +342,7 @@ async function checkStartToHomeToGameFlow(page) {
   // logs a "switch" event, and advances to home (detailed-design.md §2.2).
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 9);
 
   // The color-legacy tile is enabled and first by order (content.js gameTiles).
   const tiles = page.locator("#gameTileGrid .game-tile:not([disabled])");
@@ -337,23 +380,23 @@ async function checkStartToHomeToGameFlow(page) {
   // window before treating this as a distinct input.
   await page.waitForTimeout(200);
 
-  // Games that carry a "やりかた" entry in content.js now open on the ready
-  // screen (games/gameHost.js renderReady) so the rules are shown before any
-  // beat is scheduled. The first press dismisses it and starts the session;
-  // it is not a task input, so it must not be forwarded to the game nor
-  // recorded in the log.
-  await page.locator(".game-ready").waitFor({ state: "visible" });
-  const logsBeforeReadyDismiss = await readLogCount(page);
-  await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  // はじめの遊び（おすと でてくる）は「やりかた」を挟まない。遊びの画面が
+  // 最初から「押してみよう」と出していて、最初のひと押しで動物が出る
+  // （content.js の gameHowTo、docs/design-renewal-2026-09-25.md §1.4）。
+  // レディ画面を挟む遊びの契約（1押し目は記録しない）は slot / fishing /
+  // crane の検査が見ている。
+  await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
   assert(
-    (await readLogCount(page)) === logsBeforeReadyDismiss,
-    "Expected the ready-screen press to start the session without logging an input"
+    (await page.locator(".game-ready").count()) === 0,
+    "The first game must open straight on its prompt, without a ready screen"
   );
 
   // Pure tone owns the first ~0.2s. Spy on the actual app-TTS call and both
   // aria-live regions: checking #liveRegion text alone would miss immediate
   // speechSynthesis or the polite #gameProgress channel.
+  // アプリの読み上げは、アプリに入れた声（声のパック）でも端末の声でも
+  // neuronode:speech を出す（audio.js の reportSpeech）。どちらで読んだかに
+  // よらず、それを数える。端末の声は鳴らさない（speak を空にする）。
   await page.waitForTimeout(200);
   const logsBeforeTimedFeedback = await readLogCount(page);
   const earlyFeedback = await page.evaluate(async () => {
@@ -386,11 +429,16 @@ async function checkStartToHomeToGameFlow(page) {
     const cancelCalls = [];
     Object.defineProperty(synth, "speak", {
       configurable: true,
-      value: (utterance) => speechCalls.push({
-        text: utterance.text,
-        volume: utterance.volume,
+      value: () => {},
+    });
+    window.addEventListener("neuronode:speech", (event) => {
+      if (event.detail.fallback) return;
+      speechCalls.push({
+        text: event.detail.text,
+        volume: event.detail.volume,
+        via: event.detail.via,
         at: performance.now(),
-      }),
+      });
     });
     Object.defineProperty(synth, "cancel", {
       configurable: true,
@@ -418,20 +466,18 @@ async function checkStartToHomeToGameFlow(page) {
     window.__colorClickAt = clickAt;
     stage.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
     await new Promise((resolve) => setTimeout(resolve, 120));
-    const feedback = stageContent.querySelector(".color-feedback");
-    const feedbackText = feedback?.cloneNode(true);
+    const feedback = stageContent.querySelector(".pop-figure");
+    const feedbackText = feedback?.querySelector(".pop-word")?.cloneNode(true);
     feedbackText?.querySelectorAll("rt").forEach((reading) => reading.remove());
     const box = feedback?.getBoundingClientRect();
-    const opacity = feedback ? Number(getComputedStyle(feedback).opacity) : 0;
     return {
       speechCount: speechCalls.length,
       liveCount: liveEvents.length,
       progressCount: progressEvents.length,
       progressBefore,
       progressAfter: progress.textContent,
-      hasFeedbackClass: stageContent.classList.contains("is-feedback"),
+      animal: feedback?.dataset.animal || "",
       feedbackText: feedbackText?.textContent?.trim() || "",
-      feedbackOpacity: opacity,
       feedbackInViewport: Boolean(
         box && box.width > 0 && box.height > 0 && box.left >= 0 && box.top >= 0 &&
         box.right <= window.innerWidth && box.bottom <= window.innerHeight
@@ -442,10 +488,15 @@ async function checkStartToHomeToGameFlow(page) {
   assert(earlyFeedback.liveCount === 0, "Assertive live region must stay unchanged during the pure tone");
   assert(earlyFeedback.progressCount === 0, "Polite game progress must stay unchanged during the pure tone");
   assert(earlyFeedback.progressAfter === earlyFeedback.progressBefore, "Color input must not use live progress");
-  assert(earlyFeedback.hasFeedbackClass, "Expected short visual feedback after color input");
-  assert(earlyFeedback.feedbackText === t("color.changed"), "Visual feedback must say what changed");
-  assert(earlyFeedback.feedbackOpacity >= 0.9, `Expected visible feedback, opacity=${earlyFeedback.feedbackOpacity}`);
+  assert(earlyFeedback.animal === popAnimalFor(0).id, "The first press must bring out the first animal");
+  assert(earlyFeedback.feedbackText === t("color.pop.0"), "The animal must come with its short word");
   assert(earlyFeedback.feedbackInViewport, "Visual feedback must stay inside the viewport");
+  // 出てくる動きが終わったら、はっきり見えていること（hk-pop の途中は opacity が低い）。
+  await page.waitForTimeout(300);
+  const settledOpacity = await page.locator("#gameStageContent .pop-figure").evaluate(
+    (figure) => Number(getComputedStyle(figure).opacity)
+  );
+  assert(settledOpacity >= 0.9, `Expected the animal to be clearly visible, opacity=${settledOpacity}`);
   assert((await readLogCount(page)) === logsBeforeTimedFeedback + 1, "Timed click must log one input");
 
   // アプリTTSが届くのを待つ。
@@ -464,8 +515,9 @@ async function checkStartToHomeToGameFlow(page) {
   //      次に見る人が同じ調査を最初からやり直すことになる。
   const speechCapable = await page.evaluate(
     () =>
-      typeof window.SpeechSynthesisUtterance === "function" &&
-      typeof window.speechSynthesis?.speak === "function"
+      Boolean(window.AudioContext || window.webkitAudioContext) ||
+      (typeof window.SpeechSynthesisUtterance === "function" &&
+        typeof window.speechSynthesis?.speak === "function")
   );
   if (!speechCapable) return SKIPPED;
 
@@ -493,7 +545,11 @@ async function checkStartToHomeToGameFlow(page) {
     liveCount: window.__colorLiveEvents.length,
     progressCount: window.__colorProgressEvents.length,
   }));
-  assert(deliveredFeedback.speech.text === t("color.voice.progress", { n: 4 }), "App TTS must report the change and remaining presses");
+  assert(
+    deliveredFeedback.speech.text ===
+      spokenJa(t("color.voice.progress", { name: t(`animal.${popAnimalFor(0).id}`), n: 4 })),
+    `App TTS must name the animal and report the remaining presses, got ${JSON.stringify(deliveredFeedback.speech.text)}`
+  );
   assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt >= 220, "App TTS started before the tone ended");
   assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt <= 600, "App TTS arrived too late for a short response");
   assert(deliveredFeedback.speech.volume === 1, "Normal-mode TTS must retain the existing full-volume default");
@@ -531,23 +587,25 @@ async function checkStartToHomeToGameFlow(page) {
   assert(nextSpeech.at - nextInputCancellation.clickAt >= 220, "Replacement TTS started before its tone ended");
   assert(nextSpeech.at - nextInputCancellation.clickAt <= 600, "Replacement TTS arrived too late");
   assert(
-    nextSpeech.text === t("color.voice.progress", { n: 3 }),
-    "Replacement TTS must report the new remaining count"
+    nextSpeech.text === spokenJa(t("color.voice.progress", { name: t(`animal.${popAnimalFor(1).id}`), n: 3 })),
+    `Replacement TTS must name the new animal and report the new remaining count, got ${JSON.stringify(nextSpeech.text)}`
   );
 
+  // 出た動物はしばらく見せて、消えて真っ暗に戻る（「出て、消えて、次」）。
   await page.waitForFunction(
-    () => !document.querySelector("#gameStageContent")?.classList.contains("is-feedback"),
+    () => !document.querySelector("#gameStageContent .pop-figure"),
     null,
-    { timeout: 2_000 }
+    { timeout: POP_SHOW_MS + POP_FADE_MS + 3_000 }
   );
   const feedbackEndedAt = await page.evaluate(() => performance.now());
-  assert(feedbackEndedAt - nextInputCancellation.clickAt >= 430, "Visual feedback disappeared too early");
-  assert(feedbackEndedAt - nextInputCancellation.clickAt < 2_000, "Visual feedback stayed on screen too long");
-  await page.waitForTimeout(130);
-  const endedOpacity = await page.locator(".color-feedback").evaluate(
-    (feedback) => Number(getComputedStyle(feedback).opacity)
+  assert(
+    feedbackEndedAt - nextInputCancellation.clickAt >= POP_SHOW_MS,
+    "The animal disappeared before it could be seen"
   );
-  assert(endedOpacity <= 0.1, `Visual feedback remained visible after its timeout (opacity=${endedOpacity})`);
+  assert(
+    feedbackEndedAt - nextInputCancellation.clickAt < POP_SHOW_MS + POP_FADE_MS + 2_000,
+    "The animal stayed on screen too long"
+  );
 
   // Turning app TTS off must cancel current speech. Later color feedback then
   // belongs to the live region only.
@@ -583,10 +641,7 @@ async function checkStartToHomeToGameFlow(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
   await waitForClass(page, "#gameView", "is-active");
-  await page.locator(".game-ready").waitFor({ state: "visible" });
-  await page.waitForTimeout(200);
-  await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
 
   // Switch Control / assistive technologies may emit click-only input. Two
   // accepted presses 170ms apart are outside shell dedupe but inside the
@@ -635,7 +690,11 @@ async function checkStartToHomeToGameFlow(page) {
     secondAt: window.__rapidSecondAt,
     speechCount: window.__colorSpeechCalls.length,
   }));
-  assert(rapidDelivered.events[0].text === t("color.voice.progress", { n: 3 }), "Last rapid click must own the remaining-count announcement");
+  assert(
+    rapidDelivered.events[0].text ===
+      t("color.voice.progress", { name: t(`animal.${popAnimalFor(1).id}`), n: 3 }),
+    "Last rapid click must own the remaining-count announcement"
+  );
   assert(rapidDelivered.events[0].at - rapidDelivered.secondAt >= 220, "Rapid announcement started too early");
   assert(rapidDelivered.events[0].at - rapidDelivered.secondAt <= 600, "Rapid announcement arrived too late");
   assert(rapidDelivered.speechCount === 0, "Live-region ownership must suppress app TTS");
@@ -676,18 +735,15 @@ async function checkStartToHomeToGameFlow(page) {
     window.__destroyColorEvents.map((event) => event.text)
   );
   assert(
-    !destroyEventTexts.includes(t("color.voice.progress", { n: 2 })),
+    !destroyEventTexts.includes(
+      t("color.voice.progress", { name: t(`animal.${popAnimalFor(2).id}`), n: 2 })
+    ),
     "destroy() must cancel the pending delayed color announcement"
   );
   assert(
-    !(await page.locator("#gameStageContent").evaluate((target) => target.classList.contains("is-feedback"))),
-    "destroy() must clear visual feedback state"
+    (await page.locator("#gameStageContent .pop-figure").count()) === 0,
+    "destroy() must not leave the animal on the (hidden) stage"
   );
-  const destroyedOpacity = await page.evaluate(() => {
-    const feedback = document.querySelector("#gameStageContent .color-feedback");
-    return feedback ? Number(getComputedStyle(feedback).opacity) : 0;
-  });
-  assert(destroyedOpacity <= 0.1, `destroy() left visual feedback visible (opacity=${destroyedOpacity})`);
   await page.evaluate(() => window.__destroyColorObserver.disconnect());
 
   // Aborting remains distinct from normal completion: Esc returns directly to home.
@@ -702,15 +758,13 @@ async function checkStartToHomeToGameFlow(page) {
 async function checkColorCompletionFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 9);
   await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
   await waitForClass(page, "#gameView", "is-active");
 
-  async function beginReadySession() {
-    await page.locator(".game-ready").waitFor({ state: "visible" });
-    await page.waitForTimeout(200);
-    await page.locator("#gameStage").click();
-    await page.locator(".game-ready").waitFor({ state: "detached" });
+  // おすと でてくる（旧 色と音）。レディ画面は挟まず、最初から「押してみよう」。
+  async function waitForPrompt() {
+    await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
     await page.waitForTimeout(200);
   }
 
@@ -723,90 +777,84 @@ async function checkColorCompletionFlow(page) {
         return clone?.textContent?.trim() || "";
       };
       return {
-        total: document.querySelectorAll(".color-progress-dot").length,
-        done: document.querySelectorAll(".color-progress-dot.is-done").length,
-        label: plainText(".color-session-progress .reaction-detail"),
-        feedback: plainText(".color-feedback"),
-        chipColor: document.querySelector(".color-chip")?.style.getPropertyValue("--chip-color").trim() || "",
-        lastDoneColor:
-          [...document.querySelectorAll(".color-progress-dot.is-done")].at(-1)
-            ?.style.getPropertyValue("--dot-color").trim() || "",
+        total: document.querySelectorAll(".pop-dot").length,
+        done: document.querySelectorAll(".pop-dot.is-done").length,
+        word: plainText(".pop-word"),
+        animal: document.querySelector(".pop-figure")?.dataset.animal || "",
       };
     });
   }
 
-  await beginReadySession();
+  await waitForPrompt();
   const initial = await progressSnapshot();
-  assert(initial.total === colorLegacyPreset.targetPresses, "Color session must show one dot per required press");
-  assert(initial.done === 0, "A new color session must start with zero completed dots");
-  assert(
-    initial.label === t("color.progress", { n: colorLegacyPreset.targetPresses }),
-    "A new color session must state the complete remaining goal"
-  );
+  assert(initial.total === colorLegacyPreset.targetPresses, "The game must show one dot per required press");
+  assert(initial.done === 0, "A new session must start with zero completed dots");
+  assert(initial.word === t("color.prompt"), "A new session must invite the first press");
+  assert(initial.animal === "", "No animal may be out before the first press");
 
   const logsBefore = await readLogCount(page);
   for (let press = 1; press <= colorLegacyPreset.targetPresses; press += 1) {
     await page.locator("#gameStage").click();
     const snapshot = await progressSnapshot();
-    assert(snapshot.done === press, "Expected " + press + " completed color progress dots");
+    assert(snapshot.done === press, "Expected " + press + " completed progress dots");
+    // どの回も必ず動物が出る（失敗が無い）。出る順番は決まっている。
     assert(
-      snapshot.chipColor === snapshot.lastDoneColor,
-      `Press ${press} must collect the same colour shown in the centre (${snapshot.chipColor} vs ${snapshot.lastDoneColor})`
+      snapshot.animal === popAnimalFor(press - 1).id,
+      `Press ${press} must bring out ${popAnimalFor(press - 1).id}, got ${snapshot.animal}`
     );
-    if (press < colorLegacyPreset.targetPresses) {
-      assert(
-        snapshot.label === t("color.progress", { n: colorLegacyPreset.targetPresses - press }),
-        "Color progress must count down after every accepted press"
-      );
-      assert(snapshot.feedback === t("color.changed"), "Non-final color presses must show the change");
-      await page.waitForTimeout(170);
-    } else {
-      assert(snapshot.label === t("color.progressComplete"), "The fifth press must show visual completion");
-      assert(snapshot.feedback === t("color.complete"), "The fifth press must say that the goal is complete");
-    }
+    const expectedWord =
+      press < colorLegacyPreset.targetPresses ? t(`color.pop.${Math.min(press - 1, 3)}`) : t("color.pop.4");
+    assert(snapshot.word === expectedWord, `Press ${press} must say "${expectedWord}", got "${snapshot.word}"`);
+    if (press < colorLegacyPreset.targetPresses) await page.waitForTimeout(170);
   }
   assert(
     (await readLogCount(page)) === logsBefore + colorLegacyPreset.targetPresses,
-    "A completed color session must log exactly the required number of presses"
+    "A completed session must log exactly the required number of presses"
   );
 
-  // The completion card stays on screen briefly. A sixth accepted activation
+  // The last animal stays on screen briefly. A sixth accepted activation
   // during that interval must be ignored rather than producing an extra tone/log.
   await page.waitForTimeout(180);
-  // The new prism is still in its 360ms arrival animation here. Playwright's
-  // actionability wait can outlast the 560ms finish delay and then find the
-  // stage hidden by the result view, although a real switch event is accepted
-  // immediately. Dispatch the same click event directly: this assertion is
+  // Dispatch the click directly: Playwright's actionability wait can outlast
+  // the finish delay and then find the stage hidden by the result view,
+  // although a real switch event is accepted immediately. This assertion is
   // about the input guard, not about animation stability.
   await page.locator("#gameStage").dispatchEvent("click");
   assert(
     (await readLogCount(page)) === logsBefore + colorLegacyPreset.targetPresses,
-    "Color completion must ignore presses beyond the fixed goal"
+    "Completion must ignore presses beyond the fixed goal"
   );
 
   await waitForClass(page, "#resultView", "is-active");
   await page.locator(".completion-result").waitFor({ state: "visible" });
+  await assertNoSplitRuby(page, "completion result");
+  const plainOf = async (selector) =>
+    page.locator(selector).evaluate((element) => {
+      const clone = element.cloneNode(true);
+      clone.querySelectorAll("rt").forEach((reading) => reading.remove());
+      return clone.textContent.trim();
+    });
   assert(
-    await page.locator(".completion-result-title").evaluate(
-      (element, expected) => element.textContent.trim() === expected,
-      t("result.completion.title")
-    ),
-    "Color result must have an explicit completion heading"
+    (await plainOf(".completion-result-title")) === t("result.completion.title"),
+    "The result must have an explicit completion heading"
   );
   assert(
-    await page.locator(".completion-result-summary").evaluate(
-      (element, expected) => {
-        const clone = element.cloneNode(true);
-        clone.querySelectorAll("rt").forEach((reading) => reading.remove());
-        return clone.textContent.trim() === expected;
-      },
-      t("result.completion.summary", { n: colorLegacyPreset.targetPresses })
-    ),
-    "Color result must report the completed press count"
+    (await plainOf(".completion-result-summary")) ===
+      t("result.completion.summary", {
+        n: colorLegacyPreset.targetPresses,
+        m: colorLegacyPreset.targetPresses,
+      }),
+    "The result must report how many times the child played and how many friends came out"
+  );
+  const resultAnimals = await page.locator(".hk-result-item").evaluateAll((items) =>
+    items.map((item) => item.dataset.animal)
   );
   assert(
-    (await page.locator(".color-result-swatch").count()) === colorLegacyPreset.targetPresses,
-    "Color result must retain the five-colour visual history"
+    JSON.stringify(resultAnimals) ===
+      JSON.stringify(
+        Array.from({ length: colorLegacyPreset.targetPresses }, (_, index) => popAnimalFor(index).id)
+      ),
+    `The result must line up the animals that came out, got ${JSON.stringify(resultAnimals)}`
   );
   assert(
     (await page.locator("#resultStats").getAttribute("aria-live")) === "off",
@@ -816,17 +864,14 @@ async function checkColorCompletionFlow(page) {
     const saved = JSON.parse(localStorage.getItem(key) || "{}");
     return (saved.sessions || []).some((session) => session.gameId === "color-legacy");
   }, storageKey);
-  assert(!hasFakeResearchSession, "Completion-only color play must not create a fake research taskType session");
+  assert(!hasFakeResearchSession, "Completion-only play must not create a fake research taskType session");
 
   await page.locator("#resultRetry").click();
   await waitForClass(page, "#gameView", "is-active");
-  await beginReadySession();
+  await waitForPrompt();
   const retried = await progressSnapshot();
-  assert(retried.done === 0, "Retry must reset color progress to zero");
-  assert(
-    retried.label === t("color.progress", { n: colorLegacyPreset.targetPresses }),
-    "Retry must restore the full five-press goal"
-  );
+  assert(retried.done === 0, "Retry must reset progress to zero");
+  assert(retried.word === t("color.prompt"), "Retry must invite the first press again");
 
   for (let press = 0; press < colorLegacyPreset.targetPresses; press += 1) {
     await page.locator("#gameStage").click();
@@ -836,6 +881,641 @@ async function checkColorCompletionFlow(page) {
   await page.locator("#resultHome").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
+}
+
+/**
+ * 遊びの雰囲気「おおさわぎ」（演出の強さ big。src/lib/party.js・games/partyStage.js）。
+ *
+ *   - 押すと 出てくる に、ラッコ・キラキラびん・観客・旗が重なり、押すたびに増える
+ *   - 5回目のあと、けっかに星でいっぱいのびん・きょうのびん・もらった服が出る
+ *   - けっかでは、お祝いが終わるまで枠を動かさない（紙吹雪の下で枠を進めない）
+ *   - その日にいっぱいにしたびんの数と服が保存される（研究の記録ではない）
+ * 音楽の中身は Web Audio なので、デスクトップの Chromium だけで見る。
+ */
+async function checkPartyAtmosphere(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  await page.evaluate(
+    ({ key }) => {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      saved.settings = { ...(saved.settings || {}), fxLevel: "big" };
+      delete saved.party;
+      localStorage.setItem(key, JSON.stringify(saved));
+    },
+    { key: storageKey }
+  );
+  await page.reload();
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, t("tile.color-legacy.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator("#gameStageContent.module-pop.is-party .party-otter").waitFor({ state: "attached" });
+  const snapshot = () =>
+    page.evaluate(() => ({
+      stars: document.querySelectorAll(".party-jar .party-star").length,
+      fans: document.querySelectorAll(".party-fan.is-on").length,
+      bunting: Boolean(document.querySelector(".party-bunting.is-on")),
+      sea: document.querySelector("#gameStageContent")?.classList.contains("is-sea") || false,
+    }));
+  const start = await snapshot();
+  assert(start.sea, "The pop game must start in the sea by default");
+  assert(start.stars === 0, "The sparkle jar must start empty");
+  assert(start.fans === 0 && !start.bunting, "The crowd and bunting must arrive only after pressing");
+
+  for (let press = 1; press <= 3; press += 1) {
+    await page.locator("#gameStage").click();
+    await page.waitForTimeout(1000);
+  }
+  // 星は出てきた動物から飛んでびんに入る（入りきるまで少しかかる）。
+  await page.waitForTimeout(1200);
+  const third = await snapshot();
+  assert(third.stars === PARTY_STARS[2], `After three presses the jar must hold ${PARTY_STARS[2]} stars, got ${third.stars}`);
+  assert(third.fans >= 4, "The crowd must grow with each press");
+  assert(third.bunting, "The bunting must be up by the third press");
+
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(1000);
+  await page.locator("#gameStage").click();
+  // フィナーレとパレードを見せてから けっかへ進む（PARTY_FINISH_DELAY_MS）。ふだんの待ち（5秒）より長い。
+  await page.waitForFunction(() => document.querySelector("#resultView")?.classList.contains("is-active"), null, {
+    timeout: PARTY_FINISH_DELAY_MS + 4000,
+  });
+  const result = await page.evaluate(() => {
+    const root = document.querySelector("#resultStats .party-result");
+    return {
+      stars: root?.querySelectorAll(".party-result-jar .party-star").length || 0,
+      jarsToday: root?.querySelectorAll(".party-today .party-mini-jar").length || 0,
+      reward: root?.querySelector(".party-result-reward")?.textContent || "",
+      hat: Boolean(root?.querySelector(".party-result-otter.has-hat")),
+      focus: Boolean(document.querySelector("#resultView .scan-focus")),
+    };
+  });
+  assert(result.stars === PARTY_JAR_CAPACITY, `The result must show a full jar, got ${result.stars} stars`);
+  assert(result.jarsToday === 1, "The first play of the day must show one jar for today");
+  assert(result.reward.includes(t("party.outfit.hat").replace(/\[.*?\]/g, "")), "The first finished play must give the party hat");
+  assert(result.hat, "The otter on the result must wear the new hat");
+  assert(!result.focus, "The frame must wait until the celebration is over");
+  await page.waitForTimeout(PARTY_RESULT_SCAN_DELAY_MS + 600);
+  const scanning = await page.evaluate(() => Boolean(document.querySelector("#resultView .scan-focus")));
+  const autoScan = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").settings?.autoScan !== false, storageKey);
+  if (autoScan) assert(scanning, "The frame must move again after the celebration");
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").party, storageKey);
+  assert(saved?.jars === 1 && saved?.outfits?.join(",") === "hat", `The day's jars and the outfit must be saved, got ${JSON.stringify(saved)}`);
+
+  // 元の強さへ戻す（あとの確かめに持ち越さない）。
+  await page.evaluate(
+    ({ key }) => {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      saved.settings = { ...(saved.settings || {}), fxLevel: "normal" };
+      delete saved.party;
+      localStorage.setItem(key, JSON.stringify(saved));
+    },
+    { key: storageKey }
+  );
+}
+
+/**
+ * 演出エンジン（src/lib/fx/。docs/overall-design-2026-09-28.md §4・§5）。
+ *
+ *   - 演出のキャンバスは入力をさえぎらず、読み上げにも乗らない
+ *   - ふつうの強さでは押すと粒が出て、動きが止まればキャンバスも描くのをやめる
+ *   - 強さ「なし」では粒を出さない
+ *   - けっかの星は飛び込んでくる（見せ始めのアニメーションがある）
+ *   - そくていの回の遊びでは、どの強さを選んでいても何も足さず、その回の
+ *     session.config.fxLevel は "none" と記録される
+ */
+async function checkEffectsFollowSafetyRules(page) {
+  const emitted = () =>
+    page.evaluate(() => Number(document.querySelector("#fxLayer")?.dataset.emitted || 0));
+  const setSettings = (patch) =>
+    page.evaluate(
+      ({ key, patch }) => {
+        const saved = JSON.parse(localStorage.getItem(key) || "{}");
+        saved.settings = { ...(saved.settings || {}), ...patch };
+        localStorage.setItem(key, JSON.stringify(saved));
+      },
+      { key: storageKey, patch }
+    );
+  const toHome = async () => {
+    await page.reload();
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+  };
+  const openBalloon = async () => {
+    await openActivity(page, t("tile.balloon.title"));
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator("#gameStageContent.module-balloon .balloon-word").waitFor({ state: "visible" });
+    await page.waitForTimeout(200);
+  };
+  const gone = () =>
+    page.evaluate(() => document.querySelectorAll(".balloon.is-popping, .balloon.is-popped").length);
+
+  // 1. ふつう: ふうせんを割ると粒が出る。キャンバスは入力をさえぎらない。
+  await setSettings({ fxLevel: "normal" });
+  await toHome();
+  await openBalloon();
+  const before = await emitted();
+  await page.locator("#gameStage").click();
+  await page.waitForFunction(
+    (n) => Number(document.querySelector("#fxLayer")?.dataset.emitted || 0) > n,
+    before,
+    { timeout: 3000 }
+  );
+  const layer = await page.evaluate(() => {
+    const el = document.querySelector("#fxLayer");
+    const style = getComputedStyle(el);
+    return { pointerEvents: style.pointerEvents, ariaHidden: el.getAttribute("aria-hidden"), position: style.position };
+  });
+  assert(layer.pointerEvents === "none", `The effects canvas must never take input, got pointer-events: ${layer.pointerEvents}`);
+  assert(layer.ariaHidden === "true", "The effects canvas must stay out of the accessibility tree");
+  assert(layer.position === "fixed", "The effects canvas must cover the viewport without moving the layout");
+  // 粒が飛んでいる最中でも、次のひと押しはふうせんに届く。
+  await page.waitForTimeout(200);
+  await page.locator("#gameStage").click();
+  assert((await gone()) === 2, "A press during the effects must still pop the next balloon");
+  // 動くものが無くなったら、キャンバスは描くのをやめる（遊んでいない時間に描き続けない）。
+  await page.waitForFunction(() => document.querySelector("#fxLayer")?.dataset.active === "false", null, {
+    timeout: 8000,
+  });
+
+  // けっかの星は飛び込んでくる（見せ始めのアニメーション）。
+  for (let press = 3; press <= 5; press += 1) {
+    await page.waitForTimeout(220);
+    await page.locator("#gameStage").click();
+  }
+  await waitForClass(page, "#resultView", "is-active");
+  await page.waitForTimeout(120);
+  const revealing = await page.evaluate(() => {
+    const medal = document.querySelector("#resultStats .hk-result-medal");
+    return medal && typeof medal.getAnimations === "function" ? medal.getAnimations().length : -1;
+  });
+  assert(revealing !== 0, "The result star must fly in when the result first appears");
+
+  // 2. なし: 粒を出さない（押した結果の絵そのものは残る）。
+  await setSettings({ fxLevel: "none" });
+  await toHome();
+  await openBalloon();
+  const quietBefore = await emitted();
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(450);
+  assert((await gone()) === 1, "With effects off, the balloon must still pop");
+  assert((await emitted()) === quietBefore, "With effects off, no particles may be drawn");
+
+  // 3. そくていの回: どの強さを選んでいても何も足さない。
+  await setSettings({ fxLevel: "big", difficultyMode: "measure" });
+  await toHome();
+  await openActivity(page, "さかなつり");
+  await openActivity(page, "アタリで釣る");
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) return SKIPPED;
+  const measuredBefore = await emitted();
+  await page.locator(".fishing-scene.is-bite").waitFor({ timeout: 15000 });
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(600);
+  assert((await emitted()) === measuredBefore, "A measured run must not add any effects");
+  const recorded = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return (state.sessions || []).at(-1)?.config?.fxLevel ?? null;
+  }, storageKey);
+  assert(recorded === "none", `A measured run must record fxLevel "none", got ${JSON.stringify(recorded)}`);
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
+}
+
+/**
+ * はじめの遊び「ふうせん わり」「ぬりえ」（docs/design-renewal-2026-09-25.md §1.4）。
+ *
+ * どちらも失敗が無く、5回で終わる。押すたびにちょうど1つ進むこと、5回で
+ * 結果へ行き6回目は数えないこと、研究用の記録（session）を作らないことを見る。
+ * あわせて「この遊びの設定」を通す: 開いているあいだの入力では進まない、
+ * 「びっくりする音」を選ぶとその場で注意が出る、背景はやり直さずに効く、
+ * 設定は遊びごとに保存されてほかの遊びには及ばない、閉じたらフォーカスは
+ * 遊びの面へ戻る（設定ボタンに残ると、次のひと押しでまた開いてしまう）。
+ */
+async function checkBeginnerGamesFlow(page) {
+  const presses = BEGINNER_TARGET_PRESSES;
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+
+  const plainOf = async (selector) =>
+    page.locator(selector).evaluate((element) => {
+      const clone = element.cloneNode(true);
+      clone.querySelectorAll("rt").forEach((reading) => reading.remove());
+      return clone.textContent.trim();
+    });
+  const savedState = () =>
+    page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}"), storageKey);
+  const option = (key, value) =>
+    page.locator(`.gs-option[data-gs-key="${key}"][data-gs-value='${JSON.stringify(value)}']`);
+
+  // --- ふうせん わり ---
+  await openActivity(page, t("tile.balloon.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  const balloonWord = "#gameStageContent.module-balloon .balloon-word";
+  await page.locator(balloonWord).waitFor({ state: "visible" });
+  await page.waitForTimeout(200);
+  const balloons = () =>
+    page.evaluate(() => ({
+      total: document.querySelectorAll(".balloon").length,
+      gone: document.querySelectorAll(".balloon.is-popping, .balloon.is-popped").length,
+      light: document.querySelector("#gameStageContent")?.classList.contains("is-light"),
+    }));
+  const fresh = await balloons();
+  assert(fresh.total === presses, `The balloon game must float ${presses} balloons, got ${fresh.total}`);
+  assert(fresh.gone === 0, "No balloon may be popped before the first press");
+  assert(fresh.light === true, "The balloon game must start on its own default (light) background");
+  assert((await plainOf(balloonWord)) === t("color.prompt"), "A new balloon session must invite the first press");
+
+  const logsBefore = await readLogCount(page);
+  await page.locator("#gameStage").click();
+  assert((await balloons()).gone === 1, "One press must pop exactly one balloon");
+  assert((await plainOf(balloonWord)) === t("balloon.pop"), "A popped balloon must say so");
+
+  await page.locator("#gameSettings").click();
+  await page.locator("#gameSettingsDialog").waitFor({ state: "visible" });
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(200);
+  assert((await balloons()).gone === 1, "A press while the game settings are open must not pop a balloon");
+  await option("playPrefs.balloon.sound", "boom").click();
+  const notes = await page.locator("#gameSettingsDialog .gs-note").allTextContents();
+  assert(
+    notes.some((note) => note.includes("びっくりする音")),
+    `Choosing the startling sound must warn the supporter on the spot, got ${JSON.stringify(notes)}`
+  );
+  await option("playPrefs.balloon.background", "dark").click();
+  await page.locator("#gameSettingsDialog .gs-apply").click();
+  await page.locator("#gameSettingsDialog").waitFor({ state: "hidden" });
+  const changed = await balloons();
+  assert(changed.light === false, "The background choice must apply without restarting the game");
+  assert(changed.gone === 1, "Changing the settings must keep the balloons already popped");
+  assert(
+    (await page.evaluate(() => document.activeElement?.id)) === "gameStage",
+    "Closing the game settings must hand focus back to the game, not to the settings button"
+  );
+  const prefs = (await savedState()).settings?.playPrefs;
+  assert(
+    prefs?.balloon?.background === "dark" && prefs?.balloon?.sound === "boom",
+    `The balloon settings must be saved for the balloon game, got ${JSON.stringify(prefs?.balloon)}`
+  );
+  assert(
+    prefs?.coloring?.background === "light" && prefs?.coloring?.sound === "instrument",
+    `Another game's settings must stay as they were, got ${JSON.stringify(prefs?.coloring)}`
+  );
+
+  for (let press = 2; press <= presses; press += 1) {
+    await page.waitForTimeout(170);
+    await page.locator("#gameStage").click();
+    assert((await balloons()).gone === press, `Press ${press} must pop balloon ${press}`);
+  }
+  assert(
+    (await plainOf(balloonWord)) === t("balloon.complete"),
+    "The last balloon must announce that every balloon is popped"
+  );
+  assert(
+    (await readLogCount(page)) === logsBefore + presses,
+    "A balloon session must log exactly one switch event per press"
+  );
+  // 最後のふうせんのあと、結果へ移るまでの間の入力は数えない。
+  await page.waitForTimeout(180);
+  await page.locator("#gameStage").dispatchEvent("click");
+  assert(
+    (await readLogCount(page)) === logsBefore + presses,
+    "The balloon game must ignore presses beyond the fixed goal"
+  );
+  await waitForClass(page, "#resultView", "is-active");
+  await page.locator(".completion-result").waitFor({ state: "visible" });
+  assert(
+    (await plainOf(".completion-result-summary")) === t("result.balloon.summary", { n: presses }),
+    "The balloon result must say how many balloons were popped"
+  );
+  assert(
+    (await page.locator(".hk-result-item.is-burst").count()) === presses,
+    "The balloon result must show one burst per balloon"
+  );
+  await page.locator("#resultHome").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+
+  // --- ぬりえ ---
+  await openActivity(page, t("tile.coloring.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  const coloringWord = "#gameStageContent.module-coloring .coloring-word";
+  await page.locator(coloringWord).waitFor({ state: "visible" });
+  await page.waitForTimeout(200);
+  // 絵は押す回数ぶんの「ぬる場所」に分かれている。場所の中の部品は、
+  // まとめて塗られる（半分だけ塗られた場所が無い）。
+  const picture = () =>
+    page.evaluate(() => {
+      const groups = new Map();
+      document.querySelectorAll(".coloring-art .cl-part").forEach((part) => {
+        const group = Number(part.dataset.part);
+        const on = part.classList.contains("is-colored");
+        const entry = groups.get(group) || { all: true, any: false };
+        entry.all = entry.all && on;
+        entry.any = entry.any || on;
+        groups.set(group, entry);
+      });
+      const sorted = [...groups].sort(([a], [b]) => a - b);
+      return {
+        groups: sorted.map(([group]) => group),
+        colored: sorted.filter(([, entry]) => entry.all).map(([group]) => group),
+        partial: sorted.filter(([, entry]) => entry.any && !entry.all).map(([group]) => group),
+        complete: document.querySelector("#gameStageContent")?.classList.contains("is-complete"),
+      };
+    });
+  const blank = await picture();
+  const expectedGroups = Array.from({ length: presses }, (_, index) => index);
+  assert(
+    JSON.stringify(blank.groups) === JSON.stringify(expectedGroups),
+    `The picture must be split into one area per press, got ${JSON.stringify(blank.groups)}`
+  );
+  assert(blank.colored.length === 0 && blank.partial.length === 0, "Nothing may be coloured before the first press");
+  assert((await plainOf(coloringWord)) === t("color.prompt"), "A new colouring session must invite the first press");
+
+  for (let press = 1; press <= presses; press += 1) {
+    await page.locator("#gameStage").click();
+    const now = await picture();
+    assert(
+      JSON.stringify(now.colored) === JSON.stringify(expectedGroups.slice(0, press)) && now.partial.length === 0,
+      `Press ${press} must colour exactly the first ${press} areas, got ${JSON.stringify(now)}`
+    );
+    assert(
+      (await plainOf(coloringWord)) === t(`coloring.word.${press - 1}`),
+      `Press ${press} must say "${t(`coloring.word.${press - 1}`)}"`
+    );
+    if (press < presses) await page.waitForTimeout(170);
+  }
+  assert((await picture()).complete, "The finished picture must be marked complete before the result");
+  await waitForClass(page, "#resultView", "is-active");
+  const pictureId = await page.locator(".hk-result-picture").getAttribute("data-picture");
+  assert(pictureId, "The colouring result must show the finished picture");
+  assert(
+    (await plainOf(".completion-result-summary")) ===
+      t("result.coloring.summary", { name: t(`animal.${pictureId}`) }),
+    "The colouring result must name the picture that was finished"
+  );
+
+  // はじめの遊びは測定の課題ではない。研究用の記録を作らない。
+  const sessions = (await savedState()).sessions || [];
+  assert(
+    !sessions.some((session) => session.gameId === "balloon" || session.gameId === "coloring"),
+    "Beginner games must not create research sessions"
+  );
+  await page.locator("#resultHome").click();
+  await waitForClass(page, "#homeView", "is-active");
+}
+
+/**
+ * ボールを打つ遊び（games/baseball.js）。
+ *
+ * 約束は「振れば必ず当たる」。ボールが出ているあいだの1押しは、いつでも
+ * ホームラン・ヒット・ころころのどれかになり、下の5つの印が1つ埋まる。
+ * 構えているあいだの押しは素振り（数えない）、振らずに見送った球は数えずに
+ * もう一度投げる（へこませない）。5本でけっかへ行き、研究用の記録は作らない。
+ */
+async function checkBaseballFlow(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  await openActivity(page, t("tile.baseball.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  // やりかた（レディ画面）のひと押しは、説明を読み終えた合図。
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await assertNoSplitRuby(page, "baseball how-to");
+  await page.locator("#gameStage").click();
+  await page.locator("#gameStageContent.module-baseball .bb-field").waitFor({ state: "visible" });
+
+  const state = () =>
+    page.evaluate(() => {
+      const word = document.querySelector(".bb-word")?.dataset.word || "";
+      const match = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+        document.querySelector(".bb-ball")?.getAttribute("transform") || ""
+      );
+      return {
+        word,
+        ballY: match ? Number(match[2]) : null,
+        filled: document.querySelectorAll(".bb-slot:not([class='bb-slot'])").length,
+      };
+    });
+  const waitForPitch = () =>
+    page.waitForFunction(
+      () => {
+        const word = document.querySelector(".bb-word")?.dataset.word;
+        const match = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+          document.querySelector(".bb-ball")?.getAttribute("transform") || ""
+        );
+        return word === "" && match && Number(match[2]) > 420 && Number(match[2]) < 540;
+      },
+      null,
+      { timeout: 10_000 }
+    );
+
+  // 構えているあいだの押しは素振り。数えない。
+  await page.waitForFunction(() => document.querySelector(".bb-word")?.dataset.word === "baseball.word.ready");
+  await page.locator("#gameStage").dispatchEvent("click");
+  assert((await state()).filled === 0, "A swing before the pitch must not count as a hit");
+
+  // 見送った球は数えず、もう一度投げる。
+  await page.waitForFunction(
+    () => document.querySelector(".bb-word")?.dataset.word === "baseball.word.again",
+    null,
+    { timeout: 10_000 }
+  );
+  assert((await state()).filled === 0, "A pitch that was let go must not count");
+
+  const outcomes = [];
+  for (let swing = 1; swing <= 5; swing += 1) {
+    await waitForPitch();
+    await page.locator("#gameStage").dispatchEvent("click");
+    const after = await state();
+    assert(
+      ["baseball.word.homerun", "baseball.word.hit", "baseball.word.bunt"].includes(after.word),
+      `Swing ${swing} while the ball is out must always hit the ball, got "${after.word}"`
+    );
+    assert(after.filled === swing, `Swing ${swing} must fill exactly ${swing} marks, got ${after.filled}`);
+    outcomes.push(after.word);
+  }
+  await waitForClass(page, "#resultView", "is-active");
+  await page.locator(".completion-result").waitFor({ state: "visible" });
+  assert(
+    (await page.locator(".hk-result-item.is-ball").count()) === 5,
+    "The baseball result must line up the five hits"
+  );
+  const sessions = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key) || "{}").sessions || [],
+    storageKey
+  );
+  assert(
+    !sessions.some((session) => session.gameId === "baseball"),
+    "The baseball game must not create research sessions"
+  );
+  await page.locator("#resultHome").click();
+  await waitForClass(page, "#homeView", "is-active");
+}
+
+/**
+ * 枠が動いたときの音（settings.scanFeedback）。「名前を読む」にすると、枠が
+ * 次の項目へ動くたびに、その項目の名前を読む（画面を見続けるのが難しい利用者の
+ * ため。打ち合わせ「画面を見なくても、音なら届く」）。既定の「なし」では読まない。
+ */
+async function checkScanFeedbackSpeaksNames(page) {
+  // 読んだ文を数える（アプリの声でも端末の声でも neuronode:speech が出る）。
+  // 端末の声は鳴らさない。
+  await page.addInitScript(() => {
+    window.__spoken = [];
+    window.__spokenVia = [];
+    if (typeof window.SpeechSynthesisUtterance !== "function") {
+      window.SpeechSynthesisUtterance = class {
+        constructor(text) {
+          this.text = text;
+        }
+      };
+    }
+    const synth = window.speechSynthesis || {};
+    synth.speak = () => {};
+    synth.cancel = () => {};
+    if (!window.speechSynthesis) Object.defineProperty(window, "speechSynthesis", { value: synth });
+    window.addEventListener("neuronode:speech", (event) => {
+      if (event.detail.fallback) return;
+      window.__spoken.push(event.detail.text);
+      window.__spokenVia.push(event.detail.via);
+    });
+  });
+  // 枠を1つ進めて、そのあいだに読んだ文だけを返す（ホームへ入ったときの案内の
+  // 声など、ほかの読み上げは数えない）。
+  const stepAndHear = async () => {
+    const before = await page.evaluate(() => window.__spoken.length);
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(120);
+    return page.evaluate((from) => ({
+      said: window.__spoken.slice(from),
+      focused: document.querySelector("#gameTileGrid .scan-focus")?.getAttribute("aria-label") || null,
+    }), before);
+  };
+
+  // 既定（なし）では、枠が動いても読まない。
+  await page.reload();
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  const quiet = await stepAndHear();
+  assert(quiet.said.length === 0, `With the default setting the scan must stay silent, but it said ${JSON.stringify(quiet.said)}`);
+
+  // 「名前を読む」にすると、動いた先の名前を読む。
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    saved.settings = { ...(saved.settings || {}), scanFeedback: "speak", speechEnabled: true, autoScan: false };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, storageKey);
+  await page.reload();
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  for (let hop = 0; hop < 2; hop += 1) {
+    const heard = await stepAndHear();
+    assert(heard.focused, "Stepping the scan must focus a home item");
+    assert(
+      heard.said.at(-1) === spokenJa(heard.focused),
+      `Moving the scan frame must speak the focused item's name ("${heard.focused}"), got ${JSON.stringify(heard.said)}`
+    );
+  }
+  // 名前はアプリに入れた声で読む（声のパックにある。鳴らせる環境なら）。
+  const canPlay = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (canPlay) {
+    const via = await page.evaluate(() => window.__spokenVia);
+    assert(
+      via.length > 0 && via.every((path) => path === "voice-pack"),
+      `Home item names must be read with the app's own voice, got ${JSON.stringify(via)}`
+    );
+  }
+}
+
+/**
+ * 読み上げは、アプリに入れた自然な声（声のパック。src/lib/voicePack.js）で鳴らす
+ * （2026-09-28「英語でも何でも棒読み」）。パックを読み込み、音にして鳴らし、
+ * 端末の声へ戻らないこと。英語の表記でも同じ。設定で「端末の声」を選べば端末の声。
+ */
+async function checkAppVoiceSpeaks(page) {
+  const canPlay = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!canPlay) return SKIPPED;
+  await page.addInitScript(() => {
+    window.__speech = [];
+    window.__voiceSourcesStarted = 0;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const original = Ctx.prototype.createBufferSource;
+    Ctx.prototype.createBufferSource = function createBufferSource() {
+      const source = original.call(this);
+      const start = source.start.bind(source);
+      source.start = (...args) => {
+        window.__voiceSourcesStarted += 1;
+        return start(...args);
+      };
+      return source;
+    };
+    const synth = window.speechSynthesis;
+    if (synth) {
+      synth.speak = () => {};
+    }
+    window.addEventListener("neuronode:speech", (event) => window.__speech.push(event.detail));
+  });
+  const playFirstGame = async () => {
+    await page.reload();
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+    await page.locator("#gameTileGrid .game-tile:not([disabled])").first().click();
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
+    await page.waitForTimeout(250);
+    const sourcesBefore = await page.evaluate(() => window.__voiceSourcesStarted);
+    await page.locator("#gameStage").click();
+    await page.waitForFunction(() => window.__speech.length > 0, null, { timeout: 3_000 });
+    // 読み込み（はじめてのときはパックの取得）と音にするのを待つ。
+    await page.waitForTimeout(1_200);
+    return page.evaluate((before) => ({
+      speech: window.__speech,
+      started: window.__voiceSourcesStarted - before,
+      packs: performance.getEntriesByType("resource").map((entry) => entry.name).filter((name) => /\.bin(\?|$)/.test(name)),
+    }), sourcesBefore);
+  };
+  // 遊びの途中で書きかえると、遊びを閉じるときの保存で上書きされる。ホームへ戻ってから。
+  const setSettings = async (settings) => {
+    await page.keyboard.press("Escape");
+    await waitForClass(page, "#homeView", "is-active");
+    await page.evaluate(
+      ({ key, settings }) => {
+        const saved = JSON.parse(localStorage.getItem(key) || "{}");
+        saved.settings = { ...(saved.settings || {}), ...settings };
+        localStorage.setItem(key, JSON.stringify(saved));
+      },
+      { key: storageKey, settings }
+    );
+  };
+
+  const ja = await playFirstGame();
+  assert(ja.speech[0]?.via === "voice-pack", `Japanese speech must use the app voice, got ${JSON.stringify(ja.speech)}`);
+  assert(!ja.speech.some((detail) => detail.fallback), `The app voice fell back to the device voice: ${JSON.stringify(ja.speech)}`);
+  assert(ja.started >= 1, "The app voice must actually start a sound");
+  assert(ja.packs.length >= 1, "The voice pack must be loaded");
+
+  await setSettings({ textMode: "en" });
+  const en = await playFirstGame();
+  assert(en.speech[0]?.via === "voice-pack" && en.speech[0]?.lang === "en-US", `English speech must use the app voice, got ${JSON.stringify(en.speech)}`);
+  assert(!en.speech.some((detail) => detail.fallback), `The English app voice fell back: ${JSON.stringify(en.speech)}`);
+  assert(en.started >= 1, "The English app voice must actually start a sound");
+
+  await setSettings({ textMode: "ruby", speechVoice: "device" });
+  const device = await playFirstGame();
+  const deviceCapable = await page.evaluate(
+    () => typeof window.SpeechSynthesisUtterance === "function" && typeof window.speechSynthesis?.speak === "function"
+  );
+  if (deviceCapable) {
+    assert(device.speech[0]?.via === "device", `With "device voice" chosen, speech must use the device, got ${JSON.stringify(device.speech)}`);
+  }
+  assert(device.started === 0, "With \"device voice\" chosen, the app voice must stay silent");
 }
 
 /**
@@ -874,7 +1554,7 @@ async function checkHomeReturnFromTabs(page) {
   // switchView("home") calls scan.restartIfNeeded(); with the default
   // autoScan=true (state.js) scanning must actually resume against home's
   // tiles, not stay stale/stopped from whatever the settings view left it in.
-  await waitForText(page, "#scanState", "走査中");
+  await waitForText(page, "#scanState", "枠が動いています");
 }
 
 /**
@@ -891,8 +1571,8 @@ async function checkHomeReturnFromTabs(page) {
  * キーを限ると「押しているのに何も起きない」が起きる——本人には理由が
  * 分からない。
  *
- * ただし走査中に限る。止まっているあいだは支援者がキーボードで普通に
- * 操作している場面なので、そこまで奪うと支援者の操作が壊れる。
+ * 走査が止まっていても受けるのは本人の画面だけ（checkAnyKeyOnUserScreens）。
+ * 支援者の画面ではキーボードで普通に操作するので、奪うと支援者の操作が壊れる。
  * 修飾キー単独と修飾キー付き（Ctrl+R 等）も奪わない。
  */
 async function checkAnyKeyWhileScanning(page) {
@@ -900,10 +1580,10 @@ async function checkAnyKeyWhileScanning(page) {
   await waitForClass(page, "#homeView", "is-active");
 
   // 走査を動かす。
-  if (((await page.locator("#scanState").textContent()) || "").trim() !== "走査中") {
+  if (((await page.locator("#scanState").textContent()) || "").trim() !== "枠が動いています") {
     await page.locator("#toggleScan").click();
   }
-  await waitForText(page, "#scanState", "走査中");
+  await waitForText(page, "#scanState", "枠が動いています");
   await page.waitForFunction(() => document.querySelectorAll(".scan-focus").length > 0);
   await page.waitForTimeout(200);
 
@@ -934,7 +1614,68 @@ async function checkAnyKeyWhileScanning(page) {
   );
 }
 
+/**
+ * 本人の画面では、走査が止まっていても、どのキーでもスイッチ入力として受ける。
+ *
+ * スタート画面と遊びの中は走査を動かさない。以前はそこで Space / Enter しか
+ * 届かず、F5 を送るように設定した機器（NeuroNode はほかのアプリに合わせて
+ * キーを変えて使われる）では、パソコンのブラウザがページを読み直していた。
+ */
+async function checkAnyKeyOnUserScreens(page) {
+  await page.evaluate(() => {
+    window.__stillSamePage = true;
+  });
+  const samePage = () => page.evaluate(() => window.__stillSamePage === true);
+
+  // スタート画面：F5 で始まる。ページは読み直さない。
+  await page.keyboard.press("F5");
+  await waitForClass(page, "#homeView", "is-active");
+  assert(await samePage(), "F5 on the start screen must start, not reload the page");
+
+  // 遊びの中：F5 で「やりかた」を抜けて始まる。
+  await openActivity(page, t("tile.gonogo.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  for (let attempt = 0; attempt < 4 && (await page.locator(".game-ready").count()) > 0; attempt += 1) {
+    await page.waitForTimeout(250);
+    await page.keyboard.press("F5");
+  }
+  await page.waitForFunction(() => document.querySelectorAll(".game-ready").length === 0, null, { timeout: 5000 });
+  assert(await samePage(), "F5 inside a game must act as the switch, not reload the page");
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
+}
+
+/**
+ * 支援者の設定の並び。
+ *   - よく使う設定（枠の速さ・声・効果音・雰囲気・文字など）が先に出て、
+ *     残りは「くわしい設定」に畳んである
+ *   - 設定の画面では枠が動かない。押せない入力ドックと「枠は…」の札を、
+ *     項目に重ねて出さない
+ *   - いま測定の回であることは、「くわしい設定」を閉じていても見出しで分かる
+ *     （支援者が前の日の設定のまま測ってしまわないように）
+ */
+async function checkSupporterSettingsLayout(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+
+  await page.locator(".settings-quick").waitFor({ state: "visible" });
+  assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "The detailed settings must start folded");
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await page.locator(".status-pill").waitFor({ state: "hidden" });
+  await page.locator("#settingsMoreState").waitFor({ state: "hidden" });
+
+  await openSettingsTab(page, "measure");
+  await page.locator("#difficultyMode").selectOption("measure");
+  await page.locator("#settingsMore > summary").click();
+  assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "Clicking the heading must fold it again");
+  await page.locator("#settingsMoreState").waitFor({ state: "visible" });
+}
+
 async function checkKeyboardAndSwitchInput(page) {
+  // 物理入力代替（画面の「おす」）を確かめるので、出す設定にしておく。
+  await enableScreenSwitch(page);
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await openActivity(page, "学ぶ・伝える");
@@ -943,15 +1684,20 @@ async function checkKeyboardAndSwitchInput(page) {
 
   // Stop auto scan so an unfocused Space has no selected target and therefore
   // must be a no-op rather than triggering a hidden training action.
-  if ((await page.locator("#scanState").textContent())?.trim() === "走査中") {
-    await page.locator("#toggleScan").click();
+  // 「走査停止」は利用者の画面には出さない（docs/design-renewal-2026-09-25.md
+  // §3.5）ので、ボタンの配線そのものを呼ぶ。
+  if ((await page.locator("#scanState").textContent())?.trim() === "枠が動いています") {
+    await page.locator("#toggleScan").evaluate((button) => button.click());
   }
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   const firstPhrase = page.locator("#phraseGrid button").first();
   await firstPhrase.focus();
   await page.keyboard.press("Enter");
-  await page.waitForFunction(() => document.querySelector("#currentPhrase")?.textContent?.trim() !== "まだ選択されていません");
+  await page.waitForFunction(
+    (empty) => document.querySelector("#currentPhrase")?.textContent?.trim() !== empty,
+    t("learn.nothingYet")
+  );
 
   const logsBeforeUnfocusedSpace = await readLogCount(page);
   await page.evaluate(() => document.activeElement?.blur());
@@ -965,8 +1711,8 @@ async function checkKeyboardAndSwitchInput(page) {
   // The physical-input substitute is intentionally outside [data-scan], so
   // it can activate the highlighted target without ever becoming a dead slot.
   assert(!(await page.locator("#primarySwitch").getAttribute("data-scan")), "Primary switch must not scan itself");
-  await page.locator("#toggleScan").click();
-  await waitForText(page, "#scanState", "走査中");
+  await page.locator("#toggleScan").evaluate((button) => button.click());
+  await waitForText(page, "#scanState", "枠が動いています");
   // toggleScan の pointerdown と物理入力代替の pointerdown は別入力。
   // Playwrightは人間より速いため、150msの入力dedupe窓を越えてから押す。
   await page.waitForTimeout(200);
@@ -1183,8 +1929,13 @@ async function checkSettingsTabs(page) {
     (await tabs.first().getAttribute("aria-selected")) === "true",
     "The first settings tab must start selected"
   );
-  // 最初の面の項目は見えていて、他の面の項目は見えていない。
+  // よく使う設定は、開いてすぐ見える。残りは「くわしい設定」に畳んである。
   await page.locator("#scanInterval").waitFor({ state: "visible" });
+  await page.locator("#fxLevel").waitFor({ state: "visible" });
+  await page.locator("#autoScan").waitFor({ state: "hidden" });
+  await openSettingsMore(page);
+  // 最初の面の項目は見えていて、他の面の項目は見えていない。
+  await page.locator("#autoScan").waitFor({ state: "visible" });
   await page.locator("#researcherMode").waitFor({ state: "hidden" });
 
   const hiddenScannable = async () =>
@@ -1202,7 +1953,9 @@ async function checkSettingsTabs(page) {
   // 面を切り替えると入れ替わる。
   await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").waitFor({ state: "visible" });
-  await page.locator("#scanInterval").waitFor({ state: "hidden" });
+  await page.locator("#autoScan").waitFor({ state: "hidden" });
+  // よく使う設定は、どの面を開いていても見えたまま。
+  await page.locator("#scanInterval").waitFor({ state: "visible" });
   assert(
     (await hiddenScannable()) === 0,
     "Hidden settings panels must leave the scan ring after switching"
@@ -1265,7 +2018,7 @@ async function checkSupporterMenuStaysOutOfTheScanRing(page) {
     ring.length === 0,
     `Supporter menu must not scan at all, found: ${ring.map((entry) => entry.label).join(", ")}`
   );
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   // 自動走査のタイマーも復活しない。手動の「走査開始」も効かない。
   await page.locator("#toggleScan").evaluate((target) => target.click());
@@ -1274,7 +2027,7 @@ async function checkSupporterMenuStaysOutOfTheScanRing(page) {
     (await page.locator(".scan-focus").count()) === 0,
     "No app scan focus may appear in the supporter menu"
   );
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   // 効かない操作子は無効として見せる（押しても動かない理由が支援者に分かる）。
   assert(await page.locator("#toggleScan").isDisabled(), "The dock scan toggle is dead here, so it must be disabled");
@@ -1322,7 +2075,7 @@ async function checkIpadSwitchControlMode(page, project) {
   await waitForClass(page, "#settings", "is-active");
   // 支援者メニューへ入った時点で自前走査は止まる（scan.js の
   // isSupporterMenu()）。委譲を用意する画面そのものが、もう走っていない。
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   const mode = page.locator("#switchControlMode");
   assert(!(await mode.isChecked()), "Switch Control mode must be explicit and default off");
@@ -1333,14 +2086,15 @@ async function checkIpadSwitchControlMode(page, project) {
   );
   // Safe hand-off order: supporter stops app scanning, then enables iPad
   // Switch Control outside the app, then activates this native checkbox.
+  await openSettingsTab(page, "basic");
   await page.locator("#autoScan").click();
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
   assert((await page.locator(".scan-focus").count()) === 0, "Stopping app scan must clear its yellow focus");
   await mode.click();
   await page.waitForFunction(() => document.body.classList.contains("switch-control-mode"));
   await page.locator("#switchControlModeNotice").waitFor({ state: "visible" });
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
 
   assert(await page.locator("#autoScan").isDisabled(), "App auto scan must be locked out in iPad mode");
   assert(!(await page.locator("#autoScan").isChecked()), "App auto scan must be forced off");
@@ -1362,7 +2116,7 @@ async function checkIpadSwitchControlMode(page, project) {
   assert(!(await page.locator("#autoScan").isChecked()), "Reload must preserve app scan off");
   assert(await page.locator("#autoScan").isDisabled(), "Reloaded delegation must keep app scan locked");
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
 
   // 手動ボタン・右矢印・自動タイマーのどの入口からも黄色い枠を復活させない。
   await page.evaluate(() => {
@@ -1371,7 +2125,7 @@ async function checkIpadSwitchControlMode(page, project) {
   });
   await page.waitForTimeout(1_900);
   assert((await page.locator(".scan-focus").count()) === 0, "No app scan focus may survive in iPad mode");
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
 
   // Reloaded start -> home also uses click-only input. Compare the exact home
   // choice order at full width and a 507px Split View approximation.
@@ -1380,7 +2134,7 @@ async function checkIpadSwitchControlMode(page, project) {
   });
   await waitForClass(page, "#homeView", "is-active");
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 9);
   const fullLayout = await collectActivityLayout(page, { checkScrollReach: true });
   const fullWidthTitles = fullLayout.titles;
   assert(
@@ -1388,8 +2142,8 @@ async function checkIpadSwitchControlMode(page, project) {
     `Delegated scanning must not hide choices behind a pager: ${JSON.stringify(fullLayout.pages)}`
   );
   assert(
-    fullWidthTitles.length === 6,
-    "Expected all six home choices, got " + fullWidthTitles.join(", ")
+    fullWidthTitles.length === 9,
+    "Expected all nine home choices, got " + fullWidthTitles.join(", ")
   );
 
   await page.setViewportSize({ width: 507, height: 1194 });
@@ -1415,12 +2169,14 @@ async function checkIpadSwitchControlMode(page, project) {
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
   });
   await waitForClass(page, "#gameView", "is-active");
-  await page.locator(".game-ready").waitFor({ state: "visible" });
+  // はじめの遊び（おすと でてくる）はレディ画面を挟まない。click-only の
+  // ひと押しで、そのまま動物が出ること（Switch Control の入力で遊べること）を見る。
+  await page.locator("#gameStageContent.module-pop .pop-prompt").waitFor({ state: "visible" });
   await page.waitForTimeout(200);
   await page.locator("#gameStage").evaluate((target) => {
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
   });
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await page.locator("#gameStageContent .pop-figure").waitFor({ state: "visible" });
   await page.locator("#gameExit").evaluate((target) => {
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
   });
@@ -1429,7 +2185,7 @@ async function checkIpadSwitchControlMode(page, project) {
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
   await page.waitForTimeout(400);
   assert((await page.locator(".scan-focus").count()) === 0, "Game return must not revive app scan");
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
 
   // OS項目走査が送るclick-only入力相当で支援者画面へ戻れる。
   await page.locator("#homeSupporterMenu").evaluate((target) => {
@@ -1456,13 +2212,15 @@ async function checkIpadSwitchControlMode(page, project) {
   await openSettingsTab(page, "basic");
   await mode.click();
   await page.waitForFunction(() => !document.body.classList.contains("switch-control-mode"));
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  // 設定の画面では、委譲していなくても入力ドックは出さない（押せないものを
+  // 項目に重ねない。theme-hakkiri.css の「支援者の世界」）。
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
   assert(!(await page.locator("#autoScan").isDisabled()), "Auto scan control must unlock after delegation ends");
   assert(!(await page.locator("#autoScan").isChecked()), "Auto scan must remain stopped until explicitly enabled");
   await page.locator("#autoScan").click();
   assert(await page.locator("#autoScan").isChecked(), "Explicit ON must take effect");
   // 設定画面では走査しないので、ここではまだ止まったまま。
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
 
   // Safe operating instructions stop app scanning first, but the product
   // invariant must also survive an incorrect order. Exercise the actual UI
@@ -1470,13 +2228,13 @@ async function checkIpadSwitchControlMode(page, project) {
   // a no-op. 走っている状態は支援者メニューでは作れないので、ホームで作る。
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForText(page, "#scanState", "走査中");
+  await waitForText(page, "#scanState", "枠が動いています");
   await page.waitForFunction(() => document.querySelectorAll(".scan-focus").length > 0);
 
   // 支援者メニューへ入るだけで、走っていた自前走査は止まり枠も消える。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await waitForText(page, "#scanState", "走査停止中");
+  await waitForText(page, "#scanState", "枠は止まっています");
   assert(
     (await page.locator(".scan-focus").count()) === 0,
     "Entering the supporter menu must clear the yellow focus"
@@ -1490,7 +2248,7 @@ async function checkIpadSwitchControlMode(page, project) {
   assert(!(await page.locator("#autoScan").isChecked()), "Mode activation must force a running app scan off");
   assert(await page.locator("#autoScan").isDisabled(), "Forced delegation must lock the app scan control");
   assert((await page.locator(".scan-focus").count()) === 0, "Forced delegation must leave no yellow focus");
-  await waitForText(page, "#scanState", "iPad走査を使用");
+  await waitForText(page, "#scanState", "iPad で操作中");
   const forcedSaved = await page.evaluate(
     (key) => JSON.parse(localStorage.getItem(key)).settings,
     storageKey
@@ -1507,7 +2265,7 @@ async function checkSlotL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 9);
 
   await openActivity(page, t("tile.slot-corner.title"));
   await waitForActivityChoices(page, 3);
@@ -1518,6 +2276,7 @@ async function checkSlotL1GameFlow(page) {
   await page.locator(".tabbar").waitFor({ state: "hidden" });
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
   await page.locator(".game-ready").waitFor({ state: "visible" });
+  await assertNoSplitRuby(page, "slot-l1 how-to");
 
   await page.locator("#gameStage").click();
   await page.locator(".game-ready").waitFor({ state: "detached" });
@@ -1527,10 +2286,26 @@ async function checkSlotL1GameFlow(page) {
     "slot-l1 must render exactly one reel"
   );
 
-  const imageReady = await page.locator(".slot-symbol-guide img").evaluate(
-    (image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
-  );
+  // 6つの絵の一覧は、そくていの回にだけ出す（れんしゅうでは「リールの周りの
+  // 余計なもの」として外した。docs/design-renewal-2026-09-25.md §1.5）。
+  // 画像そのものは そくていの回で使うので、読み込めることは見ておく。
+  // 読み込みを待ってから見る。すぐ見ると、読み込み中のときに落ちる（前からあった
+  // タイミング次第の失敗。変更の前後どちらでも起きた）。
+  const imageReady = await page
+    .waitForFunction(
+      () => {
+        const image = document.querySelector(".slot-symbol-guide img");
+        return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+      },
+      null,
+      { timeout: 5000 }
+    )
+    .then(() => true, () => false);
   assert(imageReady, "Generated six-symbol guide PNG must load in the actual game");
+  assert(
+    !(await page.locator(".slot-symbol-guide").isVisible()),
+    "The six-symbol list must stay out of a practice run (nothing extra around the reel)"
+  );
 
   // 「140ms待って比べる」は時間の仮定だった。回転は rAF で進むので、遅い機械
   // では最初の1フレームがその窓に入らないことがある——CIの mobile-webkit-like
@@ -1583,7 +2358,11 @@ async function checkSlotL1GameFlow(page) {
 
   assert(session?.taskType === "slot", "slot-l1 must persist taskType=slot");
   assert(session?.protocolVersion === "slot-v1", "slot-l1 must persist protocolVersion=slot-v1");
-  assert(session?.engineVersion === 1, "slot-l1 must persist engineVersion=1");
+  const { SLOT_ENGINE_VERSION } = await import("../src/lib/games/slotJudge.js");
+  assert(
+    session?.engineVersion === SLOT_ENGINE_VERSION,
+    `slot-l1 must persist the current engineVersion (${SLOT_ENGINE_VERSION})`
+  );
   assert(session?.aborted === true && session?.finished === false, "Esc must persist an aborted partial slot session");
   assert(session?.trials?.length === 1, "One accepted L1 input must produce exactly one stop row");
   assert(session?.config?.reelCount === 1, "slot-l1 must persist reelCount=1");
@@ -1594,11 +2373,165 @@ async function checkSlotL1GameFlow(page) {
  * 1件ずつ追い、1入力が2本以上を止めないこと、左→右、ラウンド遷移、
  * 300msガード、完了結果のすべてを実ブラウザで固定する。
  */
+/**
+ * れんしゅうの回のリールは、画面いっぱいに出て、どの画面でもはみ出さない。
+ *
+ * 利用者側から「スロットとかのゲームを画面全部に見えるように」と言われた
+ * （2026-09-28）。直す前は、iPad の横向きでリール（ひとつ）が画面の 34%×55% しか
+ * 使っておらず、スマホの横向きではリールの下が切れ、縦向きでは3本がはみ出して
+ * スクロールが要った。1コマの高さを、リールの入る場所の縦横に収まるいちばん
+ * 大きい値にした（theme-hakkiri.css、engineVersion 4）。
+ *
+ * 見ること: リールの面がスクロールしない・どのリールも画面の中・3本の窓を
+ * 合わせた大きさが、画面の縦か横のどちらかをほとんど使い切っている。
+ */
+async function checkPracticeReelsFillTheScreen(page) {
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  for (const [tileKey, reels] of [["tile.slot-l2.title", 3], ["tile.slot-l1.title", 1]]) {
+    await openActivity(page, t("tile.slot-corner.title"));
+    await waitForActivityChoices(page, 3);
+    await openActivity(page, t(tileKey));
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator(".game-ready").waitFor({ state: "visible" });
+    await page.locator("#gameStage").click();
+    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await page.locator(".slot-task[data-difficulty-mode='practice']").waitFor({ state: "visible" });
+    await page.waitForTimeout(150);
+    const fit = await page.evaluate(() => {
+      const stage = document.querySelector("#gameStageContent");
+      const windows = [...document.querySelectorAll(".slot-reel-window")].map((el) => el.getBoundingClientRect());
+      const reels = [...document.querySelectorAll(".slot-reel")].map((el) => el.getBoundingClientRect());
+      const left = Math.min(...windows.map((r) => r.left));
+      const right = Math.max(...windows.map((r) => r.right));
+      const top = Math.min(...windows.map((r) => r.top));
+      const bottom = Math.max(...windows.map((r) => r.bottom));
+      return {
+        supportsContainerUnits: CSS.supports("height", "1cqh"),
+        scrolls: stage.scrollHeight > stage.clientHeight + 1 || stage.scrollWidth > stage.clientWidth + 1,
+        outside: reels.filter((r) => r.left < -1 || r.top < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1).length,
+        usedWidth: (right - left) / innerWidth,
+        usedHeight: (bottom - top) / innerHeight,
+        count: windows.length,
+      };
+    });
+    if (!fit.supportsContainerUnits) return SKIPPED;
+    assert(fit.count === reels, `Expected ${reels} reel(s), found ${fit.count}`);
+    assert(!fit.scrolls, "The practice reels must fit the screen without scrolling");
+    assert(fit.outside === 0, `${fit.outside} reel(s) spill off the screen`);
+    // 縦か横のどちらかを、ほとんど使い切っている（余白ばかりの小さなリールにしない）。
+    assert(
+      fit.usedHeight >= 0.5 || fit.usedWidth >= 0.7,
+      `The practice reels must fill the screen, used ${Math.round(fit.usedWidth * 100)}% x ${Math.round(fit.usedHeight * 100)}%`
+    );
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+  }
+}
+
+/**
+ * そくていの回のリールは、決まった大きさ（1コマ 94px、幅 620px 以下は 82px）で出し、
+ * 画面に入りきらないときだけ縮めて収める（games/slotFit.js、engineVersion 5）。
+ *
+ * 直す前は、入りきらない分が上下へはみ出し、上の分はスクロールしても戻せなかった
+ * （2026-09-28 に実測: スマホの横向きで目標の札が丸ごと画面の外、縦向きで札が
+ * 上の帯の裏）。
+ *
+ * 見ること: 目標の札・ことば・リール・6つの絵が、どれも画面の中にあって上の帯の
+ * 裏に入っていない / 収めたときはスクロールしない / 収めていないときの1コマは
+ * 決まった大きさのまま（iPad などの見え方を変えていない）/ 収めたときも決まった
+ * 大きさより大きくしない / 画面に出した1コマの高さが回の記録と、止めた1回ごとの
+ * 記録に残る。
+ */
+async function checkMeasuredReelsStayOnScreen(page) {
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    saved.settings = { ...(saved.settings || {}), difficultyMode: "measure" };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, storageKey);
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  for (const tileKey of ["tile.slot-l2.title", "tile.slot-l1.title"]) {
+    await openActivity(page, t("tile.slot-corner.title"));
+    await waitForActivityChoices(page, 3);
+    await openActivity(page, t(tileKey));
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator(".game-ready").waitFor({ state: "visible" });
+    await page.locator("#gameStage").click();
+    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await page.locator(".slot-task[data-difficulty-mode='measure']").waitFor({ state: "visible" });
+    await page.waitForTimeout(150);
+    const seen = await page.evaluate((key) => {
+      const stage = document.querySelector("#gameStageContent");
+      const bars = [...document.querySelectorAll(".game-progress, .game-actions > :not([hidden])")]
+        .map((el) => el.getBoundingClientRect())
+        .filter((b) => b.width > 0 && b.height > 0);
+      const parts = [".slot-target", ".slot-status", ".slot-reel", ".slot-symbol-guide"]
+        .flatMap((selector) => [...document.querySelectorAll(selector)])
+        .map((el) => ({ name: el.className, b: el.getBoundingClientRect() }))
+        .filter(({ b }) => b.width > 0 && b.height > 0);
+      const outside = parts.filter(({ b }) => b.left < -1 || b.top < -1 || b.right > innerWidth + 1 || b.bottom > innerHeight + 1);
+      const underBar = parts.filter(({ b }) =>
+        bars.some((bar) => b.left < bar.right - 1 && bar.left < b.right - 1 && b.top < bar.bottom - 1 && bar.top < b.bottom - 1)
+      );
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = (saved.sessions || []).filter((item) => item.taskType === "slot").at(-1);
+      return {
+        supportsContainerUnits: CSS.supports("height", "1cqh"),
+        fitted: stage.classList.contains("is-fitted"),
+        scrolls: stage.scrollHeight > stage.clientHeight + 1 || stage.scrollWidth > stage.clientWidth + 1,
+        outside: outside.map(({ name }) => name),
+        underBar: underBar.map(({ name }) => name),
+        cell: document.querySelector(".slot-reel-window").getBoundingClientRect().height / 3,
+        fixedCell: innerWidth <= 620 ? 82 : 94,
+        recordedCellPx: session?.config?.reelCellPx ?? null,
+      };
+    }, storageKey);
+    if (!seen.supportsContainerUnits) return SKIPPED;
+    assert(seen.outside.length === 0, `Measured reels: ${seen.outside.join(", ")} must stay on the screen`);
+    assert(seen.underBar.length === 0, `Measured reels: ${seen.underBar.join(", ")} must not hide under the top bar`);
+    if (seen.fitted) {
+      assert(!seen.scrolls, "The fitted measured reels must not need scrolling");
+      assert(seen.cell <= seen.fixedCell + 0.5, `A fitted reel cell must never grow past ${seen.fixedCell}px, got ${seen.cell}`);
+    } else {
+      assert(Math.abs(seen.cell - seen.fixedCell) < 0.5, `Where the reels fit, the cell must stay ${seen.fixedCell}px, got ${seen.cell}`);
+    }
+    assert(
+      typeof seen.recordedCellPx === "number" && Math.abs(seen.recordedCellPx - seen.cell) <= 0.1,
+      `The run must record the shown cell size (${seen.cell}), got ${JSON.stringify(seen.recordedCellPx)}`
+    );
+    // 止めた1回ごとにも、そのとき出ていた大きさが残る（途中で向きを変えると変わる）。
+    await page.waitForTimeout(400);
+    await page.locator("#gameStage").click();
+    const stopped = await page.waitForFunction(
+      (key) => {
+        const saved = JSON.parse(localStorage.getItem(key) || "{}");
+        const session = (saved.sessions || []).filter((item) => item.taskType === "slot").at(-1);
+        return session?.trials?.length ? session.trials.at(-1).reelCellPx ?? "missing" : null;
+      },
+      storageKey,
+      { timeout: 4000 }
+    );
+    const trialCellPx = await stopped.jsonValue();
+    assert(
+      typeof trialCellPx === "number" && Math.abs(trialCellPx - seen.cell) <= 0.1,
+      `Each stop must record the shown cell size (${seen.cell}), got ${JSON.stringify(trialCellPx)}`
+    );
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+  }
+}
+
 async function checkSlotSequentialFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 9);
 
   await openActivity(page, t("tile.slot-corner.title"));
   await waitForActivityChoices(page, 3);
@@ -1688,7 +2621,14 @@ async function checkSlotSequentialFlow(page) {
   }
 
   await waitForClass(page, "#resultView", "is-active");
-  await page.locator(".slot-result").waitFor({ state: "visible" });
+  // 利用者に見えるのは一言と「何回のうち何回」。数値の表（.slot-result）は
+  // 支援者むけに畳んである（docs/design-renewal-2026-09-25.md §1.6）。
+  await page.locator("#resultStats .hk-result").waitFor({ state: "visible" });
+  await page.locator("#resultStats .result-details .slot-result").waitFor({ state: "attached" });
+  assert(
+    !(await page.locator("#resultStats .result-details").evaluate((details) => details.open)),
+    "The supporter's numbers must start folded on the child's result screen"
+  );
 
   const session = await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || "{}");
@@ -1735,7 +2675,7 @@ async function checkRhythmL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 9);
 
   await openActivity(page, "リズム");
   await waitForActivityChoices(page, 4);
@@ -2339,9 +3279,20 @@ async function checkFishingGameFlow(page) {
  * 絞る）ので、テストも支援者と同じくまず面を開く。
  */
 async function openSettingsTab(page, name) {
+  // タブは「くわしい設定」（ふだんは閉じている）の中にある。
+  await openSettingsMore(page);
   const tab = page.locator(`.settings-tab[data-settings-tab="${name}"]`);
   await tab.click();
   await page.locator(`.settings-panel[data-settings-panel="${name}"]`).waitFor({ state: "visible" });
+}
+
+/** 設定の「くわしい設定」を開く（開いていればそのまま）。 */
+async function openSettingsMore(page) {
+  // 中に別の畳み（音の素材のクレジット）があるので、直下の見出しだけを押す。
+  const more = page.locator("#settingsMore");
+  if (!(await more.evaluate((details) => details.open))) {
+    await page.locator("#settingsMore > summary").click();
+  }
 }
 
 // 走らせるため。const だと宣言位置より前に実行されて TDZ に落ちる。
@@ -2377,7 +3328,7 @@ async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
 async function checkEndlessEndsOnFailure(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
+  await openActivity(page, t("tile.crane-corner.title"));
   await openActivity(page, "ずっと止める");
   await waitForClass(page, "#gameView", "is-active");
 
@@ -2435,7 +3386,7 @@ async function checkEndlessEndsOnFailure(page) {
 async function checkCraneGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
+  await openActivity(page, t("tile.crane-corner.title"));
   await openActivity(page, "アームを止める");
   await waitForClass(page, "#gameView", "is-active");
   // crane も content.js の gameHowTo を持つようになったので、レディ画面を
@@ -2526,7 +3477,7 @@ async function checkResultScreenStaysInTheUserWorld(page) {
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
+  await openActivity(page, t("tile.crane-corner.title"));
   await openActivity(page, "アームを止める");
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
@@ -2578,7 +3529,7 @@ async function checkScanFocusStaysVisible(page, project) {
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 9);
 
   const tiles = await page.locator("#gameTileGrid .game-tile").count();
   for (let index = 0; index < tiles; index += 1) {
@@ -2658,16 +3609,19 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
       ({ key, value }) => localStorage.setItem(key, value),
       {
         key: storageKey,
+        // 読み上げは切っておく。読み上げはアプリに入れた声（声のパック）を
+        // createBufferSource で鳴らすので、効果音と同じ数え方に入ってしまう。
+        // 読み上げは「声で読み上げる」の設定で切るもので、効果音の設定とは別。
         value: JSON.stringify({
           version: 3,
-          settings: { soundEnabled, craneTargetTrials: 3, craneSweepMs: 800 },
+          settings: { soundEnabled, speechEnabled: false, craneTargetTrials: 3, craneSweepMs: 800 },
         }),
       }
     );
     await page.reload();
     await page.locator("#startStage").click();
     await waitForClass(page, "#homeView", "is-active");
-    await openActivity(page, "アームで つかむ");
+    await openActivity(page, t("tile.crane-corner.title"));
     await openActivity(page, "アームを止める");
     await page.locator(".game-ready").waitFor({ state: "visible" });
     // タイルを押した直後のこの押下は、入力ファネルの多重発火除去
@@ -2698,7 +3652,9 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
     await page.waitForFunction(
       () => {
         const status = document.querySelector(".crane-status")?.textContent?.trim() ?? "";
-        return /つかんだ|すべった|とどかなかった|とれた/.test(status);
+        // 結果の4通り: つかんだ／おしい！すべった／もう すこし！（外れ。以前は
+        // 「届かなかった」）／取れた。ふりがなも textContent に入るので、かなで見る。
+        return /つかんだ|すべった|すこし|とれた/.test(status);
       },
       undefined,
       { timeout: 15_000 }
@@ -2741,18 +3697,23 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
  *
  * 焦点が外れたら必ず戻ることまで見る。戻らないと、走査で操作する手段が
  * 画面から消えたままになる——利用者にとっては操作不能と同じ。
+ *
+ * ドックは、画面の「おす」ボタンを出す設定のときだけ出る（評価ログも本人の
+ * 画面と同じ）。設定の画面では出さない（押せないものを項目に重ねない）。
  */
 async function checkDockStepsAsideForTextEntry(page) {
+  await enableScreenSwitch(page);
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
 
   // 支援者が文字を打つ欄は、いまは評価ログの参加者IDだけ（観察メモは
   // 効果測定セッションごと別紙へ移した。2026-08-29）。
   await page.locator('.tab[data-view="log"]').click();
   await waitForClass(page, "#log", "is-active");
+  await page.locator(".switch-dock").waitFor({ state: "visible" });
 
   await page.locator("#participantId").focus();
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
@@ -2760,6 +3721,103 @@ async function checkDockStepsAsideForTextEntry(page) {
   // 文字入力から離れたらドックは戻る。
   await page.locator("#participantId").evaluate((el) => el.blur());
   await page.locator(".switch-dock").waitFor({ state: "visible" });
+}
+
+/**
+ * 遊びを始める瞬間に音が止まっていても（iOS のスリープ・ほかのアプリ・読み上げのあと）、
+ * 戻れば始まる。以前は始めた瞬間に1回だけ canSound() を見ていたので、resume() の途中だと
+ * 「おとが ならせません」になり、そのまま戻れなかった（2026-09-30 の打ち合わせで
+ * 「高い音だけ が動かない」）。戻らないときは理由を出し、直したあとで押せば始まる。
+ *
+ * iOS の「resume() のあと少ししてから running になる」を、state の getter を差し替えて作る。
+ */
+async function checkCueTasksWaitForSuspendedSound(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) return SKIPPED;
+  await page.context().addInitScript(() => {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx || typeof BaseAudioContext === "undefined") return;
+    window.__fakeAudio = { state: null, resumeWorks: true };
+    const real = Object.getOwnPropertyDescriptor(BaseAudioContext.prototype, "state");
+    Object.defineProperty(Ctx.prototype, "state", {
+      configurable: true,
+      get() {
+        return window.__fakeAudio.state ?? real.get.call(this);
+      },
+    });
+    const resume = Ctx.prototype.resume;
+    Ctx.prototype.resume = function delayedResume() {
+      if (window.__fakeAudio.state === "suspended" && window.__fakeAudio.resumeWorks) {
+        setTimeout(() => {
+          window.__fakeAudio.state = null;
+        }, 300);
+      }
+      return resume.call(this);
+    };
+  });
+  await page.reload();
+
+  const passReady = async () => {
+    if ((await page.locator(".game-ready").count()) === 0) return;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await page.waitForTimeout(250);
+      await page.locator("#gameStage").click();
+      if ((await page.locator(".game-ready").count()) === 0) break;
+    }
+  };
+  const open = async (corner, task) => {
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+    if (corner) await openActivity(page, corner);
+    await openActivity(page, task);
+    await waitForClass(page, "#gameView", "is-active");
+  };
+  const started = (moduleClass) =>
+    page.evaluate(
+      (cls) => ({
+        running: document.querySelector("#gameStageContent")?.classList.contains(cls) || false,
+        unavailable: Boolean(document.querySelector(".game-unavailable")),
+      }),
+      moduleClass
+    );
+
+  // 1. 押した直後は止まっていて、0.3秒後に戻る（iOS のふつうの戻り方）。どちらの課題も始まる。
+  for (const [corner, task, moduleClass] of [
+    [null, t("tile.gonogo.title"), "module-rhythm"],
+    ["さかなつり", "アタリで釣る", "module-fishing"],
+  ]) {
+    await open(corner, task);
+    await page.evaluate(() => {
+      window.__fakeAudio.state = "suspended";
+      window.__fakeAudio.resumeWorks = true;
+    });
+    await passReady();
+    await page.waitForTimeout(1200);
+    const result = await started(moduleClass);
+    assert(result.running && !result.unavailable, `${task} must start once the suspended sound comes back, got ${JSON.stringify(result)}`);
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+    await page.reload();
+  }
+
+  // 2. 戻らないままなら理由を出す。音を直してから押せば、その場で始まる。
+  await open(null, t("tile.gonogo.title"));
+  await page.evaluate(() => {
+    window.__fakeAudio.state = "suspended";
+    window.__fakeAudio.resumeWorks = false;
+  });
+  await passReady();
+  await page.locator(".game-unavailable").waitFor({ state: "visible" });
+  await page.evaluate(() => {
+    window.__fakeAudio.resumeWorks = true;
+  });
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(1500);
+  const retried = await started("module-rhythm");
+  assert(retried.running && !retried.unavailable, `Pressing again after fixing the sound must start the task, got ${JSON.stringify(retried)}`);
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 /**
@@ -3011,9 +4069,9 @@ async function checkFeatureTabs(page) {
   // 直に click すると、2ページ目に居る項目に届かない——利用者と同じく
   // 「つぎのページ」を辿ってから押す。
   const activityTargets = [
-    ["matching", "マッチング"],
-    ["voca", "VOCA"],
-    ["letters", "文字学習"],
+    ["matching", t("tile.matching.title")],
+    ["voca", t("tile.voca.title")],
+    ["letters", t("tile.letters.title")],
   ];
   for (const [target, name] of activityTargets) {
     await openActivity(page, "学ぶ・伝える");
@@ -3129,23 +4187,23 @@ async function checkResearcherModeTabsNoRegression(page) {
   await waitForClass(page, "#settings", "is-active");
   await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").waitFor({ state: "visible" });
-  // 「出す遊び」は「そうさ」の面にある（設定はタブ分けされている）。
+  // 「ホームに出す遊び」は「スイッチ」の面にある（設定はタブ分けされている）。
   await openSettingsTab(page, "basic");
   await page.locator("#hideVisualTasks").click();
 
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 4);
+  await waitForActivityChoices(page, 7);
   // 1ページだけ見て判定すると、ページ分割の入る画面では「2ページ目に居る」
   // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
   const lobbyTitles = await collectActivityTitles(page);
   assert(
-    !lobbyTitles.includes("アームで つかむ"),
+    !lobbyTitles.includes(t("tile.crane-corner.title")),
     `Visual-task setting must remove the claw corner from the lobby (saw: ${lobbyTitles.join(", ")})`
   );
   assert(
-    lobbyTitles.length === 4,
-    `Expected four remaining activities after hiding the claw, got ${lobbyTitles.length}`
+    lobbyTitles.length === 7,
+    `Expected seven remaining activities after hiding the claw, got ${lobbyTitles.length}`
   );
 }
 
@@ -3286,8 +4344,35 @@ async function checkMobileLayout(page) {
   });
 
   assert(overflow <= 2, `Expected horizontal overflow <= 2px, got ${overflow}px`);
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+
+  // 利用者の画面には、既定で「走査停止」「入力」のドックを出さない
+  // （docs/design-renewal-2026-09-25.md §3.5。打ち合わせで名指しされた
+  // 分からない言葉・余計なボタンだった）。スイッチ機器とタイルの直接タップは
+  // ドックが無くても使える。
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // 画面をスイッチ代わりに使う人のために、設定で「おす」だけを出せる。
+  // 出しても「走査停止」は出さない（止めたいのは支援者で、設定の自動走査がする）。
+  await enableScreenSwitch(page);
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
   await page.locator("#primarySwitch").waitFor({ state: "visible" });
+  await page.locator("#toggleScan").waitFor({ state: "hidden" });
+  assert(
+    ((await page.locator("#primarySwitchLabel").textContent()) || "").trim() === "おす",
+    "The on-screen switch must speak the user's word, not 入力"
+  );
+}
+
+/** 利用者の画面に「おす」ボタン（画面のスイッチ）を出す設定を入れて読み直す。 */
+async function enableScreenSwitch(page) {
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    saved.settings = { ...(saved.settings || {}), showScreenSwitch: true };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, storageKey);
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
 }
 
 /**
@@ -3353,6 +4438,7 @@ async function checkLayoutInvariants(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await inspect("home");
+  await assertNoSplitRuby(page, "home");
 
   // 選択肢の名前が読める幅で置かれていること。
   //
@@ -3468,11 +4554,11 @@ async function checkIpadAccessibilityLayout(page, project) {
 
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 6);
+  await waitForActivityChoices(page, 9);
   const homeLayout = await collectActivityLayout(page, { checkViewport: true });
   assert(
-    homeLayout.titles.length === 6,
-    "Expected all six accessible home choices, got " + homeLayout.titles.join(", ")
+    homeLayout.titles.length === 9,
+    "Expected all nine accessible home choices, got " + homeLayout.titles.join(", ")
   );
 
   // 設定が実際に画面へ効いていること。チェックボックスが入っていても
@@ -3491,13 +4577,16 @@ async function checkIpadAccessibilityLayout(page, project) {
 
   const layout = await page.evaluate(() => {
     const rows = [...document.querySelectorAll("#gameTileGrid .game-tile")];
-    const dock = document.querySelector(".switch-dock")?.getBoundingClientRect();
-    const last = rows.at(-1)?.getBoundingClientRect();
+    const dockEl = document.querySelector(".switch-dock");
+    // ドックは利用者の画面では既定で出ない。出ていなければ画面の下端が限界
+    // （アプリ側の判定 views/home.js の listOverflowsDock と同じ規則）。
+    const dockShown = dockEl && getComputedStyle(dockEl).display !== "none";
+    const bottoms = rows.map((row) => row.getBoundingClientRect().bottom);
     return {
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       rowWritingModes: rows.map((row) => getComputedStyle(row).writingMode),
-      lastBottom: last ? last.bottom : null,
-      dockTop: dock ? dock.top : null,
+      lastBottom: bottoms.length ? Math.max(...bottoms) : null,
+      dockTop: dockShown ? dockEl.getBoundingClientRect().top : window.innerHeight,
     };
   });
 
@@ -3519,8 +4608,13 @@ async function checkIpadAccessibilityLayout(page, project) {
   //      下の lastBottom <= dockTop と対になる）
   const tileNaming = await page.evaluate(() =>
     [...document.querySelectorAll("#gameTileGrid .game-tile")].map((tile) => {
-      const describedBy = tile.getAttribute("aria-describedby");
-      const description = describedBy ? document.getElementById(describedBy) : null;
+      // 遊びのタイルは「札（難しさ）＋説明」の2つを describedby に持つ
+      // （views/home.js）。説明はそのうちの tile-description。
+      const describedIds = (tile.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+      const description =
+        describedIds
+          .map((id) => document.getElementById(id))
+          .find((element) => element?.classList.contains("tile-description")) || null;
       const heading = tile.querySelector("strong");
       const px = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
       // 利用者向けの文言は総ルビなので、textContent にはふりがなの読みも
@@ -3536,6 +4630,11 @@ async function checkIpadAccessibilityLayout(page, project) {
       return {
         name: tile.getAttribute("aria-label") || "",
         isPager: tile.classList.contains("scan-pager"),
+        isHero: tile.dataset.hkSlot === "hero",
+        badgeVisible: (() => {
+          const badge = tile.querySelector(".hk-tile-badge");
+          return badge ? badge.getBoundingClientRect().width > 2 : null;
+        })(),
         heading: baseText(heading),
         description: baseText(description),
         descriptionIsVisible: description
@@ -3558,22 +4657,31 @@ async function checkIpadAccessibilityLayout(page, project) {
     tileNaming.filter((tile) => tile.isPager).length === (homeLayout.pages.length > 1 ? 1 : 0),
     "A paginated home must expose exactly one reachable next-page control"
   );
+  // デザイン「はっきりした色」（docs/design-renewal-2026-09-25.md §2.1）:
+  // 絵と名前と難しさの札で選ぶ。説明文を画面に出すのは、いちばん簡単な
+  // 大きな1番だけ——小さいタイルまで文を並べると、打ち合わせで言われた
+  // 「文字が多くて難しそう」に戻る。説明は全タイルで読み上げに乗る。
+  // 行の高さの上限（旧 200px）は外した。グリッドは画面の高さに合わせて
+  // タイルが伸びるので、守るのは下の「最後の項目まで画面に届く」のほう。
   tileNaming.forEach((tile) => {
-    assert(tile.name === tile.heading, `Tile name must stay the short heading, got "${tile.name}"`);
+    assert(tile.name === tile.heading, `Tile "${tile.name}" name must stay the short heading, got "${tile.heading}"`);
     assert(tile.description.length > 0, `Tile "${tile.name}" must expose its description to AT`);
-    assert(
-      tile.descriptionIsVisible,
-      `Tile "${tile.name}" description must be readable on screen, not only by AT`
-    );
-    assert(
-      tile.descriptionFontPx < tile.headingFontPx,
-      `Tile "${tile.name}" description must stay subordinate to the heading ` +
-        `(description ${tile.descriptionFontPx}px vs heading ${tile.headingFontPx}px)`
-    );
-    assert(
-      tile.rowHeight <= 200,
-      `Tile "${tile.name}" row grew to ${tile.rowHeight}px; the current page no longer fits above the dock`
-    );
+    if (tile.isHero) {
+      assert(
+        tile.descriptionIsVisible,
+        `The first (easiest) tile "${tile.name}" must show its description on screen`
+      );
+    }
+    if (tile.badgeVisible !== null) {
+      assert(tile.badgeVisible, `Tile "${tile.name}" must show how hard it is (its level badge) on screen`);
+    }
+    if (tile.descriptionIsVisible) {
+      assert(
+        tile.descriptionFontPx < tile.headingFontPx,
+        `Tile "${tile.name}" description must stay subordinate to the heading ` +
+          `(description ${tile.descriptionFontPx}px vs heading ${tile.headingFontPx}px)`
+      );
+    }
   });
 
   assert(layout.overflow <= 2, `Expected iPad horizontal overflow <= 2px, got ${layout.overflow}px`);
@@ -3808,6 +4916,30 @@ async function waitForClass(page, selector, className) {
     { selector, className },
     { timeout: 5_000 }
   );
+}
+
+/**
+ * ふりがな（ruby）が flex / grid の子としてばらけていないこと。
+ *
+ * flex の中に ruby と字がじかに並ぶと、1つずつが別の箱になり、gap のぶん
+ * 「上 の 目標 の 絵 を 見 ます」と字のあいだが空く（折り返しも語の途中で起きる）。
+ * 総ルビ（i18n.js）にしてから、「やりかた」の手順とけっかのボタンで起きていた。
+ */
+async function assertNoSplitRuby(page, where) {
+  const split = await page.evaluate(() => {
+    const found = [];
+    document.querySelectorAll("ruby").forEach((ruby) => {
+      const parent = ruby.parentElement;
+      if (!parent || parent.getClientRects().length === 0) return;
+      if (!/flex|grid/.test(getComputedStyle(parent).display)) return;
+      const others = [...parent.childNodes].filter(
+        (node) => node !== ruby && (node.nodeType === 1 ? node.tagName !== "RT" : node.textContent.trim())
+      );
+      if (others.length) found.push(parent.id || parent.className || parent.tagName);
+    });
+    return [...new Set(found)];
+  });
+  assert(split.length === 0, `${where}: furigana is split apart by a flex/grid parent — ${split.join(", ")}`);
 }
 
 async function readLogCount(page) {

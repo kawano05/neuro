@@ -6,7 +6,33 @@
 // =====================================================================
 
 export const SLOT_PROTOCOL_VERSION = "slot-v1";
-export const SLOT_ENGINE_VERSION = 1;
+// 版を上げると、それより前の回は games/slotState.js が legacyVersion として
+// 読み取り専用で残す（消さない。リールCSVと推移からは外れ、台帳には残る）。
+//   1 … 最初の版
+//   2 … リールの帯の描き方を直した（2026-09-27、reelTrackOffset）。並びの先頭の
+//       絵が停止線へ近づくあいだ（1周の12分の1）、リールに絵が1つも描かれて
+//       いなかった。判定は時刻で行うので値は正しいが、見えていたものが違う。
+//   3 … れんしゅうの回だけ、リールを大きくし（1コマ 94px → 画面の高さに合わせて
+//       最大 136px）、当たったときの演出（星・「ぴったり！」・和音）と、外したときの
+//       「おしい！」、明るい台と紫の枠（まわりの見た目）を足した
+//       （2026-09-27、docs/design-renewal-2026-09-25.md §3.10）。そくていの回の
+//       見え方と音は 2 と同じ。どちらの回かは difficultyMode で分かる。
+//   4 … れんしゅうの回だけ、リールを画面いっぱいにした（2026-09-28）。1コマの高さを
+//       決まった値（最大 136px）ではなく、リールの入る場所の縦と横に収まるいちばん
+//       大きい値にし（iPad の横向きで約 217px）、横長の画面では目標の札を左へ置いた。
+//       スマホの横向きでリールの下が切れ、縦向きで3本がはみ出していたのも直った。
+//       当たりの星は演出エンジン（src/lib/fx/）へ移し、続けて当てると大きくなる。
+//       そくていの回の見え方と音は 2・3 と同じ。
+//   5 … そくていの回も、画面に入りきらないときだけ収めるようにした（2026-09-28、
+//       games/slotFit.js）。それまでは入りきらない分が上下へはみ出し、上の分は
+//       スクロールしても戻せなかった（スマホの横向きで目標の札が画面の外、縦向きで
+//       上の帯の裏）。収まる画面（iPad の縦・横）の見え方は 2〜4 と 1px も同じ。
+//       収めるときも 1コマは決まった大きさ（94px、幅 620px 以下は 82px）より
+//       大きくせず、縮めるだけ。画面に出した1コマの高さを config.reelCellPx に
+//       残し、リールCSVの最後の列に出す。あわせて、背の低い横向き（スマホ）では
+//       上の帯を上へ寄せた（16px → 6px）ので、れんしゅうの回のリールもそのぶん
+//       大きい。
+export const SLOT_ENGINE_VERSION = 5;
 
 export const SLOT_SYMBOL_IDS = Object.freeze([
   "circle",
@@ -55,6 +81,30 @@ export function reelPhaseAt({ atMs, reelStartMs, cycleMs, symbolCount, initialPh
 
   const elapsedMs = Math.max(0, atMs - reelStartMs);
   return positiveModulo(initialPhase + (elapsedMs / cycleMs) * symbolCount, symbolCount);
+}
+
+/**
+ * リールの帯をどれだけずらして描くか（描画用。判定には使わない）。
+ *
+ * 帯には停止線に最も近い絵を真ん中にして前後2つずつ並べ（slot.js の
+ * buildTrackSymbols）、端数だけずらして描く。ずれは必ず ±0.5 コマに収まる。
+ *
+ * 以前は「一周ぶん巻き戻した番号」と「巻き戻さない位相」の差を取っていたので、
+ * 位相が symbolCount - 0.5 を超えると差が約 -6 コマになり、帯が窓の外へ出て
+ * リールが空に見えていた（1周の12分の1のあいだ、並びの先頭の絵が近づく場面）。
+ *
+ * @param {number} phase reelPhaseAt の値（0 以上 symbolCount 未満）
+ * @param {number} symbolCount
+ * @returns {{centeredIndex: number, offsetCells: number}} offsetCells は正で下へずらす
+ */
+export function reelTrackOffset(phase, symbolCount) {
+  finiteNumber(phase, "phase");
+  positiveInteger(symbolCount, "symbolCount");
+  const nearest = Math.floor(phase + 0.5);
+  return {
+    centeredIndex: positiveModulo(nearest, symbolCount),
+    offsetCells: nearest - phase,
+  };
 }
 
 /** 停止線に最も近い絵柄の index。ちょうど半分なら進行方向側を採る。 */

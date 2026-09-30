@@ -8,6 +8,7 @@
 
 import assert from "node:assert/strict";
 import {
+  GRID_LAYOUT_MIN_WIDTH,
   SCAN_OVERLAP_TOLERANCE_PX,
   SCAN_PAGE_SIZE,
   SCAN_PAGE_SIZE_MIN,
@@ -140,6 +141,23 @@ test("page size never shrinks below two", () => {
   assert.equal(slice.pageCount, 3);
   assert.equal(slice.pageIndex, 2);
   assert.equal(slice.nextPageIndex, 0, "最後のページの次は先頭へ戻る");
+});
+
+test("a grid screen is split only after it was measured as overflowing", () => {
+  // グリッドはタイルが高さに合わせて縮むので、先読みの当て（740px）では分けない。
+  // 横長のノートPC（1366x650 など）で6つとも入るのに「次のページ」が出ていた
+  // （docs/design-renewal-2026-09-25.md §3.6）。
+  assert.equal(shouldPaginate(650, 6, SCAN_PAGE_SIZE, { gridLayout: true }), false);
+  // 描いてみて入らなかったら、グリッドでも分ける（実測が最終判定）。
+  assert.equal(
+    shouldPaginate(390, 6, SCAN_PAGE_SIZE, { gridLayout: true, forcedByOverflow: true }),
+    true
+  );
+  // グリッドでない幅（スマホ縦）は、これまでどおり先読みで分ける。
+  assert.equal(shouldPaginate(664, 6, SCAN_PAGE_SIZE, { gridLayout: false }), true);
+  // グリッドの境目は、iPad 縦（834px）が入り、スマホ縦（390px）が入らない値。
+  assert.ok(GRID_LAYOUT_MIN_WIDTH <= 834);
+  assert.ok(GRID_LAYOUT_MIN_WIDTH > 430);
 });
 
 test("a few pixels of overlap is not 'out of reach'", () => {

@@ -2,7 +2,7 @@
   "appId": "jp.ac.nit.kumeno.neuro",
   "appName": "neuro",
   "webDir": "dist",
-  "backgroundColor": "#f4f8f7",
+  "backgroundColor": "#ffffff",
   "server": {
     "hostname": "localhost",
     "iosScheme": "capacitor"

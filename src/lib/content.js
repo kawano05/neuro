@@ -15,8 +15,18 @@
  * ことに伴うバンプ。旧キー（v2: "neuronode-prototype-state-v2"、
  * v1: "neuro-trainer-state-v1"）は state.js の loadState() が v3 未保存時にのみ
  * 読み、settings・logs・evaluation を移行する。旧キー自体は削除しない。
+ *
+ * プレビュー版はキーを分ける。プレビュー版は、デザイン改修中のブランチを本番サイトの
+ * /preview/ に同居させたもの（.github/workflows/pages.yml が VITE_PREVIEW=1 でビルド）。
+ * GitHub Pages のプロジェクトサイトは同じオリジン（kawano05.github.io）に載るので、
+ * キーが同じだと、同じ端末で本番とプレビューが1つの保存を取り合う——プレビューで
+ * 試しに遊んだ回が、本番の記録（CSV）に混ざる。
+ * Node で読むとき（テスト）は import.meta.env が無いので、本番のキーになる。
  */
-export const storageKey = "neuronode-prototype-state-v4";
+export const isPreviewBuild = import.meta.env?.VITE_PREVIEW === "1";
+export const storageKey = isPreviewBuild
+  ? "neuronode-prototype-state-v4-preview"
+  : "neuronode-prototype-state-v4";
 
 /**
  * スイッチ教材モジュールの一覧（現状 "color" の1件のみ）。
@@ -32,9 +42,6 @@ export const switchModules = [
     tones: [392, 440, 494, 523],
   },
 ];
-
-/** スイッチ教材ステージの背景色サイクル */
-export const stageColors = ["#0f8b8d", "#2f8f5b", "#315c9c", "#7a8f1f", "#c04747"];
 
 /** 色と音の通常セッション。効果測定の「スイッチ教材を5回入力」と同じ長さ。 */
 export const colorLegacyPreset = {
@@ -55,11 +62,20 @@ export const colorLegacyPreset = {
 export const gameTiles = [
   // iconClass は Font Awesome Free の統一アイコン。製品アイコンに絵文字を
   // 使わず、年齢を限定しない視覚言語に揃える。
-  { id: "color-legacy", taskType: null, resultType: "completion", title: "いろと おと", description: "5かい おして いろと おとを かえよう", order: 1, enabled: true, iconClass: "fa-solid fa-palette" },
-  { id: "slot-l1", taskType: "slot", title: "ひとつ とめる", description: "おなじ えが まんなかに きたら おそう", order: 2, enabled: true, visualRequired: true, iconClass: "fa-solid fa-circle-stop" },
-  { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの リールを じゅんばんに とめよう", order: 3, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
-  { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 4, enabled: true, iconClass: "fa-solid fa-bell" },
-  { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
+  { id: "color-legacy", taskType: null, resultType: "completion", title: "いないいない ばあ", description: "おすと えと おとが でるよ", order: 1, enabled: true, iconClass: "fa-solid fa-palette" },
+  // はじめの遊び（失敗の無い遊び）の2つめと3つめ。打ち合わせで「こういう遊びを
+  // 増やしてほしい」と言われた（docs/design-renewal-2026-09-25.md §1.4）。
+  // どちらも測定の課題ではないので taskType を持たない。
+  { id: "balloon", taskType: null, resultType: "completion", title: "ふうせん わり", description: "おすと ふうせんが われるよ", order: 2, enabled: true, iconClass: "fa-solid fa-burst" },
+  { id: "coloring", taskType: null, resultType: "completion", title: "ぬりえ", description: "おすと いろが ぬれるよ", order: 3, enabled: true, iconClass: "fa-solid fa-paintbrush" },
+  // 野球盤のような遊び（打ち合わせで「誰でも野球盤」が例に出た）。押せば必ず
+  // 当たり、タイミングが合うほど遠くへ飛ぶ。はじめの遊びとタイミングの遊びの
+  // あいだの一段。これも測定の課題ではない（games/baseball.js）。
+  { id: "baseball", taskType: null, resultType: "completion", title: "やきゅう", description: "ボールが きたら おして うとう", order: 4, enabled: true, iconClass: "fa-solid fa-baseball-bat-ball" },
+  { id: "slot-l1", taskType: "slot", title: "ひとつ とめる", description: "おなじ えが まんなかに きたら おそう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-circle-stop" },
+  { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの リールを じゅんばんに とめよう", order: 6, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
+  { id: "gonogo", taskType: "gonogo", title: "おとあそび", description: "たかいおとのとき だけ おそう", order: 7, enabled: true, iconClass: "fa-solid fa-bell" },
+  { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 8, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
   // さかなつりは2種類ある。どちらも反応時間を測るが、測っているものが違う:
   //   fishing        … 純粋な単純反応時間。アタリ音は1種類だけで、迷う要素がない
   //   fishing-gonogo … そこに No-Go（長靴の低音）を混ぜた抑制つきの反応時間
@@ -67,23 +83,23 @@ export const gameTiles = [
   // （単純反応時間）なのに実体は Go/No-Go 課題という食い違いがあり、
   // 「この課題で何を測ったか」を書けなかった。ロビーでは「さかなつり」の
   // コーナー（fishingCornerTile）にまとめ、二階層目でどちらかを選ぶ。
-  { id: "fishing", taskType: "rt", title: "アタリで つる", description: "おとが なったら すぐ おそう", order: 6, enabled: true, iconClass: "fa-solid fa-fish" },
-  { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 7, enabled: true, iconClass: "fa-solid fa-fish-fins" },
-  { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 8, enabled: true, iconClass: "fa-solid fa-stopwatch" },
+  { id: "fishing", taskType: "rt", title: "アタリで つる", description: "おとが なったら すぐ おそう", order: 9, enabled: true, iconClass: "fa-solid fa-fish" },
+  { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 10, enabled: true, iconClass: "fa-solid fa-fish-fins" },
+  { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 11, enabled: true, iconClass: "fa-solid fa-stopwatch" },
 ];
 
 /** 視覚タイミング課題2種をまとめる二階層目への入口。 */
 export const slotCornerTile = {
   id: "slot-corner",
-  title: "リールを とめる",
+  title: "えあわせ",
   description: "ひとつ または 3つの えを とめよう",
   iconClass: "fa-solid fa-circle-stop",
 };
 
-/** UFOキャッチャー（ふつう / エンドレス）をまとめる二階層目への入口。 */
+/** クレーンゲーム（ふつう / エンドレス）をまとめる二階層目への入口。 */
 export const craneCornerTile = {
   id: "crane-corner",
-  title: "アームで つかむ",
+  title: "クレーンゲーム",
   description: "2つの あそびかたから えらぶ",
   iconClass: "fa-solid fa-hand",
 };
@@ -388,13 +404,18 @@ export const fishingSpecies = [
  * 入れない。読み上げにもそのまま渡すため）は i18n.js 側に置いてある。
  */
 export const gameHowTo = {
-  "color-legacy": ["howto.color-legacy.1", "howto.color-legacy.2"],
+  // color-legacy（おすと でてくる）には「やりかた」を挟まない。遊びの画面が
+  // 最初から「押してみよう」と出していて、それ自体が説明になっている。
+  // 言葉の説明は要らない、押せば出てくるだけでいい、と言われた遊びに、
+  // 読む画面をもう1枚挟むと、最初のひと押しが「説明を閉じる」に使われて
+  // 何も出てこない（docs/design-renewal-2026-09-25.md §1.4）。
   "slot-l1": ["howto.slot-l1.1", "howto.slot-l1.2", "howto.slot-l1.3"],
   "slot-l2": ["howto.slot-l2.1", "howto.slot-l2.2", "howto.slot-l2.3"],
   gonogo: ["howto.gonogo.1", "howto.gonogo.2"],
   calibration: ["howto.calibration.1", "howto.calibration.2", "howto.calibration.3"],
   crane: ["howto.crane.1", "howto.crane.2", "howto.crane.3", "howto.crane.4"],
   fishing: ["howto.fishing.1", "howto.fishing.2", "howto.fishing.3", "howto.fishing.4"],
+  baseball: ["howto.baseball.1", "howto.baseball.2", "howto.baseball.3"],
   "fishing-gonogo": [
     "howto.fishing-gonogo.1",
     "howto.fishing-gonogo.2",
@@ -411,6 +432,8 @@ export const cueTones = { low: 440, high: 880, noGo: 330, hit: 660, miss: 220 };
 export const matchingTasks = [
   {
     prompt: "赤いものを選んでください",
+    // 画面に出す問い（ふりがな付き。i18n.js の書き方）。記録と正解の判定は answer / label のまま。
+    promptRuby: "赤[あか]い ものは どれかな？",
     answer: "りんご",
     options: [
       { label: "りんご", visual: "circle red" },
@@ -421,6 +444,7 @@ export const matchingTasks = [
   },
   {
     prompt: "丸い形を選んでください",
+    promptRuby: "丸[まる]い かたちは どれかな？",
     answer: "まる",
     options: [
       { label: "しかく", visual: "square teal" },
@@ -431,6 +455,7 @@ export const matchingTasks = [
   },
   {
     prompt: "食べものを選んでください",
+    promptRuby: "食[た]べものは どれかな？",
     answer: "パン",
     options: [
       { label: "くつ", visual: "bar teal" },
@@ -443,10 +468,10 @@ export const matchingTasks = [
 
 /** 文字学習の出題 */
 export const letterTasks = [
-  { prompt: "「あめ」の最初の文字を選んでください", answer: "あ", options: ["あ", "い", "う", "え"] },
-  { prompt: "「からだ」の最初の文字を選んでください", answer: "か", options: ["さ", "た", "か", "な"] },
-  { prompt: "「みず」の最初の文字を選んでください", answer: "み", options: ["に", "み", "し", "り"] },
-  { prompt: "「ありがとう」の最初の文字を選んでください", answer: "あ", options: ["お", "あ", "ま", "や"] },
+  { prompt: "「あめ」の最初の文字を選んでください", promptRuby: "「あめ」の はじめの 文字[もじ]は どれかな？", answer: "あ", options: ["あ", "い", "う", "え"] },
+  { prompt: "「からだ」の最初の文字を選んでください", promptRuby: "「からだ」の はじめの 文字[もじ]は どれかな？", answer: "か", options: ["さ", "た", "か", "な"] },
+  { prompt: "「みず」の最初の文字を選んでください", promptRuby: "「みず」の はじめの 文字[もじ]は どれかな？", answer: "み", options: ["に", "み", "し", "り"] },
+  { prompt: "「ありがとう」の最初の文字を選んでください", promptRuby: "「ありがとう」の はじめの 文字[もじ]は どれかな？", answer: "あ", options: ["お", "あ", "ま", "や"] },
 ];
 
 /** 操作訓練のモード一覧（iOS Switch Control の模擬） */
@@ -488,6 +513,73 @@ export const operationPointTargets = [
 ];
 
 /** 定型句VOCAのカテゴリと定型句 */
+/**
+ * 定型句と分類の、画面に出す形（ふりがな付き）。記録（logEvent の label）と
+ * 効果測定の手順（evaluationTasks）は、phraseCategories の元の文字のまま使う。
+ */
+export const PHRASE_RUBY = {
+  もう一度: "もう一度[いちど]",
+  大丈夫です: "大丈夫[だいじょうぶ]です",
+  痛いです: "痛[いた]いです",
+  寒いです: "寒[さむ]いです",
+  暑いです: "暑[あつ]いです",
+  眠いです: "眠[ねむ]いです",
+  休みたいです: "休[やす]みたいです",
+  水がほしいです: "水[みず]がほしいです",
+  姿勢を変えてください: "姿勢[しせい]を変[か]えてください",
+  トイレに行きたいです: "トイレに行[い]きたいです",
+  吸引してください: "吸引[きゅういん]してください",
+  家族に連絡してください: "家族[かぞく]に連絡[れんらく]してください",
+  待ってください: "待[ま]ってください",
+  不安です: "不安[ふあん]です",
+  楽しいです: "楽[たの]しいです",
+  静かにしたいです: "静[しず]かにしたいです",
+  外に出たいです: "外[そと]に出[で]たいです",
+  話したいです: "話[はな]したいです",
+  基本: "基本[きほん]",
+  体調: "体調[たいちょう]",
+  介助: "介助[かいじょ]",
+  気持ち: "気持[きも]ち",
+};
+
+/**
+ * 定型句と分類の英語（表記が English のとき、画面と読み上げに使う）。
+ *
+ * 以前は英語表記でも日本語の文をそのまま英語の声に読ませていて、意味の通らない
+ * 音になっていた（2026-09-27）。記録（logEvent の label）は、ここでも元の
+ * 日本語のまま（効果測定の手順がその名前で数えるため）。
+ */
+export const PHRASE_EN = {
+  基本: "Basics",
+  体調: "How I feel",
+  介助: "Help",
+  気持ち: "Feelings",
+  はい: "Yes",
+  いいえ: "No",
+  もう一度: "Once more, please",
+  わかりません: "I don't understand",
+  ありがとう: "Thank you",
+  大丈夫です: "I'm okay",
+  痛いです: "It hurts",
+  寒いです: "I'm cold",
+  暑いです: "I'm hot",
+  眠いです: "I'm sleepy",
+  休みたいです: "I want to rest",
+  水がほしいです: "I'd like some water",
+  姿勢を変えてください: "Please change my position",
+  トイレに行きたいです: "I need the bathroom",
+  吸引してください: "Please suction me",
+  家族に連絡してください: "Please call my family",
+  ナースコール: "Call the nurse",
+  待ってください: "Please wait",
+  うれしいです: "I'm happy",
+  不安です: "I'm worried",
+  楽しいです: "I'm having fun",
+  静かにしたいです: "I'd like some quiet",
+  外に出たいです: "I want to go outside",
+  話したいです: "I want to talk",
+};
+
 export const phraseCategories = {
   基本: ["はい", "いいえ", "もう一度", "わかりません", "ありがとう", "大丈夫です"],
   体調: ["痛いです", "寒いです", "暑いです", "眠いです", "休みたいです", "水がほしいです"],

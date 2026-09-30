@@ -1,15 +1,19 @@
 // =====================================================================
-// views/letters.js — 文字学習ソフト画面
+// views/letters.js — 「文字を えらぶ」（旧 文字学習ソフト）
+//
+// 記録（logEvent の letter）と、正誤ののち次の問題へ進む流れは前のまま。
+// 見た目と言葉だけを利用者向けにした（docs/design-renewal-2026-09-25.md §3.14）。
 // =====================================================================
 
 import { letterTasks } from "../content.js";
+import { rubyToHtml } from "../i18n.js";
 
 export function initLetters(ctx) {
   const { state, elements, save, logEvent, voiceFeedback, playTone, scan } = ctx;
 
   function render() {
     const task = letterTasks[state.letterIndex % letterTasks.length];
-    elements.letterPrompt.textContent = task.prompt;
+    elements.letterPrompt.innerHTML = rubyToHtml(task.promptRuby || task.prompt);
     elements.letterGrid.innerHTML = "";
     task.options.forEach((letter) => {
       const button = document.createElement("button");
@@ -28,8 +32,8 @@ export function initLetters(ctx) {
     const correct = letter === task.answer;
     playTone(correct ? 760 : 240);
     voiceFeedback(
-      correct ? "正解です" : "違います",
-      correct ? `正解: ${letter}` : `違います: ${letter}`
+      correct ? ctx.t("learn.correct") : ctx.t("learn.tryNext"),
+      `${correct ? ctx.t("learn.correct") : ctx.t("learn.tryNext")} ${letter}`
     );
     logEvent({ type: "letter", label: letter, correct });
     state.letterIndex = (state.letterIndex + 1) % letterTasks.length;

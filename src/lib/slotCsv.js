@@ -41,6 +41,13 @@ export const SLOT_CSV_HEADERS = Object.freeze([
   "deviceBaseLatencyS",
   // その回の入力経路（direct / ios-switch-control）。他のCSVと同じ意味。
   "deviceInputMethod",
+  // 演出の強さ（src/lib/fx/）。れんしゅうの回の「ぴったり！」の星は成績に効きうる。
+  // 末尾に足す（列位置を動かさない）。演出エンジンより前の記録は空欄。
+  "fxLevel",
+  // 止めたときに画面に出ていた1コマの高さ（px、games/slotFit.js）。そくていの
+  // 回は決まった大きさ（94px、幅 620px 以下は 82px）が基本で、画面に入りきらない
+  // ときだけ小さくなる。刺激の大きさなので出す。engineVersion 5 より前は空欄。
+  "reelCellPx",
 ]);
 
 export function buildSlotCsvRows(sessions) {
@@ -86,6 +93,8 @@ export function buildSlotCsvRows(sessions) {
           device.outputLatencyS ?? "",
           device.baseLatencyS ?? "",
           device.inputMethod ?? "",
+          config.fxLevel ?? "",
+          trial.reelCellPx ?? config.reelCellPx ?? "",
         ]);
       });
     });

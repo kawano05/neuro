@@ -1,0 +1,4537 @@
+{
+ "ja": [
+  {
+   "text": "0パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "100パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "10パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "10個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "10匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "10回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "11パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "11個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "11匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "11回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "12パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "12個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "12匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "12回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "13パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "13個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "13匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "13回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "14パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "14個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "14匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "14回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "15パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "15個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "15匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "15回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "16パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "16個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "16匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "16回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "17パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "17個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "17匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "17回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "18パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "18個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "18匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "18回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "19パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "19個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "19匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "19回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "1パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "1個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "1分間、たくさん釣りましょう。",
+   "from": [
+    "howto.fishing-gonogo.5",
+    "howto.fishing.4"
+   ]
+  },
+  {
+   "text": "1匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "1回の入力で1本だけ止まります。",
+   "from": [
+    "howto.slot-l2.3"
+   ]
+  },
+  {
+   "text": "1回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "1回失敗すると終わりです。",
+   "from": [
+    "howto.endless.crane",
+    "howto.endless.fishing"
+   ]
+  },
+  {
+   "text": "1回押すと、1本だけ止まります。",
+   "from": [
+    "howto.slot-l1.3"
+   ]
+  },
+  {
+   "text": "20パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "20個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "20匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "20回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "21パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "21個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "21匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "22パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "22個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "22匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "23パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "23個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "23匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "24パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "24個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "24匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "25パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "25個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "25匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "26パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "26個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "26匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "27パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "27個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "27匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "28パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "28個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "28匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "29パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "29個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "29匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "2パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "2個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "2匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "2回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "30パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "30個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "30匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "31パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "32パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "33パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "34パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "35パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "36パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "37パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "38パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "39パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "3つ止める",
+   "from": [
+    "tile.slot-l2.title"
+   ]
+  },
+  {
+   "text": "3つ止める。",
+   "from": [
+    "tile.slot-l2.title (ready)"
+   ]
+  },
+  {
+   "text": "3パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "3個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "3匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "3回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "40パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "41パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "42パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "43パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "44パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "45パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "46パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "47パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "48パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "49パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "4パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "4個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "4匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "4回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "50パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "51パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "52パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "53パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "54パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "55パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "56パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "57パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "58パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "59パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "5パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "5個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "5匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "5回できたよ。",
+   "from": [
+    "color.voice.finish",
+    "color.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "5回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "5回打ったらおしまい。",
+   "from": [
+    "howto.baseball.3"
+   ]
+  },
+  {
+   "text": "5回打てたよ。",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "5回打てたよ！",
+   "from": [
+    "baseball.voice.finishNoHomerun",
+    "baseball.voice.finishNoHomerun + cheer"
+   ]
+  },
+  {
+   "text": "60パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "61パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "62パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "63パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "64パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "65パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "66パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "67パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "68パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "69パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "6パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "6個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "6匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "6回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "70パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "71パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "72パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "73パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "74パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "75パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "76パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "77パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "78パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "79パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "7パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "7個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "7匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "7回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "80パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "81パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "82パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "83パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "84パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "85パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "86パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "87パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "88パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "89パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "8パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "8個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "8匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "8回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "90パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "91パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "92パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "93パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "94パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "95パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "96パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "97パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "98パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "99パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "9パーセント合ったよ",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "9個とれたよ",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "9匹つれたよ",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "9回ぴったり！",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "「アタリ」の音が鳴ったらすぐ押します。",
+   "from": [
+    "howto.fishing.2"
+   ]
+  },
+  {
+   "text": "「アタリ」の音が鳴って大きな「！」が出たら、すぐ押します。",
+   "from": [
+    "howto.fishing.2.practice"
+   ]
+  },
+  {
+   "text": "「アタリ」の高い音で押すと釣れます。",
+   "from": [
+    "howto.fishing-gonogo.2"
+   ]
+  },
+  {
+   "text": "あ",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "あたった！",
+   "from": [
+    "baseball.word.bunt"
+   ]
+  },
+  {
+   "text": "あと1個",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "あと1回",
+   "from": [
+    "color.voice.progress",
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "あと2個",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "あと2回",
+   "from": [
+    "color.voice.progress",
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "あと3個",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "あと3回",
+   "from": [
+    "color.voice.progress",
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "あと4個",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "あと4回",
+   "from": [
+    "color.voice.progress",
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "あとひとつ！",
+   "from": [
+    "party.voice.oneMore"
+   ]
+  },
+  {
+   "text": "ありがとう",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "い",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "いいえ",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "いいね！",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "いす",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "いないいないばあ",
+   "from": [
+    "tile.color-legacy.title"
+   ]
+  },
+  {
+   "text": "いないいないばあ。",
+   "from": [
+    "tile.color-legacy.title (ready)"
+   ]
+  },
+  {
+   "text": "う",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "うさぎさんをつかんだ！",
+   "from": [
+    "crane.voice.grip"
+   ]
+  },
+  {
+   "text": "うれしいです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "え",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "お",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "おうかんをもらったよ！",
+   "from": [
+    "party.voice.outfit.crown",
+    "party.voice.outfit.crown + cheer"
+   ]
+  },
+  {
+   "text": "おしい！",
+   "from": [
+    "crane.voice.miss",
+    "learn.tryNext"
+   ]
+  },
+  {
+   "text": "おほしさまをつかんだ！",
+   "from": [
+    "crane.voice.grip"
+   ]
+  },
+  {
+   "text": "おわる",
+   "from": [
+    "game.exit"
+   ]
+  },
+  {
+   "text": "か",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "くつ",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "くまさんをつかんだ！",
+   "from": [
+    "crane.voice.grip"
+   ]
+  },
+  {
+   "text": "くるよ",
+   "from": [
+    "baseball.word.ready"
+   ]
+  },
+  {
+   "text": "ことばで伝える",
+   "from": [
+    "tile.voca.title"
+   ]
+  },
+  {
+   "text": "ことばで伝える。",
+   "from": [
+    "tile.voca.title (ready)"
+   ]
+  },
+  {
+   "text": "この遊びの設定",
+   "from": [
+    "game.settings"
+   ]
+  },
+  {
+   "text": "さ",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "さいこう！",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "さかなつり",
+   "from": [
+    "tile.fishing-corner.title"
+   ]
+  },
+  {
+   "text": "さかなつり。",
+   "from": [
+    "tile.fishing-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "さんかく",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "し",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "しかく",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "すごい！",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "ずっと止める",
+   "from": [
+    "tile.crane-endless.title"
+   ]
+  },
+  {
+   "text": "ずっと止める。",
+   "from": [
+    "tile.crane-endless.title (ready)"
+   ]
+  },
+  {
+   "text": "ずっと釣る",
+   "from": [
+    "tile.fishing-endless.title"
+   ]
+  },
+  {
+   "text": "ずっと釣る。",
+   "from": [
+    "tile.fishing-endless.title (ready)"
+   ]
+  },
+  {
+   "text": "せいかい！",
+   "from": [
+    "learn.correct"
+   ]
+  },
+  {
+   "text": "ぜんぶ打てた！",
+   "from": [
+    "baseball.word.done"
+   ]
+  },
+  {
+   "text": "そくてい",
+   "from": [
+    "tile.calibration.title"
+   ]
+  },
+  {
+   "text": "そくてい。",
+   "from": [
+    "tile.calibration.title (ready)"
+   ]
+  },
+  {
+   "text": "そのあと、高い音が1回鳴ります。",
+   "from": [
+    "howto.rhythm-l1.2"
+   ]
+  },
+  {
+   "text": "そのあとは、音が鳴るたびに押します。",
+   "from": [
+    "howto.calibration.2",
+    "howto.rhythm-l2.2"
+   ]
+  },
+  {
+   "text": "そら",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "た",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "つかんだけどすべっちゃった",
+   "from": [
+    "crane.voice.slip"
+   ]
+  },
+  {
+   "text": "つぎ",
+   "from": [
+    "learn.next"
+   ]
+  },
+  {
+   "text": "つぎはつれるよ",
+   "from": [
+    "fishing.voice.finishNone"
+   ]
+  },
+  {
+   "text": "つぎはとれるよ",
+   "from": [
+    "crane.voice.finishNone",
+    "crane.voice.miss"
+   ]
+  },
+  {
+   "text": "つぎもやってみよう",
+   "from": [
+    "learn.tryNext"
+   ]
+  },
+  {
+   "text": "できた！",
+   "from": [
+    "crane.voice.finish",
+    "crane.voice.finishNone",
+    "fishing.voice.finish",
+    "fishing.voice.finishNone",
+    "rhythm.voice.finish",
+    "slot.voice.finish",
+    "slot.voice.finishNone"
+   ]
+  },
+  {
+   "text": "どれかな？",
+   "from": [
+    "tile.matching.title",
+    "tile.matching.title (ready)"
+   ]
+  },
+  {
+   "text": "な",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "ながしかく",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "に",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "ぬりえ",
+   "from": [
+    "tile.coloring.title"
+   ]
+  },
+  {
+   "text": "ぬりえ。",
+   "from": [
+    "tile.coloring.title (ready)"
+   ]
+  },
+  {
+   "text": "はい",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "はじめる",
+   "from": [
+    "start.begin"
+   ]
+  },
+  {
+   "text": "はっぱ",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "ひとつ止める",
+   "from": [
+    "tile.slot-l1.title"
+   ]
+  },
+  {
+   "text": "ひとつ止める。",
+   "from": [
+    "tile.slot-l1.title (ready)"
+   ]
+  },
+  {
+   "text": "ぴったりだとホームラン！",
+   "from": [
+    "howto.baseball.3"
+   ]
+  },
+  {
+   "text": "ふうせんが5個われたよ。",
+   "from": [
+    "balloon.voice.finish",
+    "balloon.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "ふうせんわり",
+   "from": [
+    "tile.balloon.title"
+   ]
+  },
+  {
+   "text": "ふうせんわり。",
+   "from": [
+    "tile.balloon.title (ready)"
+   ]
+  },
+  {
+   "text": "ほん",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "ぼうしをもらったよ！",
+   "from": [
+    "party.voice.outfit.hat",
+    "party.voice.outfit.hat + cheer"
+   ]
+  },
+  {
+   "text": "ま",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "まる",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "み",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "みんなでおおさわぎ！",
+   "from": [
+    "party.voice.everyone"
+   ]
+  },
+  {
+   "text": "もういちど",
+   "from": [
+    "result.retry"
+   ]
+  },
+  {
+   "text": "もういちど読む",
+   "from": [
+    "learn.again"
+   ]
+  },
+  {
+   "text": "もういっかいなげるよ",
+   "from": [
+    "baseball.word.again"
+   ]
+  },
+  {
+   "text": "もう一度",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "もう一度押します。",
+   "from": [
+    "howto.crane.2"
+   ]
+  },
+  {
+   "text": "や",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "やったね！",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "やったー！",
+   "from": [
+    "balloon.voice.finish + cheer",
+    "baseball.voice.finish + cheer",
+    "baseball.voice.finishNoHomerun + cheer",
+    "color.voice.finish + cheer",
+    "coloring.voice.finish + cheer",
+    "party.voice.full + cheer",
+    "party.voice.outfit.bow + cheer",
+    "party.voice.outfit.crown + cheer",
+    "party.voice.outfit.hat + cheer"
+   ]
+  },
+  {
+   "text": "ゆき",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "り",
+   "from": [
+    "letters.option"
+   ]
+  },
+  {
+   "text": "りんご",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "わかりません",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "アタリで釣る",
+   "from": [
+    "tile.fishing.title"
+   ]
+  },
+  {
+   "text": "アタリで釣る。",
+   "from": [
+    "tile.fishing.title (ready)"
+   ]
+  },
+  {
+   "text": "アームが下りて、つかめたら景品口へ運びます。",
+   "from": [
+    "howto.crane.3"
+   ]
+  },
+  {
+   "text": "アームが横に動きます。",
+   "from": [
+    "howto.crane.1"
+   ]
+  },
+  {
+   "text": "アームを止める",
+   "from": [
+    "tile.crane.title"
+   ]
+  },
+  {
+   "text": "アームを止める。",
+   "from": [
+    "tile.crane.title (ready)"
+   ]
+  },
+  {
+   "text": "イルカができたよ。",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "イルカ！",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "カニができたよ。",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "カニ！",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "カメができたよ。",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "カメ！",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "キラキラがあふれた！",
+   "from": [
+    "party.voice.overflow"
+   ]
+  },
+  {
+   "text": "キラキラがいっぱい！",
+   "from": [
+    "party.voice.full",
+    "party.voice.full + cheer"
+   ]
+  },
+  {
+   "text": "キラキラはんぶん！",
+   "from": [
+    "party.voice.half"
+   ]
+  },
+  {
+   "text": "クジラができたよ。",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "クジラ！",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "クレーンゲーム",
+   "from": [
+    "tile.crane-corner.title"
+   ]
+  },
+  {
+   "text": "クレーンゲーム。",
+   "from": [
+    "tile.crane-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "タコができたよ。",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "タコ！",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "トイレに行きたいです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "ナースコール",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "バットのところに来たら押します。",
+   "from": [
+    "howto.baseball.2"
+   ]
+  },
+  {
+   "text": "パン",
+   "from": [
+    "matching.option"
+   ]
+  },
+  {
+   "text": "パン！",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "ヒット！",
+   "from": [
+    "baseball.word.hit"
+   ]
+  },
+  {
+   "text": "ホームランは1回！",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "ホームランは2回！",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "ホームランは3回！",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "ホームランは4回！",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "ホームランは5回！",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "ホームラン！",
+   "from": [
+    "baseball.word.homerun"
+   ]
+  },
+  {
+   "text": "ボールが転がって来ます。",
+   "from": [
+    "howto.baseball.1"
+   ]
+  },
+  {
+   "text": "リズム",
+   "from": [
+    "tile.rhythm-corner.title"
+   ]
+  },
+  {
+   "text": "リズム。",
+   "from": [
+    "tile.rhythm-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "リズム続けて",
+   "from": [
+    "tile.rhythm-l2.title"
+   ]
+  },
+  {
+   "text": "リズム続けて。",
+   "from": [
+    "tile.rhythm-l2.title (ready)"
+   ]
+  },
+  {
+   "text": "リズム練習",
+   "from": [
+    "tile.rhythm-l1.title"
+   ]
+  },
+  {
+   "text": "リズム練習。",
+   "from": [
+    "tile.rhythm-l1.title (ready)"
+   ]
+  },
+  {
+   "text": "リボンをもらったよ！",
+   "from": [
+    "party.voice.outfit.bow",
+    "party.voice.outfit.bow + cheer"
+   ]
+  },
+  {
+   "text": "上の目標の絵を見ます。",
+   "from": [
+    "howto.slot-l1.1",
+    "howto.slot-l2.1"
+   ]
+  },
+  {
+   "text": "不安です",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "介助",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
+   "text": "休みたいです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "低い音が2回鳴ります。",
+   "from": [
+    "howto.rhythm-l1.1"
+   ]
+  },
+  {
+   "text": "低い音のときは、押さずに待ちます。",
+   "from": [
+    "howto.gonogo.2"
+   ]
+  },
+  {
+   "text": "低い音は長靴です。",
+   "from": [
+    "howto.fishing-gonogo.3"
+   ]
+  },
+  {
+   "text": "体調",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
+   "text": "同じ絵が太い線の間に来たら押します。",
+   "from": [
+    "howto.slot-l1.2"
+   ]
+  },
+  {
+   "text": "吸引してください",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "基本",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
+   "text": "外に出たいです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "大丈夫です",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "姿勢を変えてください",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "学ぶ・伝える",
+   "from": [
+    "tile.learning-corner.title"
+   ]
+  },
+  {
+   "text": "学ぶ・伝える。",
+   "from": [
+    "tile.learning-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "家族に連絡してください",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "寒いです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "左のリールから順番に止めます。",
+   "from": [
+    "howto.slot-l2.2"
+   ]
+  },
+  {
+   "text": "床の光る輪の中で止めるとつかめます。",
+   "from": [
+    "howto.crane.4"
+   ]
+  },
+  {
+   "text": "待ってください",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "惜しい！",
+   "from": [
+    "crane.voice.slip"
+   ]
+  },
+  {
+   "text": "戻る",
+   "from": [
+    "home.back"
+   ]
+  },
+  {
+   "text": "押さずに待ちます。",
+   "from": [
+    "howto.fishing-gonogo.3"
+   ]
+  },
+  {
+   "text": "支援者と一緒に使う測定です。",
+   "from": [
+    "howto.calibration.3"
+   ]
+  },
+  {
+   "text": "文字をえらぶ",
+   "from": [
+    "tile.letters.title"
+   ]
+  },
+  {
+   "text": "文字をえらぶ。",
+   "from": [
+    "tile.letters.title (ready)"
+   ]
+  },
+  {
+   "text": "早く押せるとボーナスがつきます。",
+   "from": [
+    "howto.fishing-gonogo.4",
+    "howto.fishing.3"
+   ]
+  },
+  {
+   "text": "景品のところで押します。",
+   "from": [
+    "howto.crane.1"
+   ]
+  },
+  {
+   "text": "暑いです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "最初に低い音が鳴ります。",
+   "from": [
+    "howto.calibration.1",
+    "howto.rhythm-l2.1"
+   ]
+  },
+  {
+   "text": "最後まで止められたね",
+   "from": [
+    "slot.voice.finishNone"
+   ]
+  },
+  {
+   "text": "楽しいです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "次のページ",
+   "from": [
+    "home.nextPage"
+   ]
+  },
+  {
+   "text": "次は奥に動きます。",
+   "from": [
+    "howto.crane.2"
+   ]
+  },
+  {
+   "text": "気持ち",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
+   "text": "水がほしいです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "痛いです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "眠いです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "絵あわせ",
+   "from": [
+    "tile.slot-corner.title"
+   ]
+  },
+  {
+   "text": "絵あわせ。",
+   "from": [
+    "tile.slot-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "続けるほど難しくなります。",
+   "from": [
+    "howto.endless.crane",
+    "howto.endless.fishing"
+   ]
+  },
+  {
+   "text": "色がついたよ。",
+   "from": [
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "話したいです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "遊びを選ぶ",
+   "from": [
+    "result.home"
+   ]
+  },
+  {
+   "text": "野球",
+   "from": [
+    "tile.baseball.title"
+   ]
+  },
+  {
+   "text": "野球。",
+   "from": [
+    "tile.baseball.title (ready)"
+   ]
+  },
+  {
+   "text": "静かにしたいです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "音あそび",
+   "from": [
+    "tile.gonogo.title"
+   ]
+  },
+  {
+   "text": "音あそび。",
+   "from": [
+    "tile.gonogo.title (ready)"
+   ]
+  },
+  {
+   "text": "高い音に合わせて押します。",
+   "from": [
+    "howto.rhythm-l1.3"
+   ]
+  },
+  {
+   "text": "高い音のときだけ押します。",
+   "from": [
+    "howto.gonogo.1"
+   ]
+  },
+  {
+   "text": "魚が右から泳いできます。",
+   "from": [
+    "howto.fishing-gonogo.1",
+    "howto.fishing.1"
+   ]
+  },
+  {
+   "text": "魚だけ釣る",
+   "from": [
+    "tile.fishing-gonogo.title"
+   ]
+  },
+  {
+   "text": "魚だけ釣る。",
+   "from": [
+    "tile.fishing-gonogo.title (ready)"
+   ]
+  }
+ ],
+ "en": [
+  {
+   "text": "0 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "1 left",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "1 more to go.",
+   "from": [
+    "color.voice.progress",
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "1 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "10 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "100 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "11 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "12 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "13 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "14 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "15 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "16 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "17 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "18 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "19 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "2 left",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "2 more to go.",
+   "from": [
+    "color.voice.progress",
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "2 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "20 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "21 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "22 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "23 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "24 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "25 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "26 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "27 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "28 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "29 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "3 left",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "3 more to go.",
+   "from": [
+    "color.voice.progress",
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "3 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "30 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "31 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "32 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "33 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "34 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "35 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "36 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "37 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "38 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "39 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "4 left",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "4 more to go.",
+   "from": [
+    "color.voice.progress",
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "4 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "40 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "41 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "42 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "43 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "44 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "45 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "46 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "47 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "48 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "49 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "5 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "50 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "51 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "52 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "53 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "54 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "55 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "56 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "57 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "58 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "59 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "6 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "60 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "61 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "62 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "63 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "64 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "65 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "66 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "67 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "68 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "69 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "7 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "70 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "71 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "72 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "73 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "74 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "75 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "76 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "77 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "78 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "79 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "8 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "80 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "81 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "82 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "83 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "84 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "85 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "86 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "87 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "88 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "89 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "9 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "90 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "91 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "92 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "93 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "94 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "95 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "96 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "97 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "98 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "99 percent on the beat!",
+   "from": [
+    "rhythm.voice.finish"
+   ]
+  },
+  {
+   "text": "A ball comes rolling toward you.",
+   "from": [
+    "howto.baseball.1"
+   ]
+  },
+  {
+   "text": "A fish swims in from the right.",
+   "from": [
+    "howto.fishing-gonogo.1",
+    "howto.fishing.1"
+   ]
+  },
+  {
+   "text": "A low note is a boot.",
+   "from": [
+    "howto.fishing-gonogo.3"
+   ]
+  },
+  {
+   "text": "A quick press earns a bonus.",
+   "from": [
+    "howto.fishing-gonogo.4",
+    "howto.fishing.3"
+   ]
+  },
+  {
+   "text": "After that, press on every note.",
+   "from": [
+    "howto.calibration.2",
+    "howto.rhythm-l2.2"
+   ]
+  },
+  {
+   "text": "Again",
+   "from": [
+    "result.retry"
+   ]
+  },
+  {
+   "text": "All done!",
+   "from": [
+    "baseball.word.done"
+   ]
+  },
+  {
+   "text": "Amazing!",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "Awesome!",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "Back",
+   "from": [
+    "home.back"
+   ]
+  },
+  {
+   "text": "Baseball",
+   "from": [
+    "tile.baseball.title"
+   ]
+  },
+  {
+   "text": "Baseball.",
+   "from": [
+    "tile.baseball.title (ready)"
+   ]
+  },
+  {
+   "text": "Basics",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
+   "text": "Call the nurse",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Catch as many as you can in one minute.",
+   "from": [
+    "howto.fishing-gonogo.5",
+    "howto.fishing.4"
+   ]
+  },
+  {
+   "text": "Catch on the bite",
+   "from": [
+    "tile.fishing.title"
+   ]
+  },
+  {
+   "text": "Catch on the bite.",
+   "from": [
+    "tile.fishing.title (ready)"
+   ]
+  },
+  {
+   "text": "Claw machine",
+   "from": [
+    "tile.crane-corner.title"
+   ]
+  },
+  {
+   "text": "Claw machine.",
+   "from": [
+    "tile.crane-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "Colouring",
+   "from": [
+    "tile.coloring.title"
+   ]
+  },
+  {
+   "text": "Colouring.",
+   "from": [
+    "tile.coloring.title (ready)"
+   ]
+  },
+  {
+   "text": "Correct!",
+   "from": [
+    "learn.correct"
+   ]
+  },
+  {
+   "text": "Crab!",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "Dolphin!",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "Each press stops one reel.",
+   "from": [
+    "howto.slot-l1.3"
+   ]
+  },
+  {
+   "text": "Endless claw",
+   "from": [
+    "tile.crane-endless.title"
+   ]
+  },
+  {
+   "text": "Endless claw.",
+   "from": [
+    "tile.crane-endless.title (ready)"
+   ]
+  },
+  {
+   "text": "Endless fishing",
+   "from": [
+    "tile.fishing-endless.title"
+   ]
+  },
+  {
+   "text": "Endless fishing.",
+   "from": [
+    "tile.fishing-endless.title (ready)"
+   ]
+  },
+  {
+   "text": "Feelings",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
+   "text": "Finish",
+   "from": [
+    "game.exit"
+   ]
+  },
+  {
+   "text": "Fish only",
+   "from": [
+    "tile.fishing-gonogo.title"
+   ]
+  },
+  {
+   "text": "Fish only.",
+   "from": [
+    "tile.fishing-gonogo.title (ready)"
+   ]
+  },
+  {
+   "text": "Fishing",
+   "from": [
+    "tile.fishing-corner.title"
+   ]
+  },
+  {
+   "text": "Fishing.",
+   "from": [
+    "tile.fishing-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "Five hits and you are done.",
+   "from": [
+    "howto.baseball.3"
+   ]
+  },
+  {
+   "text": "Game settings",
+   "from": [
+    "game.settings"
+   ]
+  },
+  {
+   "text": "Half a jar!",
+   "from": [
+    "party.voice.half"
+   ]
+  },
+  {
+   "text": "Help",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
+   "text": "Here comes another one",
+   "from": [
+    "baseball.word.again"
+   ]
+  },
+  {
+   "text": "Here it comes...",
+   "from": [
+    "baseball.word.ready"
+   ]
+  },
+  {
+   "text": "Hit!",
+   "from": [
+    "baseball.word.hit"
+   ]
+  },
+  {
+   "text": "Home run!",
+   "from": [
+    "baseball.word.homerun"
+   ]
+  },
+  {
+   "text": "Hooray!",
+   "from": [
+    "balloon.voice.finish + cheer",
+    "baseball.voice.finish + cheer",
+    "baseball.voice.finishNoHomerun + cheer",
+    "color.voice.finish + cheer",
+    "coloring.voice.finish + cheer",
+    "party.voice.full + cheer",
+    "party.voice.outfit.bow + cheer",
+    "party.voice.outfit.crown + cheer",
+    "party.voice.outfit.hat + cheer"
+   ]
+  },
+  {
+   "text": "How I feel",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
+   "text": "I don't understand",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I need the bathroom",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I want to go outside",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I want to rest",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I want to talk",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I'd like some quiet",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I'd like some water",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I'm cold",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I'm happy",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I'm having fun",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I'm hot",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I'm okay",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I'm sleepy",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "I'm worried",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "It gets harder as you go.",
+   "from": [
+    "howto.endless.crane",
+    "howto.endless.fishing"
+   ]
+  },
+  {
+   "text": "It hurts",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "It's overflowing!",
+   "from": [
+    "party.voice.overflow"
+   ]
+  },
+  {
+   "text": "Just one more!",
+   "from": [
+    "party.voice.oneMore"
+   ]
+  },
+  {
+   "text": "Learn & tell",
+   "from": [
+    "tile.learning-corner.title"
+   ]
+  },
+  {
+   "text": "Learn & tell.",
+   "from": [
+    "tile.learning-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "Look at the target shape above.",
+   "from": [
+    "howto.slot-l1.1",
+    "howto.slot-l2.1"
+   ]
+  },
+  {
+   "text": "Low notes come first.",
+   "from": [
+    "howto.calibration.1",
+    "howto.rhythm-l2.1"
+   ]
+  },
+  {
+   "text": "Next",
+   "from": [
+    "learn.next"
+   ]
+  },
+  {
+   "text": "Next it moves back.",
+   "from": [
+    "howto.crane.2"
+   ]
+  },
+  {
+   "text": "Next page",
+   "from": [
+    "home.nextPage"
+   ]
+  },
+  {
+   "text": "Nice color!",
+   "from": [
+    "coloring.voice.progress"
+   ]
+  },
+  {
+   "text": "Nice!",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "No",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Octopus!",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "On the low note, wait without pressing.",
+   "from": [
+    "howto.gonogo.2"
+   ]
+  },
+  {
+   "text": "Once more, please",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "One input stops exactly one reel.",
+   "from": [
+    "howto.slot-l2.3"
+   ]
+  },
+  {
+   "text": "One miss ends the run.",
+   "from": [
+    "howto.endless.crane",
+    "howto.endless.fishing"
+   ]
+  },
+  {
+   "text": "Party time, everyone!",
+   "from": [
+    "party.voice.everyone"
+   ]
+  },
+  {
+   "text": "Peekaboo",
+   "from": [
+    "tile.color-legacy.title"
+   ]
+  },
+  {
+   "text": "Peekaboo.",
+   "from": [
+    "tile.color-legacy.title (ready)"
+   ]
+  },
+  {
+   "text": "Pick a game",
+   "from": [
+    "result.home"
+   ]
+  },
+  {
+   "text": "Pick a letter",
+   "from": [
+    "tile.letters.title"
+   ]
+  },
+  {
+   "text": "Pick a letter.",
+   "from": [
+    "tile.letters.title (ready)"
+   ]
+  },
+  {
+   "text": "Picture match",
+   "from": [
+    "tile.slot-corner.title"
+   ]
+  },
+  {
+   "text": "Picture match.",
+   "from": [
+    "tile.slot-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "Please call my family",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Please change my position",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Please suction me",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Please wait",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Pop the balloons",
+   "from": [
+    "tile.balloon.title"
+   ]
+  },
+  {
+   "text": "Pop the balloons.",
+   "from": [
+    "tile.balloon.title (ready)"
+   ]
+  },
+  {
+   "text": "Pop!",
+   "from": [
+    "balloon.voice.progress"
+   ]
+  },
+  {
+   "text": "Press as soon as you hear the bite and see the big “!”.",
+   "from": [
+    "howto.fishing.2.practice"
+   ]
+  },
+  {
+   "text": "Press as soon as you hear the bite.",
+   "from": [
+    "howto.fishing.2"
+   ]
+  },
+  {
+   "text": "Press on the high bite note to reel it in.",
+   "from": [
+    "howto.fishing-gonogo.2"
+   ]
+  },
+  {
+   "text": "Press once more.",
+   "from": [
+    "howto.crane.2"
+   ]
+  },
+  {
+   "text": "Press only on the high note.",
+   "from": [
+    "howto.gonogo.1"
+   ]
+  },
+  {
+   "text": "Press together with the high note.",
+   "from": [
+    "howto.rhythm-l1.3"
+   ]
+  },
+  {
+   "text": "Press when it reaches the bat.",
+   "from": [
+    "howto.baseball.2"
+   ]
+  },
+  {
+   "text": "Press when it reaches the prize.",
+   "from": [
+    "howto.crane.1"
+   ]
+  },
+  {
+   "text": "Press when the same shape is between the thick lines.",
+   "from": [
+    "howto.slot-l1.2"
+   ]
+  },
+  {
+   "text": "Rhythm",
+   "from": [
+    "tile.rhythm-corner.title"
+   ]
+  },
+  {
+   "text": "Rhythm.",
+   "from": [
+    "tile.rhythm-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "Rhythm: keep going",
+   "from": [
+    "tile.rhythm-l2.title"
+   ]
+  },
+  {
+   "text": "Rhythm: keep going.",
+   "from": [
+    "tile.rhythm-l2.title (ready)"
+   ]
+  },
+  {
+   "text": "Rhythm: practice",
+   "from": [
+    "tile.rhythm-l1.title"
+   ]
+  },
+  {
+   "text": "Rhythm: practice.",
+   "from": [
+    "tile.rhythm-l1.title (ready)"
+   ]
+  },
+  {
+   "text": "Right on 1 time!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 10 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 11 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 12 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 13 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 14 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 15 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 16 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 17 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 18 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 19 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 2 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 20 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 3 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 4 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 5 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 6 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 7 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 8 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on 9 times!",
+   "from": [
+    "slot.voice.finish"
+   ]
+  },
+  {
+   "text": "Right on time makes a home run!",
+   "from": [
+    "howto.baseball.3"
+   ]
+  },
+  {
+   "text": "Say it again",
+   "from": [
+    "learn.again"
+   ]
+  },
+  {
+   "text": "Say it with words",
+   "from": [
+    "tile.voca.title"
+   ]
+  },
+  {
+   "text": "Say it with words.",
+   "from": [
+    "tile.voca.title (ready)"
+   ]
+  },
+  {
+   "text": "So close!",
+   "from": [
+    "crane.voice.miss",
+    "crane.voice.slip",
+    "learn.tryNext"
+   ]
+  },
+  {
+   "text": "Sound game",
+   "from": [
+    "tile.gonogo.title"
+   ]
+  },
+  {
+   "text": "Sound game.",
+   "from": [
+    "tile.gonogo.title (ready)"
+   ]
+  },
+  {
+   "text": "Start",
+   "from": [
+    "start.begin"
+   ]
+  },
+  {
+   "text": "Stop inside the glowing ring on the floor to grab it.",
+   "from": [
+    "howto.crane.4"
+   ]
+  },
+  {
+   "text": "Stop one reel",
+   "from": [
+    "tile.slot-l1.title"
+   ]
+  },
+  {
+   "text": "Stop one reel.",
+   "from": [
+    "tile.slot-l1.title (ready)"
+   ]
+  },
+  {
+   "text": "Stop the claw",
+   "from": [
+    "tile.crane.title"
+   ]
+  },
+  {
+   "text": "Stop the claw.",
+   "from": [
+    "tile.crane.title (ready)"
+   ]
+  },
+  {
+   "text": "Stop the reels from left to right.",
+   "from": [
+    "howto.slot-l2.2"
+   ]
+  },
+  {
+   "text": "Stop three reels",
+   "from": [
+    "tile.slot-l2.title"
+   ]
+  },
+  {
+   "text": "Stop three reels.",
+   "from": [
+    "tile.slot-l2.title (ready)"
+   ]
+  },
+  {
+   "text": "Thank you",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "The claw comes down and carries the prize to the chute.",
+   "from": [
+    "howto.crane.3"
+   ]
+  },
+  {
+   "text": "The claw moves across.",
+   "from": [
+    "howto.crane.1"
+   ]
+  },
+  {
+   "text": "The jar is full!",
+   "from": [
+    "party.voice.full",
+    "party.voice.full + cheer"
+   ]
+  },
+  {
+   "text": "Then one high note follows.",
+   "from": [
+    "howto.rhythm-l1.2"
+   ]
+  },
+  {
+   "text": "This is a timing check to run with your supporter.",
+   "from": [
+    "howto.calibration.3"
+   ]
+  },
+  {
+   "text": "Timing check",
+   "from": [
+    "tile.calibration.title"
+   ]
+  },
+  {
+   "text": "Timing check.",
+   "from": [
+    "tile.calibration.title (ready)"
+   ]
+  },
+  {
+   "text": "Try the next one",
+   "from": [
+    "learn.tryNext"
+   ]
+  },
+  {
+   "text": "Turtle!",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "Wait without pressing.",
+   "from": [
+    "howto.fishing-gonogo.3"
+   ]
+  },
+  {
+   "text": "Well done!",
+   "from": [
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "Whale!",
+   "from": [
+    "color.voice.progress",
+    "party.voice.press"
+   ]
+  },
+  {
+   "text": "Which one?",
+   "from": [
+    "tile.matching.title",
+    "tile.matching.title (ready)"
+   ]
+  },
+  {
+   "text": "Yes",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "You caught 1 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 10 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 11 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 12 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 13 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 14 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 15 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 16 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 17 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 18 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 19 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 2 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 20 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 21 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 22 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 23 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 24 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 25 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 26 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 27 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 28 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 29 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 3 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 30 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 4 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 5 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 6 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 7 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 8 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You caught 9 fish!",
+   "from": [
+    "fishing.voice.finish"
+   ]
+  },
+  {
+   "text": "You did it 5 times!",
+   "from": [
+    "color.voice.finish",
+    "color.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "You did it!",
+   "from": [
+    "crane.voice.finish",
+    "crane.voice.finishNone",
+    "fishing.voice.finish",
+    "fishing.voice.finishNone",
+    "rhythm.voice.finish",
+    "slot.voice.finish",
+    "slot.voice.finishNone"
+   ]
+  },
+  {
+   "text": "You got a bow!",
+   "from": [
+    "party.voice.outfit.bow",
+    "party.voice.outfit.bow + cheer"
+   ]
+  },
+  {
+   "text": "You got a crown!",
+   "from": [
+    "party.voice.outfit.crown",
+    "party.voice.outfit.crown + cheer"
+   ]
+  },
+  {
+   "text": "You got a party hat!",
+   "from": [
+    "party.voice.outfit.hat",
+    "party.voice.outfit.hat + cheer"
+   ]
+  },
+  {
+   "text": "You grabbed the bear!",
+   "from": [
+    "crane.voice.grip"
+   ]
+  },
+  {
+   "text": "You grabbed the rabbit!",
+   "from": [
+    "crane.voice.grip"
+   ]
+  },
+  {
+   "text": "You grabbed the star!",
+   "from": [
+    "crane.voice.grip"
+   ]
+  },
+  {
+   "text": "You had it, but it slipped.",
+   "from": [
+    "crane.voice.slip"
+   ]
+  },
+  {
+   "text": "You hit it!",
+   "from": [
+    "baseball.word.bunt"
+   ]
+  },
+  {
+   "text": "You hit the ball five times!",
+   "from": [
+    "baseball.voice.finishNoHomerun",
+    "baseball.voice.finishNoHomerun + cheer"
+   ]
+  },
+  {
+   "text": "You hit the ball five times, with 1 home run!",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "You hit the ball five times, with 2 home runs!",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "You hit the ball five times, with 3 home runs!",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "You hit the ball five times, with 4 home runs!",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "You hit the ball five times, with 5 home runs!",
+   "from": [
+    "baseball.voice.finish",
+    "baseball.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "You made it all the way to the end!",
+   "from": [
+    "slot.voice.finishNone"
+   ]
+  },
+  {
+   "text": "You popped 5 balloons!",
+   "from": [
+    "balloon.voice.finish",
+    "balloon.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "You will hear two low notes.",
+   "from": [
+    "howto.rhythm-l1.1"
+   ]
+  },
+  {
+   "text": "You won 1 prize!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 10 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 11 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 12 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 13 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 14 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 15 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 16 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 17 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 18 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 19 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 2 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 20 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 21 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 22 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 23 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 24 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 25 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 26 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 27 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 28 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 29 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 3 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 30 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 4 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 5 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 6 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 7 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 8 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You won 9 prizes!",
+   "from": [
+    "crane.voice.finish"
+   ]
+  },
+  {
+   "text": "You'll catch one next time!",
+   "from": [
+    "fishing.voice.finishNone"
+   ]
+  },
+  {
+   "text": "You'll get it next time.",
+   "from": [
+    "crane.voice.miss"
+   ]
+  },
+  {
+   "text": "You'll win one next time!",
+   "from": [
+    "crane.voice.finishNone"
+   ]
+  },
+  {
+   "text": "Your Crab is all done!",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "Your Dolphin is all done!",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "Your Octopus is all done!",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "Your Turtle is all done!",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  },
+  {
+   "text": "Your Whale is all done!",
+   "from": [
+    "coloring.voice.finish",
+    "coloring.voice.finish + cheer"
+   ]
+  }
+ ]
+}

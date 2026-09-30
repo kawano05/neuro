@@ -6,9 +6,63 @@ import { cranePresets, slotPresets } from "../content.js";
 import { isMeasurementMode, resolveDifficultyMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
 import { evaluateReadiness } from "../readinessCheck.js";
+import { SOUND_CREDITS } from "../soundCredits.js";
+
+/**
+ * ミリ秒を「秒」で見せる（1600 → 1.6秒、220 → 0.22秒）。打ち合わせで設定の言葉を
+ * 「小学校高学年が読んで分かる」ようにと言われた（docs/design-renewal-2026-09-25.md
+ * §1.8）。「ms」はその外にある。保存する値はミリ秒のまま。
+ */
+export function formatSeconds(ms) {
+  return `${Number((ms / 1000).toFixed(2))}秒`;
+}
+
+/** 音の素材のクレジットを描く。中身は固定の表なので、字はそのまま入れる。 */
+export function renderSoundCredits(listEl, { links = true } = {}) {
+  if (!listEl) return;
+  listEl.replaceChildren(
+    ...SOUND_CREDITS.map((credit) => {
+      const item = document.createElement("li");
+      const use = document.createElement("strong");
+      use.textContent = credit.use;
+      const line = document.createElement("span");
+      line.textContent = `「${credit.title}」 ${credit.author}。${credit.changes}。 `;
+      // CC BY はライセンスの場所（URL）も示すのが条件。
+      const address = (text, href) => {
+        const node = links ? document.createElement("a") : document.createElement("span");
+        node.textContent = text;
+        if (links) {
+          node.href = href;
+          node.target = "_blank";
+          node.rel = "noopener";
+        }
+        return node;
+      };
+      item.append(
+        use,
+        line,
+        address(credit.source, credit.source),
+        document.createTextNode(" ／ "),
+        address(links ? credit.license : `${credit.license} ${credit.licenseUrl}`, credit.licenseUrl)
+      );
+      return item;
+    })
+  );
+}
 
 export function initSettings(ctx) {
   const { state, elements, save, scan, announce, logEvent, audio } = ctx;
+
+  // 印刷用の説明書（public/guide.html）へのリンクは、iPad のアプリ版では隠す。
+  // アプリの中から別の画面を開けず、開けても戻る手段が無いため。ウェブ版だけ。
+  const guidePrint = document.querySelector("#settingsGuidePrint");
+  if (guidePrint && globalThis.Capacitor?.isNativePlatform?.()) guidePrint.hidden = true;
+
+  // 音の素材のクレジット（src/lib/soundCredits.js）。アプリ版では、上の説明書と
+  // 同じ理由でリンクにしない（アドレスは字で出す）。
+  renderSoundCredits(document.querySelector("#soundCreditsList"), {
+    links: !globalThis.Capacitor?.isNativePlatform?.(),
+  });
 
   // UFOキャッチャーの難易度。設定側が null のあいだは cranePresets の値を
   // 使うので、スライダーにもその既定値を映す（games/crane.js の
@@ -19,7 +73,7 @@ export function initSettings(ctx) {
       input: elements.craneSweepMs,
       output: elements.craneSweepMsValue,
       fallback: cranePresets.sweepMs,
-      format: (value) => `${value}ms`,
+      format: formatSeconds,
     },
     {
       key: "craneToleranceR",
@@ -43,14 +97,14 @@ export function initSettings(ctx) {
       input: elements.slotCycleMs,
       output: elements.slotCycleMsValue,
       fallback: slotPresets["slot-l1"].cycleMs,
-      format: (value) => `${value}ms`,
+      format: formatSeconds,
     },
     {
       key: "slotToleranceMs",
       input: elements.slotToleranceMs,
       output: elements.slotToleranceMsValue,
       fallback: slotPresets["slot-l1"].toleranceMs,
-      format: (value) => `${value}ms`,
+      format: formatSeconds,
     },
     {
       key: "slotL1Rounds",
@@ -74,7 +128,9 @@ export function initSettings(ctx) {
   const rhythmChoices = [
     { key: "rhythmBpm", select: elements.rhythmBpm },
     { key: "targetBeats", select: elements.rhythmTargetBeats },
-  ];
+    // さかなつりの、アタリが続く長さ（空文字は既定の2秒）。
+    { key: "fishingLimitMs", select: elements.fishingLimitMs },
+  ].filter(({ select }) => select);
 
   /** 設定UIへ現在値を反映する */
   function render() {
@@ -83,7 +139,7 @@ export function initSettings(ctx) {
       select.value = settings[key] === null ? "" : String(settings[key]);
     });
     elements.scanInterval.value = settings.scanInterval;
-    elements.scanIntervalValue.value = `${settings.scanInterval}ms`;
+    elements.scanIntervalValue.value = formatSeconds(settings.scanInterval);
     difficultySliders.forEach(({ key, input, output, fallback, format }) => {
       const value = settings[key] ?? fallback;
       input.value = value;
@@ -91,9 +147,13 @@ export function initSettings(ctx) {
     });
     elements.switchControlMode.checked = settings.switchControlMode;
     elements.autoScan.checked = settings.autoScan;
+    elements.showScreenSwitch.checked = settings.showScreenSwitch;
+    if (elements.scanFeedback) elements.scanFeedback.value = settings.scanFeedback;
+    if (elements.fxLevel) elements.fxLevel.value = settings.fxLevel;
     elements.speechEnabled.checked = settings.speechEnabled;
     elements.speechVolume.value = settings.speechVolume;
     elements.speechVolumeValue.value = `${Math.round(settings.speechVolume * 100)}%`;
+    if (elements.speechVoice) elements.speechVoice.value = settings.speechVoice;
     elements.soundEnabled.checked = settings.soundEnabled;
     elements.largeText.checked = settings.largeText;
     elements.highContrast.checked = settings.highContrast;
@@ -125,9 +185,10 @@ export function initSettings(ctx) {
     setControlAvailable(elements.autoScan, !delegated);
   }
 
-  /** アプリTTSがOFFなら、効かない音量つまみを走査対象に残さない。 */
+  /** アプリTTSがOFFなら、効かない音量つまみ・声の選択を走査対象に残さない。 */
   function applySpeechSettings() {
     setControlAvailable(elements.speechVolume, Boolean(state.settings.speechEnabled));
+    setControlAvailable(elements.speechVoice, Boolean(state.settings.speechEnabled));
   }
 
   /**
@@ -153,6 +214,7 @@ export function initSettings(ctx) {
       elements.craneToleranceR,
       elements.craneTargetTrials,
       elements.craneAudioGuidance,
+      elements.fishingLimitMs,
     ];
     locked.forEach((control) => {
       if (!control) return;
@@ -181,7 +243,9 @@ export function initSettings(ctx) {
     if (!tab) return;
     tab.classList.toggle("is-measuring", measuring);
     // 印だけで意味を運ばない（色覚・読み上げ）。読み上げ名にも出す。
-    tab.setAttribute("aria-label", measuring ? "そくてい（いまは測定の回）" : "そくてい");
+    tab.setAttribute("aria-label", measuring ? "そくてい（研究・いまは測定の回）" : "そくてい（研究）");
+    // タブは「くわしい設定」の中にある。閉じていても分かるよう、見出しにも出す。
+    if (elements.settingsMoreState) elements.settingsMoreState.hidden = !measuring;
   }
 
   /**
@@ -233,6 +297,8 @@ export function initSettings(ctx) {
     document.body.classList.toggle("high-contrast", state.settings.highContrast);
     document.body.classList.toggle("researcher-mode", state.settings.researcherMode);
     document.body.classList.toggle("switch-control-mode", state.settings.switchControlMode);
+    // 利用者の画面に「おす」ボタンを出すか（theme-hakkiri.css が見る）。
+    document.body.classList.toggle("screen-switch-on", Boolean(state.settings.showScreenSwitch));
 
     // ルート（html）にも付ける。
     //
@@ -253,7 +319,7 @@ export function initSettings(ctx) {
   elements.scanInterval.addEventListener("input", (event) => {
     if (state.settings.switchControlMode) return;
     state.settings.scanInterval = Number(event.target.value);
-    elements.scanIntervalValue.value = `${state.settings.scanInterval}ms`;
+    elements.scanIntervalValue.value = formatSeconds(state.settings.scanInterval);
     save();
     if (scan.isRunning()) scan.start();
   });
@@ -262,6 +328,14 @@ export function initSettings(ctx) {
     state.settings.speechVolume = Number(event.target.value);
     elements.speechVolumeValue.value = `${Math.round(state.settings.speechVolume * 100)}%`;
     save();
+  });
+
+  // 読み上げの声を替えたら、その声で一言読む（支援者が聞いて選べるように）。
+  elements.speechVoice?.addEventListener("change", () => {
+    state.settings.speechVoice = elements.speechVoice.value === "device" ? "device" : "app";
+    save();
+    audio.prefetchVoice?.();
+    audio.speak(ctx.t("color.voice.cheer"));
   });
 
   elements.switchControlMode.addEventListener("change", () => {
@@ -281,8 +355,8 @@ export function initSettings(ctx) {
     scan.refresh();
     announce(
       delegated
-        ? "iPad Switch Controlに選択を任せます。アプリの走査と音声を停止しました"
-        : "iPad Switch Controlモードを解除しました。アプリ走査は停止したままです"
+        ? "iPad のスイッチコントロールで選ぶようにしました。このアプリの黄色い枠と読み上げは止めました"
+        : "iPad のスイッチコントロールを使うのをやめました。黄色い枠は止まったままです"
     );
   });
 
@@ -306,6 +380,7 @@ export function initSettings(ctx) {
 
   [
     ["autoScan", elements.autoScan],
+    ["showScreenSwitch", elements.showScreenSwitch],
     ["speechEnabled", elements.speechEnabled],
     ["soundEnabled", elements.soundEnabled],
     ["largeText", elements.largeText],
@@ -364,6 +439,27 @@ export function initSettings(ctx) {
     });
   });
 
+  elements.scanFeedback?.addEventListener("change", () => {
+    state.settings.scanFeedback = elements.scanFeedback.value;
+    save();
+    announce("枠が動いたときの音を変えました");
+  });
+
+  elements.fxLevel?.addEventListener("change", () => {
+    state.settings.fxLevel = elements.fxLevel.value;
+    save();
+    announce("演出の強さを変えました");
+    // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
+    ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });
+    ctx.fx?.engine.burst({
+      ...ctx.fx.engine.pointOf(elements.fxLevel),
+      count: 12,
+      shapes: ["sparkle", "star"],
+      colors: ["#FFC83D", "#4DC4FF", "#FFFFFF"],
+      gravity: 120,
+    });
+  });
+
   elements.textMode.addEventListener("change", () => {
     state.settings.textMode = elements.textMode.value;
     save();
@@ -381,7 +477,7 @@ export function initSettings(ctx) {
    * （scan.js は [data-scan] を rect.width > 0 で絞るので、hidden の中は
    * 対象外になる）——「見えていないのに走査で止まる」を作らない。
    *
-   * どのタブを開いていたかは保存しない。設定を開くたび「そうさ」から
+   * どのタブを開いていたかは保存しない。設定を開くたび「スイッチ」から
    * 始まるほうが、いちばんよく使う面が毎回すぐ出る。
    */
   function showSettingsTab(name) {

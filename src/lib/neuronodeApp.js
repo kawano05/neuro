@@ -27,6 +27,9 @@ import { resolveTextMode, translate, translateHtml } from "./i18n.js";
 import { loadState, createStateSaver, MAX_LOG_ENTRIES } from "./state.js";
 import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
+import { createFxSystem } from "./fx/index.js";
+import { SOUND_SAMPLE_URLS } from "./soundAssets.js";
+import { VOICE_PACK } from "./voiceAssets.js";
 import { createScanEngine } from "./scan.js";
 import { createInputDeduper } from "./utils.js";
 import { createGameHost } from "./games/gameHost.js";
@@ -83,6 +86,12 @@ const TAB_WORLD_VIEWS = new Set([
 // 代わりに残っているもの: 支援者の世界への入口がタップ専用であること、
 // 破壊的な操作（記録の消去・候補値の保存）が走査対象外であること。
 const USER_ACTIVITY_VIEWS = new Set(["matching", "voca", "letters"]);
+/**
+ * 利用者の世界（デザイン「はっきりした色」を当てる画面。src/theme-hakkiri.css）。
+ * 支援者の世界（評価ログ・設定）は業務画面のまま——こちらは「子ども向けに
+ * してほしい」とは言われていない（docs/design-renewal-2026-09-25.md §3.1）。
+ */
+const USER_WORLD_VIEWS = new Set(["start", "home", "game", "result", ...USER_ACTIVITY_VIEWS]);
 
 export function initNeuroNodeApp() {
   // --- 状態と要素 ---
@@ -138,8 +147,14 @@ export function initNeuroNodeApp() {
     ctx.announce("データの保存に失敗しました。端末の空き容量を確認してください。")
   );
 
-  const audio = createAudio(() => state.settings, ctx.announce);
+  const audio = createAudio(() => state.settings, ctx.announce, {
+    sampleUrls: SOUND_SAMPLE_URLS,
+    voicePack: VOICE_PACK,
+  });
   ctx.audio = audio;
+  // 演出（粒・光・弾み）。docs/overall-design-2026-09-28.md。強さは設定と端末の
+  // 「動きを減らす」で毎回決まり、そくていの回の遊びでは何も足さない。
+  ctx.fx = createFxSystem({ getSettings: () => state.settings });
   ctx.speak = audio.speak;
   ctx.voiceFeedback = audio.speakOrAnnounce;
   ctx.playTone = audio.playTone;
@@ -206,14 +221,33 @@ export function initNeuroNodeApp() {
       if (html) el.innerHTML = ctx.tHtml(key);
       else el.textContent = ctx.t(key);
     };
+    // 絵（::before）と字を flex で並べるボタンは、字を1つの箱にまとめる。
+    // ふりがなと字がじかに並ぶと1つずつが別の箱になり、gap のぶん
+    // 「遊 びを 選 ぶ」と字のあいだが空いていた。
+    const setLabel = (el, key) => {
+      if (!el) return;
+      el.innerHTML = `<span class="btn-label">${ctx.tHtml(key)}</span>`;
+    };
     set(elements.startTitle, "start.srTitle", false);
     set(elements.startStageLabel, "start.begin");
-    set(elements.startSettingsLink, "start.settings");
+    set(elements.startLead, "start.lead");
     set(elements.gameTitle, "game.srTitle", false);
     set(elements.gameExit, "game.exit");
+    set(elements.gameSettings, "game.settings");
     set(elements.resultTitle, "result.title");
-    set(elements.resultRetry, "result.retry");
-    set(elements.resultHome, "result.home");
+    setLabel(elements.resultRetry, "result.retry");
+    setLabel(elements.resultHome, "result.home");
+    // 「学ぶ・伝える」の中の画面（見出しは、ホームのタイルと同じ名前）。
+    const setIn = (selector, key) => set(document.querySelector(selector), key);
+    setIn("#matching-title", "tile.matching.title");
+    setIn("#voca-title", "tile.voca.title");
+    setIn("#letters-title", "tile.letters.title");
+    setIn("#nextMatching", "learn.next");
+    setIn("#nextLetter", "learn.next");
+    setIn("#repeatPhrase", "learn.again");
+    setIn("#matchingLabel", "learn.question");
+    setIn("#letterLabel", "learn.question");
+    setIn("#vocaLabel", "learn.saying");
   }
 
   ctx.renderAll = function renderAll() {
@@ -238,7 +272,9 @@ export function initNeuroNodeApp() {
     document.body.classList.toggle("user-activity-mode", USER_ACTIVITY_VIEWS.has(nextView));
     // スタート画面では支援者向けシェル（ヘッダ・タブバー）を CSS で隠し、
     // 「はじめる」への集中を保つ（styles.css の body.start-mode ルール参照）。
-    // 支援者のタップ導線は #startSettingsLink（せってい）が残る。
+    // 支援者の入口はホーム右上の「支援者の設定」だけにした——スタートに
+    // 「せってい」があると、先に設定しないといけないと思われた
+    // （docs/design-renewal-2026-09-25.md §1.2）。
     document.body.classList.toggle("start-mode", nextView === "start");
     // 支援者メニューでは自前走査を動かさない（scan.js の isSupporterMenu()）。
     // ドックの2つは、そこでは押しても何も起きない操作子になるので無効化する
@@ -254,7 +290,10 @@ export function initNeuroNodeApp() {
     });
     elements.homeReturn.hidden = !TAB_WORLD_VIEWS.has(nextView);
     elements.homeSupporterMenu.hidden = nextView !== "home";
-    elements.primarySwitchLabel.textContent = nextView === "home" ? "入力して決定" : "入力";
+    // 利用者の世界では「おす」だけ（出すのは showScreenSwitch がONのとき。
+    // theme-hakkiri.css）。「入力して決定」は支援者の言葉だった。
+    elements.primarySwitchLabel.textContent = USER_WORLD_VIEWS.has(nextView) ? "おす" : "入力";
+    document.body.classList.toggle("user-world", USER_WORLD_VIEWS.has(nextView));
 
     ctx.views.home.render();
     ctx.views.matching.render();
@@ -381,22 +420,30 @@ export function initNeuroNodeApp() {
       // ゲーム中の Esc はホスト側の強制終了（home へ直帰）。
       // それ以外は従来どおり走査停止（detailed-design.md §2.4）。
       if (state.currentView === "game") {
+        // 支援者が「この遊びの設定」を開いていたら、まずそれを閉じる
+        // （変えずに戻る）。遊びそのものは終わらせない。
+        if (ctx.gameHost.closeSettings()) return;
         ctx.gameHost.abort();
       } else {
         ctx.scan.stop();
       }
       return;
     }
-    // 走査中は、どのキーでもスイッチ入力として受ける。
+    // 走査中と本人の画面では、どのキーでもスイッチ入力として受ける。
     //
     // スイッチ機器はキーボードとして見えることが多く、機種によって送る
     // キーが違う（Space / Enter のほか、F1〜F12 や1文字キーを送るものも
-    // ある）。利用者ごとに機器が違う以上、こちらが受けるキーを限ると
+    // ある。NeuroNode もほかのアプリに合わせて F5・F12 などへ変えて使われる）。
+    // 利用者ごとに機器が違う以上、こちらが受けるキーを限ると
     // 「押しているのに何も起きない」が起きる——本人には理由が分からない。
     //
-    // 走査中に限る。止まっているあいだは、支援者がキーボードで通常の
-    // 操作（Tab移動・Enterでの決定）をしている場面なので、そこまで
-    // 奪うと支援者の操作が壊れる。
+    // 本人の画面（スタート・ホーム・遊び・けっか）では、走査が止まっていても
+    // 受ける。遊びの中は走査を止めているので、以前は Space / Enter しか届かず、
+    // F5 を送る機器ではパソコンのブラウザがページを読み直していた。
+    //
+    // 支援者の画面（設定・評価ログ）と、遊びの中で支援者が「この遊びの設定」を
+    // 開いているあいだは受けない。支援者がキーボードで通常の操作（Tab移動・
+    // Enterでの決定・F5での読み直し）をする場面なので、奪うと操作が壊れる。
     //
     // 修飾キー単独（Shift だけ等）と、修飾キー付き（Ctrl+R など）は除く。
     // 前者は「押した」と言えないし、後者はブラウザやOSの操作を潰す。
@@ -411,9 +458,12 @@ export function initNeuroNodeApp() {
       event.key === "ScrollLock" ||
       event.key === "Dead";
     const withModifier = event.ctrlKey || event.metaKey || event.altKey;
+    const userWorld =
+      USER_WORLD_VIEWS.has(state.currentView) && !(state.currentView === "game" && ctx.gameHost.settingsOpen());
     if (
-      ctx.scan.isRunning() &&
+      (ctx.scan.isRunning() || userWorld) &&
       !modifierOnly &&
+      event.key !== "Process" &&
       !withModifier &&
       event.key !== " " &&
       event.key !== "Enter" &&
@@ -453,6 +503,13 @@ export function initNeuroNodeApp() {
     if (document.hidden && state.currentView === "game") {
       ctx.gameHost.abort();
     }
+  });
+
+  // 音が止まったまま残っていたら、次の操作で戻す（iOS のスリープ・ほかのアプリ
+  // のあと。src/lib/audio.js の resumeIfSuspended）。戻せるのは操作の中だけなので、
+  // どの操作でも確かめる。鳴っているあいだは何もしない。
+  ["pointerup", "touchend", "keydown"].forEach((type) => {
+    document.addEventListener(type, () => audio.resumeIfSuspended(), { capture: true, passive: true });
   });
 
   window.addEventListener("resize", () => ctx.scan.refresh());

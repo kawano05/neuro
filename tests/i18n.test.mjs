@@ -19,6 +19,9 @@ import {
   speechLangFor,
   translate,
   translateHtml,
+  joinSpeech,
+  speechLangForText,
+  toSpeechText,
 } from "../src/lib/i18n.js";
 import {
   activityTiles,
@@ -190,6 +193,50 @@ test("shows the key itself when a string is missing", () => {
   assert.equal(translate("no.such.key", "kana"), "no.such.key");
   // 表記だけ欠けている場合は既定へ落ちる（キーそのものよりは読める）。
   assert.equal(translate("scale.early", "zz"), "はやい");
+});
+
+test("speech drops the spaces between words and reads counters right", () => {
+  // 画面は分かち書き（子どもが読みやすい）だが、声にそのまま渡すと空白のたびに
+  // 切れて、たどたどしく聞こえる。助数詞はかなのままだと「1かい」を
+  // 「いちかい」と読むので、漢字へ戻す（2026-09-27）。
+  assert.equal(toSpeechText("パン！ あと 1こ", "ja-JP"), "パン！あと1個");
+  assert.equal(toSpeechText("できた！ 3ひき つれたよ。あわせて 42センチ", "ja-JP"), "できた！3匹つれたよ。あわせて42センチ");
+  assert.equal(toSpeechText("ホームランは 1かい！", "ja-JP"), "ホームランは1回！");
+  assert.equal(toSpeechText("次は 2ばんめ", "ja-JP"), "次は2番目");
+  assert.equal(toSpeechText("くるよ…", "ja-JP"), "くるよ");
+  // 英字の前後の空白は残す（「Go せいこう」は2語のまま）。
+  assert.equal(toSpeechText("Go せいこう", "ja-JP"), "Go せいこう");
+  // 助数詞の後ろにかなが続くときは、ことばの一部かもしれないので触らない。
+  assert.equal(toSpeechText("3こども", "ja-JP"), "3こども");
+  // 英語は空白をまとめるだけ。
+  assert.equal(toSpeechText("  Pop!   3 left ", "en-US"), "Pop! 3 left");
+  // 画面で使う translate の結果そのものは変えない（分かち書きのまま）。
+  assert.equal(translate("balloon.voice.progress", "ruby", { n: 1 }), "パン！ あと 1こ");
+});
+
+test("joined speech keeps sentences apart", () => {
+  // 題名と1行目のあいだに句点が無いと、空白を外したときに1語のようにつながる。
+  assert.equal(joinSpeech(["アームを 止める", "アームが 横に 動きます。"], "ruby"), "アームを 止める。アームが 横に 動きます。");
+  assert.equal(joinSpeech(["やったー！", "できた！"], "ruby"), "やったー！できた！");
+  assert.equal(joinSpeech(["Stop the claw", "The claw moves across."], "en"), "Stop the claw. The claw moves across.");
+  assert.equal(joinSpeech(["", null, "Hi!"], "en"), "Hi!");
+});
+
+test("english picks singular or plural from the number", () => {
+  // 「1 prizes」「1 home runs」と読ませない。
+  assert.equal(translate("crane.voice.finish", "en", { n: 1 }), "You did it! You won 1 prize!");
+  assert.equal(translate("crane.voice.finish", "en", { n: 3 }), "You did it! You won 3 prizes!");
+  assert.equal(translate("baseball.voice.finish", "en", { h: 1 }), "You hit the ball five times, with 1 home run!");
+  assert.equal(translate("result.baseball.summary", "en", { h: 2, k: 1 }), "2 home runs, 1 hit");
+  // 日本語は数で言い方が変わらないので、同じ記法を使っていない。
+  assert.equal(translate("crane.voice.finish", "ruby", { n: 1 }), "できた！ 1こ とれたよ");
+});
+
+test("japanese text is spoken with a japanese voice even in english mode", () => {
+  // 英語の声に日本語を読ませると、意味の通らない音になる。
+  assert.equal(speechLangForText("痛いです", "en"), "ja-JP");
+  assert.equal(speechLangForText("It hurts", "en"), "en-US");
+  assert.equal(speechLangForText("It hurts", "ruby"), "ja-JP");
 });
 
 test("speaks in the language the text is written in", () => {

@@ -25,16 +25,26 @@ import { fileURLToPath } from "node:url";
 import { PRIZE_ART } from "../src/lib/games/craneArt.js";
 import {
   colorLegacyPreset,
+  isPreviewBuild,
+  storageKey,
   cranePresets,
   cranePrizes,
   fishingPresets,
   fishingSpecies,
   gameTiles,
+  PHRASE_EN,
+  phraseCategories,
   rhythmPresets,
   slotPresets,
 } from "../src/lib/content.js";
+import { SOUND_CREDITS } from "../src/lib/soundCredits.js";
+import { readdirSync, readFileSync } from "node:fs";
 import { gameCreators, gameModules } from "../src/lib/games/registry.js";
 import { slotSymbolStripUrl } from "../src/lib/games/slotArt.js";
+import { coloringMarkup } from "../src/lib/games/coloring.js";
+import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
+import { POP_ANIMALS } from "../src/lib/art/hakkiriArt.js";
+import { SLOT_ENGINE_VERSION } from "../src/lib/games/slotJudge.js";
 
 class MemoryStorage {
   constructor() {
@@ -153,6 +163,107 @@ test("Switch Control mode owns shell scanning and speech volume stays in range",
   assert.equal(invalid.autoScan, true);
 });
 
+test("only a preview build moves to its own storage key", () => {
+  // プレビュー版（本番サイトの /preview/。VITE_PREVIEW=1 でビルド）は保存キーを
+  // 分けて、同じオリジンの本番と記録を混ぜない（src/lib/content.js）。
+  // 逆に、ふつうのビルドがプレビューのキーを使うと、端末に残っている本番の
+  // 記録がまるごと見えなくなる。テスト（Node）とふつうのビルドは本番のキー。
+  assert.equal(isPreviewBuild, false);
+  assert.equal(storageKey, "neuronode-prototype-state-v4");
+});
+
+test("the redesign's settings survive a reload and fall back on unknown values", () => {
+  // デザイン改修で足した設定（docs/design-renewal-2026-09-25.md）。sanitize で
+  // 落ちると、支援者が選んだ音や画面のボタンが再読込のたびに既定へ戻る。
+  const defaults = sanitizeState({}).settings;
+  assert.equal(defaults.showScreenSwitch, false, "画面の「おす」ボタンは既定で出さない");
+  // 枠が動いたときの音は、既定では鳴らさない（今までと同じ）。選べば残り、知らない値は既定へ。
+  assert.equal(defaults.scanFeedback, "none");
+  assert.equal(sanitizeState({ settings: { scanFeedback: "speak" } }).settings.scanFeedback, "speak");
+  assert.equal(sanitizeState({ settings: { scanFeedback: "beep" } }).settings.scanFeedback, "none");
+  // はじめの遊びは、遊びごとに見え方と音を持つ。既定の音に「びっくりする音」は使わない
+  // （強すぎる音は発作につながりうる、と言われている）。
+  assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "baseball", "color-legacy", "coloring"]);
+  // ボールを打つ遊びは、背景の代わりにボールの速さを持つ（遊びごとに項目が違う）。
+  assert.deepEqual(defaults.playPrefs.baseball, { speed: "normal", sound: "bat", cheer: "both" });
+  Object.values(defaults.playPrefs).forEach((prefs) => {
+    assert.notEqual(prefs.sound, "boom");
+    // 打ち合わせで「笑い声があるとすごくいい」と言われた。既定で拍手と笑い声。
+    assert.equal(prefs.cheer, "both");
+  });
+  // 押すと 出てくる の背景は海が既定。「黒い画面から絵が出る」形（暗い）も選べるまま残す
+  // （見えにくさのある子には、黒い地のほうが絵を見つけやすいことがある）。海はこの遊びだけ。
+  assert.equal(defaults.playPrefs["color-legacy"].background, "sea", "海の中で動物が出てくる");
+  assert.equal(
+    sanitizeState({ settings: { playPrefs: { "color-legacy": { background: "dark" } } } }).settings.playPrefs["color-legacy"].background,
+    "dark"
+  );
+  assert.equal(
+    sanitizeState({ settings: { playPrefs: { balloon: { background: "sea" } } } }).settings.playPrefs.balloon.background,
+    "light",
+    "海は押すと 出てくる だけ"
+  );
+  // おおさわぎの、その日にいっぱいにしたびんの数と服。知らない服・壊れた日付は捨てる。
+  // 記録を消しても残る（研究の記録ではない）。
+  assert.deepEqual(sanitizeState({}).party, { day: "", jars: 0, outfits: [] });
+  assert.deepEqual(
+    sanitizeState({ party: { day: "2026-09-29", jars: 2.4, outfits: ["crown", "cape", "hat", "hat"] } }).party,
+    { day: "2026-09-29", jars: 2, outfits: ["hat", "crown"] }
+  );
+  assert.deepEqual(sanitizeState({ party: { day: "yesterday", jars: 9, outfits: "hat" } }).party, { day: "", jars: 0, outfits: [] });
+
+  const chosen = sanitizeState({
+    settings: {
+      showScreenSwitch: true,
+      playPrefs: {
+        "color-legacy": { background: "light", sound: "creature", cheer: "laugh" },
+        balloon: { background: "dark", sound: "boom", cheer: "none" },
+      },
+    },
+  }).settings;
+  assert.equal(chosen.showScreenSwitch, true);
+  assert.deepEqual(chosen.playPrefs["color-legacy"], { background: "light", sound: "creature", cheer: "laugh" });
+  assert.deepEqual(chosen.playPrefs.balloon, { background: "dark", sound: "boom", cheer: "none" });
+
+  // 2巡目の保存（おいわいが あり／なし の2択だった）は、ありを今の既定へ、なしを「なし」へ。
+  const older = sanitizeState({
+    settings: {
+      playPrefs: {
+        "color-legacy": { background: "dark", sound: "pop", cheer: true },
+        balloon: { background: "light", sound: "pop", cheer: false },
+      },
+    },
+  }).settings;
+  assert.equal(older.playPrefs["color-legacy"].cheer, "both");
+  assert.equal(older.playPrefs.balloon.cheer, "none");
+
+  // 生きものの絵が出ない遊び（ふうせん）では、生きものの声は選べない。
+  const noCreature = sanitizeState({
+    settings: { playPrefs: { balloon: { background: "light", sound: "creature", cheer: "both" } } },
+  }).settings;
+  assert.equal(noCreature.playPrefs.balloon.sound, defaults.playPrefs.balloon.sound);
+  // 保存に無い遊びは既定のまま（新しく足した遊びも、古い保存で壊れない）。
+  assert.deepEqual(chosen.playPrefs.coloring, defaults.playPrefs.coloring);
+
+  const unknown = sanitizeState({
+    settings: {
+      showScreenSwitch: "yes",
+      playPrefs: {
+        "color-legacy": { background: "pink", sound: "siren", cheer: 1 },
+        someOtherGame: { background: "dark", sound: "pop", cheer: false },
+      },
+    },
+  }).settings;
+  assert.equal(unknown.showScreenSwitch, false);
+  assert.deepEqual(unknown.playPrefs["color-legacy"], defaults.playPrefs["color-legacy"]);
+  assert.ok(!("someOtherGame" in unknown.playPrefs), "知らない遊びの設定は持ち込まない");
+
+  // 既定値は呼び出しごとに別の物（片方を書き換えても、もう片方に波及しない）。
+  const first = sanitizeState({}).settings;
+  first.playPrefs.balloon.sound = "none";
+  assert.equal(sanitizeState({}).settings.playPrefs.balloon.sound, defaults.playPrefs.balloon.sound);
+});
+
 test("sanitizeState keeps scan trials whose tolerance differs from the session default", () => {
   const base = {
     sessionId: "assist-1",
@@ -214,6 +325,29 @@ test("sanitizeState keeps scan trials whose tolerance differs from the session d
 
 // 画像素材の欠落は画面上で「絵が出ない」だけになり、ビルドも通ってしまう。
 // content.js の asset 名と実ファイルの対応をここで固定しておく。
+test("every press of the colouring game colours something you can see", () => {
+  // ぬりえは「押せば必ず何かが起きる」遊び。部品の並び順で機械的に分けていた
+  // ころ、イルカの4回目は口の線だけで、黒い線が紺に変わるだけだった
+  // （2026-09-27）。どの動物のどの回にも、白でも黒に近い色でもない塗りか、
+  // 色のある線が1つは入っていること。
+  const visible = (part) => {
+    const fill = (part.match(/fill="([^"]+)"/) || [])[1] || "none";
+    const stroke = (part.match(/stroke="([^"]+)"/) || [])[1] || "";
+    const dark = (color) => /^#(10222E|1A1A1A|000000)$/i.test(color);
+    if (fill !== "none" && !/^#FFFFFF$/i.test(fill)) return true;
+    return fill === "none" && stroke && !dark(stroke);
+  };
+  POP_ANIMALS.forEach((animal) => {
+    const markup = coloringMarkup(animal);
+    const parts = markup.match(/<(path|circle|ellipse|rect)\b[^>]*>/g) || [];
+    for (let area = 0; area < BEGINNER_TARGET_PRESSES; area += 1) {
+      const inArea = parts.filter((part) => part.includes(`data-part="${area}"`));
+      assert.ok(inArea.length > 0, `${animal.id}: area ${area} is empty`);
+      assert.ok(inArea.some(visible), `${animal.id}: area ${area} changes nothing you can see`);
+    }
+  });
+});
+
 test("game art referenced by content.js exists on disk", () => {
   const assetPath = (relative) =>
     fileURLToPath(new URL(`../src/assets/${relative}`, import.meta.url));
@@ -885,9 +1019,16 @@ test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
     "deviceOutputLatencyS",
     "deviceBaseLatencyS",
     "deviceInputMethod",
+    // 演出の強さ（2026-09-28、src/lib/fx/）。いちばん後ろに足す。
+    "fxLevel",
+    // 画面に出した1コマの高さ（2026-09-28、games/slotFit.js）。その後ろ。
+    "reelCellPx",
   ]);
-  assert.equal(rows[0].length, 31);
-  assert.equal(rows[1].length, 31);
+  assert.equal(rows[0].length, 33);
+  assert.equal(rows[1].length, 33);
+  // 演出の強さ・1コマの高さを持たない古い記録は空欄（分からないことを空欄で表す）。
+  assert.equal(rows[1].at(-2), "");
+  assert.equal(rows[1].at(-1), "");
   assert.equal(rows[1][22], JSON.stringify(["circle", "fish", "star", "flower", "bird", "square"]));
   // 遅延を持たない端末の記録は空欄（0にしない——測っていないことと、
   // 遅延が0だったことは違う）。
@@ -942,8 +1083,9 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // 既存18列 ＋ audioGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness
   // ＋ endless ＋ sweepMs。
   // ＋ endless ＋ sweepMs ＋ endlessProtocolVersion ＋ endReason。
-  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 5);
-  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 5);
+  // ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
+  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 6);
+  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 6);
   assert.equal(scanRows[0][17], "judgment");
   assert.equal(scanRows[1][17], "grip");
   assert.equal(scanRows[0][18], "audioGuidance");
@@ -974,9 +1116,12 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、toleranceR
   // だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
   assert.equal(scanRows[0][29], "sweepMs");
-  assert.equal(scanRows[0].at(-1), "endReason");
+  assert.equal(scanRows[0].at(-2), "endReason");
+  assert.equal(scanRows[0].at(-1), "fxLevel");
   assert.equal(scanRows[1][29], "");
   // 終了理由を持たない回は空欄（「分からない」と「予定どおり」は違う）。
+  assert.equal(scanRows[1].at(-2), "");
+  // 演出の強さを持たない古い記録も空欄。
   assert.equal(scanRows[1].at(-1), "");
 
   const rtRows = buildTaskCsvRows(
@@ -1006,8 +1151,9 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // 同じ2列を、既存列の**うしろ**に足す。
   // ＋ difficultyMode ＋ readiness ＋ endless ＋ limitMs
   //   ＋ endlessProtocolVersion ＋ endReason。
-  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 6);
-  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 6);
+  //   ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 7);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 7);
   assert.equal(rtRows[0][13], "excluded");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 2], "deviceUserAgent");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceInputMethod");
@@ -1016,7 +1162,8 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 2], "endless");
   // 試行ごとの受付時間。エンドレスでは試行ごとに短くなる。
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 3], "limitMs");
-  assert.equal(rtRows[0].at(-1), "endReason");
+  assert.equal(rtRows[0].at(-2), "endReason");
+  assert.equal(rtRows[0].at(-1), "fxLevel");
   // 列を持たない古い記録は practice / n/a / false に倒す（scan と同じ既定）。
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS], "practice");
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 1], "n/a");
@@ -1266,7 +1413,7 @@ test("bumping the slot engine version keeps old runs instead of deleting them", 
     summary: { hits: 1 },
   });
 
-  const restored = sanitizeState({ sessions: [run("cur", 1), run("old", 0)] }).sessions;
+  const restored = sanitizeState({ sessions: [run("cur", SLOT_ENGINE_VERSION), run("old", 0)] }).sessions;
   assert.equal(restored.length, 2, "版が違うだけの回を消してはいけない");
   const legacy = restored.find((session) => session.sessionId === "old");
   assert.equal(legacy.legacyVersion, true, "いまの版で検証していないことを記録に持たせる");
@@ -1813,7 +1960,8 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
   // 途中に挿すと、列位置で読んでいる解析側が黙って壊れる。
   // 既存18列 ＋ visualGuidance ＋ difficultyMode ＋ 端末7列 ＋ readiness。
   // 端末列は 2026-08-29 に deviceInputMethod を末尾へ足して7つになった。
-  assert.equal(rows[0].length, 20 + 7 + 1);
+  // ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
+  assert.equal(rows[0].length, 20 + 7 + 2);
   assert.equal(rows[0][16], "judgment");
   assert.equal(rows[0][17], "excluded");
   assert.equal(rows[0][18], "visualGuidance");
@@ -1827,10 +1975,12 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
 
   // 末尾に成立確認の状態（src/lib/readinessCheck.js）。この列が無いと、
   // 成績の低い回について「そもそも課題が成立していたのか」を後から分けられない。
-  assert.equal(rows[0].at(-1), "measurementReadiness");
+  assert.equal(rows[0].at(-2), "measurementReadiness");
+  assert.equal(rows[0].at(-1), "fxLevel");
   // 列を持たない古い記録は n/a。met と復元してしまうと、確認を経た回と
   // 区別できなくなる。
-  assert.equal(rows[1].at(-1), "n/a");
+  assert.equal(rows[1].at(-2), "n/a");
+  assert.equal(rows[1].at(-1), "");
 });
 
 test("the rhythm CSV carries the readiness state of a measurement run", () => {
@@ -1860,7 +2010,88 @@ test("the rhythm CSV carries the readiness state of a measurement run", () => {
   ]);
   // 成立確認を通さずに測った回。測定は止めない代わりに、必ずそう書き出す
   // ——保存されているだけで書き出されない値は、実質「記録していない」のと同じ。
-  assert.equal(rows[1].at(-1), "overridden");
+  assert.equal(rows[1].at(-2), "overridden");
+});
+
+test("the effect level survives config -> sanitize -> CSV for every timing game", () => {
+  // 演出の強さ（src/lib/fx/）は、れんしゅうの回の成績に効きうる測定の条件。
+  // 残したつもりで sanitize が落とすと、再読み込みしただけで消える（このリポジトリで
+  // 何度も踏んだ形）。3経路すべてを通ることを固定する。
+  const sanitized = sanitizeState({
+    sessions: [
+      {
+        sessionId: "fx-rt",
+        taskType: "rt",
+        gameId: "fishing",
+        startedAtIso: "2026-09-28T00:00:00.000Z",
+        aborted: false,
+        finished: true,
+        device: {},
+        config: { targetTrials: 1, limitMs: 2000, difficultyMode: "practice", fxLevel: "big" },
+        trials: [{ index: 0, kind: "real", foreperiodMs: 1500, cueMs: 1800, inputMs: 2100, reactionTimeMs: 300, judgment: "hit", excluded: false }],
+      },
+      {
+        sessionId: "fx-unknown",
+        taskType: "rt",
+        gameId: "fishing",
+        startedAtIso: "2026-09-28T00:00:00.000Z",
+        aborted: false,
+        finished: true,
+        device: {},
+        config: { targetTrials: 1, limitMs: 2000, fxLevel: "blinding" },
+        trials: [],
+      },
+    ],
+  });
+  const kept = sanitized.sessions.find((session) => session.sessionId === "fx-rt");
+  assert.equal(kept.config.fxLevel, "big");
+  const unknown = sanitized.sessions.find((session) => session.sessionId === "fx-unknown");
+  assert.equal(unknown.config.fxLevel, null, "知らない値は null（分からない）");
+  const rows = buildTaskCsvRows([kept], "rt");
+  assert.equal(rows[0].at(-1), "fxLevel");
+  assert.equal(rows[1].at(-1), "big");
+  const ledger = buildSessionLedgerRows([kept]);
+  assert.equal(ledger[0].at(-1), "fxLevel");
+  assert.equal(ledger[1].at(-1), "big");
+  // 設定そのものも保存をまたいで残り、知らない値は既定（ふつう）へ戻る。
+  assert.equal(sanitizeState({ settings: { fxLevel: "subtle" } }).settings.fxLevel, "subtle");
+  assert.equal(sanitizeState({ settings: { fxLevel: "strobe" } }).settings.fxLevel, "normal");
+});
+
+test("the phrase board has English for every phrase and group", () => {
+  // 英語表記のとき、日本語の文を英語の声に読ませない（views/voca.js）。
+  const japanese = /[ぁ-んァ-ヶ一-龠]/;
+  const missing = [];
+  Object.entries(phraseCategories).forEach(([category, phrases]) => {
+    [category, ...phrases].forEach((text) => {
+      const en = PHRASE_EN[text];
+      if (typeof en !== "string" || !en.trim() || japanese.test(en)) missing.push(text);
+    });
+  });
+  assert.deepEqual(missing, [], `英語の無い定型句: ${missing.join(", ")}`);
+});
+
+test("every recorded sound has a credit, and every credit is complete", () => {
+  // CC BY の素材は、作者・出典・ライセンスをアプリの中に出すのが使う条件
+  // （src/lib/soundCredits.js、設定「見え方・音」）。
+  SOUND_CREDITS.forEach((credit) => {
+    ["use", "title", "author", "source", "license", "licenseUrl", "changes"].forEach((field) => {
+      assert.ok(typeof credit[field] === "string" && credit[field].trim(), `${credit.title}: ${field} が空`);
+    });
+    assert.match(credit.source, /^https:\/\//);
+    // 使ってよいと確かめたライセンスだけ（公開のリポジトリに置ける・再配布を禁じない）。
+    // CC のほかは、読み上げの声の2つ（VOICEVOX:四国めたん、Kokoro。docs §3.20）。
+    assert.match(
+      credit.licenseUrl,
+      /^https:\/\/(creativecommons\.org\/|zunko\.jp\/con_ongen_kiyaku\.html$|www\.apache\.org\/licenses\/LICENSE-2\.0$)/
+    );
+  });
+  // 置いてある録音は、どれも README の表に載っている（出典が追える）。
+  const dir = fileURLToPath(new URL("../src/assets/sounds/", import.meta.url));
+  const readme = readFileSync(`${dir}README.md`, "utf8");
+  const files = readdirSync(dir).filter((file) => /\.(mp3|m4a|aac|wav|ogg)$/.test(file));
+  assert.ok(files.length > 0, "録音が1つも無い");
+  files.forEach((file) => assert.ok(readme.includes(file), `${file} が README の表に無い`));
 });
 
 for (const { name, fn } of tests) {

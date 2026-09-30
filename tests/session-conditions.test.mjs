@@ -74,6 +74,15 @@ test("a fishing session lists no condition, because its trial count is not one",
   assert.equal(describeSessionConditions(session), describeSessionConditions(another));
 });
 
+test("a fishing session names the bite length only when a supporter changed it", () => {
+  // 練習の回で「アタリが続く長さ」を変えた回は、別の条件として束ねる（推移が混ざらない）。
+  const changed = { taskType: "rt", gameId: "fishing", config: { targetTrials: 12, limitMs: 3000 } };
+  assert.equal(describeSessionConditions(changed), "アタリ 3000ms");
+  // 既定（2000ms）の回は、これまでどおり何も出さない。
+  const standard = { taskType: "rt", gameId: "fishing-gonogo", config: { targetTrials: 12, limitMs: 2000 } };
+  assert.equal(describeSessionConditions(standard), "");
+});
+
 test("a session without a config says nothing rather than guessing", () => {
   assert.equal(describeSessionConditions(undefined), "");
   assert.equal(describeSessionConditions({ taskType: "scan" }), "");

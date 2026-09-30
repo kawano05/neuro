@@ -37,381 +37,29 @@
 // =====================================================================
 
 import { findGameModule } from "./registry.js";
-import { displayOffsetMs } from "./rhythm.js";
-import { PRIZE_ART } from "./craneArt.js";
-import { slotSymbolHtml } from "./slotArt.js";
 import { MAX_SESSIONS } from "../state.js";
-import { gameHowTo, stageColors } from "../content.js";
+import { gameHowTo } from "../content.js";
+import { entryFor, joinSpeech, resolveTextMode } from "../i18n.js";
+import { isMeasurementMode } from "../difficultyMode.js";
+
+/** けっかの星が飛び込むときの音（1つ目から順に上がる。G5・B5・D6・G6）。 */
+const RESULT_STAR_NOTES = [783.99, 987.77, 1174.66, 1567.98];
+import { SCENE_ART, artSvg } from "../art/hakkiriArt.js";
+// けっかの画面の組み立て（遊びごとの renderer と、一言と星）は results.js。
+import {
+  candidateBaselineMsFromSummary,
+  formatSignedMs,
+  personalBest,
+  renderPraise,
+  resultRenderers,
+  resultScore,
+} from "./results.js";
+
+import { tileThemeFor } from "../homeTheme.js";
+import { createGameSettings } from "./gameSettings.js";
 import { resolveReadinessState } from "../readinessCheck.js";
-
-/** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
-function formatSignedMs(value) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "--";
-  const rounded = Math.round(value);
-  return `${rounded > 0 ? "+" : ""}${rounded}ms`;
-}
-
-/**
- * P4-3（detailed-design.md §8.2）: キャリブレーション結果から候補となる
- * baselineOffsetMs（有効試行 hit の生オフセットの中央値、四捨五入）を取り出す。
- * summary が無い、または medianRawOffsetMs が数値でない（hit が0件）場合は null。
- */
-function candidateBaselineMsFromSummary(summary) {
-  if (!summary || typeof summary.medianRawOffsetMs !== "number") return null;
-  return Math.round(summary.medianRawOffsetMs);
-}
-
-/** オフセットの符号を「はやめ/おそめ」に言い換える（detailed-design.md §2.5・§5.2規則4）。 */
-function offsetDirectionLabel(value, t) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "";
-  if (value < 0) return t("result.early");
-  if (value > 0) return t("result.late");
-  return t("result.exact");
-}
-
-/**
- * その回のずれを、1枚の帯にまとめて描く（事後のKR）。
- *
- * 通常練習は settings.visualGuidance 既定ONでノートレーンを出し、measure /
- * calibration は強制OFFで未来ノートなしの計器盤を出す。ただし、
- * **終わったあとのまとめはどちらの版面でも出す**。理由は2つ。
- *
- *  1. 測定として安全。セッションはもう終わっているので、ここで何を見せても
- *     その回の入力は変わらない。毎試行のKRが問題になるのは、次の試行を
- *     補正させてしまうからで、事後のまとめにはその経路が無い。
- *     運動学習の側から見ても、毎試行より要約のほうが望ましいとされる
- *     （guidance hypothesis）。
- *  2. これが無いと、予告なし計器盤で遊んだ回は「たっせいりつ 70%」以外に
- *     何も残らない。研究の中核である入力時刻のずれを、当のアプリが一度も
- *     見せないことになる。
- *
- * 位置は判定窓（±effectiveWindowMs）を幅いっぱいに写したもので、両版面の
- * 事後目盛りと同じ読み方。値は displayOffsetMs（基準補正後）を使う——記録の
- * rawOffsetMs とは別物であることを、見出しでも書き分けている。
- */
-function renderOffsetSpread(trials, config, t) {
-  const windowMs = typeof config?.effectiveWindowMs === "number" ? config.effectiveWindowMs : 0;
-  if (!windowMs || !Array.isArray(trials)) return "";
-  const offsets = trials
-    .filter((trial) => !trial.excluded && trial.judgment === "hit")
-    .map((trial) => displayOffsetMs(trial.rawOffsetMs, trial.appliedBaselineMs))
-    .filter((value) => typeof value === "number");
-  if (!offsets.length) return "";
-
-  const ratio = (value) => ((Math.max(-1, Math.min(1, value / windowMs)) + 1) / 2) * 100;
-  const marks = offsets
-    .map((value) => {
-      const tone = value < -30 ? "is-early" : value > 30 ? "is-late" : "is-exact";
-      return `<span class="spread-mark ${tone}" style="left:${ratio(value).toFixed(2)}%"></span>`;
-    })
-    .join("");
-  const mean = offsets.reduce((sum, value) => sum + value, 0) / offsets.length;
-
-  return `
-    <div class="offset-spread">
-      <span class="metric-label">${t("result.spread", { n: offsets.length })}</span>
-      <div class="spread-track">
-        <span class="spread-centre"></span>
-        ${marks}
-        <span class="spread-mean" style="left:${ratio(mean).toFixed(2)}%"></span>
-      </div>
-      <div class="spread-legend">
-        <span>${t("scale.early")}</span>
-        <span>${t("scale.onTime")}</span>
-        <span>${t("scale.late")}</span>
-      </div>
-    </div>
-  `;
-}
-
-/** 同期課題のリザルト。 */
-function renderSmsResult(summary, context = {}) {
-  const t = context.t;
-  const totalGoBeats = summary.hits + summary.misses;
-  const hitRatePercent = totalGoBeats ? Math.round((summary.hits / totalGoBeats) * 100) : 0;
-  const sdLabel = typeof summary.sdRawOffsetMs === "number" ? `${Math.round(summary.sdRawOffsetMs)}ms` : "--";
-  return `
-    ${renderOffsetSpread(context.trials, context.config, t)}
-    <div class="summary-grid">
-      <div class="summary-tile">
-        <span class="metric-label">${t("result.hitRate")}</span>
-        <strong>${hitRatePercent}% <small>(${summary.hits}/${totalGoBeats})</small></strong>
-      </div>
-      <div class="summary-tile">
-        <!--
-          この数字は生値（rawOffsetMs）の平均で、上の帯は基準補正後の位置。
-          基準オフセットが 0 でない利用者では両者がずれるので、見出しで
-          どちらの量かを書き分ける。同じ「オフセット」で通すと、画面の帯と
-          この数字とCSVが食い違って見える。
-        -->
-        <span class="metric-label">${t("result.meanOffset")}</span>
-        <strong>${formatSignedMs(summary.meanRawOffsetMs)}</strong>
-        <p>${offsetDirectionLabel(summary.meanRawOffsetMs, t)}</p>
-      </div>
-      <div class="summary-tile">
-        <span class="metric-label">${t("result.sd")}</span>
-        <strong>${sdLabel}</strong>
-      </div>
-      <div class="summary-tile">
-        <span class="metric-label">${t("result.extras")}</span>
-        <strong>${summary.extras}</strong>
-      </div>
-    </div>
-  `;
-}
-
-function renderGonogoResult(summary, context = {}) {
-  const t = context.t;
-  const goTrials = summary.hits + summary.misses;
-  const nogoTrials = summary.commissions + summary.correctRejections;
-  const hitRate = goTrials ? Math.round((summary.hits / goTrials) * 100) : 0;
-  const commissionRate = nogoTrials
-    ? Math.round((summary.commissions / nogoTrials) * 100)
-    : 0;
-  return `
-    <div class="summary-grid">
-      <div class="summary-tile"><span class="metric-label">${t("result.gonogo.goHit")}</span><strong>${hitRate}%</strong></div>
-      <div class="summary-tile"><span class="metric-label">${t("result.gonogo.commission")}</span><strong>${commissionRate}%</strong></div>
-      <div class="summary-tile"><span class="metric-label">${t("result.gonogo.missed")}</span><strong>${summary.misses}</strong></div>
-      <div class="summary-tile"><span class="metric-label">${t("result.gonogo.extras")}</span><strong>${summary.extras}</strong></div>
-    </div>
-  `;
-}
-
-/**
- * 走査課題のリザルト。
- *
- * 以前は4枠のうち2枠が「へいきん きょり」「ちゅうおう きょり」という同じ量の
- * 統計違いで、しかも単位が％——利用者に読める情報がひとつも無かった。
- * 先頭を「いくつ取れたか」にして、狙いのずれは1枠に絞る。
- * bestStreak は state.js の scan スキーマ外なので、永続化された session を
- * 描くときは出ない（games/crane.js の computeSummary のコメント参照）。
- */
-/**
- * 同じ難度で完走した過去セッションのうち、いちばん良かった値を返す。
- *
- * なぜ「前回」ではなく「これまでの最高」か: 前回と比べると、体調で下がった
- * 日に「まえより すくない」と突きつけることになる。訓練の課題でそれをやる
- * 理由がない。最高記録なら常に目標として働き、負の比較が出ない。
- *
- * なぜ条件で絞るか: 支援者が つかめる広さ・アームの速さ・1回のかいすう を
- * 変えられる（settings の craneToleranceR / craneSweepMs / craneTargetTrials）。
- * とくに かいすう は取れる数の上限そのものなので、5回の回と9回の回を並べると
- * 比較にならない。同じ条件の回だけを見る。
- *
- * 中断した回は試行数が足りず不利なので、完走した回だけを対象にする。
- */
-export function personalBest(sessions, { gameId, config, pick, participantId = "" }) {
-  // エンドレスは別の束。決まった回数の回とは、上限も終わり方も違う
-  // （1回失敗で終わるので、取れた数はほぼ「続いた数 - 1」になる）。
-  //
-  // 実測で2つ壊れていた（2026-08-28）:
-  //   1. 5回で終わったエンドレス（4こ）が、5回設定の通常回の最高として
-  //      出ていた。通常回で5こ取るのと、5回目で失敗するまでに4こ取るのは
-  //      別のことなので、越えられない目標が出つづける。
-  //   2. エンドレスどうしは、続いた回数（＝終了時に書き戻す targetTrials）が
-  //      違うだけで別の束になり、いつまでも比較対象なし（null）だった。
-  //      いちばん比べたい回どうしが比べられていない。
-  //
-  // エンドレスは難度の上がり方がコードに固定されていて回ごとに変わらないので、
-  // 続いた回数が違っても同じ物差しで比べられる——だから束ねる条件から
-  // targetTrials を外す。
-  const endless = config?.endless === true;
-  const sameSetup = (sessions || []).filter((session) => {
-    if (session.gameId !== gameId) return false;
-    // 別の参加者の記録を目標として出さない。共用端末では、他の子が出した
-    // 記録が「これまでの さいこう」として本人に提示されていた
-    // （2026-08-29に発見）。IDが空のときは絞らない（1人しか使わない端末）。
-    if (participantId && (session.participantId || "") !== participantId) return false;
-    if (session.finished !== true || session.aborted !== false) return false;
-    if ((session.config?.endless === true) !== endless) return false;
-    if (endless) return true;
-    return (
-      session.config?.toleranceR === config?.toleranceR &&
-      session.config?.sweepMs === config?.sweepMs &&
-      session.config?.targetTrials === config?.targetTrials
-    );
-  });
-  const values = sameSetup.map(pick).filter((value) => typeof value === "number");
-  return values.length ? Math.max(...values) : null;
-}
-
-/**
- * 自己最高の行を出すかどうか、出すなら何と出すか。
- *
- * 実際に遊んで分かったこと: 0こしか取れていない段階で「これまでの さいこう
- * 0こ」と出ると、目標にもならず失敗を復唱するだけになる。記録として意味を
- * 持つのは1こ以上からなので、0のときは何も出さない。
- *
- * ただし 0 → 1 は本人にとって最初の成功なので、そこは祝う。
- * 下回った回に「まえより すくない」は出さない（personalBest 参照）。
- *
- * @param {number} grips いま取れた数
- * @param {number|null} best 同条件での過去最高（比較対象が無ければ null）
- * @param {(key: string, values?: object) => string} t 文言（表記モードで変わるので
- *   定数にできない。ここへ渡すのはプレーン文を返すほう——戻り値の text は
- *   textContent へ入る）
- * @returns {{text:string, isNew:boolean}|null} null なら何も出さない
- */
-export function bestRecordLine(grips, best, t) {
-  if (typeof grips !== "number") return null;
-  if (typeof best !== "number") return null;
-  if (grips > best && grips > 0) return { text: t("best.new"), isNew: true };
-  if (best > 0) return { text: t("best.previous", { n: best }), isNew: false };
-  return null;
-}
-
-/**
- * @param {object} summary  いま終わったセッションの集計
- * @param {object} [context] { best } 同条件での自己最高。無ければ null
- */
-function renderScanResult(summary, context = {}) {
-  const t = context.t;
-  const distance =
-    typeof summary.meanDistance === "number" ? summary.meanDistance.toFixed(1) : "--";
-  const streakTile =
-    typeof summary.bestStreak === "number"
-      ? `<div class="summary-tile"><span class="metric-label">${t("result.bestStreak")}</span><strong>${summary.bestStreak}</strong></div>`
-      : "";
-  // 取れた景品を並べる。数だけより「なにが取れたか」が見えるほうが、
-  // もう一度やる理由になる。永続化された session を描くときは collected が
-  // 無いので出ない（summary の遊び用フィールドは scan スキーマ外）。
-  const prizeRow = Array.isArray(summary.collected) && summary.collected.length
-    ? `<div class="summary-prizes" role="img" aria-label="${context.tPlain("result.scan.prizes", { n: summary.collected.length })}">${summary.collected
-        .map((prize) => `<img src="${PRIZE_ART[prize.asset]}" alt="" />`)
-        .join("")}</div>`
-    : "";
-  // 続ける理由が画面に無かった。1回ぶんの結果しか出ないので、良くなって
-  // いるのかどうかが利用者に分からない。同条件の自己最高だけを出す
-  // （下がった回に「まえより すくない」とは言わない。personalBest 参照）。
-  const record = bestRecordLine(summary.grips, context.best, context.tPlain ?? context.t);
-  const bestLine = record
-    ? `<p class="summary-best${record.isNew ? " is-new" : ""}">${record.text}</p>`
-    : "";
-  return `
-    <div class="summary-grid">
-      <div class="summary-tile is-headline">
-        <span class="metric-label">${t("result.scan.caught")}</span>
-        <strong>${summary.grips}<small>${t("result.scan.pieces")}</small></strong>
-        <p>${t("result.scan.outOf", { n: summary.trials })}</p>
-        ${bestLine}
-        ${prizeRow}
-      </div>
-      <div class="summary-tile"><span class="metric-label">${t("result.scan.slips")}</span><strong>${summary.slips}</strong></div>
-      ${streakTile}
-      <div class="summary-tile"><span class="metric-label">${t("result.scan.distance")}</span><strong>${distance}%</strong></div>
-    </div>
-  `;
-}
-
-function renderReactionResult(summary, context = {}) {
-  const t = context.t;
-  const hitRate = Math.round((summary.hitRate || 0) * 100);
-  const commissionRate = Math.round((summary.commissionRate || 0) * 100);
-  const meanRt =
-    typeof summary.meanRtMs === "number" ? `${Math.round(summary.meanRtMs)}ms` : "--";
-
-  // 釣果（さかなつりの遊びの手応え）。state.js の rt スキーマには無い値なので
-  // 永続化された session からは復元されない。ここに来る summary は
-  // ctx.finish() でゲームから直接渡されたものなので、その回だけ表示できる
-  // （games/fishing.js 冒頭のコメント参照）。
-  const catchTiles =
-    typeof summary.scoreCm === "number"
-      ? `
-      <div class="summary-tile is-headline">
-        <span class="metric-label">${t("result.rt.score")}</span>
-        <strong>${summary.scoreCm}<small>cm</small></strong>
-        <p>${t("result.rt.catchSummary", { n: summary.catches ?? 0, cm: summary.totalLengthCm ?? 0 })}</p>
-      </div>
-      <div class="summary-tile">
-        <span class="metric-label">${t("result.rt.longest")}</span>
-        <strong>${typeof summary.longestCm === "number" ? `${summary.longestCm}cm` : "--"}</strong>
-      </div>
-      <div class="summary-tile">
-        <span class="metric-label">${t("result.bestStreak")}</span>
-        <strong>${summary.bestStreak ?? 0}</strong>
-      </div>
-      <div class="summary-tile">
-        <span class="metric-label">${t("result.rt.fastCatch")}</span>
-        <strong>${summary.speedBonuses ?? 0}</strong>
-      </div>`
-      : "";
-
-  return `
-    <div class="summary-grid">
-      ${catchTiles}
-      <div class="summary-tile"><span class="metric-label">${t("result.rt.caughtRate")}</span><strong>${hitRate}%</strong></div>
-      <div class="summary-tile"><span class="metric-label">${t("result.rt.meanRt")}</span><strong>${meanRt}</strong></div>
-      <div class="summary-tile"><span class="metric-label">${t("result.rt.falseStarts")}</span><strong>${summary.falseStarts}</strong></div>
-      <div class="summary-tile"><span class="metric-label">${t("result.rt.commission")}</span><strong>${commissionRate}%</strong></div>
-    </div>
-  `;
-}
-
-/** 正誤のない「できた」型ゲームの軽量リザルト。研究taskTypeとは分離する。 */
-function renderCompletionResult(summary, context = {}) {
-  const t = context.t;
-  const presses = Number.isFinite(summary?.presses) ? Math.max(0, Math.round(summary.presses)) : 0;
-  const colorCount = Number.isFinite(summary?.colors) ? Math.max(0, Math.round(summary.colors)) : 0;
-  const swatches = stageColors
-    .slice(0, colorCount)
-    .map((color) => `<span class="color-result-swatch" style="--result-color:${color}"></span>`)
-    .join("");
-
-  return `
-    <div class="completion-result">
-      <span class="completion-result-icon" aria-hidden="true">
-        <i class="fa-solid fa-star"></i>
-      </span>
-      <strong class="completion-result-title">${t("result.completion.title")}</strong>
-      <p class="completion-result-summary">${t("result.completion.summary", { n: presses })}</p>
-      <div class="color-result-palette" aria-hidden="true">${swatches}</div>
-      <span class="color-result-caption">${t("result.completion.colors", { n: colorCount })}</span>
-    </div>
-  `;
-}
-
-
-
-/** slot-v1 の利用者向け結果。失敗数を主見出しにせず、成功とずれの要約を示す。 */
-function renderSlotResult(summary, context = {}) {
-  const t = context.t;
-  const tPlain = context.tPlain || context.t;
-  const total = Number.isFinite(summary?.trials) ? summary.trials : 0;
-  const hits = Number.isFinite(summary?.hits) ? summary.hits : 0;
-  const hitRate = total ? Math.round((hits / total) * 100) : 0;
-  const medianError = Number.isFinite(summary?.medianAbsoluteErrorMs)
-    ? `${Math.round(summary.medianAbsoluteErrorMs)}ms`
-    : "--";
-  const meanError = formatSignedMs(summary?.meanSignedErrorMs);
-  const lastRound = Array.isArray(summary?.lastRoundSymbols) && summary.lastRoundSymbols.length
-    ? `<div class="slot-result-symbols" role="img" aria-label="${tPlain("result.slot.lastRound")}">${summary.lastRoundSymbols
-        .map((symbolId) => slotSymbolHtml(symbolId))
-        .join("")}</div>`
-    : "";
-
-  return `
-    <div class="slot-result">
-      <strong class="slot-result-title">${t("result.slot.title")}</strong>
-      ${lastRound}
-      <div class="summary-grid">
-        <div class="summary-tile is-headline"><span class="metric-label">${t("result.slot.hitRate")}</span><strong>${hitRate}% <small>(${hits}/${total})</small></strong></div>
-        <div class="summary-tile"><span class="metric-label">${t("result.slot.medianError")}</span><strong>${medianError}</strong></div>
-        <div class="summary-tile"><span class="metric-label">${t("result.slot.meanError")}</span><strong>${meanError}</strong></div>
-        <div class="summary-tile"><span class="metric-label">${t("result.slot.timeouts")}</span><strong>${summary?.timeoutCount || 0}</strong></div>
-        <div class="summary-tile"><span class="metric-label">${t("result.slot.extras")}</span><strong>${summary?.extraInputCount || 0}</strong></div>
-      </div>
-    </div>
-  `;
-}
-const resultRenderers = {
-  completion: renderCompletionResult,
-  sms: renderSmsResult,
-  gonogo: renderGonogoResult,
-  scan: renderScanResult,
-  slot: renderSlotResult,
-  rt: renderReactionResult,
-};
+import { applyPartyResult, localDayKey } from "../party.js";
+import { PARTY_RESULT_SCAN_DELAY_MS, revealPartyResult } from "./partyStage.js";
 
 export function createGameHost(ctx) {
   const { state, elements, scan, announce, save, logEvent } = ctx;
@@ -419,6 +67,9 @@ export function createGameHost(ctx) {
   let activeInstance = null;
   let activeGameId = null;
   let lastResultSummary = null;
+  // けっかの星を飛び込ませるのは、けっかへ来た最初の1回だけ（描き直しのたびに
+  // 最初からやり直さない。docs/overall-design-2026-09-28.md §6.1）。
+  let revealPending = false;
   // レディ画面（「やりかた」）を表示中のモジュール。null でなければ、
   // 次のスイッチ入力はゲームへ渡さずセッション開始に使う。
   let pendingModule = null;
@@ -428,6 +79,18 @@ export function createGameHost(ctx) {
   // P4-3: 今回のリザルトで既に候補値を保存したか（同一リザルト画面での
   // 二重保存を防ぎ、保存後は確認文言に切り替える。launch() のたびにリセット）。
   let calibrationOffsetSaved = false;
+
+  // この遊びの設定（遊んでいる最中に支援者が変える。games/gameSettings.js）。
+  // 関数宣言は巻き上がるので、ここで launch / destroyActive を渡してよい。
+  const gameSettings = createGameSettings(ctx, {
+    activeGameId: () => activeGameId,
+    sessionRunning: () => Boolean(activeInstance) && !pendingModule,
+    abortSession: () => destroyActive(),
+    relaunch: () => {
+      if (activeGameId) launch(activeGameId, { endless: requestedEndless });
+    },
+    applyLive: () => activeInstance?.applySettings?.(),
+  });
 
   /** instance.destroy() を安全に呼ぶ（例外を握りつぶし、activeInstance を必ずクリアする）。 */
   function destroyActive() {
@@ -527,6 +190,8 @@ export function createGameHost(ctx) {
       // ——そくてい中は設定側が必ず打ち消す。
       endless: requestedEndless,
       audio: ctx.audio,
+      // 演出（src/lib/fx/）。遊びは「何が起きたか」を名前で呼ぶだけ。
+      fx: ctx.fx,
       announce,
       voiceFeedback: ctx.voiceFeedback,
       // 利用者向け文言の表記解決（src/lib/i18n.js）。ゲームは自前で文言を
@@ -551,6 +216,17 @@ export function createGameHost(ctx) {
         state.sessions || [],
         state.evaluation.participantId
       ),
+      // 遊びの雰囲気「おおさわぎ」の、もらったラッコの服と、その日にいっぱいにしたびんの数
+      // （src/lib/party.js）。遊び終えたとき（5回目）に claim して保存する。研究の記録には入れない。
+      party: {
+        outfits: () => [...(state.party?.outfits || [])],
+        claim() {
+          const outcome = applyPartyResult(state.party, localDayKey());
+          state.party = outcome.party;
+          save();
+          return outcome;
+        },
+      },
       setProgress(text) {
         elements.gameProgress.textContent = text;
       },
@@ -617,13 +293,26 @@ export function createGameHost(ctx) {
     // 差し替える。ここを直さないと、画面は「1分間」と言っているのに終わらない
     // ——説明と挙動が食い違ったまま遊ばせることになる。
     const endlessKey = requestedEndless ? ENDLESS_HOWTO_KEYS[activeGameId] : null;
-    const resolvedKeys = endlessKey ? [...stepKeys.slice(0, -1), endlessKey] : stepKeys;
+    // れんしゅうの回だけの見え方（さかなつりの大きな「！」など）がある行は、
+    // れんしゅうでは説明もそれに合わせる（キー + ".practice"）。そくていは元の行。
+    const practice = !isMeasurementMode(state.settings);
+    const resolvedKeys = (endlessKey ? [...stepKeys.slice(0, -1), endlessKey] : stepKeys).map((key) =>
+      practice && entryFor(`${key}.practice`) ? `${key}.practice` : key
+    );
     const steps = resolvedKeys.map((key) => ctx.tHtml(key));
     const spokenSteps = resolvedKeys.map((key) => ctx.t(key));
-    const items = steps.map((line) => `<li>${line}</li>`).join("");
-    const icon = module.iconClass
-      ? `<span class="game-ready-icon" aria-hidden="true"><i class="${module.iconClass}"></i></span>`
-      : "";
+    // 行は「番号の丸（::before）＋文」を flex で並べる。文を1つの箱にまとめないと、
+    // ふりがなと字が1つずつ別の箱になり「上 の 目標 の 絵 を 見 ます」と
+    // 字のあいだが空き、行の途中でも折り返していた。
+    const items = steps.map((line) => `<li><span class="game-ready-step">${line}</span></li>`).join("");
+    // ホームで押したタイルと同じ絵を出す（docs/design-renewal-2026-09-25.md）。
+    // 絵の無い遊びは、これまでどおりアイコン。
+    const theme = tileThemeFor(module.id);
+    const icon = theme
+      ? `<span class="game-ready-art" aria-hidden="true" style="--tile-thumb:${theme.colors.thumb}">${artSvg(SCENE_ART[theme.art], { slice: true })}</span>`
+      : module.iconClass
+        ? `<span class="game-ready-icon" aria-hidden="true"><i class="${module.iconClass}"></i></span>`
+        : "";
     elements.gameStageContent.classList.add("is-ready");
     elements.gameStageContent.innerHTML = `
       <div class="game-ready">
@@ -636,7 +325,9 @@ export function createGameHost(ctx) {
 
     // #gameStageContent は aria-hidden なので、説明は読み上げ経路で伝える。
     // 画面注視が困難な利用者にも届かせる必要がある（basic-design.md §1.2）。
-    const spoken = [moduleTitle(module), ...spokenSteps].join(" ");
+    // 題名と手順は文として区切って読む（句点が無いと、分かち書きを外したときに
+    // 題名と1行目が1語のようにつながる。i18n.js の joinSpeech）。
+    const spoken = joinSpeech([moduleTitle(module), ...spokenSteps], resolveTextMode(state.settings));
     ctx.voiceFeedback(spoken);
   }
 
@@ -664,6 +355,15 @@ export function createGameHost(ctx) {
   function launch(gameId, options = {}) {
     const module = findGameModule(gameId);
     if (!module || module.enabled === false) return;
+    ctx.audio.music?.stop(0.3);
+    // 効果音の場面（src/lib/audio.js の effectOutputGain）。合図のある遊び
+    // （taskType あり）は今までどおりの大きさ、測定の課題でない遊びは持ち上げる。
+    ctx.audio.setProfile?.(module.taskType ? "task" : "play");
+    // そくていの回の遊びでは、演出を何も足さない（docs/overall-design §5）。
+    // キャリブレーション（支援者と使う基準の測定）は、モードによらず測定の扱い。
+    ctx.fx?.setMeasurement(
+      Boolean(module.taskType) && (isMeasurementMode(state.settings) || module.id === "calibration")
+    );
     requestedEndless = options.endless === true;
     destroyActive(); // 多重起動防止（MUST）: 前回 instance の destroy() を必ず呼ぶ
     scan.stop(true);
@@ -714,10 +414,21 @@ export function createGameHost(ctx) {
       });
     }
     destroyActive();
+    ctx.audio.setProfile?.("play");
+    ctx.fx?.setMeasurement(false);
+    revealPending = true;
     state.currentView = "result";
     save();
     ctx.renderAll();
-    scan.restartIfNeeded();
+    if (summary?.party) {
+      // おおさわぎのけっかは、数え上げ・ラッコ・ごほうび・花火を見せてから枠を動かす
+      // （紙吹雪の下で枠を進めない。docs/party-mode-2026-09-29.md）。
+      window.setTimeout(() => {
+        if (state.currentView === "result") scan.restartIfNeeded();
+      }, PARTY_RESULT_SCAN_DELAY_MS);
+    } else {
+      scan.restartIfNeeded();
+    }
   }
 
   /**
@@ -726,12 +437,19 @@ export function createGameHost(ctx) {
    * （detailed-design.md §2.4「aborted の場合は home へ直帰」）。
    */
   function returnHome() {
+    // 設定を開いたまま抜けた（おわる・画面が隠れた）ときは、変更を捨てて閉じる。
+    gameSettings.dismiss();
     // レディ画面から「おわる」/Esc で抜けた場合は instance がまだ無い。
     // 保留を落とし、読み上げも黙らせる（ホームに戻ってから喋り続けない）。
     pendingModule = null;
     ctx.audio.stopSpeech();
+    ctx.audio.music?.stop(0.3);
     elements.gameStageContent.classList.remove("is-ready");
     destroyActive();
+    ctx.audio.setProfile?.("play");
+    ctx.fx?.setMeasurement(false);
+    ctx.fx?.clear();
+    revealPending = false;
     ctx.views.home?.showLobby();
     state.currentView = "home";
     save();
@@ -741,6 +459,9 @@ export function createGameHost(ctx) {
 
   /** シェルが計時した入力を現在のゲームへ渡す（入力ファネル経由。§3.3）。 */
   function dispatchInput(t, source) {
+    // 支援者が設定を開いているあいだは、スイッチを押しても遊びは進まない
+    // （時間で進む遊びは、開いた時点でその回を止めてある。gameSettings.js）。
+    if (gameSettings.isOpen()) return;
     // レディ画面のひと押しは「説明を読み終えた合図」であって課題の入力では
     // ないので、ゲームへは渡さず、logEvent にも残さない。これを渡すと
     // セッション開始前の入力が1件目の試行として記録されてしまう。
@@ -803,6 +524,10 @@ export function createGameHost(ctx) {
     dispatchInput,
     retry,
     abort: returnHome,
+    /** 設定が開いていれば閉じる（変更は捨てる）。閉じたら true（Esc 用）。 */
+    closeSettings: () => gameSettings.close({ apply: false }),
+    /** 支援者が「この遊びの設定」を開いているか（キーを支援者の操作に返すため）。 */
+    settingsOpen: () => gameSettings.isOpen(),
     getActiveGameId: () => activeGameId,
     getLastSummary: () => lastResultSummary,
     /** gameProgress / resultStats の表示更新（ctx.renderAll() から呼ばれる）。 */
@@ -813,6 +538,12 @@ export function createGameHost(ctx) {
       // ——registry の title は日本語のままなので、直に出すと英語表記でも
       // ここだけ日本語になる。
       elements.gameProgress.textContent = activeModule ? moduleTitle(activeModule) : "";
+      // 変えられる項目のある遊びでだけ出す（そくていの回で速さしか無い遊びは出さない）。
+      elements.gameSettings.hidden = !(
+        state.currentView === "game" &&
+        activeGameId &&
+        gameSettings.available(activeGameId)
+      );
 
       // 正常終了の要約をアプリTTSが所有する場合、同じ遷移で結果DOMまで
       // VoiceOverへ読ませない。TTSがOFFなら従来どおりpolite live regionが所有する。
@@ -830,7 +561,7 @@ export function createGameHost(ctx) {
         : null;
       if (lastResultSummary && resultRenderer) {
         const session = currentSession();
-        elements.resultStats.innerHTML = resultRenderer(lastResultSummary, {
+        const context = {
           best: bestBeforeCurrentSession(),
           trials: session?.trials,
           config: session?.config,
@@ -843,7 +574,39 @@ export function createGameHost(ctx) {
           // aria-label と、textContent へ入る文字（自己最高の行）は
           // プレーン文でなければならない。同じ context に両方を入れておく。
           tPlain: ctx.t,
-        });
+        };
+        const detailed = resultRenderer(lastResultSummary, context);
+        const score = resultScore(rendererType, lastResultSummary);
+        if (score && score.total > 0) {
+          // 利用者に見せるのは一言と「何回のうち何回」だけ。数値の表は
+          // 支援者のもので、畳んでおく（docs/design-renewal-2026-09-25.md §1.6）。
+          // 走査の輪には入れない（summary に data-scan を付けない）。
+          // キャリブレーションは支援者と一緒に使う測定なので、開いたまま出す。
+          const open = activeGameId === "calibration" ? " open" : "";
+          elements.resultStats.innerHTML = `
+            ${renderPraise(score, context)}
+            <details class="result-details"${open}>
+              <summary>${ctx.tHtml("result.details")}</summary>
+              ${detailed}
+            </details>
+          `;
+        } else {
+          elements.resultStats.innerHTML = detailed;
+        }
+        if (revealPending && state.currentView === "result") {
+          revealPending = false;
+          // 描いた次のコマで、星を飛び込ませる（位置が決まってから）。
+          window.requestAnimationFrame(() => {
+            if (elements.resultStats.querySelector(".party-result")) {
+              revealPartyResult(elements.resultStats, { fx: ctx.fx, audio: ctx.audio });
+              return;
+            }
+            ctx.fx?.revealResult(elements.resultStats, {
+              playStar: (index, delayS) =>
+                ctx.audio.playChime(RESULT_STAR_NOTES[index] ?? RESULT_STAR_NOTES.at(-1), { delayS, durationS: 0.9 }),
+            });
+          });
+        }
       } else if (lastResultSummary) {
         elements.resultStats.innerHTML = `<p class="panel-note">${ctx.tHtml("result.none")}</p>`;
       } else {

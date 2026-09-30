@@ -416,6 +416,100 @@ h3 {
   line-height: 1.6;
 }
 
+/* はじめての支援者向けの「つかいかた」（App.svelte の #settingsGuide）。
+   ふだんは閉じておき、開いたときだけタブの面が下へずれる。 */
+.settings-guide {
+  margin: 0 0 18px;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.settings-guide > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* 44px 未満のタップ標的を作らない（このアプリの全体規則）。 */
+  min-height: 44px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-guide > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-guide > summary::before {
+  content: "▶";
+  font-size: 0.8em;
+  transition: transform 0.15s ease;
+}
+
+.settings-guide[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.settings-guide-steps {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 4px 20px 18px 44px;
+  line-height: 1.7;
+}
+
+.settings-guide-steps strong {
+  display: block;
+}
+
+.settings-guide-print {
+  margin: 0;
+  padding: 0 20px 18px 44px;
+  font-weight: 700;
+}
+
+.settings-guide-print[hidden] {
+  display: none;
+}
+
+body.high-contrast .settings-guide {
+  border-color: #000000;
+  background: #ffffff;
+  color: #000000;
+}
+
+/* 音の素材のクレジット（App.svelte の #soundCredits）。見た目は「つかいかた」と同じ。 */
+.settings-credits {
+  margin: 18px 0 0;
+}
+
+.settings-credits-note {
+  margin: 0;
+  padding: 0 20px 8px 44px;
+  line-height: 1.6;
+}
+
+.settings-credits-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 20px 18px 44px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.settings-credits-list strong {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-guide > summary::before {
+    transition: none;
+  }
+}
+
 .settings-mode-notice {
   grid-column: 1 / -1;
   margin: 0;
@@ -7274,14 +7368,15 @@ body.high-contrast .fishing-water {
 }
 
 .slot-reel-track {
-  --slot-track-offset: 0px;
+  /* コマ数（games/slot.js の paintReel）。1コマの高さを掛けて px にする。 */
+  --slot-track-offset: 0;
   position: absolute;
   top: 50%;
   left: 0;
   width: 100%;
   display: grid;
   grid-auto-rows: var(--slot-cell-size);
-  transform: translateY(calc(-50% + var(--slot-track-offset)));
+  transform: translateY(calc(-50% + var(--slot-track-offset) * var(--slot-cell-size)));
   will-change: transform;
 }
 
@@ -7305,12 +7400,15 @@ body.high-contrast .fishing-water {
   pointer-events: none;
 }
 
+/* 真ん中のコマの上下の端。1コマの高さ（--slot-cell-size）から引くので、
+   リールの大きさ（スマホの 82px、れんしゅうの大きいリール）に付いてくる。
+   7px は線の太さ。 */
 .slot-stop-line.is-top {
-  top: calc(50% - 47px);
+  top: calc(50% - var(--slot-cell-size) / 2);
 }
 
 .slot-stop-line.is-bottom {
-  top: calc(50% + 40px);
+  top: calc(50% + var(--slot-cell-size) / 2 - 7px);
 }
 
 .slot-reel.is-active .slot-stop-line {
@@ -7477,14 +7575,6 @@ body.high-contrast .slot-symbol {
   .slot-reel-window {
     --slot-cell-size: 82px;
     min-width: 0;
-  }
-
-  .slot-stop-line.is-top {
-    top: calc(50% - 41px);
-  }
-
-  .slot-stop-line.is-bottom {
-    top: calc(50% + 34px);
   }
 
   .slot-reel .slot-symbol {
