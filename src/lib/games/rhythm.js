@@ -40,6 +40,7 @@
 // =====================================================================
 
 import { rhythmPresets, cueTones } from "../content.js";
+import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
   allowsVisualGuidance,
   resolveDifficultyMode,
@@ -54,10 +55,10 @@ import {
 } from "./judge.js";
 import { createRhythmVisuals } from "./rhythmVisuals.js";
 
-// フィードバック音（detailed-design.md §5.3）: hit は既定音量、miss/extra は
-// 小音量・短めにして罰的にしない。
-const FEEDBACK_GAIN_HIT = 0.05;
-const FEEDBACK_GAIN_MISS = 0.018;
+// フィードバック音（detailed-design.md §5.3）: hit は合図と同じ大きさ、miss/extra は
+// 小音量・短めにして罰的にしない（audio.js の CUE_TONE_GAIN / CUE_SOFT_GAIN）。
+const FEEDBACK_GAIN_HIT = CUE_TONE_GAIN;
+const FEEDBACK_GAIN_MISS = CUE_SOFT_GAIN;
 // 最終判定も通常の判定と同じだけ画面へ残してから結果へ進む。
 // 入力と音のスケジューラは判定直後に止めるので、待機中に6回目は入らない。
 export const RHYTHM_FINAL_FEEDBACK_MS = 480;
@@ -987,6 +988,9 @@ export function createRhythmGame(gameId) {
         finished: false,
         config: {
           bpm: params.bpm,
+          // 合図音の大きさ（audio.js の CUE_TONE_GAIN）。2026-09-30 に 0.05 から上げたので、
+          // どちらの大きさで取った記録かを分けられるように残す。
+          cueGain: FEEDBACK_GAIN_HIT,
           countInBeats: params.countInBeats,
           targetBeats: params.targetBeats,
           judgmentWindowMs: settings.judgmentWindowMs,

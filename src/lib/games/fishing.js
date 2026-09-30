@@ -27,6 +27,7 @@
 // =====================================================================
 
 import { cueTones, fishingPresets, fishingSpecies } from "../content.js";
+import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
   ENDLESS_PROTOCOL_VERSION,
   endlessDifficultyStep,
@@ -49,8 +50,9 @@ const fishLargeUrl = new URL("../../assets/fishing/fish-large.png", import.meta.
 const fishMediumUrl = new URL("../../assets/fishing/fish-medium.png", import.meta.url).href;
 const fishSmallUrl = new URL("../../assets/fishing/fish-small.png", import.meta.url).href;
 
-const FEEDBACK_GAIN = 0.05;
-const MISS_GAIN = 0.018;
+// アタリと当たりの音は合図の大きさ、外れは小さく（audio.js の CUE_TONE_GAIN / CUE_SOFT_GAIN）。
+const FEEDBACK_GAIN = CUE_TONE_GAIN;
+const MISS_GAIN = CUE_SOFT_GAIN;
 
 /** 魚の見た目（content.js の species.asset → 画像URL）。 */
 const FISH_ART = {
@@ -1025,6 +1027,9 @@ export function createFishingGame(gameId) {
       finished: false,
       config: {
         ...config,
+        // 合図音の大きさ（audio.js の CUE_TONE_GAIN）。2026-09-30 に 0.05 から上げたので、
+        // どちらの大きさで取った記録かを分けられるように残す。
+        cueGain: FEEDBACK_GAIN,
         seedSequence: foreperiods,
         kindSequence,
         // その回が「そくてい」か「れんしゅう」か（src/lib/difficultyMode.js）。
