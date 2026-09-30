@@ -9,9 +9,8 @@
    ガラスの箱の中の景品・アーム・当たりの輪の位置と大きさは、styles.css と
    games/craneGeometry.js のまま。
 
-   動くもの（旗・風船・紙ふぶき）は、台の外の店内だけ。箱の中は止めておく
-   （目で追うアームと景品が主役なので、背景が動くと邪魔になる）。動かすのは
-   translate / rotate だけで、明るさは変えない（点滅にならない）。
+   背景は無地と近い色の明暗だけにし、動かさない。目で追うアーム・走査の線・
+   当たりの輪・景品より背景が目立つと、止める場所を見失いやすいため。
    ===================================================================== */
 
 .game-stage-content.module-crane.is-practice {
@@ -26,167 +25,26 @@
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  /* 水玉の壁紙。色のついた壁に、白い水玉を互い違いに。 */
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.85) 0 7px, transparent 7.5px) 0 0 / 56px 56px,
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.85) 0 7px, transparent 7.5px) 28px 28px / 56px 56px,
-    linear-gradient(180deg, #bdeee0 0%, #dcf8ef 70%, #eafbf5 100%);
+  background: linear-gradient(180deg, #e1f2ed, #edf6f2);
 }
 
-/* 旗は、上の帯（のこり・この遊びの設定・おわる）の裏では消す。帯は半透明なので、
-   旗の色が透けて字の後ろがうるさくなる。帯の幅は画面で変わるので、両端を px で外す。 */
-.module-crane.is-practice .cw-bunting {
+/* 床の境目だけを静かに示す。台や主役の寸法には触れない。 */
+.module-crane.is-practice .crane-world::after {
+  content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: auto;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0 150px, #000 250px, #000 calc(100% - 420px), transparent calc(100% - 310px));
-  mask-image: linear-gradient(90deg, transparent 0 150px, #000 250px, #000 calc(100% - 420px), transparent calc(100% - 310px));
-}
-
-.module-crane.is-practice .cw-flag {
-  transform-box: fill-box;
-  transform-origin: 50% 0;
-  animation: cw-flutter 3.6s ease-in-out infinite alternate;
-  animation-delay: calc(var(--i) * -0.45s);
-}
-
-.module-crane.is-practice .cw-floor {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: clamp(90px, 15vh, 160px);
-}
-
-/* 風船と壁飾りは台のわきの余白に置く。台の幅は最大 900px なので、余白が細い画面
-   （縦向き・スマホ・1024px 幅の横向き）では出さない（台の裏に半分隠れて散らかる）。 */
-.module-crane.is-practice .cw-balloons {
-  position: absolute;
-  bottom: 1.5%;
-  display: none;
-  width: clamp(84px, 8.6vw, 150px);
-  height: auto;
-  transform-origin: 50% 100%;
-  animation: cw-sway 6s ease-in-out infinite alternate;
-}
-
-.module-crane.is-practice .cw-balloons-left {
-  left: 1.6%;
-}
-
-.module-crane.is-practice .cw-balloons-right {
-  right: 1.6%;
-  animation-delay: -3s;
-}
-
-/* 壁飾りの星とハート: 台のわきの余白に、ゆっくり上下にゆれる。 */
-.module-crane.is-practice .cw-deco {
-  position: absolute;
-  display: none;
-  height: auto;
-  animation: cw-bob 5s ease-in-out infinite alternate;
-}
-
-@media (min-width: 1100px) {
-  .module-crane.is-practice .cw-balloons,
-  .module-crane.is-practice .cw-deco {
-    display: block;
-  }
-}
-
-/* 紙ふぶきは壁の上をゆっくり落ちる（箱の裏なので、箱の中には見えない）。 */
-.module-crane.is-practice .cw-confetti i {
-  position: absolute;
-  top: -6vh;
-  width: var(--s);
-  height: var(--s);
-  animation: cw-fall var(--d) linear infinite;
-}
-
-.module-crane.is-practice .cw-confetti svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-@keyframes cw-flutter {
-  from {
-    rotate: -3.5deg;
-  }
-
-  to {
-    rotate: 3.5deg;
-  }
-}
-
-@keyframes cw-sway {
-  from {
-    rotate: -3deg;
-  }
-
-  to {
-    rotate: 3deg;
-  }
-}
-
-@keyframes cw-bob {
-  from {
-    translate: 0 -6px;
-    rotate: -6deg;
-  }
-
-  to {
-    translate: 0 6px;
-    rotate: 6deg;
-  }
-}
-
-@keyframes cw-fall {
-  from {
-    translate: 0 0;
-    rotate: 0deg;
-  }
-
-  to {
-    translate: 28px 112vh;
-    rotate: 200deg;
-  }
+  inset: 88% 0 0;
+  pointer-events: none;
+  border-top: 1px solid #d5e5df;
+  background: #e4efea;
 }
 
 /* --- 台（看板・ガラスの枠・本体） --------------------------------------- */
 
-/* 看板: 青。ふちに、光らない電球（色のついた粒）を並べる。 */
+/* 看板: 無地の青。文字と得点の札を読みやすくする。 */
 .module-crane.is-practice .crane-marquee {
-  position: relative;
-  isolation: isolate;
   border-color: #1a1a1a;
   background: #005aff;
   box-shadow: none;
-}
-
-.module-crane.is-practice .crane-marquee::before,
-.module-crane.is-practice .crane-marquee::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  right: 18px;
-  left: 18px;
-  z-index: -1;
-  height: 9px;
-  background:
-    radial-gradient(circle at 50% 50%, #ff8082 0 3.4px, #1a1a1a 3.6px 4.4px, transparent 4.8px) 0 0 / 60px 9px repeat-x,
-    radial-gradient(circle at 50% 50%, #ffffff 0 3.4px, #1a1a1a 3.6px 4.4px, transparent 4.8px) 20px 0 / 60px 9px repeat-x,
-    radial-gradient(circle at 50% 50%, #f6aa00 0 3.4px, #1a1a1a 3.6px 4.4px, transparent 4.8px) 40px 0 / 60px 9px repeat-x;
-}
-
-.module-crane.is-practice .crane-marquee::before {
-  top: 2px;
-}
-
-.module-crane.is-practice .crane-marquee::after {
-  bottom: 2px;
 }
 
 .module-crane.is-practice .crane-marquee-title {
@@ -272,7 +130,7 @@
 /* --- 箱の中（ガラスの中）: 部屋・床のマット ---------------------------- */
 
 .module-crane.is-practice .crane-back {
-  background: #dce6ff;
+  background: #e3ebf3;
 }
 
 .module-crane.is-practice .crane-room {
@@ -287,31 +145,21 @@
 }
 
 .module-crane.is-practice .cr-ceiling {
-  background: #b7c8ff;
+  background: #d3deeb;
 }
 
-/* 奥の壁と左右の壁: 水玉。丸いまま（px の放射状）で、壁の色だけ変える。 */
-.module-crane.is-practice .cr-back,
-.module-crane.is-practice .cr-wall {
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.9) 0 4px, transparent 4.5px) 0 0 / 30px 30px,
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.9) 0 4px, transparent 4.5px) 15px 15px / 30px 30px,
-    #e3ebff;
+/* 壁は同じパステル色の明暗だけで、奥行きを示す。 */
+.module-crane.is-practice .cr-back {
+  background: #e3ebf3;
 }
 
 .module-crane.is-practice .cr-wall {
-  background-color: #c9d8ff;
+  background: #dbe5ef;
 }
 
-/* 手前の縁: 桃と白のしま。 */
+/* 手前の縁は、主役と競合しない無地にする。 */
 .module-crane.is-practice .cr-front {
-  background: repeating-linear-gradient(90deg, #ff8082 0 28px, #ffffff 28px 56px);
-}
-
-.module-crane.is-practice .cr-sticker {
-  position: absolute;
-  height: auto;
-  transform: translate(-50%, -50%);
+  background: #d5e2e9;
 }
 
 .module-crane.is-practice .crane-floor {
@@ -328,7 +176,7 @@
 
 /* 結果の色。styles.css は .crane-back に薄い膜を付けているが、部屋の裏に隠れるので、
    同じ意味（つかめた＝明るく、すべった＝あたたかく、はずれ＝ほんの少し暗く）の膜を
-   部屋の上に重ねる。青い床の上で黄色い膜は濁って見えるので、色は白・桃・藍にした。
+   部屋の上に重ねる。床の上でも主役が読みやすいよう、色は白・桃・藍にした。
    景品とアームより下。 */
 .module-crane.is-practice .crane-tint {
   position: absolute;
@@ -437,10 +285,10 @@
   display: block;
 }
 
-/* 景品の出口: しま模様のふち（赤と白）と、奥へ落ちる紫の口。 */
+/* 景品の出口: 無地のふちと、奥へ落ちる暗い口。 */
 .module-crane.is-practice .crane-chute {
   border: 3px solid #1a1a1a;
-  background: repeating-conic-gradient(#ff4b00 0 12deg, #ffffff 12deg 24deg);
+  background: #d5e2e9;
   box-shadow: none;
 }
 
@@ -459,25 +307,9 @@
   background: #1a1a1a;
 }
 
-/* --- 動きを減らす設定 ---------------------------------------------------- */
+/* --- 高コントラスト設定: 白黒のはっきりした面にする -------------------- */
 
-@media (prefers-reduced-motion: reduce) {
-  .module-crane.is-practice .cw-flag,
-  .module-crane.is-practice .cw-balloons,
-  .module-crane.is-practice .cw-deco {
-    animation: none;
-  }
-
-  .module-crane.is-practice .cw-confetti {
-    display: none;
-  }
-}
-
-/* --- 高コントラスト設定: 飾りを消して、白黒のはっきりした面にする ---------- */
-
-body.high-contrast .module-crane.is-practice .crane-world,
-body.high-contrast .module-crane.is-practice .crane-marquee::before,
-body.high-contrast .module-crane.is-practice .crane-marquee::after {
+body.high-contrast .module-crane.is-practice .crane-world {
   display: none;
 }
 

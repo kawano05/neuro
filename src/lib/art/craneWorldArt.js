@@ -2,8 +2,8 @@
 // art/craneWorldArt.js — 「アームで つかむ」（れんしゅうの回）の世界の絵
 //
 // おもちゃ屋さんのクレーンゲーム。景品3つ・アーム・箱の中の部屋・床のマット・
-// 台の外の飾りを、hakkiriArt.js の描き方（平たい形・はっきりした色・黒目に白い
-// ハイライト・#1A1A1A の輪郭）でそろえる。
+// 落ち着いた地を組み合わせる。景品とアームは hakkiriArt.js の描き方（平たい形・
+// はっきりした色・黒目に白いハイライト・#1A1A1A の輪郭）でそろえる。
 //
 // 画像ファイル（src/assets/crane/*.png）は、そくていの回が今のまま使う。
 // そくていの回の見え方は測定の条件なので、この絵は games/crane.js が
@@ -31,6 +31,8 @@ import { artSvg } from "./hakkiriArt.js";
  * 同じ考え方。測定条件は禁止せず記録する）。この列を持たない古い記録は空欄。
  *   1 … 画像ファイル（PNG）の絵。そくていの回は今もこの見え方
  *   2 … れんしゅうの回だけ、このファイルの SVG の絵と世界にした（2026-09-30）。
+ *       未配布のうちに飾りと背景の動きを取り除き、無地の壁と淡い市松に整理した。
+ *       主役の描き込みと落ち着いた地で見やすくする。
  *       位置・大きさ・時刻は 1 と同じ。そくていの回の見え方は 1 と同じ
  */
 export const CRANE_ART_VERSION = 2;
@@ -127,8 +129,8 @@ export function clawHtml() {
 
 // --- 箱の中の部屋（ガラスの中） -----------------------------------------
 // 床の台形と同じ投影（craneGeometry.js）で、天井・奥の壁・左右の壁・手前の縁を描く。
-// 面は clip-path の多角形（％はステージに対する比で、床と同じ）。模様は px の
-// 放射状グラデーション（丸いまま）と、面ごとに置く星・ハートのシール。
+// 面は clip-path の多角形（％はステージに対する比で、床と同じ）。
+// 無地の面の明暗だけで奥行きを示し、目で追うアームと景品を際立たせる。
 
 /** 箱の内側の面の座標（ステージに対する％）。 */
 function roomShape() {
@@ -145,18 +147,6 @@ function roomShape() {
 }
 
 const polygon = (points) => `polygon(${points.map(([x, y]) => `${x.toFixed(2)}% ${y.toFixed(2)}%`).join(",")})`;
-
-/** 星・ハートの形（viewBox 24x24）。箱の中のシールと、台の外の壁飾りで使う。 */
-function stickerShape(kind, color) {
-  return kind === "heart"
-    ? `<path d="M12 21 C4 14 2.5 10 2.5 7.5 C2.5 4.8 4.6 3 7 3 C9 3 10.9 4.2 12 6 C13.1 4.2 15 3 17 3 C19.4 3 21.5 4.8 21.5 7.5 C21.5 10 20 14 12 21 Z" fill="${color}" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>`
-    : `<path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="${color}" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>`;
-}
-
-/** 箱の中のシール（星・ハート）。位置と大きさはステージに対する％（幅基準）。 */
-function sticker(kind, left, top, width, color) {
-  return `<svg class="cr-sticker" style="left:${left}%;top:${top}%;width:${width}%" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${stickerShape(kind, color)}</svg>`;
-}
 
 /**
  * 箱の中の部屋。.crane-stage の最初の子として入れる（床の台形より奥）。
@@ -183,16 +173,11 @@ export function craneRoomHtml() {
       <div class="cr-face cr-wall cr-wall-left" style="clip-path:${leftWall}"></div>
       <div class="cr-face cr-wall cr-wall-right" style="clip-path:${rightWall}"></div>
       <div class="cr-face cr-front" style="clip-path:${front}"></div>
-      ${sticker("star", 33, 18.5, 4.4, "#F6AA00")}
-      ${sticker("heart", 49, 16.8, 4.2, "#FF8082")}
-      ${sticker("star", 64, 19, 3.8, "#FFFFFF")}
-      ${sticker("star", 8.5, 42, 2.6, "#FF8082")}
-      ${sticker("star", 91, 44, 2.6, "#4DC4FF")}
     </div>`;
 }
 
 /**
- * 床のマット。色つきの市松（8列×6段）を、床と同じ投影で描く。
+ * 床のマット。近い色の淡い市松（8列×6段）を、床と同じ投影で描く。
  * 頂点は project() から出すので、床の台形とずれない。角の形だけの図なので、
  * preserveAspectRatio="none"（ステージの縦横比に合わせて伸びる）でよい。
  */
@@ -215,141 +200,15 @@ export function craneMatHtml() {
     }
   }
   const outline = `M${at(0, 0)} L${at(100, 0)} L${at(100, 100)} L${at(0, 100)} Z`;
-  return `<svg class="crane-mat" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="${outline}" fill="#7FD3FF"/><path d="${dark}" fill="#4DC4FF"/><path d="${outline}" fill="none" stroke="${INK}" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+  return `<svg class="crane-mat" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="${outline}" fill="#E2F0F4"/><path d="${dark}" fill="#D6E8EE"/><path d="${outline}" fill="none" stroke="${INK}" stroke-width="3" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
-// --- 台の外の飾り（おもちゃ屋さんの店内） --------------------------------
-// 色のついた壁・旗・風船・床・紙ふぶき。動きはどれもゆっくりで、明るさは
-// 変えない（点滅にならない）。動かすのは translate / rotate だけ（world-crane.css）。
-
-const FLAG_COLORS = ["#FF8082", "#4DC4FF", "#F6AA00", "#03AF7A", "#D65DB1", "#005AFF", "#FF4B00"];
-
-/** 旗（ガーランド）。横幅いっぱいに、たるみを2つ。旗ごとに小さくゆれる。 */
-function buntingSvg() {
-  const width = 1180;
-  const yAt = (x) => 8 + 26 * Math.sin(Math.PI * ((x % (width / 2)) / (width / 2)));
-  let rope = "M0 8";
-  for (let x = 10; x <= width; x += 10) rope += ` L${x} ${yAt(x).toFixed(1)}`;
-  let flags = "";
-  for (let index = 0; index < 16; index += 1) {
-    const x = 37 + index * 73.75;
-    const y = yAt(x);
-    const color = FLAG_COLORS[index % FLAG_COLORS.length];
-    flags += `<path class="cw-flag" style="--i:${index}" d="M${(x - 24).toFixed(1)} ${y.toFixed(1)} L ${(x + 24).toFixed(1)} ${y.toFixed(1)} L ${x.toFixed(1)} ${(y + 44).toFixed(1)} Z" fill="${color}" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>`;
-  }
-  return `<svg class="cw-bunting" viewBox="0 0 ${width} 92" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="${rope}" fill="none" stroke="${INK}" stroke-width="3"/>${flags}</svg>`;
-}
-
-/** 風船（ひもつき）。viewBox 100x260。ひもの根もとが下の中央（ここを軸にゆれる）。 */
-function balloonBunchSvg(className, balloons, base) {
-  const strings = balloons
-    .map((b) => `<path d="M${b.x} ${b.y + 46} C ${b.x + 8} ${b.y + 90}, 52 190, 50 236" fill="none" stroke="${INK}" stroke-width="2.5"/>`)
-    .join("");
-  const bodies = balloons
-    .map(
-      (b) =>
-        `<ellipse cx="${b.x}" cy="${b.y}" rx="27" ry="34" fill="${b.color}" stroke="${INK}" stroke-width="3.5"/><path d="M${b.x - 5} ${b.y + 34} L ${b.x + 5} ${b.y + 34} L ${b.x} ${b.y + 42} Z" fill="${b.color}" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/><ellipse cx="${b.x - 10}" cy="${b.y - 12}" rx="5" ry="9" fill="#FFFFFF" opacity="0.6"/>`
-    )
-    .join("");
-  return `<svg class="cw-balloons ${className}" viewBox="0 0 100 260" aria-hidden="true" focusable="false">${strings}${bodies}${base}</svg>`;
-}
-
-const GIFT_BOX = `<rect x="24" y="226" width="52" height="34" rx="5" fill="#FF8082" stroke="${INK}" stroke-width="3.5"/><rect x="45" y="226" width="10" height="34" fill="#4DC4FF" stroke="${INK}" stroke-width="3"/><path d="M50 226 C 36 208, 26 216, 32 226 M50 226 C 64 208, 74 216, 68 226" fill="none" stroke="${INK}" stroke-width="3.5" stroke-linecap="round"/><circle cx="50" cy="226" r="4.5" fill="#4DC4FF" stroke="${INK}" stroke-width="3"/>`;
-const BLOCKS = `<rect x="14" y="224" width="36" height="36" rx="5" fill="#4DC4FF" stroke="${INK}" stroke-width="3.5"/><rect x="50" y="224" width="36" height="36" rx="5" fill="#F6AA00" stroke="${INK}" stroke-width="3.5"/><rect x="32" y="190" width="36" height="34" rx="5" fill="#03AF7A" stroke="${INK}" stroke-width="3.5"/><text x="32" y="251" font-size="24" font-weight="800" fill="#FFFFFF" text-anchor="middle" font-family="sans-serif">A</text><text x="68" y="251" font-size="24" font-weight="800" fill="#FFFFFF" text-anchor="middle" font-family="sans-serif">B</text><text x="50" y="216" font-size="24" font-weight="800" fill="#FFFFFF" text-anchor="middle" font-family="sans-serif">C</text>`;
-
-/** 店の床（手前を広く見せた市松）。横は伸び縮みしてよい。 */
-function shopFloorSvg() {
-  const width = 1180;
-  const height = 150;
-  const rows = 4;
-  const cols = 16;
-  const horizon = 40; // 奥の端の高さ
-  const yAt = (row) => horizon + ((height - horizon) * row) / rows;
-  const xAt = (col, y) => {
-    const t = (y - horizon) / (height - horizon);
-    const spread = 0.35 + 0.65 * t; // 奥ほど縮む
-    return width / 2 + ((col / cols - 0.5) * width * spread * 1.4);
-  };
-  let dark = "";
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      if ((row + col) % 2 === 0) continue;
-      const y0 = yAt(row);
-      const y1 = yAt(row + 1);
-      dark += `M${xAt(col, y0).toFixed(1)} ${y0} L${xAt(col + 1, y0).toFixed(1)} ${y0} L${xAt(col + 1, y1).toFixed(1)} ${y1} L${xAt(col, y1).toFixed(1)} ${y1} Z `;
-    }
-  }
-  return `<svg class="cw-floor" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect x="-200" y="${horizon}" width="${width + 400}" height="${height - horizon + 10}" fill="#FFD1D8"/><path d="${dark}" fill="#FFFFFF"/><rect x="-200" y="${horizon - 12}" width="${width + 400}" height="14" fill="#FF8082" stroke="${INK}" stroke-width="3"/></svg>`;
-}
-
-// 紙ふぶき（左 %・落ちる秒・大きさ px・遅れ秒・色・形）。壁の上をゆっくり落ちる。
-const CONFETTI = [
-  [6, 34, 14, -3, "#FF8082", "star"],
-  [17, 40, 10, -17, "#4DC4FF", "dot"],
-  [29, 46, 12, -9, "#F6AA00", "star"],
-  [41, 38, 9, -25, "#03AF7A", "dot"],
-  [53, 44, 13, -13, "#D65DB1", "star"],
-  [64, 36, 10, -30, "#005AFF", "dot"],
-  [75, 48, 12, -5, "#FF8082", "star"],
-  [86, 40, 9, -21, "#F6AA00", "dot"],
-  [94, 42, 13, -11, "#4DC4FF", "star"],
-];
-
-function confettiHtml() {
-  return CONFETTI.map(([left, seconds, size, delay, color, shape]) => {
-    const inner =
-      shape === "star"
-        ? `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="${color}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/></svg>`
-        : `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" fill="${color}" stroke="${INK}" stroke-width="2.4"/></svg>`;
-    return `<i style="left:${left}%;--d:${seconds}s;--s:${size}px;animation-delay:${delay}s">${inner}</i>`;
-  }).join("");
-}
-
-// 壁に貼った飾り（種類・左 %・上 %・大きさ px・色・遅れ秒）。台のわきの余白に出す
-// （余白が細い画面では出さない。world-crane.css）。ゆっくり上下にゆれる。
-const WALL_DECOS = [
-  ["star", 6.2, 30, 46, "#F6AA00", -1],
-  ["heart", 3.2, 47, 34, "#FF8082", -3.5],
-  ["star", 92.4, 27, 40, "#4DC4FF", -2],
-  ["heart", 95.6, 44, 36, "#D65DB1", -4.5],
-];
-
-function wallDecosHtml() {
-  return WALL_DECOS.map(
-    ([kind, left, top, size, color, delay]) =>
-      `<svg class="cw-deco" style="left:${left}%;top:${top}%;width:${size}px;animation-delay:${delay}s" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${stickerShape(kind, color)}</svg>`
-  ).join("");
-}
+// --- 台の外の落ち着いた地 -----------------------------------------------
 
 /**
- * 台の外の店内。stageEl の最初の子として入れる（台より奥）。世界は遊びの始めに
- * 1回だけ作り、試行ごとには作り直さない。
+ * 台より奥に、無地の壁と床の境目だけを置く。背景の模様や動きが、
+ * アームと走査の線を追う邪魔にならないようにする。
  */
 export function craneWorldHtml() {
-  const left = balloonBunchSvg(
-    "cw-balloons-left",
-    [
-      { x: 30, y: 46, color: "#FF4B00" },
-      { x: 68, y: 44, color: "#4DC4FF" },
-      { x: 49, y: 100, color: "#D65DB1" },
-    ],
-    GIFT_BOX
-  );
-  const right = balloonBunchSvg(
-    "cw-balloons-right",
-    [
-      { x: 34, y: 44, color: "#03AF7A" },
-      { x: 68, y: 84, color: "#F6AA00" },
-    ],
-    BLOCKS
-  );
-  return `
-    <div class="crane-world" aria-hidden="true">
-      <span class="cw-confetti">${confettiHtml()}</span>
-      ${wallDecosHtml()}
-      ${buntingSvg()}
-      ${shopFloorSvg()}
-      ${left}
-      ${right}
-    </div>`;
+  return `<div class="crane-world" aria-hidden="true"></div>`;
 }
