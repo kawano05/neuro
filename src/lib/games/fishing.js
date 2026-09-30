@@ -34,6 +34,7 @@ import {
   resolveEndlessMode,
   resolveFishingDifficulty,
 } from "../difficultyMode.js";
+import { fishingBoatSvg, fishingCatchSvg, fishingSeaHtml, fishingSkyHtml } from "../art/fishingWorldArt.js";
 import { generateGoNoGoSequence } from "./judge.js";
 import { generateForeperiods, judgeReaction } from "./reaction.js";
 
@@ -264,6 +265,10 @@ export function createFishingGame(gameId) {
   //   - fishing-gonogo には出さない。長靴のときに出さず魚のときだけ出すと、
   //     「！を見たら押す」だけで解けてしまい、見送る練習にならない。
   const showBiteMark = gameId === "fishing" && resolveDifficultyMode(ctx.settings) !== "measure";
+  // れんしゅうの回だけ、押すと 出てくる とつながる海と、ラッコの舟・色つきの魚にする
+  // （src/world-fishing.css、art/fishingWorldArt.js）。動くもの・合図の位置・大きさ・時刻は
+  // 変えず、描いてある絵だけを替える。そくていの回は、いまの絵（PNG）のまま1pxも変えない。
+  const practice = resolveDifficultyMode(ctx.settings) !== "measure";
   // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
   // 返すので、測る回の長さは protocol のまま動かない。
   config.endless = resolveEndlessMode(ctx.settings, ctx.endless);
@@ -433,6 +438,23 @@ export function createFishingGame(gameId) {
     catchEl = stageEl.querySelector(".fishing-catch");
     scoreEl = stageEl.querySelector(".fishing-score");
     streakEl = stageEl.querySelector(".fishing-streak");
+  }
+
+  /**
+   * れんしゅうの回の世界に差し替える。組み立ては renderMarkup のまま（要素と class は
+   * 同じ）で、中の絵だけを替える——判定・位置・時刻を動かす要素には触らない。
+   * 世界は遊びの始めに1回だけ作る（試行ごとには作り直さない）。
+   */
+  function decoratePractice() {
+    sceneEl.querySelector(".fishing-sky").innerHTML = fishingSkyHtml();
+    const deepEl = sceneEl.querySelector(".fishing-deep");
+    deepEl.innerHTML = fishingSeaHtml();
+    // 夕暮れ（is-dusk）は、光の変化だけで伝える合図。れんしゅうの回は滑らかに重ねる。
+    deepEl.insertAdjacentHTML("afterend", '<div class="fishing-dusk"></div>');
+    sceneEl.querySelector(".fishing-boat").outerHTML = fishingBoatSvg();
+    // 魚・長靴は、試行ごとに updateVisual が SVG を入れる。
+    sceneEl.querySelector(".fishing-swimmer-art").outerHTML = '<span class="fishing-swimmer-art"></span>';
+    swimmerArtEl = stageEl.querySelector(".fishing-swimmer-art");
   }
 
   function updateProgress(nowRelativeMs) {
@@ -745,7 +767,8 @@ export function createFishingGame(gameId) {
     } else {
       if (swimmerArtEl && swimmerArtEl.dataset.index !== String(planned.index)) {
         swimmerArtEl.dataset.index = String(planned.index);
-        swimmerArtEl.src = planned.kind === "fake" ? bootUrl : FISH_ART[planned.species];
+        if (practice) swimmerArtEl.innerHTML = fishingCatchSvg(planned.kind === "fake" ? "boot" : planned.species);
+        else swimmerArtEl.src = planned.kind === "fake" ? bootUrl : FISH_ART[planned.species];
         swimmerEl.classList.toggle("is-boot", planned.kind === "fake");
         // 画面上の大きさを魚種に合わせる（styles.css の
         // .fishing-swimmer[data-species]）。長さを cm で見せる以上、
@@ -904,7 +927,10 @@ export function createFishingGame(gameId) {
   function mount(el) {
     stageEl = el;
     stageEl.classList.add("module-fishing");
+    // 世界を出し分ける印。CSS はすべてこの下に書いてある（src/world-fishing.css）。
+    stageEl.classList.toggle("is-practice", practice);
     renderMarkup();
+    if (practice) decoratePractice();
 
     const { trials, kindSequence, foreperiods } = buildPlan();
     trialsPlan = trials;
@@ -1046,7 +1072,7 @@ export function createFishingGame(gameId) {
       logTrial(session);
     }
     if (stageEl) {
-      stageEl.classList.remove("module-fishing");
+      stageEl.classList.remove("module-fishing", "is-practice");
       stageEl.innerHTML = "";
     }
     stageEl = null;
