@@ -512,6 +512,9 @@ export function createRhythmGame(gameId) {
     let visualPresentation = "instrument";
     let rafId = null;
     let destroyed = false;
+    // 音が止まっていて始められないとき（おとが ならせません）と、戻るのを待っているあいだ。
+    let soundUnavailable = false;
+    let waitingForSound = false;
     let hitFlashTimer = null;
     let finishTimer = null;
     // 画面から拍の手がかりを出すか（resolveVisualGuidance）。mount() で
@@ -605,7 +608,7 @@ export function createRhythmGame(gameId) {
       // 割り込みを直せばその場で続けられる。
       const stopped = audioState === "suspended" || audioState === "interrupted";
       const why = stopped
-        ? "音が止まっているため、リズムの課題は始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。"
+        ? "音が止まっているため、リズムの課題は始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。画面を押すと、もう一度ためします。"
         : "この端末では音を鳴らす機能が使えないため、リズムの課題は始められません。";
       stageEl.innerHTML = `
         <div class="game-unavailable">
@@ -817,6 +820,12 @@ export function createRhythmGame(gameId) {
     // 引数名を t にしない: このスコープには文言を引く ctx.t がいる
     // （crane で実際に踏んだ。tests/i18n.test.mjs の shadow 検査を参照）。
     function handleInput(perfMs, _source) {
+      // 「おとが ならせません」の画面で押したら、もう一度ためす（押した操作の中で
+      // 止まった音を戻せる。neuronodeApp.js の resumeIfSuspended）。記録はしない。
+      if (!destroyed && !session && soundUnavailable) {
+        waitForSound({ remount: true });
+        return;
+      }
       if (destroyed || !session || session.finished) return;
       // §6.3: 入力時刻(performance.now()) → audio絶対時刻(ms) への変換をここに集約。
       const inputAbsMs = perfMs - anchorPerfMs + sessionStartAudioMs;
@@ -880,6 +889,43 @@ export function createRhythmGame(gameId) {
       excludedTrialCount = params.excludedTrialCount || 0;
       mountStageVisuals();
 
+      // 音が止まっていたら（iOS のスリープ・ほかのアプリ・読み上げのあと）、戻るのを
+      // 少し待ってから始める。戻らなければ理由を出し、次のひと押しでもう一度ためす
+      // （audio.js の waitUntilRunning）。
+      if (audio.scheduler.canSound()) beginSession();
+      else waitForSound();
+    }
+
+    /**
+     * 音が鳴るようになるのを待って始める。鳴らないままなら「おとが ならせません」。
+     * 押すたびに（ユーザー操作の中で）止まった音を戻せるので、その画面で押せば
+     * もう一度ためす（handleInput）。
+     */
+    function waitForSound({ remount = false } = {}) {
+      if (waitingForSound) return;
+      waitingForSound = true;
+      const waiting = audio.scheduler.waitUntilRunning
+        ? audio.scheduler.waitUntilRunning()
+        : Promise.resolve(audio.scheduler.canSound());
+      waiting.then((running) => {
+        waitingForSound = false;
+        if (destroyed || session) return;
+        if (!running) {
+          soundUnavailable = true;
+          renderUnavailable(audio.scheduler.state());
+          return;
+        }
+        soundUnavailable = false;
+        if (remount) {
+          rhythmVisuals?.destroy();
+          mountStageVisuals();
+        }
+        beginSession();
+      });
+    }
+
+    /** セッションを始める（合図の予約・記録の用意）。音が鳴る状態で呼ぶ。 */
+    function beginSession() {
       // §6.3: 対応ペアの取得は「セッション開始時に1回」。perfMs/audioS を
       // 隣接する行で取得し、以降のずれ（クロックドリフト）は許容誤差内とする。
       anchorPerfMs = performance.now();
@@ -902,6 +948,7 @@ export function createRhythmGame(gameId) {
       // 素通りする。ヘッドレスでは再現しないので CI にも出てこない。
       if (startAt === null || !audio.scheduler.canSound()) {
         audio.scheduler.stop();
+        soundUnavailable = true;
         renderUnavailable(audio.scheduler.state());
         return;
       }

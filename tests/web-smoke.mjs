@@ -92,6 +92,7 @@ const checks = [
   ["keeps every scan target visible above the input dock", checkScanFocusStaysVisible],
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
+  ["starts a cue task once suspended sound comes back, and retries on the next press", checkCueTasksWaitForSuspendedSound],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
   ["keeps the supporter menu itself out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
@@ -3624,6 +3625,103 @@ async function checkDockStepsAsideForTextEntry(page) {
   // 文字入力から離れたらドックは戻る。
   await page.locator("#participantId").evaluate((el) => el.blur());
   await page.locator(".switch-dock").waitFor({ state: "visible" });
+}
+
+/**
+ * 遊びを始める瞬間に音が止まっていても（iOS のスリープ・ほかのアプリ・読み上げのあと）、
+ * 戻れば始まる。以前は始めた瞬間に1回だけ canSound() を見ていたので、resume() の途中だと
+ * 「おとが ならせません」になり、そのまま戻れなかった（2026-09-30 の打ち合わせで
+ * 「高い音だけ が動かない」）。戻らないときは理由を出し、直したあとで押せば始まる。
+ *
+ * iOS の「resume() のあと少ししてから running になる」を、state の getter を差し替えて作る。
+ */
+async function checkCueTasksWaitForSuspendedSound(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) return SKIPPED;
+  await page.context().addInitScript(() => {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx || typeof BaseAudioContext === "undefined") return;
+    window.__fakeAudio = { state: null, resumeWorks: true };
+    const real = Object.getOwnPropertyDescriptor(BaseAudioContext.prototype, "state");
+    Object.defineProperty(Ctx.prototype, "state", {
+      configurable: true,
+      get() {
+        return window.__fakeAudio.state ?? real.get.call(this);
+      },
+    });
+    const resume = Ctx.prototype.resume;
+    Ctx.prototype.resume = function delayedResume() {
+      if (window.__fakeAudio.state === "suspended" && window.__fakeAudio.resumeWorks) {
+        setTimeout(() => {
+          window.__fakeAudio.state = null;
+        }, 300);
+      }
+      return resume.call(this);
+    };
+  });
+  await page.reload();
+
+  const passReady = async () => {
+    if ((await page.locator(".game-ready").count()) === 0) return;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await page.waitForTimeout(250);
+      await page.locator("#gameStage").click();
+      if ((await page.locator(".game-ready").count()) === 0) break;
+    }
+  };
+  const open = async (corner, task) => {
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+    if (corner) await openActivity(page, corner);
+    await openActivity(page, task);
+    await waitForClass(page, "#gameView", "is-active");
+  };
+  const started = (moduleClass) =>
+    page.evaluate(
+      (cls) => ({
+        running: document.querySelector("#gameStageContent")?.classList.contains(cls) || false,
+        unavailable: Boolean(document.querySelector(".game-unavailable")),
+      }),
+      moduleClass
+    );
+
+  // 1. 押した直後は止まっていて、0.3秒後に戻る（iOS のふつうの戻り方）。どちらの課題も始まる。
+  for (const [corner, task, moduleClass] of [
+    [null, t("tile.gonogo.title"), "module-rhythm"],
+    ["さかなつり", "アタリで釣る", "module-fishing"],
+  ]) {
+    await open(corner, task);
+    await page.evaluate(() => {
+      window.__fakeAudio.state = "suspended";
+      window.__fakeAudio.resumeWorks = true;
+    });
+    await passReady();
+    await page.waitForTimeout(1200);
+    const result = await started(moduleClass);
+    assert(result.running && !result.unavailable, `${task} must start once the suspended sound comes back, got ${JSON.stringify(result)}`);
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+    await page.reload();
+  }
+
+  // 2. 戻らないままなら理由を出す。音を直してから押せば、その場で始まる。
+  await open(null, t("tile.gonogo.title"));
+  await page.evaluate(() => {
+    window.__fakeAudio.state = "suspended";
+    window.__fakeAudio.resumeWorks = false;
+  });
+  await passReady();
+  await page.locator(".game-unavailable").waitFor({ state: "visible" });
+  await page.evaluate(() => {
+    window.__fakeAudio.resumeWorks = true;
+  });
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(1500);
+  const retried = await started("module-rhythm");
+  assert(retried.running && !retried.unavailable, `Pressing again after fixing the sound must start the task, got ${JSON.stringify(retried)}`);
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 /**

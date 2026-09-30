@@ -27,6 +27,13 @@ import { chunkGapS, planVoiceClips, splitSpeechChunks, voiceLang } from "./voice
 
 /** ビート予約の既定包絡（sine, gain 0.05, 約0.18秒で減衰）。detailed-design.md §6.2。 */
 export const DEFAULT_TONE_GAIN = 0.05;
+
+/**
+ * 合図が音の課題を始めるときに音が止まっていたら（iOS）、戻るのをこれだけ待つ（ms）。
+ * resume() のあと動き出すまでは、ふつう数十〜数百ms。待ちすぎると押しても始まらない
+ * 時間が長くなるので、1.5秒で打ち切って理由を出す（scheduler.waitUntilRunning）。
+ */
+export const SOUND_RESUME_WAIT_MS = 1500;
 /** 既存利用者の通常時音量を変えない。Switch ControlモードはTTS自体を既定OFFにする。 */
 export const DEFAULT_SPEECH_VOLUME = 1;
 
@@ -1453,6 +1460,37 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       canSound() {
         const ctx = ensureContext();
         return Boolean(ctx) && ctx.state === "running";
+      },
+      /**
+       * 音が鳴る状態になるまで待つ。
+       *
+       * iOS では、スリープ・ほかのアプリ・着信・端末の読み上げのあと、AudioContext が
+       * "suspended" や "interrupted" のまま残る。resume() を呼んでも、動き出すのは少し
+       * あと（Promise が解けてから）。以前は遊びを始めた瞬間に1回だけ canSound() を見て
+       * いたので、戻る途中だと「おとが ならせません」になり、そのまま戻れなかった
+       * （2026-09-30 の打ち合わせで「高い音だけ が動かない」）。
+       * @param {number} [timeoutMs] これだけ待っても鳴らなければ false
+       * @returns {Promise<boolean>}
+       */
+      waitUntilRunning(timeoutMs = SOUND_RESUME_WAIT_MS) {
+        const ctx = ensureContext();
+        if (!ctx) return Promise.resolve(false);
+        if (ctx.state === "running") return Promise.resolve(true);
+        preferPlaybackSession();
+        try {
+          ctx.resume().catch(() => {});
+        } catch {
+          // resume できない環境でも、待つだけは待つ。
+        }
+        const started = performance.now();
+        return new Promise((resolve) => {
+          const check = () => {
+            if (ctx.state === "running") resolve(true);
+            else if (ctx.state === "closed" || performance.now() - started >= timeoutMs) resolve(false);
+            else window.setTimeout(check, 50);
+          };
+          check();
+        });
       },
       /** いまの AudioContext の状態（表示・記録用。無ければ null）。 */
       state() {
