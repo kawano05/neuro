@@ -404,6 +404,25 @@
   height: 100%;
 }
 
+/* 釣果札の上端を帯と合計点の下に留める。測定の札・魚・合図の位置は変えない。 */
+.module-fishing.is-practice .fishing-catch {
+  top: max(17%, 104px);
+  /* 大きく出る演出でも、札の上端を基点にして合計点へせり上がらせない。 */
+  transform-origin: 50% 0;
+  transform: translate(-50%, 0);
+}
+
+.module-fishing.is-practice .fishing-catch.is-shown {
+  transform: translate(-50%, 0);
+}
+
+/* 背の低い画面では合計点も帯の下へ来るため、釣果札は巻き上げた魚の下に出す。 */
+@media (max-height: 500px) {
+  .module-fishing.is-practice .fishing-catch {
+    top: max(48%, 132px);
+  }
+}
+
 /* --- 高コントラスト（絵が課題の対象と競わないよう、飾りは消す） ---------------- */
 
 body.high-contrast .module-fishing.is-practice .fishing-water {
