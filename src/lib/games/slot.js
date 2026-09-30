@@ -121,7 +121,7 @@ export function createSlotGame(gameId) {
     // 測定のDOMは既存の関数へそのまま渡し、れんしゅうの刺激だけ替える。
     function symbolHtml(symbolId, options) {
       return config.difficultyMode !== "measure"
-        ? slotPracticeSymbolHtml(symbolId, options)
+        ? presentation.run("world.slot.symbol", () => slotPracticeSymbolHtml(symbolId, options), slotSymbolHtml(symbolId, options))
         : slotSymbolHtml(symbolId, options);
     }
 

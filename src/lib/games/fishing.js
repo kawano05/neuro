@@ -769,7 +769,7 @@ export function createFishingGame(gameId) {
     } else {
       if (swimmerArtEl && swimmerArtEl.dataset.index !== String(planned.index)) {
         swimmerArtEl.dataset.index = String(planned.index);
-        if (practice) swimmerArtEl.innerHTML = fishingCatchSvg(planned.kind === "fake" ? "boot" : planned.species);
+        if (practice) swimmerArtEl.innerHTML = presentation.run("world.fishing.catch", () => fishingCatchSvg(planned.kind === "fake" ? "boot" : planned.species), `<img src="${planned.kind === "fake" ? bootUrl : FISH_ART[planned.species]}" alt="" style="width:100%;height:100%;object-fit:contain" />`);
         else swimmerArtEl.src = planned.kind === "fake" ? bootUrl : FISH_ART[planned.species];
         swimmerEl.classList.toggle("is-boot", planned.kind === "fake");
         // 画面上の大きさを魚種に合わせる（styles.css の

@@ -4655,6 +4655,10 @@ async function exposePresentationContext(page) {
       exposed = true;
       return source + `window.__presentationCtx=${name}${end}`;
     });
+    // 世界の絵の関数にも、応答内だけで例外を差し込む。
+    const brokenWorld = 'window.__breakWorld?(()=>{throw Error("SMOKE_WORLD_ART")})():';
+    body = body.replace(/return(`\s*\$\{\w+\}\s*<span class="sea-spot")/, (_, template) => `return ${brokenWorld}${template}`);
+    body = body.replace('return`<div class="slot-world"', `return ${brokenWorld}\`<div class="slot-world"`);
     assert(exposed, "The response injection must expose the actual app context");
     await route.fulfill({ response, body });
   });
@@ -4664,7 +4668,7 @@ async function exposePresentationContext(page) {
 
 async function checkPresentationFaults(page) {
   await exposePresentationContext(page);
-  for (const fault of ["press", "finale", "music", "voice", "party"]) {
+  for (const fault of ["press", "finale", "music", "voice", "party", "world"]) {
     await page.evaluate(({ key, fault }) => {
       const saved = JSON.parse(localStorage.getItem(key));
       saved.settings = { ...saved.settings, autoScan: false, speechEnabled: false, fxLevel: fault === "party" ? "big" : "normal", slotL1Rounds: 3 };
@@ -4680,6 +4684,7 @@ async function checkPresentationFaults(page) {
       if (fault === "music") ctx.audio.music.stop = broken;
       if (fault === "voice") ctx.voiceFeedback = broken;
       if (fault === "party") { ctx.fx.partyPress = broken; ctx.fx.partyFinale = broken; }
+      if (fault === "world") window.__breakWorld = true;
     }, fault);
     // 声を壊すのは説明を終えたあと。説明画面の担当範囲には触れない。
     await openActivity(page, t("tile.color-legacy.title"));
@@ -4750,6 +4755,8 @@ async function checkDecorationMotion(page, project) {
         const scheduler = window.__presentationCtx.audio.scheduler;
         scheduler.canSound = () => true;
         scheduler.now = () => performance.now() / 1000;
+        scheduler.start = () => performance.now() / 1000 + 0.3;
+        scheduler.stop = () => {};
       });
     }
     await page.waitForTimeout(200);

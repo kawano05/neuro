@@ -404,6 +404,11 @@ export function createCraneGame(ctx) {
     return prizes[currentIndex];
   }
 
+  // 世界の絵が壊れたときも、狙う景品の種類を既存の画像で伝える。
+  function prizePicture(asset) {
+    return presentation.run("world.crane.prize", () => cranePrizeSvg(asset), `<img src="${PRIZE_ART[asset]}" alt="" style="width:100%;height:100%;object-fit:contain" />`);
+  }
+
   /** 奥に転がしておく飾りの景品。狙う対象ではないので影もリングも付けない。 */
   function decorMarkup() {
     return DECOR_SPOTS.map((spot, index) => {
@@ -411,7 +416,7 @@ export function createCraneGame(ctx) {
       const at = project(spot.x, spot.y);
       if (practice) {
         return `<div class="crane-decor" aria-hidden="true"
-          style="left:${at.left}%;top:${at.top}%;--prize-scale:${at.scale.toFixed(3)}">${cranePrizeSvg(prize.asset)}</div>`;
+          style="left:${at.left}%;top:${at.top}%;--prize-scale:${at.scale.toFixed(3)}">${prizePicture(prize.asset)}</div>`;
       }
       return `<img class="crane-decor" src="${PRIZE_ART[prize.asset]}" alt=""
         style="left:${at.left}%;top:${at.top}%;--prize-scale:${at.scale.toFixed(3)}" />`;
@@ -442,7 +447,7 @@ export function createCraneGame(ctx) {
       ? `<div class="crane-prize" aria-hidden="true"></div>`
       : `<img class="crane-prize" src="" alt="" />`;
     const clawMarkup = practice
-      ? `<div class="crane-claw" aria-hidden="true">${clawHtml()}</div>`
+      ? `<div class="crane-claw" aria-hidden="true">${presentation.run("world.crane.claw", clawHtml, `<img src="${clawOpenUrl}" alt="" style="width:100%;height:100%" />`)}</div>`
       : `<img class="crane-claw" src="${clawOpenUrl}" alt="" />`;
     stageEl.innerHTML = `${worldHtml}
       <div class="crane-cabinet" aria-hidden="true">
@@ -561,7 +566,7 @@ export function createCraneGame(ctx) {
     const target = currentTarget();
     const prize = currentPrize();
     const at = project(target.x, target.y);
-    if (practice) prizeEl.innerHTML = cranePrizeSvg(prize.asset);
+    if (practice) prizeEl.innerHTML = prizePicture(prize.asset);
     else prizeEl.src = PRIZE_ART[prize.asset];
     prizeEl.style.left = `${at.left}%`;
     prizeEl.style.top = `${at.top}%`;
@@ -1005,7 +1010,7 @@ export function createCraneGame(ctx) {
     const badge = document.createElement(practice ? "div" : "img");
     badge.className = "crane-collected-item";
     if (practice) {
-      badge.innerHTML = cranePrizeSvg(currentPrize().asset);
+      badge.innerHTML = prizePicture(currentPrize().asset);
     } else {
       badge.src = PRIZE_ART[currentPrize().asset];
       badge.alt = "";
