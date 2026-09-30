@@ -19,12 +19,14 @@
 
 .module-fishing.is-practice .fishing-sky {
   overflow: hidden;
+  pointer-events: none;
   background: linear-gradient(180deg, #5fc4f6 0%, #a9e1fb 58%, #e4f7ff 100%);
 }
 
 /* 雲は上の帯（のこり・設定・おわる。高さ 66px まで）の下を流れる。帯の裏に入れない。 */
 .module-fishing.is-practice .fishing-cloud {
   position: absolute;
+  pointer-events: none;
   left: 0;
   height: auto;
   animation: fishing-cloud-drift 97s linear infinite;
@@ -66,6 +68,7 @@
 /* 島は水平線に座る。水のほうが手前なので、島の下の縁は水に隠れる。 */
 .module-fishing.is-practice .fishing-island {
   position: absolute;
+  pointer-events: none;
   right: 7%;
   bottom: 0;
   height: min(44%, 116px);
@@ -74,6 +77,7 @@
 
 .module-fishing.is-practice .fishing-island-far {
   position: absolute;
+  pointer-events: none;
   bottom: 0;
   left: 9%;
   height: min(28%, 72px);
@@ -297,6 +301,7 @@
 .module-fishing.is-practice .fishing-dusk-sky {
   position: absolute;
   inset: 0;
+  pointer-events: none;
   background: linear-gradient(180deg, #f0955a 0%, #ffbe84 55%, #ffe2b6 100%);
   opacity: 0;
   transition: opacity 1200ms linear;
@@ -322,17 +327,7 @@
   height: auto;
   aspect-ratio: 720 / 444;
   overflow: visible;
-  animation: fishing-boat-bob 9s ease-in-out infinite alternate;
-}
-
-@keyframes fishing-boat-bob {
-  from {
-    translate: 0 -2px;
-  }
-
-  to {
-    translate: 0 2px;
-  }
+  /* 水中の糸は合図の位置なので動かさず、舟の糸との継ぎ目も固定する。 */
 }
 
 .module-fishing.is-practice .fishing-otter-eyes {
@@ -432,7 +427,6 @@ body.high-contrast .module-fishing.is-practice .fishing-line::after {
   .module-fishing.is-practice .fishing-sea .sea-rays i,
   .module-fishing.is-practice .fishing-sea .sea-surface,
   .module-fishing.is-practice .fishing-sea .sea-weed,
-  .module-fishing.is-practice .fishing-boat,
   .module-fishing.is-practice .fishing-otter-eyes {
     animation: none;
   }
