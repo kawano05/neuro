@@ -7,9 +7,8 @@
 //   node scripts/probes/probe-csv-output.mjs
 
 import { escapeCsv } from "../../src/lib/utils.js";
-import { buildRhythmCsvRows, buildTaskCsvRows, buildSessionLedgerRows } from "../../src/lib/dataExport.js";
+import { buildRhythmCsvRows, buildTaskCsvRows, buildSessionLedgerRows, buildLogCsvRows } from "../../src/lib/dataExport.js";
 import { buildSlotCsvRows } from "../../src/lib/slotCsv.js";
-import { buildLogCsvRows } from "../../src/lib/views/log.js";
 
 const toCsv = (rows) => rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
 

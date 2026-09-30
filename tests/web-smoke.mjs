@@ -76,14 +76,13 @@ const checks = [
   ["finishes color-legacy with progress, result, retry, and home", checkColorCompletionFlow],
   ["plays the balloon and coloring games to the end, with live per-game settings", checkBeginnerGamesFlow],
   ["hits every pitch that is swung at and re-pitches a missed one in the baseball game", checkBaseballFlow],
-  ["adds effects within the safety rules and never in a measured run", checkEffectsFollowSafetyRules],
+  ["adds effects within the safety rules", checkEffectsFollowSafetyRules],
   ["plays the party atmosphere: otter, sparkles, crowd, reward, and a frame that waits", checkPartyAtmosphere],
   ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
   ["speaks with the app's own natural voice, and with the device voice when asked to", checkAppVoiceSpeaks],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
   ["fills the screen with the practice reels without any of them spilling off it", checkPracticeReelsFillTheScreen],
-  ["keeps the measured reels at their fixed size and shrinks them only when they cannot fit", checkMeasuredReelsStayOnScreen],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
   ["counts up instead of counting down in endless fishing", checkEndlessFishingHasNoClock],
   ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
@@ -93,26 +92,19 @@ const checks = [
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["starts a cue task once suspended sound comes back, and retries on the next press", checkCueTasksWaitForSuspendedSound],
-  ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
   ["keeps the supporter menu itself out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
   ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
-  ["moves between visible feature tabs", checkFeatureTabs],
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
   ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
   ["takes any key as switch input on the start screen and inside a game", checkAnyKeyOnUserScreens],
-  ["shows the everyday settings first and folds the rest, with the measuring mark still visible", checkSupporterSettingsLayout],
-  ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
+  ["shows the everyday settings first, folds the rest, and has no research or log screens", checkSupporterSettingsLayout],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps every screen free of overflow and undersized targets", checkLayoutInvariants],
   ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
   ["keeps the hidden attribute effective against CSS display rules", checkHiddenAttributeIsRespected],
-  ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
-  ["lets the supporter reach every game's trend through tabs", checkTrendTabsCoverEveryGame],
-  ["wires every export button to a real download", checkExportButtonsAreWired],
-  ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
 ];
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。
@@ -283,11 +275,10 @@ async function waitForServer() {
 
 async function checkMainApp(page) {
   await waitForText(page, "h1", "NEURONODE");
-  // タブは2つ（評価ログ・設定）＋「← ホームへ」。効果測定・操作訓練・研究の
-  // 3画面は 2026-08-29 に削除し、支援者のデータ画面は評価ログ1枚へまとめた
-  // （手順は別紙の手順書に置く）。matching/voca/letters は利用者向けなので、
-  // 以前にホームの「まなぶ・つたえる」二階層目へ移している。
-  await waitForCount(page, ".tab", 2);
+  // タブは設定の1つ＋「← ホームへもどる」。効果測定・操作訓練・研究の
+  // 3画面は 2026-08-29 に、評価ログは 2026-09-30 に外した。matching/voca/letters
+  // は利用者向けなので、以前にホームの「まなぶ・つたえる」二階層目へ移している。
+  await waitForCount(page, ".tab", 1);
   // The app always boots into the start screen (detailed-design.md §2.1:
   // MUST start from "start" even on revisit, to guarantee the AudioContext
   // unlock + input continuity check every time).
@@ -1059,30 +1050,6 @@ async function checkEffectsFollowSafetyRules(page) {
   await page.waitForTimeout(450);
   assert((await gone()) === 1, "With effects off, the balloon must still pop");
   assert((await emitted()) === quietBefore, "With effects off, no particles may be drawn");
-
-  // 3. そくていの回: どの強さを選んでいても何も足さない。
-  await setSettings({ fxLevel: "big", difficultyMode: "measure" });
-  await toHome();
-  await openActivity(page, "さかなつり");
-  await openActivity(page, "アタリで釣る");
-  await waitForClass(page, "#gameView", "is-active");
-  await page.locator(".game-ready").waitFor({ state: "visible" });
-  await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
-  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
-  if (!audioAvailable) return SKIPPED;
-  const measuredBefore = await emitted();
-  await page.locator(".fishing-scene.is-bite").waitFor({ timeout: 15000 });
-  await page.locator("#gameStage").click();
-  await page.waitForTimeout(600);
-  assert((await emitted()) === measuredBefore, "A measured run must not add any effects");
-  const recorded = await page.evaluate((key) => {
-    const state = JSON.parse(localStorage.getItem(key) || "{}");
-    return (state.sessions || []).at(-1)?.config?.fxLevel ?? null;
-  }, storageKey);
-  assert(recorded === "none", `A measured run must record fxLevel "none", got ${JSON.stringify(recorded)}`);
-  await page.locator("#gameExit").click();
-  await waitForClass(page, "#homeView", "is-active");
 }
 
 /**
@@ -1664,13 +1631,28 @@ async function checkSupporterSettingsLayout(page) {
   assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "The detailed settings must start folded");
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
   await page.locator(".status-pill").waitFor({ state: "hidden" });
-  await page.locator("#settingsMoreState").waitFor({ state: "hidden" });
 
-  await openSettingsTab(page, "measure");
-  await page.locator("#difficultyMode").selectOption("measure");
+  // 研究（そくてい）と評価ログの画面は外した（2026-09-30）。
+  assert((await page.locator('.settings-tab[data-settings-tab="measure"]').count()) === 0, "The research tab must be gone");
+  assert((await page.locator("#difficultyMode, #researcherMode, #startCalibration").count()) === 0, "Research controls must be gone");
+  assert((await page.locator('.tab[data-view="log"], #log').count()) === 0, "The evaluation log must be gone");
+  await openSettingsMore(page);
   await page.locator("#settingsMore > summary").click();
   assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "Clicking the heading must fold it again");
-  await page.locator("#settingsMoreState").waitFor({ state: "visible" });
+
+  // 以前に「測定」を保存した端末でも、戻す画面が無いので練習に戻す。
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    saved.settings = { ...(saved.settings || {}), difficultyMode: "measure", researcherMode: true };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, storageKey);
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  const settings = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").settings || {}, storageKey);
+  assert(settings.difficultyMode === "practice", `A saved measured mode must fall back to practice, got ${settings.difficultyMode}`);
+  assert(settings.researcherMode === false, "A saved researcher mode must be turned off");
 }
 
 async function checkKeyboardAndSwitchInput(page) {
@@ -1729,194 +1711,6 @@ async function checkKeyboardAndSwitchInput(page) {
  *   2. 支援者編集ロックを廃止したあと、操作子がそのまま押せること。
  *      「無効化されているが輪には居る」状態を作り直さない。
  */
-/**
- * 書き出しボタンが本当に書き出すこと。
- *
- * リールCSVのボタンは、押しても何も起きない状態で出荷されていた
- * （2026-08-28に発見）。exportSlotCsv が exportRhythmCsv の内側に入り込んで
- * いて、外側からは見えない——にもかかわらず例外は出なかった。`id` を持つ
- * 要素は同名のグローバル変数になるので、`exportSlotCsv` はボタン要素自身に
- * 解決され、addEventListener はそれを「handleEvent を持たないリスナ」として
- * 黙って受け取っていた。エラーも警告も無く、押しても無反応になるだけ。
- *
- * 「押せる」「見える」を見ていたテストでは捕まらない。捕まえられるのは
- * 「押した結果データが出てくるか」だけなので、Blob の生成を数える。
- * ダウンロード自体はヘッドレスで止まるが、URL.createObjectURL まで届けば
- * 行は組み上がっている。
- */
-/**
- * 参加者ひとりぶんを終えるとき、書き出す前には消させない。
- *
- * 想定運用は「1人終わったら書き出して、端末を空にして次の人へ」。消すのは
- * 取り返しがつかず、書き出しは取り返しがつく——順番を守らせる。
- *
- * これまでどのボタンも state.sessions を消さなかったので、共用端末では前の
- * 参加者の回が残りつづけ、推移も自己最高も混ざっていた（2026-08-29）。
- */
-async function checkHandOverNeedsAnExportFirst(page) {
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-    await page.locator('.tab[data-view="log"]').click();
-    await waitForClass(page, "#log", "is-active");
-
-  // 消す対象を作る（1件でも入っていれば導線は同じ）。
-  await page.evaluate((key) => {
-    const state = JSON.parse(localStorage.getItem(key) || "{}");
-    state.logs = [
-      { time: "2026-08-29T00:00:00.000Z", view: "home", type: "probe", label: "handover" },
-    ];
-    localStorage.setItem(key, JSON.stringify(state));
-  }, storageKey);
-  await page.reload();
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await page.locator("#homeSupporterMenu").click();
-    await page.locator('.tab[data-view="log"]').click();
-    await waitForClass(page, "#log", "is-active");
-
-  // 確認ダイアログが出たら必ず承諾する。それでも書き出し前は消えないこと。
-  page.on("dialog", (dialog) => dialog.accept());
-
-  await page.locator("#handOverParticipant").click();
-  await page.waitForTimeout(150);
-  const blocked = await page.evaluate((key) => {
-    const state = JSON.parse(localStorage.getItem(key) || "{}");
-    return (state.logs || []).length;
-  }, storageKey);
-  // 画面を行き来するあいだにも操作ログは増えるので、件数ではなく
-  // 「消えていない」ことだけを見る。
-  assert(blocked >= 1, `書き出す前に消えてしまった（logs=${blocked}）`);
-  const reason = ((await page.locator("#supporterMessage").textContent()) || "").trim();
-  assert(
-    reason.includes("書き出"),
-    `止めた理由が画面に出ていない: ${reason.slice(0, 60)}`
-  );
-
-  // 書き出したあとなら消える。
-  await page.locator("#exportRawJson").click();
-  await page.waitForTimeout(200);
-  await page.locator("#handOverParticipant").click();
-  await page.waitForTimeout(300);
-  const cleared = await page.evaluate((key) => {
-    const state = JSON.parse(localStorage.getItem(key) || "{}");
-    return {
-      logs: (state.logs || []).length,
-      sessions: (state.sessions || []).length,
-      participantId: state.evaluation?.participantId ?? null,
-    };
-  }, storageKey);
-  assert(cleared.logs === 0 && cleared.sessions === 0, `消えていない: ${JSON.stringify(cleared)}`);
-  // 次の人のIDを入れ直させる（前の人のIDが残っていると取り違える）。
-  assert(cleared.participantId === "", `参加者IDが残っている: ${cleared.participantId}`);
-}
-
-async function checkExportButtonsAreWired(page) {
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-  // 効果測定タブは研究者モードでのみ出る。
-    await page.locator('.tab[data-view="log"]').click();
-    await waitForClass(page, "#log", "is-active");
-
-  // データが1件も無い状態では「ありません」を出して書き出さないのが正しい
-  // 挙動なので、押して数える前に1回ぶんの記録を差し込む。
-  await page.evaluate(() => {
-    window.__blobCount = 0;
-    const original = URL.createObjectURL.bind(URL);
-    URL.createObjectURL = (blob) => {
-      window.__blobCount += 1;
-      window.__lastBlobType = blob.type;
-      return original(blob);
-    };
-  });
-
-  const buttons = [
-    "#exportRhythmCsv",
-    "#exportSlotCsv",
-    "#exportScanCsv",
-    "#exportRtCsv",
-    "#exportSessionLedgerCsv",
-    "#exportRawJson",
-    // 操作ログCSVもこの1枚に居る（効果測定タブを畳んだ 2026-08-29 以降）。
-    "#exportCsv",
-  ];
-  for (const selector of buttons) {
-    const count = await page.locator(selector).count();
-    assert(count === 1, `Export button ${selector} must exist exactly once, found ${count}`);
-    const before = await page.evaluate(() => window.__blobCount);
-    await page.locator(selector).click();
-    const after = await page.evaluate(() => window.__blobCount);
-    const explained = await page.evaluate(() =>
-      (document.querySelector("#supporterMessage")?.textContent || "").trim()
-    );
-    // 書き出したか、書き出せない理由を出したか。無反応だけを落とす。
-    assert(
-      after > before || explained.length > 0,
-      `${selector} produced neither a download nor a visible reason (silent no-op)`
-    );
-    await page.evaluate(() => {
-      const message = document.querySelector("#supporterMessage");
-      if (message) {
-        message.textContent = "";
-        message.hidden = true;
-      }
-    });
-  }
-}
-
-/**
- * 回ごとの推移を、あそびごとのタブで全部たどれること。
- *
- * 記録のあるあそびだけをタブに出すと、支援者は「まだ遊んでいない」のか
- * 「表示が壊れている」のかを区別できない。全部並べて、記録の無いものは
- * 「データがありません」と言う。
- *
- * タブに data-scan は付けない。ここは支援者がタップ／キーボードで使う面で、
- * 利用者が走査で操作するものではない（ホームの支援者メニュー入口と同じ扱い）。
- */
-async function checkTrendTabsCoverEveryGame(page) {
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-  await page.locator('.tab[data-view="log"]').click();
-  await waitForClass(page, "#log", "is-active");
-
-  const tabs = page.locator(".trend-tab");
-  const tabCount = await tabs.count();
-  // 記録が1件も無い状態でも、あそびのぶんだけタブが出る。
-  assert(tabCount >= 5, `Expected a tab per game, got ${tabCount}`);
-
-  // 走査の輪には入れない（利用者が押しても意味のない項目を増やさない）。
-  assert(
-    (await page.locator(".trend-tab[data-scan]").count()) === 0,
-    "Trend tabs are supporter-only and must stay out of the scan ring"
-  );
-
-  // どのタブを開いても、何かしら答えが出る（無反応の面を作らない）。
-  for (let index = 0; index < tabCount; index += 1) {
-    const tab = tabs.nth(index);
-    const name = ((await tab.textContent()) || "").replace(/\s+/g, " ").trim();
-    await tab.click();
-    await page.waitForTimeout(80);
-    assert(
-      (await tab.getAttribute("aria-selected")) === "true",
-      `Tab "${name}" did not become the selected one`
-    );
-    const panel = ((await page.locator("#sessionTrends").textContent()) || "").trim();
-    assert(panel.length > 0, `Tab "${name}" showed nothing at all`);
-    // 記録が無い回は、無いと言い切る（黙って空にしない）。
-    const hasCards = (await page.locator("#sessionTrends .trend-card").count()) > 0;
-    assert(
-      hasCards || panel.includes("データがありません"),
-      `Tab "${name}" is empty but does not say so: ${panel.slice(0, 60)}`
-    );
-  }
-}
-
 async function checkSettingsTabs(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -1924,7 +1718,8 @@ async function checkSettingsTabs(page) {
   await waitForClass(page, "#settings", "is-active");
 
   const tabs = page.locator(".settings-tab");
-  assert((await tabs.count()) === 4, `Expected four settings tabs, got ${await tabs.count()}`);
+  // 研究の面（そくてい）は 2026-09-30 に外した。スイッチ・見え方と音・むずかしさの3つ。
+  assert((await tabs.count()) === 3, `Expected three settings tabs, got ${await tabs.count()}`);
   assert(
     (await tabs.first().getAttribute("aria-selected")) === "true",
     "The first settings tab must start selected"
@@ -1936,7 +1731,7 @@ async function checkSettingsTabs(page) {
   await openSettingsMore(page);
   // 最初の面の項目は見えていて、他の面の項目は見えていない。
   await page.locator("#autoScan").waitFor({ state: "visible" });
-  await page.locator("#researcherMode").waitFor({ state: "hidden" });
+  await page.locator("#fishingLimitMs").waitFor({ state: "hidden" });
 
   const hiddenScannable = async () =>
     page.evaluate(
@@ -1951,8 +1746,8 @@ async function checkSettingsTabs(page) {
   );
 
   // 面を切り替えると入れ替わる。
-  await openSettingsTab(page, "measure");
-  await page.locator("#researcherMode").waitFor({ state: "visible" });
+  await openSettingsTab(page, "play");
+  await page.locator("#fishingLimitMs").waitFor({ state: "visible" });
   await page.locator("#autoScan").waitFor({ state: "hidden" });
   // よく使う設定は、どの面を開いていても見えたまま。
   await page.locator("#scanInterval").waitFor({ state: "visible" });
@@ -1963,7 +1758,7 @@ async function checkSettingsTabs(page) {
 
   // 支援者編集ロックは廃止した（2026-08-17）。開いた面の操作子はそのまま押せる。
   assert(
-    !(await page.locator("#researcherMode").isDisabled()),
+    !(await page.locator("#fishingLimitMs").isDisabled()),
     "Settings controls must be usable without an editing lock"
   );
   assert(
@@ -2043,22 +1838,6 @@ async function checkSupporterMenuStaysOutOfTheScanRing(page) {
   assert(!(await page.locator("#homeReturn").isHidden()), "The supporter must still see the way back");
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
-
-  // 他の支援者画面（評価ログ）では、その面の操作子はこれまでどおり輪に入る。
-  // 走査で行き止まりになるのは設定画面だけ。
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-  await page.locator('.tab[data-view="log"]').click();
-  await waitForClass(page, "#log", "is-active");
-  const logRing = await walkRing(45);
-  assert(
-    logRing.some((entry) => entry.id === "exportCsv"),
-    "Only the supporter menu is exempt; other views keep their own controls in the ring"
-  );
-  assert(
-    logRing.some((entry) => entry.id === "homeReturn"),
-    "The home-return button must stay reachable by scanning from the evaluation log"
-  );
 }
 
 /**
@@ -2425,102 +2204,6 @@ async function checkPracticeReelsFillTheScreen(page) {
     assert(
       fit.usedHeight >= 0.5 || fit.usedWidth >= 0.7,
       `The practice reels must fill the screen, used ${Math.round(fit.usedWidth * 100)}% x ${Math.round(fit.usedHeight * 100)}%`
-    );
-    await page.locator("#gameExit").click();
-    await waitForClass(page, "#homeView", "is-active");
-  }
-}
-
-/**
- * そくていの回のリールは、決まった大きさ（1コマ 94px、幅 620px 以下は 82px）で出し、
- * 画面に入りきらないときだけ縮めて収める（games/slotFit.js、engineVersion 5）。
- *
- * 直す前は、入りきらない分が上下へはみ出し、上の分はスクロールしても戻せなかった
- * （2026-09-28 に実測: スマホの横向きで目標の札が丸ごと画面の外、縦向きで札が
- * 上の帯の裏）。
- *
- * 見ること: 目標の札・ことば・リール・6つの絵が、どれも画面の中にあって上の帯の
- * 裏に入っていない / 収めたときはスクロールしない / 収めていないときの1コマは
- * 決まった大きさのまま（iPad などの見え方を変えていない）/ 収めたときも決まった
- * 大きさより大きくしない / 画面に出した1コマの高さが回の記録と、止めた1回ごとの
- * 記録に残る。
- */
-async function checkMeasuredReelsStayOnScreen(page) {
-  await page.evaluate((key) => {
-    const saved = JSON.parse(localStorage.getItem(key) || "{}");
-    saved.settings = { ...(saved.settings || {}), difficultyMode: "measure" };
-    localStorage.setItem(key, JSON.stringify(saved));
-  }, storageKey);
-  await page.reload();
-  await waitForClass(page, "#startView", "is-active");
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 9);
-  for (const tileKey of ["tile.slot-l2.title", "tile.slot-l1.title"]) {
-    await openActivity(page, t("tile.slot-corner.title"));
-    await waitForActivityChoices(page, 3);
-    await openActivity(page, t(tileKey));
-    await waitForClass(page, "#gameView", "is-active");
-    await page.locator(".game-ready").waitFor({ state: "visible" });
-    await page.locator("#gameStage").click();
-    await page.locator(".game-ready").waitFor({ state: "detached" });
-    await page.locator(".slot-task[data-difficulty-mode='measure']").waitFor({ state: "visible" });
-    await page.waitForTimeout(150);
-    const seen = await page.evaluate((key) => {
-      const stage = document.querySelector("#gameStageContent");
-      const bars = [...document.querySelectorAll(".game-progress, .game-actions > :not([hidden])")]
-        .map((el) => el.getBoundingClientRect())
-        .filter((b) => b.width > 0 && b.height > 0);
-      const parts = [".slot-target", ".slot-status", ".slot-reel", ".slot-symbol-guide"]
-        .flatMap((selector) => [...document.querySelectorAll(selector)])
-        .map((el) => ({ name: el.className, b: el.getBoundingClientRect() }))
-        .filter(({ b }) => b.width > 0 && b.height > 0);
-      const outside = parts.filter(({ b }) => b.left < -1 || b.top < -1 || b.right > innerWidth + 1 || b.bottom > innerHeight + 1);
-      const underBar = parts.filter(({ b }) =>
-        bars.some((bar) => b.left < bar.right - 1 && bar.left < b.right - 1 && b.top < bar.bottom - 1 && bar.top < b.bottom - 1)
-      );
-      const saved = JSON.parse(localStorage.getItem(key) || "{}");
-      const session = (saved.sessions || []).filter((item) => item.taskType === "slot").at(-1);
-      return {
-        supportsContainerUnits: CSS.supports("height", "1cqh"),
-        fitted: stage.classList.contains("is-fitted"),
-        scrolls: stage.scrollHeight > stage.clientHeight + 1 || stage.scrollWidth > stage.clientWidth + 1,
-        outside: outside.map(({ name }) => name),
-        underBar: underBar.map(({ name }) => name),
-        cell: document.querySelector(".slot-reel-window").getBoundingClientRect().height / 3,
-        fixedCell: innerWidth <= 620 ? 82 : 94,
-        recordedCellPx: session?.config?.reelCellPx ?? null,
-      };
-    }, storageKey);
-    if (!seen.supportsContainerUnits) return SKIPPED;
-    assert(seen.outside.length === 0, `Measured reels: ${seen.outside.join(", ")} must stay on the screen`);
-    assert(seen.underBar.length === 0, `Measured reels: ${seen.underBar.join(", ")} must not hide under the top bar`);
-    if (seen.fitted) {
-      assert(!seen.scrolls, "The fitted measured reels must not need scrolling");
-      assert(seen.cell <= seen.fixedCell + 0.5, `A fitted reel cell must never grow past ${seen.fixedCell}px, got ${seen.cell}`);
-    } else {
-      assert(Math.abs(seen.cell - seen.fixedCell) < 0.5, `Where the reels fit, the cell must stay ${seen.fixedCell}px, got ${seen.cell}`);
-    }
-    assert(
-      typeof seen.recordedCellPx === "number" && Math.abs(seen.recordedCellPx - seen.cell) <= 0.1,
-      `The run must record the shown cell size (${seen.cell}), got ${JSON.stringify(seen.recordedCellPx)}`
-    );
-    // 止めた1回ごとにも、そのとき出ていた大きさが残る（途中で向きを変えると変わる）。
-    await page.waitForTimeout(400);
-    await page.locator("#gameStage").click();
-    const stopped = await page.waitForFunction(
-      (key) => {
-        const saved = JSON.parse(localStorage.getItem(key) || "{}");
-        const session = (saved.sessions || []).filter((item) => item.taskType === "slot").at(-1);
-        return session?.trials?.length ? session.trials.at(-1).reelCellPx ?? "missing" : null;
-      },
-      storageKey,
-      { timeout: 4000 }
-    );
-    const trialCellPx = await stopped.jsonValue();
-    assert(
-      typeof trialCellPx === "number" && Math.abs(trialCellPx - seen.cell) <= 0.1,
-      `Each stop must record the shown cell size (${seen.cell}), got ${JSON.stringify(trialCellPx)}`
     );
     await page.locator("#gameExit").click();
     await waitForClass(page, "#homeView", "is-active");
@@ -3688,42 +3371,6 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
 }
 
 /**
- * 支援者が文字を入力しているあいだ、入力ドックが可視領域を食わない。
- *
- * ドックは画面下に position:fixed で居座る。スマホでソフトキーボードが出ると
- * その上へ持ち上がり、いま打っている欄が見えなくなる（実測: iPhone SE では
- * フォームの可視領域がほぼ消える）。ドックは利用者がスイッチで操作する
- * ためのものなので、支援者がキーボードを使っている最中に要る場面がない。
- *
- * 焦点が外れたら必ず戻ることまで見る。戻らないと、走査で操作する手段が
- * 画面から消えたままになる——利用者にとっては操作不能と同じ。
- *
- * ドックは、画面の「おす」ボタンを出す設定のときだけ出る（評価ログも本人の
- * 画面と同じ）。設定の画面では出さない（押せないものを項目に重ねない）。
- */
-async function checkDockStepsAsideForTextEntry(page) {
-  await enableScreenSwitch(page);
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-  await page.locator(".switch-dock").waitFor({ state: "hidden" });
-
-  // 支援者が文字を打つ欄は、いまは評価ログの参加者IDだけ（観察メモは
-  // 効果測定セッションごと別紙へ移した。2026-08-29）。
-  await page.locator('.tab[data-view="log"]').click();
-  await waitForClass(page, "#log", "is-active");
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
-
-  await page.locator("#participantId").focus();
-  await page.locator(".switch-dock").waitFor({ state: "hidden" });
-
-  // 文字入力から離れたらドックは戻る。
-  await page.locator("#participantId").evaluate((el) => el.blur());
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
-}
-
-/**
  * 遊びを始める瞬間に音が止まっていても（iOS のスリープ・ほかのアプリ・読み上げのあと）、
  * 戻れば始まる。以前は始めた瞬間に1回だけ canSound() を見ていたので、resume() の途中だと
  * 「おとが ならせません」になり、そのまま戻れなかった（2026-09-30 の打ち合わせで
@@ -4054,159 +3701,6 @@ async function checkRhythmRecordsRealOffsets(page, project) {
   );
 }
 
-async function checkFeatureTabs(page) {
-  // The start screen hides the whole shell (topbar/tabbar, body.start-mode)
-  // since the design pass, so enter the home screen first to make the tabs
-  // clickable — same as a real supporter would.
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-
-  // matching/voca/letters are user-facing activities and now live on the
-  // home screen under the "まなぶ・つたえる" second level, not as tabs.
-  // Each visit returns home via #homeReturn, the same path a switch user
-  // would scan to.
-  // 二階層目もページに分かれることがある（画面が短いと1ページ2〜3件）。
-  // 直に click すると、2ページ目に居る項目に届かない——利用者と同じく
-  // 「つぎのページ」を辿ってから押す。
-  const activityTargets = [
-    ["matching", t("tile.matching.title")],
-    ["voca", t("tile.voca.title")],
-    ["letters", t("tile.letters.title")],
-  ];
-  for (const [target, name] of activityTargets) {
-    await openActivity(page, "学ぶ・伝える");
-    await openActivity(page, name);
-    await waitForClass(page, `#${target}`, "is-active");
-    await page.locator("#homeReturn").click();
-    await waitForClass(page, "#homeView", "is-active");
-  }
-
-  // Only the always-visible supporter tabs; operation/evaluation/research
-  // stay hidden until "researcher mode" is turned on in settings
-  // (P0-0, detailed-design.md §0.2).
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-  const tabTargets = ["log", "settings"];
-  for (const target of tabTargets) {
-    await page.locator(`.tab[data-view="${target}"]`).click();
-    await waitForClass(page, `#${target}`, "is-active");
-  }
-}
-
-/**
- * P5-1 (detailed-design.md §11.2 item 4): confirm the researcher-only tabs
- * (evaluation/operation/research, gated by settings.researcherMode since
- * P0-0) still render correctly after this phase's changes, and specifically
- * that the P3-1/P4 additions to the evaluation tab (rhythm CSV export
- * button) are present and unaffected — this is the "既存タブ(評価・設定)
- * 不退行" no-regression check the task calls out by name.
- */
-/**
- * 書き出すデータが1件も無いとき、押した支援者に理由が見えること。
- *
- * 以前は announce() だけを出していたが、その出力先 #liveRegion は .sr-only
- * なので、読み上げを使わない支援者には何も届かなかった。研究データの
- * 書き出し導線が「押しても無反応」に見え、壊れていると受け取られる。
- */
-async function checkEmptyExportIsExplained(page) {
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-  await openSettingsTab(page, "measure");
-  await page.locator("#researcherMode").click();
-  await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
-
-    await page.locator('.tab[data-view="log"]').click();
-    await waitForClass(page, "#log", "is-active");
-
-  // まだ1回も遊んでいないので走査課題データは0件。
-  const message = page.locator("#supporterMessage");
-  assert(await message.isHidden(), "The supporter message must stay out of the way until needed");
-  await page.locator("#exportScanCsv").click();
-  await message.waitFor({ state: "visible" });
-
-  const text = await message.innerText();
-  assert(text.includes("ありません"), `Expected the message to say what is missing, got "${text}"`);
-  // 理由だけでなく、どうすれば書き出せるようになるかまで伝える。
-  assert(
-    text.includes("1回終える"),
-    `Expected the message to say how to produce data, got "${text}"`
-  );
-}
-
-async function checkResearcherModeTabsNoRegression(page) {
-  // The tabbar is hidden on the start screen (body.start-mode, design pass);
-  // go through home first.
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-
-  // Research controls are protected from the user's scan order until a
-  // supporter explicitly unlocks the editing session.
-
-  // researcherMode は設定の面（そくてい）の出し分けに使う。効果測定・操作訓練・
-  // 研究の3タブは 2026-08-29 に削除したので、ここで確かめるのは「支援者の
-  // データ画面が評価ログ1枚にまとまっていること」。
-  await openSettingsTab(page, "measure");
-  await page.locator("#researcherMode").click();
-  await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
-
-  await page.locator('.tab[data-view="log"]').click();
-  await waitForClass(page, "#log", "is-active");
-  // 参加者IDと書き出しは、すべてこの1枚に居る。
-  await page.locator("#participantId").waitFor({ state: "visible" });
-  for (const selector of [
-    "#exportSessionLedgerCsv",
-    "#exportRhythmCsv",
-    "#exportSlotCsv",
-    "#exportScanCsv",
-    "#exportRtCsv",
-    "#exportRawJson",
-    "#exportCsv",
-    "#handOverParticipant",
-  ]) {
-    await page.locator(selector).waitFor({ state: "visible" });
-  }
-
-  // 消した画面が本当に消えていること。マークアップに残したまま到達できない
-  // 状態にすると、次に触る人が「動かない画面」を直そうとする。
-  for (const gone of ["#evaluation", "#operation", "#research"]) {
-    assert((await page.locator(gone).count()) === 0, `${gone} must be gone, not hidden`);
-  }
-  const tabs = await page.locator(".tabbar button").allTextContents();
-  assert(
-    tabs.length === 3,
-    `Expected three shell tabs (home / log / settings), got ${tabs.length}: ${tabs.join(" ")}`
-  );
-
-  // 設定そのものは、researcherMode を入れたあとも動く。
-  await page.locator('.tab[data-view="settings"]').click();
-  await waitForClass(page, "#settings", "is-active");
-  await openSettingsTab(page, "measure");
-  await page.locator("#researcherMode").waitFor({ state: "visible" });
-  // 「ホームに出す遊び」は「スイッチ」の面にある（設定はタブ分けされている）。
-  await openSettingsTab(page, "basic");
-  await page.locator("#hideVisualTasks").click();
-
-  await page.locator("#homeReturn").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await waitForActivityChoices(page, 7);
-  // 1ページだけ見て判定すると、ページ分割の入る画面では「2ページ目に居る」
-  // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
-  const lobbyTitles = await collectActivityTitles(page);
-  assert(
-    !lobbyTitles.includes(t("tile.crane-corner.title")),
-    `Visual-task setting must remove the claw corner from the lobby (saw: ${lobbyTitles.join(", ")})`
-  );
-  assert(
-    lobbyTitles.length === 7,
-    `Expected seven remaining activities after hiding the claw, got ${lobbyTitles.length}`
-  );
-}
-
 async function checkPwaDelivery(page, project) {
   const manifestHref = await page.locator('link[rel="manifest"]').getAttribute("href");
   assert(manifestHref, "Expected a manifest link in the built page");
@@ -4476,22 +3970,14 @@ async function checkLayoutInvariants(page) {
     }
   });
 
-  // 支援者の世界。研究者モードを開けて、列の多い画面まで含めて見る。
+  // 支援者の世界は設定だけになった（評価ログと研究の面は 2026-09-30 に外した）。
+  // よく使う設定と、「くわしい設定」の3つの面を1つずつ見る。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await inspect("settings (locked)");
-
-  await openSettingsTab(page, "measure");
-  await page.locator("#researcherMode").click();
-  await inspect("settings (unlocked)");
-
-  // 支援者が見る面は評価ログと設定の2つだけになった（2026-08-29）。
-  // 評価ログは列の多い画面（書き出し9個・推移のタブ・セッション一覧）なので、
-  // はみ出しが出るならここに出る。
-  for (const view of ["log"]) {
-    await page.locator(`.tab[data-view="${view}"]`).click();
-    await waitForClass(page, `#${view}`, "is-active");
-    await inspect(view);
+  await inspect("settings");
+  for (const name of ["basic", "senses", "play"]) {
+    await openSettingsTab(page, name);
+    await inspect(`settings (${name})`);
   }
 }
 
@@ -4520,7 +4006,7 @@ async function checkHiddenAttributeIsRespected(page) {
     };
   });
   // 対象が0件だと、この検査は何も見ずに通ってしまう。
-  // calibrationOffer / measureModeNotice など常設の hidden 要素がある前提。
+  // calibrationOffer や、閉じている設定の面など、常設の hidden 要素がある前提。
   assert(total >= 3, `Expected several [hidden] elements to inspect, found ${total}`);
   assert(
     leaks.length === 0,

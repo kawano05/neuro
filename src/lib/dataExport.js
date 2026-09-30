@@ -1,5 +1,10 @@
 // =====================================================================
-// dataExport.js — 支援者が記録を取り出すための面（評価ログの中に置く）
+// dataExport.js — 記録を CSV の行にする関数（画面は持たない）
+//
+// 評価ログの画面（書き出しボタン・参加者ID・切り替え）は、2026-09-30 に
+// 支援者の画面から外した。記録（state.sessions / state.logs）は今までどおり
+// 端末に残る。ここには、それを CSV の行にする純粋な関数だけを残す
+// （tests/data-integrity.test.mjs と scripts/probes/ が使う）。
 //
 // もとは「効果測定セッション」画面（views/evaluation.js）だった。手順を
 // 画面で案内し、支援者が成功／失敗やカウンタを手で押していく作りだったが、
@@ -15,9 +20,7 @@
 // この面は書き出すだけ。
 // =====================================================================
 
-import { cloneDefaultState, MAX_SESSIONS } from "./state.js";
-import { escapeCsv, localFileStamp, toLocalIso } from "./utils.js";
-import { storageKey } from "./content.js";
+import { toLocalIso } from "./utils.js";
 import { buildSlotCsvRows } from "./slotCsv.js";
 export { buildSlotCsvRows };
 
@@ -398,220 +401,60 @@ export function buildTaskCsvRows(sessions, taskType) {
   return [];
 }
 
-export function initDataExport(ctx) {
-  const { state, elements, save, announce, notifySupporter } = ctx;
-
-  // この画面で書き出しを押したか。参加者の切り替え（handOverToNextParticipant）
-  // が、消す前に書き出しを求めるために使う。ファイルが保存されたかまでは
-  // アプリからは知れないので、「押した」までしか主張しない。
-  let exportedSinceLastReset = false;
-
-  function downloadCsv(rows, filenameStem) {
-    exportedSinceLastReset = true;
-    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${filenameStem}-${localFileStamp()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportRhythmCsv() {
-    const sessions = state.sessions.filter(
-      (session) => session.taskType === "sms" || session.taskType === "gonogo"
-    );
-    if (!sessions.length) {
-      announce("書き出すリズム計測データがありません");
-      // announce の出力先 #liveRegion は .sr-only なので、読み上げを使わない
-      // 支援者には何も届かない——押しても無反応に見え、壊れていると受け取られる。
-      // 他の書き出しには notifySupporter を足してあったのに、ここだけ抜けていた
-      // （2026-08-28、tests/web-smoke.mjs の checkExportButtonsAreWired が検出）。
-      notifySupporter(
-        "書き出すリズム計測データがありません。リズムまたはGo/No-Goを1回終えると記録されます。"
-      );
-      return;
-    }
-    exportedSinceLastReset = true;
-    const rows = buildRhythmCsvRows(sessions);
-    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `neuronode-rhythm-${localFileStamp()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportSlotCsv() {
-    const sessions = state.sessions.filter((session) => session.taskType === "slot");
-    if (!sessions.length) {
-      announce("書き出すリール停止データがありません");
-      notifySupporter("書き出すリール停止データがありません。L1またはL2を1回終えると記録されます。");
-      return;
-    }
-    exportedSinceLastReset = true;
-    const rows = buildSlotCsvRows(sessions);
-    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `neuronode-slot-${localFileStamp()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportTaskCsv(taskType) {
-    const sessions = state.sessions.filter((session) => session.taskType === taskType);
-    if (!sessions.length) {
-      const label = taskType === "scan" ? "走査課題" : "反応課題";
-      announce(`書き出す${label}データがありません`);
-      notifySupporter(
-        `書き出す${label}データがありません。利用者が該当のあそびを1回終えると記録されます。`
-      );
-      return;
-    }
-    exportedSinceLastReset = true;
-    const rows = buildTaskCsvRows(sessions, taskType);
-    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `neuronode-${taskType}-${localFileStamp()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportSessionLedgerCsv() {
-    if (!state.sessions.length) {
-      announce("書き出すセッションがありません");
-      notifySupporter(
-        "書き出すセッションがありません。あそびを1回終えると1行ぶん記録されます。"
-      );
-      return;
-    }
-    downloadCsv(buildSessionLedgerRows(state.sessions), "neuronode-sessions");
-  }
-
-  function exportRawJson() {
-    exportedSinceLastReset = true;
-    const payload = {
-      // 控えの中身は state そのまま（保存はUTC）。読む人のために、
-      // 書き出した時刻だけ日本時間も併記する。
-      exportedAtIso: new Date().toISOString(),
-      exportedAtLocal: toLocalIso(new Date().toISOString()),
-      storageKey,
-      // CSVの列は増えるが、この控えは state の形そのもの。読む側が形を
-      // 判別できるように、書き出し時のキー名を添える。
-      sessionCount: state.sessions.length,
-      logCount: state.logs.length,
-      state,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `neuronode-raw-${localFileStamp()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    notifySupporter(
-      `生データを書き出しました（セッション${state.sessions.length}件、ログ${state.logs.length}件）。`
-    );
-  }
-
-  function renderSessionRetention() {
-    const warning = elements.sessionRetentionWarning;
-    if (!warning) return;
-    const count = state.sessions.length;
-    const remaining = MAX_SESSIONS - count;
-    if (remaining > 5) {
-      warning.hidden = true;
-      warning.textContent = "";
-      return;
-    }
-    warning.hidden = false;
-    warning.textContent =
-      remaining > 0
-        ? `セッションの保存上限（${MAX_SESSIONS}件）まであと${remaining}件です。` +
-          "上限を超えると古い回から消えるので、先に「セッション台帳」と各CSV、" +
-          "または「生データ(JSON)」を書き出してください。"
-        : `セッションの保存上限（${MAX_SESSIONS}件）に達しています。` +
-          "次の回を記録すると最も古い回が消えます。今すぐ書き出してください。";
-  }
-
-  function recordedParticipants() {
-    const ids = new Set();
-    (state.sessions || []).forEach((session) => ids.add(session.participantId || ""));
-    return [...ids];
-  }
-
-  function handOverToNextParticipant() {
-    const sessionCount = state.sessions.length;
-    const logCount = state.logs.length;
-    if (sessionCount === 0 && logCount === 0) {
-      notifySupporter("消すものがありません。この端末にはまだ記録が入っていません。");
-      announce("消すものがありません");
-      return;
-    }
-    if (!exportedSinceLastReset) {
-      notifySupporter(
-        `まだ書き出していません。セッション${sessionCount}件・ログ${logCount}件が消えます。` +
-          "先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。"
-      );
-      announce("先に書き出してください");
-      return;
-    }
-    if (!window.confirm(
-      `この端末の記録を消します。\n\n` +
-        `　セッション ${sessionCount}件\n` +
-        `　操作ログ ${logCount}件\n` +
-        `　測定結果と観察メモ\n\n` +
-        "書き出したファイルは消えません。消した記録は元に戻せません。"
-    )) {
-      announce("消すのをやめました");
-      return;
-    }
-
-    const fresh = cloneDefaultState();
-    state.sessions = [];
-    state.logs = [];
-    state.evaluation = { ...fresh.evaluation };
-    state.arcade = { ...fresh.arcade };
-    exportedSinceLastReset = false;
-    save();
-    ctx.renderAll();
-    notifySupporter(
-      `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。` +
-        "次の参加者IDを入れてから始めてください。"
-    );
-    announce("記録を消しました。次の参加者IDを入れてください");
-  }
-
-  /** 参加者IDと保存上限の警告を画面へ反映する。 */
-  function render() {
-    if (elements.participantId) {
-      elements.participantId.value = state.evaluation.participantId;
-    }
-    renderSessionRetention();
-  }
-
-  elements.participantId?.addEventListener("input", (event) => {
-    state.evaluation.participantId = event.target.value;
-    save();
+/**
+ * 操作ログCSVの行を作る（1エントリ1行）。
+ *
+ * 純粋関数として切り出してあるのは、DOMの中に埋めたままだと列をテストで
+ * 固定できないから。ロング形式の課題CSVと同じ理由で、ここも解析側と
+ * 静かに食い違いうる出力になっている（tests/data-integrity.test.mjs）。
+ *
+ * @param {Array<object>} logs state.logs（配列先頭が最新）
+ * @param {string} [participantId] 書き出した時点の参加者ID
+ */
+export function buildLogCsvRows(logs, participantId) {
+  const rows = [
+    [
+      // 端末のローカル時刻（オフセット付き）。名前も time から time_local にする。
+      "time_local",
+      "view",
+      "type",
+      "label",
+      "correct",
+      // 以下は末尾に追加した列（既存4列の位置は動かさない）。
+      //
+      // success / skipEvaluation / distance は sanitizeLogEntry がずっと
+      // 保持していたのに、どのCSVにも出していなかった。保存されているだけの
+      // 値は解析に使えないので、実質「記録していない」のと同じ——端末情報を
+      // 記録しながら書き出していなかったときと同じ型の穴。
+      "success",
+      "skip_evaluation",
+      "distance",
+      // 書き出した時点で設定されていた参加者ID。
+      //
+      // 名前が重要。ログは参加者をまたいで最大300件たまるので、この値を
+      // participant_id という名前で出すと、別の参加者の回に付いた行まで
+      // 「この人の行」として読めてしまう——列名が行ごとの真実を主張して
+      // しまい、ログには行ごとの参加者IDが無い。
+      //
+      // 突き合わせは時刻で行う（セッションCSVの startedAtIso / endedAtIso と
+      // このログの time を突き合わせる）。この列はその作業の入口を示すだけの
+      // 補助であって、行の帰属ではない。
+      "exported_participant_id",
+    ],
+  ];
+  (Array.isArray(logs) ? logs : []).forEach((entry) => {
+    if (!entry || typeof entry !== "object") return;
+    rows.push([
+      toLocalIso(entry.time),
+      entry.view,
+      entry.type,
+      entry.label || "",
+      entry.correct ?? "",
+      entry.success ?? "",
+      entry.skipEvaluation ?? "",
+      entry.distance ?? "",
+      participantId || "",
+    ]);
   });
-  elements.exportRhythmCsv?.addEventListener("click", exportRhythmCsv);
-  elements.exportSlotCsv?.addEventListener("click", exportSlotCsv);
-  elements.exportScanCsv?.addEventListener("click", () => exportTaskCsv("scan"));
-  elements.exportRtCsv?.addEventListener("click", () => exportTaskCsv("rt"));
-  elements.exportSessionLedgerCsv?.addEventListener("click", exportSessionLedgerCsv);
-  elements.exportRawJson?.addEventListener("click", exportRawJson);
-  elements.handOverParticipant?.addEventListener("click", handOverToNextParticipant);
-
-  return { render };
+  return rows;
 }

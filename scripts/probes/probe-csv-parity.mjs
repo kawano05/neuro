@@ -3,9 +3,8 @@
 //
 //   node scripts/probes/probe-csv-parity.mjs
 
-import { buildRhythmCsvRows, buildTaskCsvRows, buildSessionLedgerRows } from "../../src/lib/dataExport.js";
+import { buildRhythmCsvRows, buildTaskCsvRows, buildSessionLedgerRows, buildLogCsvRows } from "../../src/lib/dataExport.js";
 import { buildSlotCsvRows, SLOT_CSV_HEADERS } from "../../src/lib/slotCsv.js";
-import { buildLogCsvRows } from "../../src/lib/views/log.js";
 import { sanitizeState } from "../../src/lib/state.js";
 
 const device = {
