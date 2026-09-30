@@ -12,11 +12,19 @@ import { SETTINGS_FIELDS } from "./settingsFields.js";
 
 export function collectElements() {
   return {
-    // 設定UIと同じ定義からIDを収集し、手書きの項目一覧を重複させない。
-    ...Object.fromEntries(SETTINGS_FIELDS.flatMap(field => [
-      [field.id, document.getElementById(field.id)],
-      ...(field.type === "range" ? [[field.id + "Value", document.getElementById(field.id + "Value")]] : []),
-    ])),
+    // 設定UIと同じ定義からIDを収集し、手書きの項目一覧を重複させない
+    // （入力・つまみの値・選んだものの説明。SettingsFields.svelte と同じ id）。
+    ...Object.fromEntries(
+      SETTINGS_FIELDS.flatMap((field) => [
+        [field.id, document.getElementById(field.id)],
+        ...(field.type === "range" ? [[`${field.id}Value`, document.getElementById(`${field.id}Value`)]] : []),
+        ...(field.description ? [[`${field.id}Description`, document.getElementById(`${field.id}Description`)]] : []),
+      ])
+    ),
+    // 設定画面の常設部分（SettingsView.svelte / SettingsGuide.svelte）。
+    settingsModeStatus: document.querySelector("#settingsModeStatus"),
+    settingsGuidePrint: document.querySelector("#settingsGuidePrint"),
+    soundCreditsList: document.querySelector("#soundCreditsList"),
     scanState: document.querySelector("#scanState"),
     homeSupporterMenu: document.querySelector("#homeSupporterMenu"),
     storageWarning: document.querySelector("#storageWarning"),

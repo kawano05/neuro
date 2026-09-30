@@ -2,6 +2,10 @@
 // views/settings.js — 項目定義から値を描画・保存する支援者設定
 // UIの型・キーは settingsFields.js と共有。開閉では値を変えない。
 // 保存・測定条件の解決は従来のまま（docs/settings-simple-2026-09-30.md）。
+//
+// 設定画面は支援者の世界なので、走査（黄色い枠）はここでは動かない（src/lib/viewWorld.js。
+// scan.js が支援者の画面では輪を空にする）。操作はタップとキーボードだけ。
+// 走査の設定を変えても、ここで走査を始め直さない——ホームへ戻ったときに scan.js が読む。
 // =====================================================================
 
 import { SETTINGS_FIELDS, fieldValue, formatFieldValue, readFieldValue } from "../settingsFields.js";
@@ -48,12 +52,13 @@ export function initSettings(ctx) {
 
   // 印刷用の説明書（public/guide.html）へのリンクは、iPad のアプリ版では隠す。
   // アプリの中から別の画面を開けず、開けても戻る手段が無いため。ウェブ版だけ。
-  const guidePrint = document.querySelector("#settingsGuidePrint");
-  if (guidePrint && globalThis.Capacitor?.isNativePlatform?.()) guidePrint.hidden = true;
+  if (elements.settingsGuidePrint && globalThis.Capacitor?.isNativePlatform?.()) {
+    elements.settingsGuidePrint.hidden = true;
+  }
 
   // 音の素材のクレジット（src/lib/soundCredits.js）。アプリ版では、上の説明書と
   // 同じ理由でリンクにしない（アドレスは字で出す）。
-  renderSoundCredits(document.querySelector("#soundCreditsList"), {
+  renderSoundCredits(elements.soundCreditsList, {
     links: !globalThis.Capacitor?.isNativePlatform?.(),
   });
 
@@ -61,7 +66,9 @@ export function initSettings(ctx) {
   const fields = SETTINGS_FIELDS.map(field => ({
     ...field,
     control: elements[field.id],
-    output: elements[field.id + "Value"],
+    output: elements[`${field.id}Value`],
+    // 選んだものの説明（雰囲気）。field.description は説明文を作る関数。
+    descriptionOutput: elements[`${field.id}Description`],
   }));
 
   /**
@@ -81,14 +88,14 @@ export function initSettings(ctx) {
       if (field.type === "checkbox") field.control.checked = value;
       else field.control.value = value === null ? "" : String(value);
       showRangeValue(field, value);
-      if (field.description) document.getElementById(field.id + "Description").textContent = field.description(value);
+      if (field.description) field.descriptionOutput.textContent = field.description(value);
     });
     applySwitchControlMode();
     applySpeechSettings();
     applyDifficultyMode();
   }
 
-  /** 使えない操作子を無効化し、自前走査の輪からも外す。 */
+  /** 使えない操作子を無効化する。 */
   function setControlAvailable(control, available) {
     if (!control) return;
     control.disabled = !available;
@@ -105,7 +112,7 @@ export function initSettings(ctx) {
     setControlAvailable(elements.autoScan, !delegated);
   }
 
-  /** アプリTTSがOFFなら、効かない音量つまみ・声の選択を走査対象に残さない。 */
+  /** アプリTTSがOFFなら、効かない音量つまみ・声の選択を使えなくする。 */
   function applySpeechSettings() {
     setControlAvailable(elements.speechVolume, Boolean(state.settings.speechEnabled));
     setControlAvailable(elements.speechVoice, Boolean(state.settings.speechEnabled));
@@ -118,9 +125,6 @@ export function initSettings(ctx) {
    * つまみを触れても効かない。効かない操作子を黙って置いておくのは、この
    * アプリが何度も直してきた「動くが伝わらない」欠陥そのものなので、
    * 触れないことと、その理由を同時に見せる。
-   *
-   * 走査対象からも外す。効かない操作子を走査の輪に残すと、利用者が
-   * そこで止まって押しても何も起きない。
    */
   function applyDifficultyMode() {
     const measuring = isMeasurementMode(state.settings);
@@ -136,7 +140,7 @@ export function initSettings(ctx) {
 
   // 研究欄を畳んでも、前の回から残ったそくていの回を見落とさない。
   function updateModeStatus(measuring) {
-    const status = document.getElementById("settingsModeStatus");
+    const status = elements.settingsModeStatus;
     status.textContent = measuring
       ? "そくていの回です。遊びごとの難しさは固定です。変更は自動で保存されます。"
       : "れんしゅうの回です。変更は自動で保存されます。";
@@ -150,9 +154,6 @@ export function initSettings(ctx) {
    * ことではない——代わりに「何が確かめられていないか」をその場で出し、
    * 通っていない状態で測った回には readiness="overridden" を残す
    * （測定条件は禁止せず記録する、という全体の方針）。
-   *
-   * 走査対象にはしない。利用者が選ぶものではなく、支援者が読むものなので、
-   * 走査の輪に入れると押しても何も起きない項目が増えるだけになる。
    */
   function renderReadiness(measuring) {
     const box = elements.readinessCheck;
@@ -231,8 +232,8 @@ export function initSettings(ctx) {
     save();
     render();
     applyClasses();
+    // 枠の状態の表示（「iPad で操作中」）を直す。走査そのものは支援者の画面では動かない。
     scan.stop(true);
-    scan.refresh();
     announce(
       delegated
         ? "iPad のスイッチコントロールで選ぶようにしました。このアプリの黄色い枠と読み上げは止めました"
@@ -246,7 +247,6 @@ export function initSettings(ctx) {
       state.settings[field.key] = readFieldValue(field, field.control);
       showRangeValue(field, state.settings[field.key]);
       save();
-      if (field.id === "scanInterval" && scan.isRunning()) scan.start();
     });
   });
 
@@ -255,28 +255,18 @@ export function initSettings(ctx) {
       state.settings[key] = element.checked;
       save();
       applyClasses();
-      if (key === "autoScan") {
-        if (state.settings.switchControlMode) {
-          state.settings.autoScan = false;
-          element.checked = false;
-          save();
-          scan.stop(true);
-          return;
-        }
-        // restartIfNeeded() はON時だけ再始動する。OFFへ切り替えた
-        // ときは既存の interval を明示的に止める必要がある。
-        if (element.checked) scan.restartIfNeeded();
-        else scan.stop(true);
+      if (key === "autoScan" && state.settings.switchControlMode) {
+        // 二重走査を保存状態としても許さない（操作子は使えなくしてあるが、ここでも守る）。
+        state.settings.autoScan = false;
+        element.checked = false;
+        save();
       }
       if (key === "speechEnabled") {
         if (!element.checked) audio.stopSpeech();
         applySpeechSettings();
-        scan.refresh();
       }
-      if (key === "hideVisualTasks") {
-        ctx.views.home.render();
-        scan.restartIfNeeded();
-      }
+      // ホームに出す遊びが変わる。走査の輪はホームへ戻ったときに作り直される。
+      if (key === "hideVisualTasks") ctx.views.home.render();
     });
   });
 
@@ -284,8 +274,6 @@ export function initSettings(ctx) {
     state.settings.difficultyMode = elements.difficultyMode.value;
     save();
     applyDifficultyMode();
-    // 走査対象が増減する（そくていではむずかしさのつまみが輪から外れる）。
-    scan.restartIfNeeded();
     announce(
       isMeasurementMode(state.settings)
         ? "そくていの回にしました。むずかしさは固定されます"
@@ -307,8 +295,8 @@ export function initSettings(ctx) {
   elements.fxLevel?.addEventListener("change", () => {
     state.settings.fxLevel = elements.fxLevel.value;
     save();
-    const field = SETTINGS_FIELDS.find(item => item.id === "fxLevel");
-    document.getElementById("fxLevelDescription").textContent = field.description(state.settings.fxLevel);
+    const field = fields.find(item => item.id === "fxLevel");
+    field.descriptionOutput.textContent = field.description(state.settings.fxLevel);
     ctx.fx.syncPolicy();
     // 画面の名前は「遊びの雰囲気」。読み上げだけ古い名前（演出の強さ）だった。
     announce(`遊びの雰囲気を「${elements.fxLevel.selectedOptions[0]?.textContent ?? ""}」にしました`);
@@ -329,7 +317,6 @@ export function initSettings(ctx) {
     // 利用者の世界の文言が全部変わるので、ホームを描き直す。
     // 表記は定数として持てない——描画のたびに引き直す必要がある。
     ctx.views.home.render();
-    scan.restartIfNeeded();
     announce("文字づかいを変えました");
   });
 
