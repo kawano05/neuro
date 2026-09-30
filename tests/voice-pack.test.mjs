@@ -296,6 +296,18 @@ test("announces asynchronous local device errors but ignores canceled old uttera
   });
 });
 
+test("a remote device error after speech starts also returns ownership to text", async () => {
+  await withFakeAudio({ speechEnabled: true, speechVoice: "device" }, async ({ audio, utterances, announcements }) => {
+    window.speechSynthesis.getVoices = () => [{name:"remote", lang:"ja-JP", localService:false}];
+    audio.speakOrAnnounce("やったー！", "文字で知らせる");
+    const utterance = utterances.at(-1);
+    assert.equal(utterance.voice.localService, false);
+    utterance.onstart();
+    utterance.onerror({error:"network"});
+    assert.deepEqual(announcements, ["文字で知らせる"]);
+  });
+});
+
 let passed = 0;
 let failed = 0;
 for (const { name, fn } of tests) {

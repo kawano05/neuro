@@ -603,7 +603,11 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
             window.clearTimeout(timer);
             return;
           }
-          retry();
+          if (settled) {
+            if (token === speechToken) onFailure();
+          } else {
+            retry();
+          }
         };
       }
       if (!voice || voice.localService !== false) {
