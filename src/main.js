@@ -9,6 +9,7 @@ import "@fortawesome/fontawesome-free/css/regular.min.css";
 import "./styles.css";
 // 利用者の世界のデザイン（はっきりした色）。styles.css より後に読む。
 import "./theme-hakkiri.css";
+import "./world-slot.css";
 
 const app = mount(App, {
   target: document.getElementById("app"),

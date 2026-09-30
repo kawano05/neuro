@@ -19,6 +19,7 @@ import {
   summarizeSlotTrials,
 } from "./slotJudge.js";
 import { slotSymbolHtml, slotSymbolStripUrl } from "./slotArt.js";
+import { slotPracticeSymbolHtml, slotWorldHtml } from "../art/slotWorldArt.js";
 import { fitMeasuredReels, reelCellPx } from "./slotFit.js";
 
 const INPUT_GUARD_MS = 300;
@@ -111,9 +112,16 @@ export function createSlotGame(gameId) {
       return [-2, -1, 0, 1, 2]
         .map((offset) => {
           const symbolId = symbolOrder[positiveModulo(centeredIndex + offset, symbolOrder.length)];
-          return `<span class="slot-track-cell">${slotSymbolHtml(symbolId)}</span>`;
+          return `<span class="slot-track-cell">${symbolHtml(symbolId)}</span>`;
         })
         .join("");
+    }
+
+    // 測定のDOMは既存の関数へそのまま渡し、れんしゅうの刺激だけ替える。
+    function symbolHtml(symbolId, options) {
+      return config.difficultyMode !== "measure"
+        ? slotPracticeSymbolHtml(symbolId, options)
+        : slotSymbolHtml(symbolId, options);
     }
 
     function paintReel(reelIndex, atMs) {
@@ -158,7 +166,7 @@ export function createSlotGame(gameId) {
       if (!round || !targetEl) return;
       targetEl.innerHTML = `
         <span class="slot-target-label">${tHtml("slot.target")}</span>
-        ${slotSymbolHtml(round.targetSymbol, {
+        ${symbolHtml(round.targetSymbol, {
           label: symbolLabel(round.targetSymbol),
           decorative: false,
         })}
@@ -469,6 +477,9 @@ export function createSlotGame(gameId) {
           </figure>
         </section>
       `;
+      if (config.difficultyMode !== "measure") {
+        stageEl.insertAdjacentHTML("afterbegin", slotWorldHtml());
+      }
       reelsEl = stageEl.querySelector("[data-slot-reels]");
       targetEl = stageEl.querySelector("[data-slot-target]");
       statusEl = stageEl.querySelector("[data-slot-status]");

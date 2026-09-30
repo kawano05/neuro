@@ -1,0 +1,84 @@
+/* 絵と背景だけを変え、既存のコマ・停止線・札の位置と大きさは引き継ぐ。 */
+.slot-stage.is-practice {
+  isolation: isolate;
+  background: linear-gradient(180deg, #8ED8F7 0%, #DDF5FF 62%, #EEF8E9 100%);
+}
+
+.slot-stage.is-practice .slot-world {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.slot-stage.is-practice .slot-world svg {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+.slot-stage.is-practice .slot-world-landscape { inset: 0; width: 100%; height: 100%; }
+.slot-stage.is-practice .slot-world-cloud { width: clamp(100px, 16vw, 220px); animation: slot-world-cloud-drift 48s ease-in-out infinite alternate; }
+.slot-stage.is-practice .slot-world-cloud-one { top: 12%; left: 4%; }
+.slot-stage.is-practice .slot-world-cloud-two { top: 7%; left: 41%; width: clamp(80px, 12vw, 170px); animation-duration: 59s; animation-delay: -19s; }
+.slot-stage.is-practice .slot-world-cloud-three { top: 25%; right: 5%; animation-duration: 65s; animation-delay: -31s; }
+.slot-stage.is-practice .slot-world-wheel { left: 2%; bottom: 11%; width: clamp(160px, 26vw, 370px); }
+.slot-stage.is-practice .slot-world-wheel-turn { transform-origin: 150px 140px; animation: slot-world-wheel-turn 96s linear infinite; }
+.slot-stage.is-practice .slot-world-cabin { animation: slot-world-cabin-upright 96s linear infinite; }
+.slot-stage.is-practice .slot-world-tent { right: 2%; bottom: 12%; width: clamp(130px, 20vw, 280px); }
+.slot-stage.is-practice .slot-world-shrubs { bottom: 0; width: 100%; height: 10%; }
+
+@keyframes slot-world-cloud-drift { to { transform: translateX(45px); } }
+@keyframes slot-world-wheel-turn { to { transform: rotate(360deg); } }
+@keyframes slot-world-cabin-upright { to { transform: rotate(-360deg); } }
+
+/* 絵の外枠をSVGへ移す。0.68コマの外寸と中央配置はそのままにする。 */
+.slot-task[data-difficulty-mode="practice"] .slot-symbol.slot-world-symbol {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  filter: none;
+  pointer-events: none;
+}
+
+.slot-task[data-difficulty-mode="practice"] .slot-world-symbol svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+.slot-stage.is-practice .slot-reel,
+.slot-stage.is-practice .slot-reel.is-stopped {
+  background: linear-gradient(180deg, #A996DF 0%, #8069C3 18%, #6F5BB8 88%, #59439D 100%);
+  border-color: #493578;
+  box-shadow: inset 0 5px 0 #D7CAF4, inset 0 -5px 0 #493578, 0 5px 0 #493578;
+}
+
+.slot-stage.is-practice .slot-reel.is-active {
+  border-color: #493578;
+  /* 既存の走査色の枠は残し、電飾には使わない。 */
+  box-shadow: 0 0 0 5px #FFC83D, inset 0 5px 0 #D7CAF4, inset 0 -5px 0 #493578, 0 5px 0 #493578;
+}
+
+/* 丸は窓の外の筐体にだけ置き、動く刺激には重ねない。 */
+.slot-stage.is-practice .slot-reel::before,
+.slot-stage.is-practice .slot-reel::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #E4DCF5;
+  pointer-events: none;
+}
+.slot-stage.is-practice .slot-reel::before { left: 5px; }
+.slot-stage.is-practice .slot-reel::after { right: 5px; }
+.slot-stage.is-practice .slot-reel-number { color: #493578; background: #FFF6EA; box-shadow: 0 2px 0 #493578; }
+.slot-stage.is-practice .slot-reel-badge { background: #493578; box-shadow: 0 2px 0 #493578; }
+.slot-stage.is-practice .slot-reel.is-active .slot-reel-badge { background: #FFC83D; }
+.slot-task[data-difficulty-mode="practice"] .slot-target { border-color: #6F5BB8; background: #FFFDF7; box-shadow: inset 0 4px 0 #FFF, 0 5px 0 #9C8ACB, 0 10px 20px #49357826; }
+.slot-stage.is-practice .slot-status { color: #10222E; text-shadow: 0 2px 0 #FFF, 2px 0 0 #FFF, -2px 0 0 #FFF, 0 -2px 0 #FFF; }
+
+@media (prefers-reduced-motion: reduce) {
+  .slot-stage.is-practice .slot-world-cloud,
+  .slot-stage.is-practice .slot-world-wheel-turn,
+  .slot-stage.is-practice .slot-world-cabin { animation: none; }
+}
