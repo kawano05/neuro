@@ -1,21 +1,15 @@
 // =====================================================================
-// views/settings.js — 設定画面（走査間隔・音・表示の設定）
+// views/settings.js — 項目定義から値を描画・保存する支援者設定
+// UIの型・キーは settingsFields.js と共有。開閉では値を変えない。
+// 保存・測定条件の解決は従来のまま（docs/settings-simple-2026-09-30.md）。
 // =====================================================================
 
-import { cranePresets, slotPresets } from "../content.js";
+import { SETTINGS_FIELDS, fieldValue, formatFieldValue, readFieldValue } from "../settingsFields.js";
+export { formatSeconds } from "../settingsFields.js";
 import { isMeasurementMode, resolveDifficultyMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
 import { evaluateReadiness } from "../readinessCheck.js";
 import { SOUND_CREDITS } from "../soundCredits.js";
-
-/**
- * ミリ秒を「秒」で見せる（1600 → 1.6秒、220 → 0.22秒）。打ち合わせで設定の言葉を
- * 「小学校高学年が読んで分かる」ようにと言われた（docs/design-renewal-2026-09-25.md
- * §1.8）。「ms」はその外にある。保存する値はミリ秒のまま。
- */
-export function formatSeconds(ms) {
-  return `${Number((ms / 1000).toFixed(2))}秒`;
-}
 
 /** 音の素材のクレジットを描く。中身は固定の表なので、字はそのまま入れる。 */
 export function renderSoundCredits(listEl, { links = true } = {}) {
@@ -64,105 +58,22 @@ export function initSettings(ctx) {
     links: !globalThis.Capacitor?.isNativePlatform?.(),
   });
 
-  // UFOキャッチャーの難易度。設定側が null のあいだは cranePresets の値を
-  // 使うので、スライダーにもその既定値を映す（games/crane.js の
-  // resolveCraneConfig と同じ優先順位）。
-  const craneSliders = [
-    {
-      key: "craneSweepMs",
-      input: elements.craneSweepMs,
-      output: elements.craneSweepMsValue,
-      fallback: cranePresets.sweepMs,
-      format: formatSeconds,
-    },
-    {
-      key: "craneToleranceR",
-      input: elements.craneToleranceR,
-      output: elements.craneToleranceRValue,
-      fallback: cranePresets.toleranceR,
-      format: (value) => String(value),
-    },
-    {
-      key: "craneTargetTrials",
-      input: elements.craneTargetTrials,
-      output: elements.craneTargetTrialsValue,
-      fallback: cranePresets.targetTrials,
-      format: (value) => String(value),
-    },
-  ];
+  // 同じ定義からUIと入力配線を作り、手書きの型・キーの重複を持たない。
+  const fields = SETTINGS_FIELDS.map(field => ({
+    ...field,
+    control: elements[field.id],
+    output: elements[field.id + "Value"],
+  }));
 
-  const slotSliders = [
-    {
-      key: "slotCycleMs",
-      input: elements.slotCycleMs,
-      output: elements.slotCycleMsValue,
-      fallback: slotPresets["slot-l1"].cycleMs,
-      format: formatSeconds,
-    },
-    {
-      key: "slotToleranceMs",
-      input: elements.slotToleranceMs,
-      output: elements.slotToleranceMsValue,
-      fallback: slotPresets["slot-l1"].toleranceMs,
-      format: formatSeconds,
-    },
-    {
-      key: "slotL1Rounds",
-      input: elements.slotL1Rounds,
-      output: elements.slotL1RoundsValue,
-      fallback: slotPresets["slot-l1"].rounds,
-      format: String,
-    },
-    {
-      key: "slotL2Rounds",
-      input: elements.slotL2Rounds,
-      output: elements.slotL2RoundsValue,
-      fallback: slotPresets["slot-l2"].rounds,
-      format: String,
-    },
-  ];
-  const difficultySliders = [...slotSliders, ...craneSliders];
-
-  // リズム系の難易度。値を持たない（null）＝「あそびごとの既定を使う」を
-  // 選択肢として表せる必要があるのでプルダウンにしてある。空文字が null。
-  const rhythmChoices = [
-    { key: "rhythmBpm", select: elements.rhythmBpm },
-    { key: "targetBeats", select: elements.rhythmTargetBeats },
-    // さかなつりの、アタリが続く長さ（空文字は既定の2秒）。
-    { key: "fishingLimitMs", select: elements.fishingLimitMs },
-  ].filter(({ select }) => select);
-
-  /** 設定UIへ現在値を反映する */
   function render() {
-    const settings = state.settings;
-    rhythmChoices.forEach(({ key, select }) => {
-      select.value = settings[key] === null ? "" : String(settings[key]);
+    fields.forEach(field => {
+      const value = fieldValue(field, state.settings);
+      if (field.type === "checkbox") field.control.checked = value;
+      else field.control.value = value === null ? "" : String(value);
+      if (field.output) field.output.value = formatFieldValue(field, value);
     });
-    elements.scanInterval.value = settings.scanInterval;
-    elements.scanIntervalValue.value = formatSeconds(settings.scanInterval);
-    difficultySliders.forEach(({ key, input, output, fallback, format }) => {
-      const value = settings[key] ?? fallback;
-      input.value = value;
-      output.value = format(value);
-    });
-    elements.switchControlMode.checked = settings.switchControlMode;
-    elements.autoScan.checked = settings.autoScan;
-    elements.showScreenSwitch.checked = settings.showScreenSwitch;
-    if (elements.scanFeedback) elements.scanFeedback.value = settings.scanFeedback;
-    if (elements.fxLevel) elements.fxLevel.value = settings.fxLevel;
-    elements.speechEnabled.checked = settings.speechEnabled;
-    elements.speechVolume.value = settings.speechVolume;
-    elements.speechVolumeValue.value = `${Math.round(settings.speechVolume * 100)}%`;
-    if (elements.speechVoice) elements.speechVoice.value = settings.speechVoice;
-    elements.soundEnabled.checked = settings.soundEnabled;
-    elements.largeText.checked = settings.largeText;
-    elements.highContrast.checked = settings.highContrast;
-    elements.hideVisualTasks.checked = settings.hideVisualTasks;
-    elements.researcherMode.checked = settings.researcherMode;
-    elements.visualGuidance.checked = settings.visualGuidance;
-    elements.craneAudioGuidance.checked = settings.craneAudioGuidance;
-    elements.difficultyMode.value = resolveDifficultyMode(settings);
-    elements.textMode.value = resolveTextMode(settings);
+    elements.difficultyMode.value = resolveDifficultyMode(state.settings);
+    elements.textMode.value = resolveTextMode(state.settings);
     applySwitchControlMode();
     applySpeechSettings();
     applyDifficultyMode();
@@ -205,45 +116,22 @@ export function initSettings(ctx) {
   function applyDifficultyMode() {
     const measuring = isMeasurementMode(state.settings);
     elements.measureModeNotice.hidden = !measuring;
-    const locked = [
-      ...slotSliders.map(({ input }) => input),
-      elements.rhythmBpm,
-      elements.rhythmTargetBeats,
-      elements.visualGuidance,
-      elements.craneSweepMs,
-      elements.craneToleranceR,
-      elements.craneTargetTrials,
-      elements.craneAudioGuidance,
-      elements.fishingLimitMs,
-    ];
-    locked.forEach((control) => {
-      if (!control) return;
+    fields.filter(field => field.measured).forEach(({ control }) => {
       control.disabled = measuring;
       control.setAttribute("aria-disabled", String(measuring));
-      const row = control.closest(".setting-row");
-      if (row) row.classList.toggle("is-protocol-locked", measuring);
-      if (measuring) delete control.dataset.scan;
-      else control.dataset.scan = "";
+      control.closest(".setting-row")?.classList.toggle("is-protocol-locked", measuring);
     });
     renderReadiness(measuring);
-    updateMeasureTabState(measuring);
+    updateModeStatus(measuring);
   }
 
-  /**
-   * 「そくてい」タブに、いま測定の回であることを出す。
-   *
-   * 測定条件は「そくてい」タブの中にあるので、別の面を見ているあいだは
-   * 状態が見えない。畳めるもの（面を分けてよいもの）と、面をまたいで
-   * 伝えねばならないものは別——支援者が昨日の設定のまま測ってしまう。
-   */
-  function updateMeasureTabState(measuring) {
-    const tab = (elements.settingsTabs || []).find(
-      (item) => item.dataset.settingsTab === "measure"
-    );
-    if (!tab) return;
-    tab.classList.toggle("is-measuring", measuring);
-    // 印だけで意味を運ばない（色覚・読み上げ）。読み上げ名にも出す。
-    tab.setAttribute("aria-label", measuring ? "そくてい（研究・いまは測定の回）" : "そくてい（研究）");
+  // 研究欄を畳んでも、前の回から残った測定モードを見落とさない。
+  function updateModeStatus(measuring) {
+    const status = document.getElementById("settingsModeStatus");
+    status.textContent = measuring
+      ? "測定の回です。難しさは固定です。変更は自動で保存されます。"
+      : "練習の回です。変更は自動で保存されます。";
+    status.classList.toggle("is-measuring", measuring);
   }
 
   /**
@@ -314,20 +202,6 @@ export function initSettings(ctx) {
     root.classList.toggle("text-ruby", resolveTextMode(state.settings) === "ruby");
   }
 
-  elements.scanInterval.addEventListener("input", (event) => {
-    if (state.settings.switchControlMode) return;
-    state.settings.scanInterval = Number(event.target.value);
-    elements.scanIntervalValue.value = formatSeconds(state.settings.scanInterval);
-    save();
-    if (scan.isRunning()) scan.start();
-  });
-
-  elements.speechVolume.addEventListener("input", (event) => {
-    state.settings.speechVolume = Number(event.target.value);
-    elements.speechVolumeValue.value = `${Math.round(state.settings.speechVolume * 100)}%`;
-    save();
-  });
-
   // 読み上げの声を替えたら、その声で一言読む（支援者が聞いて選べるように）。
   elements.speechVoice?.addEventListener("change", () => {
     state.settings.speechVoice = elements.speechVoice.value === "device" ? "device" : "app";
@@ -358,36 +232,17 @@ export function initSettings(ctx) {
     );
   });
 
-  rhythmChoices.forEach(({ key, select }) => {
-    select.addEventListener("change", () => {
-      // 空文字は「あそびごとの既定」。null で保存すると games/rhythm.js の
-      // resolveParams が rhythmPresets 側を使う。
-      state.settings[key] = select.value === "" ? null : Number(select.value);
+  fields.filter(field => field.nullable || field.type === "range").forEach(field => {
+    field.control.addEventListener(field.type === "range" ? "input" : "change", () => {
+      if (field.id === "scanInterval" && state.settings.switchControlMode) return;
+      state.settings[field.key] = readFieldValue(field, field.control);
+      if (field.output) field.output.value = formatFieldValue(field, state.settings[field.key]);
       save();
+      if (field.id === "scanInterval" && scan.isRunning()) scan.start();
     });
   });
 
-  difficultySliders.forEach(({ key, input, output, format }) => {
-    input.addEventListener("input", (event) => {
-      const value = Number(event.target.value);
-      state.settings[key] = value;
-      output.value = format(value);
-      save();
-    });
-  });
-
-  [
-    ["autoScan", elements.autoScan],
-    ["showScreenSwitch", elements.showScreenSwitch],
-    ["speechEnabled", elements.speechEnabled],
-    ["soundEnabled", elements.soundEnabled],
-    ["largeText", elements.largeText],
-    ["highContrast", elements.highContrast],
-    ["hideVisualTasks", elements.hideVisualTasks],
-    ["researcherMode", elements.researcherMode],
-    ["visualGuidance", elements.visualGuidance],
-    ["craneAudioGuidance", elements.craneAudioGuidance],
-  ].forEach(([key, element]) => {
+  fields.filter(field => field.type === "checkbox" && field.id !== "switchControlMode").forEach(({ key, control: element }) => {
     element.addEventListener("change", () => {
       state.settings[key] = element.checked;
       save();
@@ -410,7 +265,7 @@ export function initSettings(ctx) {
         applySpeechSettings();
         scan.refresh();
       }
-      // researcherMode はタブの表示/非表示を切り替えるため、走査対象の再収集が要る。
+      // researcherMode は研究用の機能タブを出し分ける。
       if (key === "researcherMode") scan.restartIfNeeded();
       if (key === "hideVisualTasks") {
         ctx.views.home.render();
@@ -466,37 +321,6 @@ export function initSettings(ctx) {
     ctx.views.home.render();
     scan.restartIfNeeded();
     announce("文字づかいを変えました");
-  });
-
-  /**
-   * 設定のタブを切り替える。
-   *
-   * 面を hidden にするだけ。中の操作子は走査の輪から自動的に外れる
-   * （scan.js は [data-scan] を rect.width > 0 で絞るので、hidden の中は
-   * 対象外になる）——「見えていないのに走査で止まる」を作らない。
-   *
-   * どのタブを開いていたかは保存しない。設定を開くたび「スイッチ」から
-   * 始まるほうが、いちばんよく使う面が毎回すぐ出る。
-   */
-  function showSettingsTab(name) {
-    (elements.settingsPanels || []).forEach((panel) => {
-      panel.hidden = panel.dataset.settingsPanel !== name;
-    });
-    (elements.settingsTabs || []).forEach((tab) => {
-      const active = tab.dataset.settingsTab === name;
-      tab.setAttribute("aria-selected", String(active));
-      tab.classList.toggle("is-active", active);
-    });
-    // タブを替えると輪の長さが変わる。走査中に切り替えても現在位置が
-    // 消えた面に取り残されないよう、refresh を明示的に呼ぶ。
-    scan.refresh();
-  }
-
-  (elements.settingsTabs || []).forEach((tab) => {
-    tab.addEventListener("click", () => {
-      showSettingsTab(tab.dataset.settingsTab);
-      announce(`${tab.textContent.trim()}の設定`);
-    });
   });
 
   elements.startCalibration.addEventListener("click", () => {

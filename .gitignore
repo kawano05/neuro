@@ -6,6 +6,8 @@ dist/
 .DS_Store
 *.log
 playwright-report/
+.playwright-cli/
+output/playwright/
 test-results/
 # CI が撮る画面（scripts/capture-screens.mjs）。成果物として上げるだけで、
 # リポジトリには入れない。
