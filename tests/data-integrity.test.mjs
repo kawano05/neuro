@@ -1025,10 +1025,12 @@ test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
     "fxLevel",
     // 画面に出した1コマの高さ（2026-09-28、games/slotFit.js）。その後ろ。
     "reelCellPx",
+    "artVersion",
   ]);
-  assert.equal(rows[0].length, 33);
-  assert.equal(rows[1].length, 33);
-  // 演出の強さ・1コマの高さを持たない古い記録は空欄（分からないことを空欄で表す）。
+  assert.equal(rows[0].length, 34);
+  assert.equal(rows[1].length, 34);
+  // 演出の強さ・1コマの高さ・見え方の版を持たない古い記録は空欄。
+  assert.equal(rows[1].at(-3), "");
   assert.equal(rows[1].at(-2), "");
   assert.equal(rows[1].at(-1), "");
   assert.equal(rows[1][22], JSON.stringify(["circle", "fish", "star", "flower", "bird", "square"]));

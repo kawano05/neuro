@@ -32,10 +32,9 @@ export const SLOT_PROTOCOL_VERSION = "slot-v1";
 //       残し、リールCSVの最後の列に出す。あわせて、背の低い横向き（スマホ）では
 //       上の帯を上へ寄せた（16px → 6px）ので、れんしゅうの回のリールもそのぶん
 //       大きい。
-//   6 … れんしゅうの回だけ、6種類の絵柄と目標の札を輪郭付きSVGにし、昼の遊園地と
-//       おもちゃの台を足した（2026-09-30）。コマ・停止線・並び・周期・判定は同じ。
-//       そくていの回の見え方と音は 5 と同じ。
-export const SLOT_ENGINE_VERSION = 6;
+// 絵だけの変更は engineVersion を上げず、art/slotWorldArt.js の SLOT_ART_VERSION で残す。
+// 版を上げると前の回が legacyVersion になって表から外れるため。
+export const SLOT_ENGINE_VERSION = 5;
 
 export const SLOT_SYMBOL_IDS = Object.freeze([
   "circle",

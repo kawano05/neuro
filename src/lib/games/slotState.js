@@ -74,6 +74,8 @@ function sanitizeConfig(gameId, rawConfig) {
     textMode: TEXT_MODES.has(value.textMode) ? value.textMode : "ruby",
     // 演出の強さ（れんしゅうの回の「ぴったり！」の星）。無い古い記録は null。
     fxLevel: FX_LEVELS.has(value.fxLevel) ? value.fxLevel : null,
+    // 絵が変わる前後の回を分けられるよう保つ。持たない古い記録は null。
+    artVersion: bounded(value.artVersion, null, 1, 1_000, true),
     // 画面に出した1コマの高さ（px、games/slotFit.js）。そくていの回でも、画面に
     // 入りきらないときは決まった大きさより小さい。無い古い記録は null。
     reelCellPx: nullable(value.reelCellPx, 1, 2_000),

@@ -1,3 +1,14 @@
+/**
+ * 見え方の版。session.config.artVersion に残し、CSV の最後の列に出す。
+ *
+ * 絵が変わった前後の回を解析で分けられるよう、判定の版とは別に残す。
+ * この列を持たない古い記録は空欄。
+ *   1 … Font Awesome と CSS の輪郭の絵。そくていの回は今もこの見え方
+ *   2 … れんしゅうの回だけ SVG の絵と遊園地にした（2026-09-30）。
+ *       コマ・停止線・並び・周期・判定は 1 と同じ
+ */
+export const SLOT_ART_VERSION = 2;
+
 // 測定の刺激と分けておくことで、遊びの絵を直してもそくていの見え方を保つ。
 const SYMBOL_BODIES = Object.freeze({
   circle: `<circle cx="50" cy="50" r="45" fill="#FF4B00"/><path d="M17 69 Q50 96 83 69" fill="none" stroke="#D93F00" stroke-width="8"/><ellipse cx="32" cy="29" rx="9" ry="14" transform="rotate(35 32 29)" fill="#FFF" stroke="none"/>`,

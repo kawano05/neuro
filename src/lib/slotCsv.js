@@ -48,6 +48,8 @@ export const SLOT_CSV_HEADERS = Object.freeze([
   // 回は決まった大きさ（94px、幅 620px 以下は 82px）が基本で、画面に入りきらない
   // ときだけ小さくなる。刺激の大きさなので出す。engineVersion 5 より前は空欄。
   "reelCellPx",
+  // 判定の版を変えずに、絵が変わる前後の回を解析で分けられるようにする。
+  "artVersion",
 ]);
 
 export function buildSlotCsvRows(sessions) {
@@ -95,6 +97,7 @@ export function buildSlotCsvRows(sessions) {
           device.inputMethod ?? "",
           config.fxLevel ?? "",
           trial.reelCellPx ?? config.reelCellPx ?? "",
+          config.artVersion ?? "",
         ]);
       });
     });
