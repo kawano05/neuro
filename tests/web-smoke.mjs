@@ -70,6 +70,7 @@ const projects = [
 ];
 
 const checks = [
+  ["isolates presentation faults and completes recorded beginner and timing runs", checkPresentationFaults],
   ["loads the main learning app", checkMainApp],
   ["keeps the start press from falling through into a home activity", checkStartInputGuard],
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
@@ -168,7 +169,9 @@ try {
     const browser = await project.browserType.launch({ headless: !headed });
     try {
       for (const [name, check] of selectedChecks) {
-        const context = await browser.newContext(project.contextOptions);
+        const context = await browser.newContext({ ...project.contextOptions,
+          serviceWorkers: check === checkPresentationFaults ? "block" : "allow",
+        });
         await context.addInitScript(() => {
           const marker = "neuro-smoke-initialized";
           if (sessionStorage.getItem(marker) === "1") return;
@@ -4636,6 +4639,75 @@ async function checkIpadAccessibilityLayout(page, project) {
  */
 async function settleStartGuard(page) {
   await page.waitForTimeout(550);
+}
+
+// 配信応答だけで共有 ctx を公開する。製品コードに障害注入用の入口は作らない。
+async function exposePresentationContext(page) {
+  await page.route("**/assets/*.js", async route => {
+    const response = await route.fetch();
+    let body = await response.text();
+    let exposed = false;
+    body = body.replace(/(\b\w+)\.scan\s*=\s*\w+\(\1\)([,;])/, (source, name, end) => {
+      exposed = true;
+      return source + `window.__presentationCtx=${name}${end}`;
+    });
+    assert(exposed, "The response injection must expose the actual app context");
+    await route.fulfill({ response, body });
+  });
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__presentationCtx));
+}
+
+async function checkPresentationFaults(page) {
+  await exposePresentationContext(page);
+  for (const fault of ["press", "finale", "music", "voice", "party"]) {
+    await page.evaluate(({ key, fault }) => {
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.settings = { ...saved.settings, autoScan: false, speechEnabled: false, fxLevel: fault === "party" ? "big" : "normal", slotL1Rounds: 3 };
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, { key: storageKey, fault });
+    await page.reload();
+    await page.locator("#startStage").click();
+    await page.evaluate(fault => {
+      const ctx = window.__presentationCtx;
+      const broken = () => { throw Error(`SMOKE_PRESENTATION_${fault}`); };
+      if (fault === "press") ctx.fx.popAppear = broken;
+      if (fault === "finale") ctx.fx.finale = broken;
+      if (fault === "music") ctx.audio.music.stop = broken;
+      if (fault === "voice") ctx.voiceFeedback = broken;
+      if (fault === "party") { ctx.fx.partyPress = broken; ctx.fx.partyFinale = broken; }
+    }, fault);
+    // 声を壊すのは説明を終えたあと。説明画面の担当範囲には触れない。
+    await openActivity(page, t("tile.color-legacy.title"));
+    const before = await readLogCount(page);
+    for (let i = 0; i < 5; i++) {
+      await page.locator("#gameStage").dispatchEvent("click");
+      await page.waitForTimeout(200);
+    }
+    await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, { timeout: 12000 });
+    assert(await readLogCount(page) === before + 5, `${fault}: every beginner press must remain recorded`);
+    await page.evaluate(() => { window.__presentationCtx.voiceFeedback = () => {}; });
+    await page.locator("#resultHome").click();
+    await openActivity(page, t("tile.slot-corner.title"));
+    await openActivity(page, t("tile.slot-l1.title"));
+    // 説明の声はこの検査の対象外なので、開始時だけ通常の声へ戻す。
+    await page.evaluate(() => { window.__presentationCtx.voiceFeedback = () => {}; });
+    await page.waitForTimeout(200);
+    await page.locator("#gameStage").dispatchEvent("click");
+    await page.evaluate(() => {
+      const broken = () => { throw Error("SMOKE_TIMING_PRESENTATION"); };
+      window.__presentationCtx.voiceFeedback = broken;
+      window.__presentationCtx.fx.finale = broken;
+      window.__presentationCtx.fx.partyFinale = broken;
+    });
+    for (let i = 0; i < 3; i++) {
+      await page.waitForTimeout(1000);
+      await page.locator("#gameStage").dispatchEvent("click");
+    }
+    await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, { timeout: 12000 });
+    const session = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).sessions.at(-1), storageKey);
+    assert(session.finished === true && session.trials.length === 3, "Timing faults must preserve completion and all trial records");
+  }
 }
 
 async function openActivity(page, name) {

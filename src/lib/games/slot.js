@@ -20,6 +20,7 @@ import {
 } from "./slotJudge.js";
 import { slotSymbolHtml, slotSymbolStripUrl } from "./slotArt.js";
 import { SLOT_ART_VERSION, slotPracticeSymbolHtml, slotWorldHtml } from "../art/slotWorldArt.js";
+import { presentation } from "../presentation.js";
 import { fitMeasuredReels, reelCellPx } from "./slotFit.js";
 
 const INPUT_GUARD_MS = 300;
@@ -479,7 +480,7 @@ export function createSlotGame(gameId) {
         </section>
       `;
       if (config.difficultyMode !== "measure") {
-        stageEl.insertAdjacentHTML("afterbegin", slotWorldHtml());
+        stageEl.insertAdjacentHTML("afterbegin", presentation.run("world.slot", slotWorldHtml, ""));
       }
       reelsEl = stageEl.querySelector("[data-slot-reels]");
       targetEl = stageEl.querySelector("[data-slot-target]");

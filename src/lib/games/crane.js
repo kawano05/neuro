@@ -34,6 +34,7 @@
 //   試行に使わず、「まってね」の合図だけ返す（黙って捨てない）。
 // =====================================================================
 
+import { presentation } from "../presentation.js";
 import { cranePresets, cranePrizes, cueTones } from "../content.js";
 import {
   ENDLESS_PROTOCOL_VERSION,
@@ -431,12 +432,12 @@ export function createCraneGame(ctx) {
     // れんしゅうの回だけ、店内（台の外）と箱の中の部屋・床のマットを足す。
     // 世界は始めに1回だけ作る（試行ごとには作り直さない）。景品とアームは
     // PNG ではなく SVG を入れる（同じクラスなので、位置と大きさの CSS はそのまま効く）。
-    const worldHtml = practice ? craneWorldHtml() : "";
-    const roomHtml = practice ? craneRoomHtml() : "";
+    const worldHtml = practice ? presentation.run("world.crane", craneWorldHtml, "") : "";
+    const roomHtml = practice ? presentation.run("world.room", craneRoomHtml, "") : "";
     const shadeHtml = practice
       ? `<line class="crane-guide-shade crane-guide-shade-x" vector-effect="non-scaling-stroke" /><line class="crane-guide-shade crane-guide-shade-y" vector-effect="non-scaling-stroke" />`
       : "";
-    const matHtml = practice ? `${craneMatHtml()}<div class="crane-tint" aria-hidden="true"></div>` : "";
+    const matHtml = practice ? `${presentation.run("world.mat", craneMatHtml, "")}<div class="crane-tint" aria-hidden="true"></div>` : "";
     const prizeHtml = practice
       ? `<div class="crane-prize" aria-hidden="true"></div>`
       : `<img class="crane-prize" src="" alt="" />`;

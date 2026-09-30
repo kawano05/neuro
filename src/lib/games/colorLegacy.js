@@ -29,6 +29,7 @@
 import { colorLegacyPreset, switchModules } from "../content.js";
 import { POP_ANIMALS, artSvg } from "../art/hakkiriArt.js";
 import { seaSceneHtml } from "../art/partyArt.js";
+import { presentation } from "../presentation.js";
 import { createBeginnerFlow, playPrefsFor, progressDotsHtml } from "./beginnerKit.js";
 
 const GAME_ID = "color-legacy";
@@ -119,7 +120,7 @@ export function createColorLegacyGame(ctx) {
       seaEl = stageEl.ownerDocument.createElement("span");
       seaEl.className = "pop-sea";
       seaEl.setAttribute("aria-hidden", "true");
-      seaEl.innerHTML = seaSceneHtml();
+      seaEl.innerHTML = presentation.run("world.sea", seaSceneHtml, "");
       stageEl.prepend(seaEl);
     } else if (background !== "sea" && seaEl) {
       seaEl.remove();

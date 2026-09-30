@@ -22,6 +22,7 @@ import {
   createBrightLimiter,
   fxScale,
 } from "./fxSafety.js";
+import { presentation } from "../presentation.js";
 import {
   alphaOf,
   ringRadiusOf,
@@ -283,10 +284,19 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
     }
     g.globalAlpha = 1;
     if (particles.length) {
-      rafId = doc.defaultView.requestAnimationFrame(frame);
+      rafId = doc.defaultView.requestAnimationFrame(safeFrame);
     } else {
       rafId = null;
       canvas.dataset.active = "false";
+    }
+  }
+
+  function safeFrame(t) {
+    if (!presentation.run("fx.frame", () => { frame(t); return true; }, false)) {
+      particles = [];
+      rafId = null;
+      if (canvas) canvas.dataset.active = "false";
+      presentation.run("fx.clear", () => g?.clearRect(0, 0, width, height));
     }
   }
 
@@ -294,7 +304,7 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
     if (rafId !== null || !canvas) return;
     canvas.dataset.active = "true";
     lastT = doc.defaultView.performance.now();
-    rafId = doc.defaultView.requestAnimationFrame(frame);
+    rafId = doc.defaultView.requestAnimationFrame(safeFrame);
   }
 
   function emit(list) {

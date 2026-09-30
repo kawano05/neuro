@@ -21,6 +21,7 @@
 import { joinSpeech, resolveTextMode } from "../i18n.js";
 import { DEFAULT_PLAY_PREFS } from "../state.js";
 import { PARTY_FINISH_DELAY_MS } from "./partyStage.js";
+import { presentation } from "../presentation.js";
 
 /** はじめの遊びは5回で終わる（colorLegacyPreset と同じ長さ）。 */
 export const BEGINNER_TARGET_PRESSES = 5;
@@ -208,7 +209,7 @@ export function createBeginnerFlow(
     const pressIndex = count;
     count += 1;
     const prefs = playPrefsFor(settings, gameId);
-    const drawn = onPress(pressIndex) || {};
+    const drawn = presentation.run("beginner.press", () => onPress(pressIndex), {}) || {};
     ctx.party?.react({ index: pressIndex, source: drawn.source, name: drawn.name });
     playPressSound(audio, prefs.sound, pressIndex, { creature: drawn.creature ?? null });
 
@@ -225,7 +226,7 @@ export function createBeginnerFlow(
         const level = ctx.fx?.level?.() || "normal";
         if (level === "none" || level === "subtle") audio.playChime(784, { durationS: 0.24 });
         else finishSound(audio, prefs.sound);
-        onFinale(pressIndex);
+        presentation.run("beginner.finale", () => onFinale(pressIndex));
       }
       // 最後の絵とフィナーレを見せてから、けっかへ。けっかが出るのと同時に、
       // 歓声と拍手・笑い声・「やったー」（この遊びの設定で切れる）。

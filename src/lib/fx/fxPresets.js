@@ -6,6 +6,7 @@
 // だんだん盛り上がる（§3.1）: 回の番号 k で escalation(k) を掛け、色も増やす。
 // =====================================================================
 
+import { presentation } from "../presentation.js";
 import { escalation } from "./fxSafety.js";
 
 /** 色の組（カラーユニバーサルデザイン推奨配色と、はっきりした色の黄・白）。 */
@@ -432,12 +433,12 @@ export function createFxPresets({ engine, motion }) {
         else motion.slamIn(star, { delayMs });
         if (!star.classList.contains("is-off")) {
           playStar?.(index, (delayMs + 220) / 1000);
-          window.setTimeout(() => {
+          presentation.later(delayMs + 220, () => {
             if (!star.isConnected) return;
             const { x, y } = engine.pointOf(star);
             engine.burst({ x, y, count: 14, speed: [260, 620], shapes: ["sparkle", "star"], colors: PALETTES.gold, size: [16, 28], life: [0.6, 1.1], gravity: 160, twinkle: 0.2 });
             engine.ring({ x, y, color: "#FFC83D", r0: 10, r1: 70, width: 5, life: 0.4 });
-          }, delayMs + 220);
+          });
         }
       });
       const itemsStart = 120 + stars.length * STEP;
@@ -446,7 +447,7 @@ export function createFxPresets({ engine, motion }) {
       if (title) motion.stamp(title, { delayMs: titleAt });
       // 星が2つ以上（または点の無い遊びの「できた」）なら、小さな紙吹雪も。
       if (engine.scale().finale === "full" && (lit.length >= 2 || container.querySelector(".completion-result"))) {
-        window.setTimeout(() => {
+        presentation.later(titleAt + 200, () => {
           if (!container.isConnected) return;
           const p = engine.pointOf(title || container);
           engine.burst({
@@ -463,7 +464,7 @@ export function createFxPresets({ engine, motion }) {
             gravity: 520,
             drag: 1.7,
           });
-        }, titleAt + 200);
+        });
       }
       return titleAt + 500;
     },

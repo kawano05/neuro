@@ -26,6 +26,7 @@
 // 渡すため（sanitizer を通らない）、その場では合計スコアを表示できる。
 // =====================================================================
 
+import { presentation } from "../presentation.js";
 import { cueTones, fishingPresets, fishingSpecies } from "../content.js";
 import {
   ENDLESS_PROTOCOL_VERSION,
@@ -446,12 +447,12 @@ export function createFishingGame(gameId) {
    * 世界は遊びの始めに1回だけ作る（試行ごとには作り直さない）。
    */
   function decoratePractice() {
-    sceneEl.querySelector(".fishing-sky").innerHTML = fishingSkyHtml();
+    sceneEl.querySelector(".fishing-sky").innerHTML = presentation.run("world.sky", fishingSkyHtml, "");
     const deepEl = sceneEl.querySelector(".fishing-deep");
-    deepEl.innerHTML = fishingSeaHtml();
+    deepEl.innerHTML = presentation.run("world.deep", fishingSeaHtml, "");
     // 夕暮れ（is-dusk）は、光の変化だけで伝える合図。れんしゅうの回は滑らかに重ねる。
     deepEl.insertAdjacentHTML("afterend", '<div class="fishing-dusk"></div>');
-    sceneEl.querySelector(".fishing-boat").outerHTML = fishingBoatSvg();
+    sceneEl.querySelector(".fishing-boat").outerHTML = presentation.run("world.boat", fishingBoatSvg, sceneEl.querySelector(".fishing-boat").outerHTML);
     // 魚・長靴は、試行ごとに updateVisual が SVG を入れる。
     sceneEl.querySelector(".fishing-swimmer-art").outerHTML = '<span class="fishing-swimmer-art"></span>';
     swimmerArtEl = stageEl.querySelector(".fishing-swimmer-art");
