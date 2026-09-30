@@ -2126,6 +2126,16 @@ test("the art version survives config -> sanitize -> CSV for the arm and fishing
   assert.equal(byId("art-rt").config.artVersion, FISHING_ART_VERSION);
   assert.equal(byId("art-old").config.artVersion, null, "数でない値・列の無い古い記録は null（分からない）");
 
+  for (const value of [-1, 0, 1.8, "2", NaN, Infinity, null, undefined, 1, 1001]) {
+    const sessions = [byId("art-scan"), byId("art-rt")].map(session => ({
+      ...session, config: { ...session.config, artVersion: value },
+    }));
+    const restored = sanitizeState({ sessions }).sessions;
+    assert.equal(restored.length, 2);
+    restored.forEach(session => assert.equal(session.config.artVersion,
+      Number.isInteger(value) && value >= 1 ? value : null));
+  }
+
   const scanRows = buildTaskCsvRows([byId("art-scan")], "scan");
   assert.equal(scanRows[0].at(-1), "artVersion");
   assert.equal(scanRows[1].at(-1), CRANE_ART_VERSION);
