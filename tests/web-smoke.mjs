@@ -94,7 +94,7 @@ const checks = [
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
-  ["keeps the supporter menu itself out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
+  ["keeps all supporter screens out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
   ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
   ["moves between visible feature tabs", checkFeatureTabs],
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
@@ -1521,8 +1521,9 @@ async function checkAppVoiceSpeaks(page) {
  * supporter's world (any tab), there was no way back to the user's world
  * short of force-quitting the app. #homeReturn ("← ホームへ") is the fix:
  * it must stay hidden while in the user's world (start/home/game/result) and
- * appear the moment a tab view is entered, and clicking/scanning to it must
- * take the user all the way back to #homeView and restart scanning there.
+ * appear the moment a tab view is entered. Supporter tabs require a tap;
+ * learning views also permit scanning. Both must take the user all the way
+ * back to #homeView and restart scanning there.
  */
 async function checkHomeReturnFromTabs(page) {
   await waitForClass(page, "#startView", "is-active");
@@ -1904,92 +1905,88 @@ async function checkSettingsTabs(page) {
 }
 
 /**
- * 支援者メニュー（設定画面）の操作子は走査の輪に入らない。
- *
- * ここを触るのは支援者で、スイッチ走査では操作しない（2026-08-28 合意）。
- * 輪に入れても利用者が選ぶ項目は1つもなく、待ち時間が延びるだけになる。
- *
- * 同時に守るのは逃げ道。面の中身は外すが #homeReturn とタブバーは輪に残す
- * ——利用者が誤って支援者の世界へ入ったとき、走査だけで home へ戻れなく
- * なると、実機確認2026-07-04の「強制終了以外に戻れない」欠落が戻る。
+ * 支援者の世界は輪全体を止める。評価ログ・設定とも帰り道は支援者のタップ。
+ * 一瞬だけ枠が復活して消える事故も、class 変更を観測して拾う。
  */
+async function assertSupporterScanStopped(page, view) {
+  await waitForClass(page, `#${view}`, "is-active");
+  await waitForText(page, "#scanState", "枠は止まっています");
+  for (const id of ["toggleScan", "primarySwitch"]) {
+    assert(await page.locator(`#${id}`).isDisabled(), `${view}: ${id} must be disabled`);
+    assert(await page.locator(`#${id}`).getAttribute("aria-disabled") === "true", `${view}: ${id} must expose its disabled state`);
+  }
+  const savedState = await page.evaluate(() => JSON.stringify(localStorage));
+  await page.evaluate(() => {
+    document.activeElement?.blur(); // 通常のボタンの Enter 決定とは区別する。
+    const probe = { focusAppeared: false, clicks: 0 };
+    const observer = new MutationObserver((records) => {
+      if (document.querySelector(".scan-focus") || records.some((r) => r.oldValue?.includes("scan-focus"))) {
+        probe.focusAppeared = true;
+      }
+    });
+    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"], attributeOldValue: true });
+    const countClick = () => { probe.clicks += 1; };
+    const surfaces = [document.querySelector(".tabbar"), document.querySelector(".view.is-active")];
+    surfaces.forEach((surface) => surface.addEventListener("click", countClick));
+    window.__supporterScanProbe = { probe, cleanup: () => {
+      observer.disconnect();
+      surfaces.forEach((surface) => surface.removeEventListener("click", countClick));
+    } };
+    // disabled のネイティブ抑止を迂回しても、エンジン自身が止めること。
+    document.querySelector("#toggleScan").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const input = document.querySelector("#primarySwitch");
+    input.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, isPrimary: true, button: 0 }));
+    input.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    window.dispatchEvent(new Event("resize")); // refresh() の入口も確認する。
+  });
+  for (let index = 0; index < 45; index += 1) {
+    await page.keyboard.press("ArrowRight");
+    assert(await page.locator(".scan-focus").count() === 0, `${view}: scan ring must be empty`);
+  }
+  for (const key of ["Space", "Enter", "a", "F8"]) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(170);
+  }
+  await page.waitForTimeout(1_900); // 既定の自動走査間隔を越えて待つ。
+  const probe = await page.evaluate(() => {
+    const { probe, cleanup } = window.__supporterScanProbe;
+    cleanup();
+    delete window.__supporterScanProbe;
+    return probe;
+  });
+  assert(!probe.focusAppeared, `${view}: timer and manual inputs must never create a frame`);
+  assert(probe.clicks === 0, `${view}: switch input must not activate any control`);
+  assert(await page.locator(".scan-focus").count() === 0, `${view}: no frame may remain`);
+  assert(await page.evaluate(() => JSON.stringify(localStorage)) === savedState, `${view}: switch input must not change saved state`);
+  await waitForClass(page, `#${view}`, "is-active");
+  await waitForText(page, "#scanState", "枠は止まっています");
+}
+
+async function assertHomeScanResumed(page) {
+  assert(!(await page.locator("#homeReturn").isHidden()), "The supporter must still see the way back");
+  await page.locator("#homeReturn").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForText(page, "#scanState", "枠が動いています");
+  assert(await page.locator("#toggleScan").isEnabled(), "Home must re-enable the scan toggle");
+  assert(await page.locator("#primarySwitch").isEnabled(), "Home must re-enable the switch");
+  await page.waitForFunction(() => Boolean(document.querySelector("#homeView .scan-focus")));
+  const first = await page.locator(".scan-focus").getAttribute("data-tile-id");
+  await page.waitForFunction((id) => {
+    const current = document.querySelector("#homeView .scan-focus");
+    return current && current.getAttribute("data-tile-id") !== id;
+  }, first);
+}
+
 async function checkSupporterMenuStaysOutOfTheScanRing(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-
-  // 走査間隔に依存しないよう、→ キーで輪を手で回して一周ぶん集める。
-  const walkRing = async (steps) => {
-    const seen = [];
-    for (let index = 0; index < steps; index += 1) {
-      await page.keyboard.press("ArrowRight");
-      const current = await page.evaluate(() => {
-        const focused = document.querySelector(".scan-focus");
-        if (!focused) return null;
-        return {
-          id: focused.id || null,
-          inSettings: Boolean(focused.closest("#settings")),
-          label: (focused.getAttribute("aria-label") || focused.textContent || "")
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 20),
-        };
-      });
-      if (current) seen.push(current);
-    }
-    return seen;
-  };
-
-  // 支援者メニューでは走査を一切動かさない（2026-09-14の指示。理由と代償は
-  // src/lib/scan.js の isSupporterMenu()）。面の中身だけでなく、タブバーも
-  // 走査ドックも輪から外れる。
-  const ring = await walkRing(45);
-  assert(
-    ring.length === 0,
-    `Supporter menu must not scan at all, found: ${ring.map((entry) => entry.label).join(", ")}`
-  );
-  await waitForText(page, "#scanState", "枠は止まっています");
-
-  // 自動走査のタイマーも復活しない。手動の「走査開始」も効かない。
-  await page.locator("#toggleScan").evaluate((target) => target.click());
-  await page.waitForTimeout(1_900);
-  assert(
-    (await page.locator(".scan-focus").count()) === 0,
-    "No app scan focus may appear in the supporter menu"
-  );
-  await waitForText(page, "#scanState", "枠は止まっています");
-
-  // 効かない操作子は無効として見せる（押しても動かない理由が支援者に分かる）。
-  assert(await page.locator("#toggleScan").isDisabled(), "The dock scan toggle is dead here, so it must be disabled");
-  assert(await page.locator("#primarySwitch").isDisabled(), "The dock switch surrogate is dead here, so it must be disabled");
-
-  // スイッチ入力（キーボード相当）も何も起こさない——画面は設定のまま。
-  await page.keyboard.press("Space");
-  await page.waitForTimeout(200);
-  await waitForClass(page, "#settings", "is-active");
-
-  // 走査で戻れなくなった代わりに、支援者のタップで戻る導線は生きている
-  // ことを固定する。ここが壊れると、この画面は本当に行き止まりになる。
-  assert(!(await page.locator("#homeReturn").isHidden()), "The supporter must still see the way back");
-  await page.locator("#homeReturn").click();
-  await waitForClass(page, "#homeView", "is-active");
-
-  // 他の支援者画面（評価ログ）では、その面の操作子はこれまでどおり輪に入る。
-  // 走査で行き止まりになるのは設定画面だけ。
+  await assertSupporterScanStopped(page, "settings");
+  await assertHomeScanResumed(page);
   await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
   await page.locator('.tab[data-view="log"]').click();
-  await waitForClass(page, "#log", "is-active");
-  const logRing = await walkRing(45);
-  assert(
-    logRing.some((entry) => entry.id === "exportCsv"),
-    "Only the supporter menu is exempt; other views keep their own controls in the ring"
-  );
-  assert(
-    logRing.some((entry) => entry.id === "homeReturn"),
-    "The home-return button must stay reachable by scanning from the evaluation log"
-  );
+  await assertSupporterScanStopped(page, "log");
+  await assertHomeScanResumed(page);
 }
 
 /**
@@ -2005,7 +2002,7 @@ async function checkIpadSwitchControlMode(page, project) {
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
   // 支援者メニューへ入った時点で自前走査は止まる（scan.js の
-  // isSupporterMenu()）。委譲を用意する画面そのものが、もう走っていない。
+  // scanningIsOff()）。委譲を用意する画面そのものが、もう走っていない。
   await waitForText(page, "#scanState", "枠は止まっています");
 
   const mode = page.locator("#switchControlMode");
@@ -3887,9 +3884,7 @@ async function checkFeatureTabs(page) {
     await waitForClass(page, "#homeView", "is-active");
   }
 
-  // Only the always-visible supporter tabs; operation/evaluation/research
-  // stay hidden until "researcher mode" is turned on in settings
-  // (P0-0, detailed-design.md §0.2).
+  // 支援者タブは評価ログと設定。旧研究者タブは削除済み。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
   const tabTargets = ["log", "settings"];
@@ -3899,14 +3894,6 @@ async function checkFeatureTabs(page) {
   }
 }
 
-/**
- * P5-1 (detailed-design.md §11.2 item 4): confirm the researcher-only tabs
- * (evaluation/operation/research, gated by settings.researcherMode since
- * P0-0) still render correctly after this phase's changes, and specifically
- * that the P3-1/P4 additions to the evaluation tab (rhythm CSV export
- * button) are present and unaffected — this is the "既存タブ(評価・設定)
- * 不退行" no-regression check the task calls out by name.
- */
 /**
  * 書き出すデータが1件も無いとき、押した支援者に理由が見えること。
  *
@@ -3950,8 +3937,7 @@ async function checkResearcherModeTabsNoRegression(page) {
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
 
-  // Research controls are protected from the user's scan order until a
-  // supporter explicitly unlocks the editing session.
+  // 支援者の世界では、研究者モードを入れても走査は再開しない。
 
   // researcherMode は設定の面（そくてい）の出し分けに使う。効果測定・操作訓練・
   // 研究の3タブは 2026-08-29 に削除したので、ここで確かめるのは「支援者の
@@ -3962,6 +3948,7 @@ async function checkResearcherModeTabsNoRegression(page) {
 
   await page.locator('.tab[data-view="log"]').click();
   await waitForClass(page, "#log", "is-active");
+  await assertSupporterScanStopped(page, "log");
   // 参加者IDと書き出しは、すべてこの1枚に居る。
   await page.locator("#participantId").waitFor({ state: "visible" });
   for (const selector of [
@@ -3993,6 +3980,7 @@ async function checkResearcherModeTabsNoRegression(page) {
   await waitForClass(page, "#settings", "is-active");
   await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").waitFor({ state: "visible" });
+  await assertSupporterScanStopped(page, "settings");
   // 「ホームに出す遊び」は「スイッチ」の面にある（設定はタブ分けされている）。
   await openSettingsTab(page, "basic");
   await page.locator("#hideVisualTasks").click();
