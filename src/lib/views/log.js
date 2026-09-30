@@ -2,7 +2,7 @@
 // views/log.js — 評価ログ画面（操作ログの集計・一覧・CSV書き出し）
 // =====================================================================
 
-import { escapeHtml, escapeCsv, formatTime, localFileStamp, toLocalIso } from "../utils.js";
+import { escapeHtml, escapeCsv, formatTime, exportFileStamp, toLocalIso } from "../utils.js";
 import { MAX_LOG_ENTRIES } from "../state.js";
 import {
   describeSessionConditions,
@@ -467,7 +467,7 @@ export function initLog(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-log-${localFileStamp()}.csv`;
+    link.download = `neuronode-log-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }

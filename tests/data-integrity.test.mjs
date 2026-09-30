@@ -11,7 +11,7 @@ import {
   sanitizeState,
   summarizeRhythmTrials,
 } from "../src/lib/state.js";
-import { escapeCsv, formatTime, localFileStamp, toLocalIso } from "../src/lib/utils.js";
+import { escapeCsv, formatTime, exportFileStamp, localFileStamp, toLocalIso } from "../src/lib/utils.js";
 import {
   buildSessionLedgerRows,
   buildSlotCsvRows,
@@ -2184,6 +2184,13 @@ test("every recorded sound has a credit, and every credit is complete", () => {
   const files = readdirSync(dir).filter((file) => /\.(mp3|m4a|aac|wav|ogg)$/.test(file));
   assert.ok(files.length > 0, "録音が1つも無い");
   files.forEach((file) => assert.ok(readme.includes(file), `${file} が README の表に無い`));
+});
+
+test("export names include a safe participant and local hours minutes seconds", () => {
+  const stamp = exportFileStamp('P:01/\\<>"|?*', new Date('2026-09-30T03:04:05Z'));
+  assert.match(stamp, /^P_01_+-\d{4}-\d{2}-\d{2}-\d{6}$/);
+  assert.ok(stamp.includes('120405') || stamp.includes('030405'), stamp);
+  assert.match(exportFileStamp(''), /^no-id-/);
 });
 
 for (const { name, fn } of tests) {

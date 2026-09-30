@@ -16,7 +16,7 @@
 // =====================================================================
 
 import { cloneDefaultState, MAX_SESSIONS } from "./state.js";
-import { escapeCsv, localFileStamp, toLocalIso } from "./utils.js";
+import { escapeCsv, exportFileStamp, toLocalIso } from "./utils.js";
 import { storageKey } from "./content.js";
 import { buildSlotCsvRows } from "./slotCsv.js";
 export { buildSlotCsvRows };
@@ -425,7 +425,7 @@ export function initDataExport(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${filenameStem}-${localFileStamp()}.csv`;
+    link.download = `${filenameStem}-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -452,7 +452,7 @@ export function initDataExport(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-rhythm-${localFileStamp()}.csv`;
+    link.download = `neuronode-rhythm-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -471,7 +471,7 @@ export function initDataExport(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-slot-${localFileStamp()}.csv`;
+    link.download = `neuronode-slot-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -493,7 +493,7 @@ export function initDataExport(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-${taskType}-${localFileStamp()}.csv`;
+    link.download = `neuronode-${taskType}-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -529,7 +529,7 @@ export function initDataExport(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-raw-${localFileStamp()}.json`;
+    link.download = `neuronode-raw-${exportFileStamp(state.evaluation.participantId)}.json`;
     link.click();
     URL.revokeObjectURL(url);
     notifySupporter(
