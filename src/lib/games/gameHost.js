@@ -43,6 +43,7 @@ import { MAX_SESSIONS } from "../state.js";
 import { gameHowTo } from "../content.js";
 import { entryFor, joinSpeech, resolveTextMode } from "../i18n.js";
 import { isMeasurementMode } from "../difficultyMode.js";
+import { createReadyScreen } from "./readyScreen.js";
 
 /** けっかの星が飛び込むときの音（1つ目から順に上がる。G5・B5・D6・G6）。 */
 const RESULT_STAR_NOTES = [783.99, 987.77, 1174.66, 1567.98];
@@ -86,6 +87,9 @@ export function createGameHost(ctx) {
   // P4-3: 今回のリザルトで既に候補値を保存したか（同一リザルト画面での
   // 二重保存を防ぎ、保存後は確認文言に切り替える。launch() のたびにリセット）。
   let calibrationOffsetSaved = false;
+  const readyScreen = createReadyScreen(ctx, beginSession);
+  const modeKey = () => activeGameId === "calibration" || isMeasurementMode(state.settings) ? "session.measure" : "session.practice";
+  const modeText = () => ctx.t(`${modeKey()}Short`);
 
   const switchMenu = document.querySelector("#gameSwitchMenu");
   const switchAgain = document.querySelector("#gameSwitchAgain");
@@ -292,7 +296,7 @@ export function createGameHost(ctx) {
         finale: () => atmosphere?.finale(),
       },
       setProgress(text) {
-        elements.gameProgress.textContent = text;
+        elements.gameProgress.textContent = `${modeText()} · ${text}`;
       },
       logTrial(session) {
         persistSession(session);
@@ -391,12 +395,16 @@ export function createGameHost(ctx) {
         ? `<span class="game-ready-icon" aria-hidden="true"><i class="${module.iconClass}"></i></span>`
         : "";
     elements.gameStageContent.classList.add("is-ready");
+    elements.gameStageContent.dataset.readyWorld = theme?.palette || "high";
     elements.gameStageContent.innerHTML = `
       <div class="game-ready">
+        <div class="game-ready-info">
+        <span class="session-mode">${ctx.tHtml(modeKey())}</span>
         ${icon}
         <strong class="game-ready-title">${moduleTitle(module, true)}</strong>
+        </div>
         <ol class="game-ready-steps">${items}</ol>
-        <span class="game-ready-go">${ctx.tHtml("ready.go")}</span>
+        <span class="game-ready-go"><span class="game-ready-instruction">${ctx.tHtml("ready.go")}</span></span>
       </div>
     `;
 
@@ -407,13 +415,14 @@ export function createGameHost(ctx) {
     const spoken = joinSpeech([moduleTitle(module), ...spokenSteps], resolveTextMode(state.settings));
     if (requestedEndless && !isMeasurementMode(state.settings) && state.settings.autoScan && !state.settings.switchControlMode) {
       const hint = document.createElement("span");
-      hint.className = "game-ready-go";
+      hint.className = "game-ready-endless";
       hint.textContent = resolveTextMode(state.settings) === "en"
         ? 'To finish, wait 20 seconds without pressing and choose Finish.'
         : 'おわりたいときは 20びょう おさずに まって、えらんでね。';
-      elements.gameStageContent.querySelector(".game-ready").append(hint);
+      elements.gameStageContent.querySelector(".game-ready-go").append(hint);
     }
     ctx.voiceFeedback(spoken);
+    readyScreen.open();
   }
 
   /** レディ画面のひと押しを受けて、実際にゲームを開始する。 */
@@ -421,11 +430,14 @@ export function createGameHost(ctx) {
     const module = pendingModule;
     pendingModule = null;
     if (!module) return;
+    readyScreen.close();
     // 案内の読み上げを途中で打ち切る。読み終わるのを待たずに始められる以上、
     // 放っておくと課題の合図音（低音・高音）に人の声が重なる。合図音を
     // 聴き取ることがこの課題そのものなので、確実に黙らせてから始める。
     ctx.audio.stopSpeech();
     elements.gameStageContent.classList.remove("is-ready");
+    delete elements.gameStageContent.dataset.readyWorld;
+    scan.stop(true);
     activeInstance = module.create(buildGameCtx());
     activeInstance.mount(elements.gameStageContent);
     mountAtmosphere(module);
@@ -452,6 +464,7 @@ export function createGameHost(ctx) {
       Boolean(module.taskType) && (isMeasurementMode(state.settings) || module.id === "calibration")
     );
     requestedEndless = options.endless === true;
+    readyScreen.close();
     destroyActive(); // 多重起動防止（MUST）: 前回 instance の destroy() を必ず呼ぶ
     ctx.fx?.clear(); // 前の画面の粒を、次の合図より前へ持ち越さない。
     scan.stop(true);
@@ -556,9 +569,11 @@ export function createGameHost(ctx) {
     // レディ画面から「おわる」/Esc で抜けた場合は instance がまだ無い。
     // 保留を落とし、読み上げも黙らせる（ホームに戻ってから喋り続けない）。
     pendingModule = null;
+    readyScreen.close();
     ctx.audio.stopSpeech();
     ctx.audio.music?.stop(0.3);
     elements.gameStageContent.classList.remove("is-ready");
+    delete elements.gameStageContent.dataset.readyWorld;
     destroyActive();
     ctx.audio.setProfile?.("play");
     ctx.fx?.setMeasurement(false);
@@ -589,7 +604,8 @@ export function createGameHost(ctx) {
       return;
     }
     if (pendingModule) {
-      beginSession();
+      if (state.settings.autoScan && !state.settings.switchControlMode) scan.activate();
+      else readyScreen.advance();
       return;
     }
     if (!activeInstance) return;
@@ -646,6 +662,7 @@ export function createGameHost(ctx) {
   return {
     launch,
     isSwitchMenuOpen: () => !switchMenu.hidden,
+    isReadyOpen: readyScreen.isOpen,
     dispatchInput,
     retry,
     abort: returnHome,
@@ -660,7 +677,10 @@ export function createGameHost(ctx) {
       // 始まっていないので「のこり」は書けない）。名前は辞書から引く
       // ——registry の title は日本語のままなので、直に出すと英語表記でも
       // ここだけ日本語になる。
-      elements.gameProgress.textContent = activeModule ? moduleTitle(activeModule) : "";
+      elements.gameProgress.textContent = activeModule ? `${modeText()} · ${moduleTitle(activeModule)}` : "";
+      document.querySelector("#resultMode").innerHTML = activeModule?.taskType ? ctx.tHtml(modeKey()) : "";
+      document.querySelector("#resultMode").hidden = !activeModule?.taskType;
+      document.querySelector("#resultView").dataset.world = tileThemeFor(activeGameId)?.palette || "pop";
       // 変えられる項目のある遊びでだけ出す（そくていの回で速さしか無い遊びは出さない）。
       elements.gameSettings.hidden = !(
         state.currentView === "game" &&

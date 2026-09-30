@@ -7,12 +7,13 @@
    決まり
      - 全部 .is-practice の下に書く。そくていの回（.is-practice が付かない）は
        styles.css の見え方のまま、1px も変えない（docs/design-renewal-2026-09-25.md §3.3）。
-     - 判定・時刻・位置・大きさは styles.css / games/fishing.js のまま。ここは絵だけ。
+     - 判定・時刻・泳ぐ経路と口の基準位置は games/fishing.js のまま。
+       れんしゅうの縦画面では島を遠ざけ、スマホの魚を大きくする。
      - ずっと続く動きは、合図と関係のない一定のゆっくりした動きだけ。周期は 9 / 13 / 17 / 23 秒
        （前刺激間隔 1.8〜4.2 秒の範囲の外で、その整数倍にも当たらない。styles.css の
        環境の動きと同じ決まり）。雲は 97 / 131 / 173 秒。明るさは変えず（点滅にしない）、
        動かすのは translate / rotate / scale（と小さな泡の opacity）だけ。
-     - 「！」「静かに待とう」「0 cm」の札は、いまの見た目のまま（合図なので）。
+     - 合図の「！」と待つ文はそのまま。縦画面の得点札は操作帯から離す。
    ===================================================================== */
 
 /* --- 空 ---------------------------------------------------------------- */
@@ -82,6 +83,18 @@
   left: 9%;
   height: min(28%, 72px);
   aspect-ratio: 300 / 120;
+}
+/* 縦長では舟に視線を集める。島は小さな遠景へ退ける。 */
+@media (max-aspect-ratio: 1/1) {
+  .module-fishing.is-practice .fishing-island { right: 4%; height: min(20%, 52px); }
+  .module-fishing.is-practice .fishing-island-far { left: 4%; height: min(14%, 36px); }
+}
+@media (max-width: 560px) and (max-aspect-ratio: 1/1) {
+  /* 口の基準点と泳ぐ経路は維持して、魚種間の大小を保ちながら絵を大きくする。 */
+  .module-fishing.is-practice .fishing-swimmer[data-species="small"] { width: min(132px, 23%); }
+  .module-fishing.is-practice .fishing-swimmer[data-species="medium"] { width: min(178px, 29%); }
+  .module-fishing.is-practice .fishing-swimmer[data-species="large"] { width: min(232px, 36%); }
+  .module-fishing.is-practice .fishing-swimmer.is-boot { width: min(120px, 20%); }
 }
 
 /* --- 水（押すと 出てくる の海の色の流れ。暗く沈ませない） ------------------- */
@@ -410,4 +423,9 @@ body.high-contrast .module-fishing.is-practice .fishing-line::after {
   .module-fishing.is-practice :is(.fishing-dusk-sky, .fishing-dusk) {
     transition: none;
   }
+}
+
+/* Split Viewでも得点を上の操作帯から離す。測定には適用しない。 */
+@media (max-aspect-ratio: 1/1) {
+  body.game-mode.user-world .module-fishing.is-practice .fishing-score { top: 78px; left: 4%; transform: none; }
 }

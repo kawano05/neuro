@@ -1,4 +1,15 @@
-/* 絵と背景だけを変え、既存のコマ・停止線・札の位置と大きさは引き継ぐ。 */
+/* れんしゅうの割り付けと絵。そくていのコマ・停止線・札には適用しない。 */
+/* れんしゅうの札は、実際に流れる絵の寸法をslot.jsから受け取る。 */
+.slot-stage.is-practice .slot-task[data-difficulty-mode="practice"] .slot-target .slot-symbol {
+  width: var(--slot-target-size, 66px);
+  height: var(--slot-target-size, 66px);
+  flex-shrink: 0;
+}
+.slot-stage.is-practice .slot-cheer-word { margin-top: 8px; }
+@media (max-aspect-ratio: 1/1) {
+  .slot-task[data-difficulty-mode="practice"] .slot-reels { --slot-min-aspect: 1.05; --slot-max-aspect: 1.4; }
+  .slot-task[data-difficulty-mode="practice"] .slot-reels.is-1-reel { --slot-min-aspect: 1.15; }
+}
 .slot-stage.is-practice {
   isolation: isolate;
   background: linear-gradient(180deg, #8ED8F7 0%, #DDF5FF 62%, #EEF8E9 100%);

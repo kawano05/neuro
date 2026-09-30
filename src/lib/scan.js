@@ -74,6 +74,12 @@ export function createScanEngine(ctx) {
       if (scanIndex >= scanTargets.length) scanIndex = 0;
       return;
     }
+    if (state.currentView === "game" && ctx.gameHost?.isReadyOpen?.()) {
+      scanTargets = [...document.querySelectorAll("#gameReadyControls [data-scan], #gameExit[data-scan]")]
+        .filter(target => !target.hidden && !target.disabled);
+      if (scanIndex >= scanTargets.length) scanIndex = 0;
+      return;
+    }
     const activeView = document.querySelector(".view.is-active");
     scanTargets = [
       ...document.querySelectorAll(".tabbar [data-scan]"),
@@ -147,12 +153,13 @@ export function createScanEngine(ctx) {
       stop(true);
       return;
     }
-    // ゲーム中・スタート画面中は絶対に走査しない（不変条件、
+    // 課題の実行中・スタート画面中は走査しない。説明と終了の選択だけは
+    // 専用の操作を走査する（不変条件、
     // detailed-design.md §8.4の二重防御をstartにも拡張）。
     // gameHost.launch() の scan.stop(true) が一次防御、これは二次防御。
     // start は「走査対象なし・全画面が入力」（detailed-design.md §2.1）のため、
     // タブバー等が誤って走査され続ける事故を防ぐ。
-    if ((state.currentView === "game" && !ctx.gameHost?.isSwitchMenuOpen?.()) || state.currentView === "start") return;
+    if ((state.currentView === "game" && !ctx.gameHost?.isSwitchMenuOpen?.() && !ctx.gameHost?.isReadyOpen?.()) || state.currentView === "start") return;
     stop(false);
     refresh();
     scanIndex = scanTargets.length ? Math.max(0, scanIndex) : -1;
@@ -186,9 +193,10 @@ export function createScanEngine(ctx) {
       stop(true);
       return;
     }
-    // ゲーム中・スタート画面中は絶対に走査しない（不変条件、
+    // 課題の実行中・スタート画面中は走査しない。説明と終了の選択だけは
+    // 専用の操作を走査する（不変条件、
     // detailed-design.md §8.4の二重防御をstartにも拡張、§2.1）。
-    if ((state.currentView === "game" && !ctx.gameHost?.isSwitchMenuOpen?.()) || state.currentView === "start") return;
+    if ((state.currentView === "game" && !ctx.gameHost?.isSwitchMenuOpen?.() && !ctx.gameHost?.isReadyOpen?.()) || state.currentView === "start") return;
     window.setTimeout(() => {
       refresh();
       if (state.settings.autoScan) start();

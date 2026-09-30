@@ -433,6 +433,13 @@ export function createSlotGame(gameId) {
      */
     function fitReels() {
       if (stageEl && config?.difficultyMode === "measure") fitMeasuredReels(stageEl);
+      if (stageEl && config?.difficultyMode === "practice") {
+        // 目標の絵も流れる絵と同じ寸法。縦配置では札が高さを使うため再計算する。
+        for (let i = 0; i < 4; i += 1) {
+          const window = stageEl.querySelector(".slot-reel-window");
+          if (window) stageEl.style.setProperty("--slot-target-size", `${window.getBoundingClientRect().height / 3 * 0.68}px`);
+        }
+      }
     }
 
     // 向きを変えたとき（スマホを横にした、など）に測り直す。1フレームに1回まで。
@@ -595,6 +602,7 @@ export function createSlotGame(gameId) {
         logTrial(session);
       }
       if (stageEl) {
+        stageEl.style.removeProperty("--slot-target-size");
         stageEl.classList.remove("slot-stage", "is-practice", "is-fitted", "is-whole");
         stageEl.innerHTML = "";
       }
