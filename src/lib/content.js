@@ -62,7 +62,7 @@ export const colorLegacyPreset = {
 export const gameTiles = [
   // iconClass は Font Awesome Free の統一アイコン。製品アイコンに絵文字を
   // 使わず、年齢を限定しない視覚言語に揃える。
-  { id: "color-legacy", taskType: null, resultType: "completion", title: "おすと でてくる", description: "おすと えと おとが でるよ", order: 1, enabled: true, iconClass: "fa-solid fa-palette" },
+  { id: "color-legacy", taskType: null, resultType: "completion", title: "いないいない ばあ", description: "おすと えと おとが でるよ", order: 1, enabled: true, iconClass: "fa-solid fa-palette" },
   // はじめの遊び（失敗の無い遊び）の2つめと3つめ。打ち合わせで「こういう遊びを
   // 増やしてほしい」と言われた（docs/design-renewal-2026-09-25.md §1.4）。
   // どちらも測定の課題ではないので taskType を持たない。
@@ -71,10 +71,10 @@ export const gameTiles = [
   // 野球盤のような遊び（打ち合わせで「誰でも野球盤」が例に出た）。押せば必ず
   // 当たり、タイミングが合うほど遠くへ飛ぶ。はじめの遊びとタイミングの遊びの
   // あいだの一段。これも測定の課題ではない（games/baseball.js）。
-  { id: "baseball", taskType: null, resultType: "completion", title: "ボールを うつ", description: "ボールが きたら おして うとう", order: 4, enabled: true, iconClass: "fa-solid fa-baseball-bat-ball" },
+  { id: "baseball", taskType: null, resultType: "completion", title: "やきゅう", description: "ボールが きたら おして うとう", order: 4, enabled: true, iconClass: "fa-solid fa-baseball-bat-ball" },
   { id: "slot-l1", taskType: "slot", title: "ひとつ とめる", description: "おなじ えが まんなかに きたら おそう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-circle-stop" },
   { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの リールを じゅんばんに とめよう", order: 6, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
-  { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 7, enabled: true, iconClass: "fa-solid fa-bell" },
+  { id: "gonogo", taskType: "gonogo", title: "おとあそび", description: "たかいおとのとき だけ おそう", order: 7, enabled: true, iconClass: "fa-solid fa-bell" },
   { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 8, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
   // さかなつりは2種類ある。どちらも反応時間を測るが、測っているものが違う:
   //   fishing        … 純粋な単純反応時間。アタリ音は1種類だけで、迷う要素がない
@@ -91,15 +91,15 @@ export const gameTiles = [
 /** 視覚タイミング課題2種をまとめる二階層目への入口。 */
 export const slotCornerTile = {
   id: "slot-corner",
-  title: "リールを とめる",
+  title: "えあわせ",
   description: "ひとつ または 3つの えを とめよう",
   iconClass: "fa-solid fa-circle-stop",
 };
 
-/** UFOキャッチャー（ふつう / エンドレス）をまとめる二階層目への入口。 */
+/** クレーンゲーム（ふつう / エンドレス）をまとめる二階層目への入口。 */
 export const craneCornerTile = {
   id: "crane-corner",
-  title: "アームで つかむ",
+  title: "クレーンゲーム",
   description: "2つの あそびかたから えらぶ",
   iconClass: "fa-solid fa-hand",
 };

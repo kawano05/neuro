@@ -3269,7 +3269,7 @@ async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
 async function checkEndlessEndsOnFailure(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
+  await openActivity(page, t("tile.crane-corner.title"));
   await openActivity(page, "ずっと止める");
   await waitForClass(page, "#gameView", "is-active");
 
@@ -3327,7 +3327,7 @@ async function checkEndlessEndsOnFailure(page) {
 async function checkCraneGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
+  await openActivity(page, t("tile.crane-corner.title"));
   await openActivity(page, "アームを止める");
   await waitForClass(page, "#gameView", "is-active");
   // crane も content.js の gameHowTo を持つようになったので、レディ画面を
@@ -3418,7 +3418,7 @@ async function checkResultScreenStaysInTheUserWorld(page) {
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
+  await openActivity(page, t("tile.crane-corner.title"));
   await openActivity(page, "アームを止める");
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
@@ -3562,7 +3562,7 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
     await page.reload();
     await page.locator("#startStage").click();
     await waitForClass(page, "#homeView", "is-active");
-    await openActivity(page, "アームで つかむ");
+    await openActivity(page, t("tile.crane-corner.title"));
     await openActivity(page, "アームを止める");
     await page.locator(".game-ready").waitFor({ state: "visible" });
     // タイルを押した直後のこの押下は、入力ファネルの多重発火除去
@@ -4134,7 +4134,7 @@ async function checkResearcherModeTabsNoRegression(page) {
   // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
   const lobbyTitles = await collectActivityTitles(page);
   assert(
-    !lobbyTitles.includes("アームで つかむ"),
+    !lobbyTitles.includes(t("tile.crane-corner.title")),
     `Visual-task setting must remove the claw corner from the lobby (saw: ${lobbyTitles.join(", ")})`
   );
   assert(

@@ -512,7 +512,7 @@
         <label class="setting-row toggle-row">
           <span>
             <strong>画面をよく見る遊びを隠す</strong>
-            <small>「リールを止める」と「アームでつかむ」は画面を見続ける遊びです。見るのが難しい人のときは外せます</small>
+            <small>「絵あわせ」と「クレーンゲーム」は画面を見続ける遊びです。見るのが難しい人のときは外せます</small>
           </span>
           <input id="hideVisualTasks" type="checkbox" role="switch" data-scan />
         </label>
@@ -523,7 +523,7 @@
       <div class="settings-panel" data-settings-panel="senses" hidden>
       <h3 class="settings-group-title">音と言葉</h3>
       <p class="settings-group-note">
-        効果音を切っても、遊びの合図の音（「高い音だけ」の音や、さかなつりのアタリの音など）は
+        効果音を切っても、遊びの合図の音（「音あそび」の音や、さかなつりのアタリの音など）は
         鳴ります。合図が無いと遊べないためです。
       </p>
 
@@ -613,7 +613,7 @@
         <label class="setting-row">
           <span>
             <strong>遊びの雰囲気</strong>
-            <small>できたときの紙吹雪や星の量です。「おおさわぎ」は、押すと 出てくる で、なかまのラッコ・押すたびに重なる音楽・大きな数・観客まで出ます。光の点滅は、どの雰囲気でも1秒に3回までです。刺激に弱い人は「すっきり」か「なし」に</small>
+            <small>できたときの紙吹雪や星の量です。「おおさわぎ」は、いないいない ばあ で、なかまのラッコ・押すたびに重なる音楽・大きな数・観客まで出ます。光の点滅は、どの雰囲気でも1秒に3回までです。刺激に弱い人は「すっきり」か「なし」に</small>
           </span>
           <select id="fxLevel" data-scan>
             <option value="none">なし</option>
@@ -656,7 +656,7 @@
         </span>
       </p>
 
-      <h3 class="settings-group-title">リールを止める</h3>
+      <h3 class="settings-group-title">絵あわせ</h3>
       <p class="settings-group-note">
         練習の回にだけ効きます。測定の回は決まった値です（1周3.2秒・「合った」の広さ0.22秒・
         「ひとつ止める」8回・「3つ止める」4回）。
@@ -700,7 +700,7 @@
         </label>
       </div>
 
-      <h3 class="settings-group-title">高い音だけ</h3>
+      <h3 class="settings-group-title">音あそび</h3>
       <p class="settings-group-note">
         練習の回にだけ効きます。測定の回と「押すタイミングの測定」は、決まった条件で行います。
       </p>
@@ -758,7 +758,7 @@
         </label>
       </div>
 
-      <h3 class="settings-group-title">アームでつかむ</h3>
+      <h3 class="settings-group-title">クレーンゲーム</h3>
       <p class="settings-group-note">
         変えた値は、次に始めるときから効きます。どの設定で遊んだかは記録に残ります。
       </p>
