@@ -64,11 +64,8 @@
     <!--
       マッチング・VOCA・文字学習は利用者向けアクティビティなので、タブでは
       なくホームの「まなぶ・つたえる」二階層から入る。
-      タブバーに残るのは支援者機能（評価ログ・設定＋研究者モードの3タブ）のみ。
+      タブバーに残るのは設定だけ（評価ログと研究の画面は 2026-09-30 に外した）。
     -->
-    <button class="tab" data-view="log" data-scan aria-label="評価ログ">
-      <span class="tab-full">評価ログ</span><span class="tab-short">ログ</span>
-    </button>
     <button class="tab" data-view="settings" data-scan aria-label="設定">
       <span class="tab-full">設定</span><span class="tab-short">設定</span>
     </button>
@@ -235,106 +232,6 @@
       <div class="letter-grid" id="letterGrid" aria-label="文字選択肢"></div>
     </section>
 
-    <section class="view" id="log" aria-labelledby="log-title">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">Evaluation</p>
-          <h2 id="log-title">評価ログ</h2>
-        </div>
-        <!--
-          支援者が使うデータ画面はここ1枚にまとめる（2026-08-29）。
-          測定手順のUI（効果測定セッション）・操作訓練・研究メモの3画面は
-          別紙の手順書に置き換えて削除した。アプリに残すのは、記録を取り出す
-          手段と、取り違えを防ぐ手当てだけ。
-        -->
-        <div class="action-row">
-          <button class="secondary" id="exportSessionLedgerCsv" data-scan>セッション台帳</button>
-          <button class="secondary" id="exportRhythmCsv" data-scan>リズムCSV</button>
-          <button class="secondary" id="exportSlotCsv" data-scan>リールCSV</button>
-          <button class="secondary" id="exportScanCsv" data-scan>走査CSV</button>
-          <button class="secondary" id="exportRtCsv" data-scan>反応CSV</button>
-          <button class="secondary" id="exportRawJson" data-scan>生データ(JSON)</button>
-          <button class="secondary" id="exportCsv" data-scan>操作ログCSV</button>
-          <button class="danger" id="clearLog" data-scan>ログ削除</button>
-          <button class="danger" id="handOverParticipant" data-scan>参加者を切り替える</button>
-        </div>
-      </div>
-
-      <!--
-        参加者ID。全セッションにこの値が焼き付き、成立確認もこれで絞る。
-        書き出しの前に必ず目に入る位置へ置く——切り替え忘れは記録から
-        見分けられないので、気づける場所に出しておくしかない。
-      -->
-      <div class="supporter-fields">
-          <label class="field-row">
-            <span>参加者ID</span>
-            <input id="participantId" type="text" inputmode="text" placeholder="例: P001" />
-          </label>
-      </div>
-
-      <!--
-        保存上限（MAX_SESSIONS）の警告。研究データ本体は古い順に消える。
-      -->
-      <p class="empty-state" id="sessionRetentionWarning" hidden></p>
-
-      <div class="summary-grid">
-        <div class="summary-tile">
-          <span class="metric-label">総入力</span>
-          <strong id="totalInputs">0</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">正答率</span>
-          <strong id="accuracyRate">--</strong>
-        </div>
-        <div class="summary-tile">
-          <span class="metric-label">誤選択</span>
-          <strong id="mistakeCount">0</strong>
-        </div>
-      </div>
-
-      <!--
-        記録済みセッションと、その回に効いていた条件。
-        難易度を設定画面から変えられるようにしたので、回ごとに条件が違いうる。
-        値は session.config に残るが、これまで state.sessions は CSV 書き出し
-        からしか読まれておらず、画面には一度も出ていなかった。
-      -->
-      <!--
-        回を並べた推移。このアプリの目的のひとつが「訓練前後の比較」
-        （README）なのに、画面に出ていたのは1回ごとの記録だけで、良く
-        なっているかどうかは支援者が数字を目で追って比べるしかなかった。
-
-        条件（テンポ・拍数・つかめる広さ・画面の手がかり）が違う回は別の線に
-        する。同じ指標でも測っているものが変わるので、1本にまとめると
-        比較にならない（src/lib/sessionTrend.js）。
-      -->
-      <h3 class="settings-group-title">回ごとの推移</h3>
-      <p class="settings-group-note">
-        同じ あそび・同じ条件で完走した回だけを、古い順に並べています。
-        条件を変えた回は別の線になります。中断した回は含みません。
-      </p>
-      <!--
-        あそびごとのタブ。記録のあるあそびだけを出すと「無い」ことが見えず、
-        支援者は「まだ遊んでいない」のか「表示が壊れている」のか分からない。
-        全部のあそびを出し、記録が無い回は「データがありません」と言う。
-
-        data-scan は付けない。ここは支援者がタップ／キーボードで使う面で、
-        利用者が走査で操作するものではない（ホームの支援者メニュー入口と
-        同じ扱い）。走査の輪に入れると、押しても利用者に関係のない項目が
-        並ぶだけ増える。
-      -->
-      <div class="trend-tabs" id="trendTabs" role="tablist" aria-label="あそびを えらぶ"></div>
-      <div id="sessionTrends" aria-label="セッションの推移"></div>
-
-      <h3 class="settings-group-title">遊びの記録</h3>
-      <p class="settings-group-note">
-        1回ごとの条件です。設定を変えた回は、ここの値も変わります。
-      </p>
-      <div class="log-list" id="sessionList" aria-label="記録済みのセッション"></div>
-
-      <h3 class="settings-group-title">操作ログ</h3>
-      <div class="log-list" id="logList" aria-label="直近の操作ログ"></div>
-    </section>
-
     <section class="view" id="settings" aria-labelledby="settings-title">
       <div class="section-head">
         <div>
@@ -460,7 +357,7 @@
           <span>
             <strong>文字づかい</strong>
             <small>
-              遊びの画面の文字と読み上げ。漢字にはふりがなを付けます。支援者の画面（設定・記録）は日本語のままです
+              遊びの画面の文字と読み上げ。漢字にはふりがなを付けます。支援者の画面（設定）は日本語のままです
             </small>
           </span>
           <select id="textMode" data-scan>
@@ -480,14 +377,12 @@
       </section>
 
       <!--
-        くわしい設定。ふだんは閉じておく。いま測定の回かどうかは、閉じていても
-        見出しの印で分かるようにする（settings.js の updateMeasureTabState）。
+        くわしい設定。ふだんは閉じておく。
       -->
       <details class="settings-more" id="settingsMore">
         <summary>
           <span class="settings-more-title">くわしい設定</span>
-          <small class="settings-more-note">スイッチ・見え方と音・遊びごとのむずかしさ・研究</small>
-          <span class="settings-more-state" id="settingsMoreState" hidden>いまは測定の回</span>
+          <small class="settings-more-note">スイッチ・見え方と音・遊びごとのむずかしさ</small>
         </summary>
 
       <!--
@@ -500,7 +395,7 @@
           スイッチ … 利用者が何をどう選ぶか（枠の速さ・ホームに出す遊び）
           見え方・音 … 感覚まわり
           むずかしさ … あそびごとの難易度
-          そくてい（研究） … 研究者向けの設定と測定条件
+        （研究者向けの「そくてい（研究）」は 2026-09-30 に外した）
 
         1面が1画面に収まることを基準に配分した（iPad 実測）。収まっていれば
         探す動作が要らない——タブに分けても面が長ければ、結局スクロールで
@@ -518,9 +413,6 @@
         </button>
         <button class="settings-tab" role="tab" data-settings-tab="play" aria-selected="false" data-scan>
           むずかしさ
-        </button>
-        <button class="settings-tab" role="tab" data-settings-tab="measure" aria-selected="false" data-scan>
-          そくてい（研究）
         </button>
       </div>
 
@@ -652,29 +544,7 @@
       </div>
 
       <div class="settings-panel" data-settings-panel="play" hidden>
-      <!--
-        そくていの回に、下のむずかしさが効かない理由をその場で出す。出さないと
-        「操作子が黙って無効になっている」という、このアプリが何度も直して
-        きたのと同じ欠陥になる。
-
-        つまみと**同じ面**に置くこと。切り替えは「そくてい」タブだが、
-        効かない操作子を見ているのはこの面なので、理由がここに無いと
-        支援者は別の面を探しにいくことになる。
-      -->
-      <p class="measure-mode-notice" id="measureModeNotice" hidden>
-        <i class="fa-solid fa-lock" aria-hidden="true"></i>
-        <span>
-          いまは「そくてい」の回です。下のむずかしさは決まった値に固定されていて
-          変えられません。変えたいときは「そくてい（研究）」タブで「練習」に
-          切り替えてください。
-        </span>
-      </p>
-
       <h3 class="settings-group-title">絵あわせ</h3>
-      <p class="settings-group-note">
-        練習の回にだけ効きます。測定の回は決まった値です（1周3.2秒・「合った」の広さ0.22秒・
-        「ひとつ止める」8回・「3つ止める」4回）。
-      </p>
 
       <div class="settings-grid">
         <label class="setting-row">
@@ -715,9 +585,6 @@
       </div>
 
       <h3 class="settings-group-title">音あそび</h3>
-      <p class="settings-group-note">
-        練習の回にだけ効きます。測定の回と「押すタイミングの測定」は、決まった条件で行います。
-      </p>
 
       <div class="settings-grid">
         <label class="setting-row">
@@ -757,15 +624,14 @@
           既定ON。ふだんの練習は本格的なリズムゲームとして取り組めるようにする。
           OFFの練習と measure / calibration は、未来ノートを作らない予告なし計器盤。
           実際に効いた visualGuidance / visualPresentation はセッションごとに記録され、
-          visualGuidance と difficultyMode は評価ログとリズムCSVにも出る。
+          visualGuidance と difficultyMode はリズムCSVにも出る。
         -->
         <label class="setting-row toggle-row">
           <span>
             <strong>次の音が来る場所を画面に出す</strong>
             <small>
-              練習では、次の音が来る場所を画面に出します（練習の既定）。切ると、
-              押したあとの「はやい／おそい」だけを出します。測定の回と「押すタイミングの測定」では
-              自動で切れます
+              次の音が来る場所を画面に出します（既定）。切ると、
+              押したあとの「はやい／おそい」だけを出します
             </small>
           </span>
           <input id="visualGuidance" type="checkbox" role="switch" data-scan />
@@ -826,9 +692,6 @@
       </div>
 
       <h3 class="settings-group-title">さかなつり</h3>
-      <p class="settings-group-note">
-        練習の回にだけ効きます。測定の回は決まった条件です。
-      </p>
 
       <div class="settings-grid">
         <label class="setting-row">
@@ -846,95 +709,6 @@
       </div>
       </div>
 
-      <div class="settings-panel" data-settings-panel="measure" hidden>
-      <div class="supporter-actions">
-        <div>
-          <strong>押すタイミングの測定（研究用）</strong>
-          <span>ホームには出しません。支援者と一緒に行います。</span>
-        </div>
-        <button class="secondary" id="startCalibration" type="button">
-          そくていを始める
-        </button>
-      </div>
-
-      <h3 class="settings-group-title">研究者向け</h3>
-
-      <div class="settings-grid">
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>研究者モード</strong>
-            <small>研究用のタブ（操作訓練・効果測定・研究）を出します</small>
-          </span>
-          <input id="researcherMode" type="checkbox" role="switch" data-scan />
-        </label>
-      </div>
-
-      <!--
-        あそびごとの難易度は、全体設定に混ぜると「どのあそびの話なのか」が
-        小さい説明文を読むまで分からない。見出しで囲って所属を先に示す。
-        値はセッションの config に記録されるので、どの条件で測ったかは
-        走査CSVから追える。
-      -->
-      <!--
-        リズム系の難易度。設定は課題ごとではなく1つなので、「あそびごとの
-        既定を使う」という状態が要る。既定は L1=40 / L2=60 / gonogo=50 と
-        ばらばらで、スライダーではどれを初期位置にしても嘘になるため、
-        既定を選択肢のひとつに持てるプルダウンにしている。
-
-        そくてい（calibration）には効かない。基準オフセットの測定手順そのもの
-        で、ここで得た中央値は判定窓の中心補正として全セッションに効く
-        （games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS）。
-      -->
-      <!--
-        難易度を「そくてい（研究）」と「れんしゅう（訓練）」の2つに畳む。
-
-        条件を1つずつ記録する方式には限界がある——条件が増えるほど層別すべき
-        セルが増え、少ない参加者では空のセルばかりになる。「記録した」ことは
-        「交絡が無い」ことを意味しない。名前つきの束にして、解析ではまず
-        そくていの回だけを見ればよい状態にする（src/lib/difficultyMode.js）。
-      -->
-      <h3 class="settings-group-title">この回は、練習？ 測定？</h3>
-      <p class="settings-group-note">
-        ふだんは「練習」のままで大丈夫です。研究で測るときだけ「測定」にします。
-        どちらだったかは1回ごとに記録されます。
-      </p>
-
-      <div class="settings-grid">
-        <label class="setting-row">
-          <span>
-            <strong>練習／測定</strong>
-            <small>
-              測定にすると、速さや回数などが決まった値になり、変えられなくなります。
-              回どうし・人どうしを同じ条件で比べるためです
-            </small>
-          </span>
-          <select id="difficultyMode">
-            <option value="practice">練習（訓練・調整できる）</option>
-            <option value="measure">測定（研究・固定）</option>
-          </select>
-        </label>
-      </div>
-
-      <!--
-        そくていに入る前の成立確認（src/lib/readinessCheck.js）。
-
-        測定を止めるためではなく、止めないなら何が確かめられていないのかを
-        言えるようにするために出す。3つのうち通っていないものがあっても
-        そくていは選べるが、その回の記録には readiness="overridden" が残り、
-        評価ログとCSVに出る。
-
-        判定はれんしゅうの回の記録から自動で読む（自己申告のチェックボックス
-        にしない——「できます」という記録は成績と独立でないし、何を根拠に
-        そう答えたかが残らない）。そくていを選んでいるときだけ出す:
-        れんしゅうの回には関係がなく、常設すると設定画面が長くなるだけ。
-      -->
-      <div class="readiness-check" id="readinessCheck" hidden>
-        <h3 class="settings-group-title">測定の前に（成立確認）</h3>
-        <p class="readiness-lead" id="readinessLead"></p>
-        <ul class="readiness-list" id="readinessList"></ul>
-      </div>
-
-      </div>
       </details>
     </section>
   </main>

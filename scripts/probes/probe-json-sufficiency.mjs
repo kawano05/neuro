@@ -11,9 +11,9 @@ import {
   buildRhythmCsvRows,
   buildTaskCsvRows,
   buildSessionLedgerRows,
+  buildLogCsvRows,
 } from "../../src/lib/dataExport.js";
 import { buildSlotCsvRows } from "../../src/lib/slotCsv.js";
-import { buildLogCsvRows } from "../../src/lib/views/log.js";
 import { escapeCsv } from "../../src/lib/utils.js";
 
 const device = {
