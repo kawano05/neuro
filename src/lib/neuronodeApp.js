@@ -429,16 +429,21 @@ export function initNeuroNodeApp() {
       }
       return;
     }
-    // 走査中は、どのキーでもスイッチ入力として受ける。
+    // 走査中と本人の画面では、どのキーでもスイッチ入力として受ける。
     //
     // スイッチ機器はキーボードとして見えることが多く、機種によって送る
     // キーが違う（Space / Enter のほか、F1〜F12 や1文字キーを送るものも
-    // ある）。利用者ごとに機器が違う以上、こちらが受けるキーを限ると
+    // ある。NeuroNode もほかのアプリに合わせて F5・F12 などへ変えて使われる）。
+    // 利用者ごとに機器が違う以上、こちらが受けるキーを限ると
     // 「押しているのに何も起きない」が起きる——本人には理由が分からない。
     //
-    // 走査中に限る。止まっているあいだは、支援者がキーボードで通常の
-    // 操作（Tab移動・Enterでの決定）をしている場面なので、そこまで
-    // 奪うと支援者の操作が壊れる。
+    // 本人の画面（スタート・ホーム・遊び・けっか）では、走査が止まっていても
+    // 受ける。遊びの中は走査を止めているので、以前は Space / Enter しか届かず、
+    // F5 を送る機器ではパソコンのブラウザがページを読み直していた。
+    //
+    // 支援者の画面（設定・評価ログ）と、遊びの中で支援者が「この遊びの設定」を
+    // 開いているあいだは受けない。支援者がキーボードで通常の操作（Tab移動・
+    // Enterでの決定・F5での読み直し）をする場面なので、奪うと操作が壊れる。
     //
     // 修飾キー単独（Shift だけ等）と、修飾キー付き（Ctrl+R など）は除く。
     // 前者は「押した」と言えないし、後者はブラウザやOSの操作を潰す。
@@ -453,9 +458,12 @@ export function initNeuroNodeApp() {
       event.key === "ScrollLock" ||
       event.key === "Dead";
     const withModifier = event.ctrlKey || event.metaKey || event.altKey;
+    const userWorld =
+      USER_WORLD_VIEWS.has(state.currentView) && !(state.currentView === "game" && ctx.gameHost.settingsOpen());
     if (
-      ctx.scan.isRunning() &&
+      (ctx.scan.isRunning() || userWorld) &&
       !modifierOnly &&
+      event.key !== "Process" &&
       !withModifier &&
       event.key !== " " &&
       event.key !== "Enter" &&

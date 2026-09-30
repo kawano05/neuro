@@ -101,6 +101,7 @@ const checks = [
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
   ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
+  ["takes any key as switch input on the start screen and inside a game", checkAnyKeyOnUserScreens],
   ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
@@ -1569,8 +1570,8 @@ async function checkHomeReturnFromTabs(page) {
  * キーを限ると「押しているのに何も起きない」が起きる——本人には理由が
  * 分からない。
  *
- * ただし走査中に限る。止まっているあいだは支援者がキーボードで普通に
- * 操作している場面なので、そこまで奪うと支援者の操作が壊れる。
+ * 走査が止まっていても受けるのは本人の画面だけ（checkAnyKeyOnUserScreens）。
+ * 支援者の画面ではキーボードで普通に操作するので、奪うと支援者の操作が壊れる。
  * 修飾キー単独と修飾キー付き（Ctrl+R 等）も奪わない。
  */
 async function checkAnyKeyWhileScanning(page) {
@@ -1610,6 +1611,37 @@ async function checkAnyKeyWhileScanning(page) {
     moved !== viewBefore,
     `F5 while scanning must activate the highlighted item (view stayed ${moved})`
   );
+}
+
+/**
+ * 本人の画面では、走査が止まっていても、どのキーでもスイッチ入力として受ける。
+ *
+ * スタート画面と遊びの中は走査を動かさない。以前はそこで Space / Enter しか
+ * 届かず、F5 を送るように設定した機器（NeuroNode はほかのアプリに合わせて
+ * キーを変えて使われる）では、パソコンのブラウザがページを読み直していた。
+ */
+async function checkAnyKeyOnUserScreens(page) {
+  await page.evaluate(() => {
+    window.__stillSamePage = true;
+  });
+  const samePage = () => page.evaluate(() => window.__stillSamePage === true);
+
+  // スタート画面：F5 で始まる。ページは読み直さない。
+  await page.keyboard.press("F5");
+  await waitForClass(page, "#homeView", "is-active");
+  assert(await samePage(), "F5 on the start screen must start, not reload the page");
+
+  // 遊びの中：F5 で「やりかた」を抜けて始まる。
+  await openActivity(page, t("tile.gonogo.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  for (let attempt = 0; attempt < 4 && (await page.locator(".game-ready").count()) > 0; attempt += 1) {
+    await page.waitForTimeout(250);
+    await page.keyboard.press("F5");
+  }
+  await page.waitForFunction(() => document.querySelectorAll(".game-ready").length === 0, null, { timeout: 5000 });
+  assert(await samePage(), "F5 inside a game must act as the switch, not reload the page");
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 async function checkKeyboardAndSwitchInput(page) {
