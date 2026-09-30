@@ -22,6 +22,7 @@ import {
   createBrightLimiter,
   fxScale,
 } from "./fxSafety.js";
+import { presentation } from "../presentation.js";
 import {
   alphaOf,
   ringRadiusOf,
@@ -204,7 +205,7 @@ function drawParticle(g, p) {
  * @param {() => string} options.getLevel いまの強さ（fxSafety の resolveFxLevel）
  * @param {Document} [options.doc]
  */
-export function createFxEngine({ getLevel = () => "normal", doc = typeof document !== "undefined" ? document : null } = {}) {
+export function createFxEngine({ getLevel = () => "normal", getScale = () => fxScale(getLevel()), doc = typeof document !== "undefined" ? document : null } = {}) {
   let canvas = null;
   let g = null;
   let dpr = 1;
@@ -283,10 +284,19 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
     }
     g.globalAlpha = 1;
     if (particles.length) {
-      rafId = doc.defaultView.requestAnimationFrame(frame);
+      rafId = doc.defaultView.requestAnimationFrame(safeFrame);
     } else {
       rafId = null;
       canvas.dataset.active = "false";
+    }
+  }
+
+  function safeFrame(t) {
+    if (!presentation.run("fx.frame", () => { frame(t); return true; }, false)) {
+      particles = [];
+      rafId = null;
+      if (canvas) canvas.dataset.active = "false";
+      presentation.run("fx.clear", () => g?.clearRect(0, 0, width, height));
     }
   }
 
@@ -294,7 +304,7 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
     if (rafId !== null || !canvas) return;
     canvas.dataset.active = "true";
     lastT = doc.defaultView.performance.now();
-    rafId = doc.defaultView.requestAnimationFrame(frame);
+    rafId = doc.defaultView.requestAnimationFrame(safeFrame);
   }
 
   function emit(list) {
@@ -311,7 +321,7 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
   }
 
   function scale() {
-    return fxScale(level());
+    return getScale();
   }
 
   /** 要素の真ん中（画面の座標）。要素が無ければ画面の真ん中。 */

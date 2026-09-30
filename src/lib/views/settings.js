@@ -71,6 +71,7 @@ export function initSettings(ctx) {
       if (field.type === "checkbox") field.control.checked = value;
       else field.control.value = value === null ? "" : String(value);
       if (field.output) field.output.value = formatFieldValue(field, value);
+      if (field.description) document.getElementById(field.id + "Description").textContent = field.description(value);
     });
     elements.difficultyMode.value = resolveDifficultyMode(state.settings);
     elements.textMode.value = resolveTextMode(state.settings);
@@ -301,6 +302,9 @@ export function initSettings(ctx) {
   elements.fxLevel?.addEventListener("change", () => {
     state.settings.fxLevel = elements.fxLevel.value;
     save();
+    const field = SETTINGS_FIELDS.find(item => item.id === "fxLevel");
+    document.getElementById("fxLevelDescription").textContent = field.description(state.settings.fxLevel);
+    ctx.fx.syncPolicy();
     announce("演出の強さを変えました");
     // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
     ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });

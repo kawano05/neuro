@@ -71,6 +71,7 @@ function makeCtx() {
   const ctx = {
     settings: { speechEnabled: true, soundEnabled: true, textMode: "ruby", playPrefs: { balloon: { sound: "instrument", background: "light", cheer: "both" } } },
     audio,
+    fx: { level: () => "normal" },
     voiceFeedback: (text) => calls.spoken.push({ text }),
     logEvent: (entry) => calls.logs.push(entry),
     finish: (summary) => calls.finished.push(summary),

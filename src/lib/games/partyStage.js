@@ -16,6 +16,7 @@
 // =====================================================================
 
 import { POP_ANIMALS, artSvg } from "../art/hakkiriArt.js";
+import { presentation } from "../presentation.js";
 import {
   JAR_SLOTS,
   PARTY_FANS,
@@ -57,6 +58,7 @@ export const PARTY_COLORS = Object.freeze(["#FF8082", "#03AF7A", "#F6AA00", "#4D
 
 function animate(el, frames, options) {
   if (!el || typeof el.animate !== "function") return null;
+  if (el.ownerDocument?.body?.dataset.decorationMotion === "off") return null;
   try {
     return el.animate(frames, options);
   } catch {
@@ -142,7 +144,7 @@ function playFanfare(audio, semitones = 0) {
  * @param {() => ({unlocked: string|null, jarsToday: number, party: object})|null} [options.claim]
  *   遊び終えたときに、その日のびんの数と服を保存する（gameHost）
  */
-export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, outfits = [], claim = null, kind = "beginner", level = fx?.level?.() || "normal", legacy = false }) {
+export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, outfits = [], claim = null, kind = "beginner", level = fx?.level?.() || "none", legacy = false }) {
   const profile = atmosphereProfile(level, kind);
   const doc = host.ownerDocument;
   const win = doc.defaultView;
@@ -150,7 +152,7 @@ export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, out
   const later = (ms, fn) => {
     const id = win.setTimeout(() => {
       timers.delete(id);
-      fn();
+      presentation.run("party.timer", fn);
     }, ms);
     timers.add(id);
   };
@@ -566,6 +568,7 @@ export function fullJarHtml(count = PARTY_JAR_CAPACITY) {
  * @returns {number} 見せ終わるまで（ms）。この間は枠を動かさない（gameHost）。
  */
 export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
+  if (fx?.policy?.().motion === false) return 0;
   const root = container?.querySelector?.(".party-result");
   if (!root) return 0;
   const win = root.ownerDocument.defaultView;
@@ -580,7 +583,7 @@ export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
     fx?.motion?.slamIn(root.querySelector(".party-result-jar"), { delayMs: 60 });
     jarStars.forEach((star, index) => fx?.motion?.popIn(star, { delayMs: 160 + index * 35 }));
     fx?.motion?.popIn(otter, { delayMs: 500 });
-    win.setTimeout(() => { if (root.isConnected) moves.clap(2); }, 650);
+    presentation.later(650, () => { if (root.isConnected) moves.clap(2); }, win);
     return 1400;
   }
   fx?.motion?.slamIn(root.querySelector(".party-result-jar"), { delayMs: 60 });
@@ -591,19 +594,19 @@ export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
   items.forEach((item, index) => fx?.motion?.popIn(item, { delayMs: 1100 + index * 110 }));
   today.forEach((jar, index) => fx?.motion?.popIn(jar, { delayMs: 1300 + index * 90 }));
   fx?.motion?.slamIn(otter, { delayMs: 1500 });
-  win.setTimeout(() => {
+  presentation.later(1800, () => {
     if (!root.isConnected) return;
     playBell(audio);
     moves.hop(40, { spin: true });
     moves.clap(3);
-  }, 1800);
+  }, win);
   fx?.motion?.slamIn(reward, { delayMs: 2000 });
-  win.setTimeout(() => {
+  presentation.later(2200, () => {
     if (!root.isConnected || !otter) return;
     fx?.partyReward?.(otter);
-  }, 2200);
-  win.setTimeout(() => { if (root.isConnected) fx?.engine?.fireworks?.({ colors: PARTY_COLORS, bursts: 2 }); }, 2300);
+  }, win);
+  presentation.later(2300, () => { if (root.isConnected) fx?.engine?.fireworks?.({ colors: PARTY_COLORS, bursts: 2 }); }, win);
   // けっかの描き直しでも曲を止める。次の遊びへ移ったあとは、その曲を止めない。
-  win.setTimeout(() => { if (isCurrent ? isCurrent() : root.isConnected) audio?.music?.stop(RESULT_MUSIC_FADE_S); }, 3200);
+  presentation.later(3200, () => { if (isCurrent ? isCurrent() : root.isConnected) audio?.music?.stop(RESULT_MUSIC_FADE_S); }, win);
   return PARTY_RESULT_SCAN_DELAY_MS;
 }

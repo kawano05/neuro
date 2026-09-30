@@ -21,6 +21,7 @@ import {
   escalation,
   fxScale,
   resolveFxLevel,
+  resolveDecorationPolicy,
 } from "../src/lib/fx/fxSafety.js";
 import {
   alphaOf,
@@ -59,8 +60,12 @@ function seeded(seed = 1) {
 test("the chosen strength is respected, and a measured run adds nothing", () => {
   assert.equal(resolveFxLevel({ fxLevel: "big" }), "big");
   assert.equal(resolveFxLevel({ fxLevel: "subtle" }), "subtle");
-  assert.equal(resolveFxLevel({}), DEFAULT_FX_LEVEL);
-  assert.equal(resolveFxLevel({ fxLevel: "nonsense" }), DEFAULT_FX_LEVEL);
+  assert.equal(DEFAULT_FX_LEVEL, "normal", "保存の既定は変えない");
+  assert.equal(resolveFxLevel({}), "none");
+  for (const value of ["nonsense", null, {}, "toString"]) {
+    assert.equal(resolveFxLevel({ fxLevel: value }), "none");
+    assert.equal(fxScale(value), fxScale("none"));
+  }
   // そくていの回は何も足さない（どの強さを選んでいても）。
   for (const level of FX_LEVELS) assert.equal(resolveFxLevel({ fxLevel: level }, { measurement: true }), "none");
 });
@@ -76,6 +81,19 @@ test("the device's reduce-motion setting caps the strength at subtle", () => {
   }
   assert.equal(fxScale("none").particles, 0, "なし では粒を出さない");
   assert.equal(fxScale("none").finale, "none");
+});
+
+test("decorative motion is separate from the recorded level and task motion", () => {
+  for (const fxLevel of FX_LEVELS) {
+    for (const reducedMotion of [false, true]) {
+      const policy = resolveDecorationPolicy({ fxLevel }, { reducedMotion });
+      assert.equal(policy.level, resolveFxLevel({ fxLevel }, { reducedMotion }));
+      assert.equal(policy.motion, !reducedMotion && fxLevel !== "none");
+      assert.equal(policy.worldMotion, !reducedMotion && ["normal", "big"].includes(fxLevel));
+      if (reducedMotion || fxLevel === "none") assert.equal(policy.scale, fxScale("none"));
+      assert.equal(resolveDecorationPolicy({ fxLevel }, { reducedMotion, measurement: true }).motion, false);
+    }
+  }
 });
 
 test("shakes and glows stay inside the safety limits", () => {

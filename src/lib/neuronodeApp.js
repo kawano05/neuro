@@ -27,6 +27,7 @@ import { resolveTextMode, translate, translateHtml } from "./i18n.js";
 import { loadState, createStateSaver, MAX_LOG_ENTRIES } from "./state.js";
 import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
+import { presentation } from "./presentation.js";
 import { createFxSystem } from "./fx/index.js";
 import { SOUND_SAMPLE_URLS } from "./soundAssets.js";
 import { VOICE_PACK } from "./voiceAssets.js";
@@ -161,12 +162,13 @@ export function initNeuroNodeApp() {
     sampleUrls: SOUND_SAMPLE_URLS,
     voicePack: VOICE_PACK,
   });
-  ctx.audio = audio;
+  // 合図のスケジューラと研究用の時刻・端末情報は演出として握りつぶさない。
+  ctx.audio = presentation.protect(audio, "audio", ["scheduler", "playToneAt", "getDeviceInfo", "unlock"]);
   // 演出（粒・光・弾み）。docs/overall-design-2026-09-28.md。強さは設定と端末の
   // 「動きを減らす」で毎回決まり、そくていの回の遊びでは何も足さない。
-  ctx.fx = createFxSystem({ getSettings: () => state.settings });
-  ctx.speak = audio.speak;
-  ctx.voiceFeedback = audio.speakOrAnnounce;
+  ctx.fx = presentation.protect(createFxSystem({ getSettings: () => state.settings }), "fx");
+  ctx.speak = (...args) => presentation.run("voice.speak", () => audio.speak(...args));
+  ctx.voiceFeedback = (...args) => presentation.run("voice.feedback", () => audio.speakOrAnnounce(...args));
   ctx.playTone = audio.playTone;
 
   ctx.scan = createScanEngine(ctx);
@@ -226,6 +228,7 @@ export function initNeuroNodeApp() {
    * 読み上げ名（sr-only の見出し）はプレーン文、目で読む文字はルビ付き。
    */
   function renderUserWorldText() {
+    ctx.fx.syncPolicy();
     const set = (el, key, html = true) => {
       if (!el) return;
       if (html) el.innerHTML = ctx.tHtml(key);
@@ -504,8 +507,12 @@ export function initNeuroNodeApp() {
   // ゲーム中にタブが非アクティブ化したらセッションを中断して home へ直帰する
   // （detailed-design.md §2.4 終了条件3。計時汚染防止のため再開はしない）。
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && state.currentView === "game") {
-      ctx.gameHost.abort();
+    if (document.hidden) {
+      if (state.currentView === "game") ctx.gameHost.abort();
+      else ctx.gameHost.stopPresentation();
+      ctx.scan.stop(true);
+    } else {
+      ctx.scan.restartIfNeeded();
     }
   });
 

@@ -26,6 +26,7 @@
 // 渡すため（sanitizer を通らない）、その場では合計スコアを表示できる。
 // =====================================================================
 
+import { presentation } from "../presentation.js";
 import { cueTones, fishingPresets, fishingSpecies } from "../content.js";
 import {
   ENDLESS_PROTOCOL_VERSION,
@@ -446,12 +447,12 @@ export function createFishingGame(gameId) {
    * 世界は遊びの始めに1回だけ作る（試行ごとには作り直さない）。
    */
   function decoratePractice() {
-    sceneEl.querySelector(".fishing-sky").innerHTML = fishingSkyHtml();
+    sceneEl.querySelector(".fishing-sky").innerHTML = presentation.run("world.sky", fishingSkyHtml, "");
     const deepEl = sceneEl.querySelector(".fishing-deep");
-    deepEl.innerHTML = fishingSeaHtml();
+    deepEl.innerHTML = presentation.run("world.deep", fishingSeaHtml, "");
     // 夕暮れ（is-dusk）は、光の変化だけで伝える合図。れんしゅうの回は滑らかに重ねる。
     deepEl.insertAdjacentHTML("afterend", '<div class="fishing-dusk"></div>');
-    sceneEl.querySelector(".fishing-boat").outerHTML = fishingBoatSvg();
+    sceneEl.querySelector(".fishing-boat").outerHTML = presentation.run("world.boat", fishingBoatSvg, sceneEl.querySelector(".fishing-boat").outerHTML);
     // 魚・長靴は、試行ごとに updateVisual が SVG を入れる。
     sceneEl.querySelector(".fishing-swimmer-art").outerHTML = '<span class="fishing-swimmer-art"></span>';
     swimmerArtEl = stageEl.querySelector(".fishing-swimmer-art");
@@ -768,7 +769,7 @@ export function createFishingGame(gameId) {
     } else {
       if (swimmerArtEl && swimmerArtEl.dataset.index !== String(planned.index)) {
         swimmerArtEl.dataset.index = String(planned.index);
-        if (practice) swimmerArtEl.innerHTML = fishingCatchSvg(planned.kind === "fake" ? "boot" : planned.species);
+        if (practice) swimmerArtEl.innerHTML = presentation.run("world.fishing.catch", () => fishingCatchSvg(planned.kind === "fake" ? "boot" : planned.species), `<img src="${planned.kind === "fake" ? bootUrl : FISH_ART[planned.species]}" alt="" style="width:100%;height:100%;object-fit:contain" />`);
         else swimmerArtEl.src = planned.kind === "fake" ? bootUrl : FISH_ART[planned.species];
         swimmerEl.classList.toggle("is-boot", planned.kind === "fake");
         // 画面上の大きさを魚種に合わせる（styles.css の

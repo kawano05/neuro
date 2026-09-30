@@ -1,6 +1,7 @@
 import { chromium, devices, webkit } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { mkdir } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { colorLegacyPreset, rhythmPresets, storageKey } from "../src/lib/content.js";
@@ -70,6 +71,10 @@ const projects = [
 ];
 
 const checks = [
+  ["explains every atmosphere from the shared Japanese descriptions", checkAtmosphereDescriptions],
+  ["isolates presentation faults and completes recorded beginner and timing runs", checkPresentationFaults],
+  ["stops decorative motion for all four atmospheres and reduced motion", checkDecorationMotion],
+  ["cancels scheduled sounds and result music when hidden or interrupted", checkPresentationCleanup],
   ["loads the main learning app", checkMainApp],
   ["keeps the start press from falling through into a home activity", checkStartInputGuard],
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
@@ -168,7 +173,9 @@ try {
     const browser = await project.browserType.launch({ headless: !headed });
     try {
       for (const [name, check] of selectedChecks) {
-        const context = await browser.newContext(project.contextOptions);
+        const context = await browser.newContext({ ...project.contextOptions,
+          serviceWorkers: [checkPresentationFaults, checkDecorationMotion, checkPresentationCleanup].includes(check) ? "block" : "allow",
+        });
         await context.addInitScript(() => {
           const marker = "neuro-smoke-initialized";
           if (sessionStorage.getItem(marker) === "1") return;
@@ -4636,6 +4643,226 @@ async function checkIpadAccessibilityLayout(page, project) {
  */
 async function settleStartGuard(page) {
   await page.waitForTimeout(550);
+}
+
+// 配信応答だけで共有 ctx を公開する。製品コードに障害注入用の入口は作らない。
+async function exposePresentationContext(page) {
+  await page.route("**/assets/*.js", async route => {
+    const response = await route.fetch();
+    let body = await response.text();
+    let exposed = false;
+    body = body.replace(/(\b\w+)\.scan\s*=\s*\w+\(\1\)([,;])/, (source, name, end) => {
+      exposed = true;
+      return source + `window.__presentationCtx=${name}${end}`;
+    });
+    // 世界の絵の関数にも、応答内だけで例外を差し込む。
+    const brokenWorld = 'window.__breakWorld?(()=>{throw Error("SMOKE_WORLD_ART")})():';
+    body = body.replace(/return(`\s*\$\{\w+\}\s*<span class="sea-spot")/, (_, template) => `return ${brokenWorld}${template}`);
+    body = body.replace('return`<div class="slot-world"', `return ${brokenWorld}\`<div class="slot-world"`);
+    assert(exposed, "The response injection must expose the actual app context");
+    await route.fulfill({ response, body });
+  });
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__presentationCtx));
+}
+
+async function checkPresentationFaults(page) {
+  const diagnostics = [];
+  page.on("console", message => { if (message.type() === "warning") diagnostics.push(message.text()); });
+  await exposePresentationContext(page);
+  for (const fault of ["press", "finale", "music", "voice", "party", "world"]) {
+    await page.evaluate(({ key, fault }) => {
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.settings = { ...saved.settings, autoScan: false, speechEnabled: false, fxLevel: fault === "party" ? "big" : "normal", slotL1Rounds: 3 };
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, { key: storageKey, fault });
+    await page.reload();
+    await page.locator("#startStage").click();
+    await page.evaluate(fault => {
+      const ctx = window.__presentationCtx;
+      const broken = () => { throw Error(`SMOKE_PRESENTATION_${fault}`); };
+      if (fault === "press") ctx.fx.popAppear = broken;
+      if (fault === "finale") ctx.fx.finale = broken;
+      if (fault === "music") ctx.audio.music.stop = broken;
+      if (fault === "voice") ctx.voiceFeedback = broken;
+      if (fault === "party") { ctx.fx.partyPress = broken; ctx.fx.partyFinale = broken; }
+      if (fault === "world") window.__breakWorld = true;
+    }, fault);
+    // 声を壊すのは説明を終えたあと。説明画面の担当範囲には触れない。
+    await openActivity(page, t("tile.color-legacy.title"));
+    const before = await readLogCount(page);
+    for (let i = 0; i < 5; i++) {
+      await page.locator("#gameStage").dispatchEvent("click");
+      await page.waitForTimeout(200);
+    }
+    await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, { timeout: 12000 });
+    assert(await readLogCount(page) === before + 5, `${fault}: every beginner press must remain recorded`);
+    await page.evaluate(() => { window.__presentationCtx.voiceFeedback = () => {}; });
+    await page.locator("#resultHome").click();
+    await openActivity(page, t("tile.slot-corner.title"));
+    await openActivity(page, t("tile.slot-l1.title"));
+    // 説明の声はこの検査の対象外なので、開始時だけ通常の声へ戻す。
+    await page.evaluate(() => { window.__presentationCtx.voiceFeedback = () => {}; });
+    await page.waitForTimeout(200);
+    await page.locator("#gameStage").dispatchEvent("click");
+    await page.evaluate(() => {
+      const broken = () => { throw Error("SMOKE_TIMING_PRESENTATION"); };
+      window.__presentationCtx.voiceFeedback = broken;
+      window.__presentationCtx.fx.finale = broken;
+      window.__presentationCtx.fx.partyFinale = broken;
+    });
+    for (let i = 0; i < 3; i++) {
+      await page.waitForTimeout(1000);
+      await page.locator("#gameStage").dispatchEvent("click");
+    }
+    await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, { timeout: 12000 });
+    const session = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).sessions.at(-1), storageKey);
+    assert(session.finished === true && session.trials.length === 3, "Timing faults must preserve completion and all trial records");
+    if (fault === "world") {
+      assert(diagnostics.some(message => message.includes("world.sea")), "The sea art fault must actually reach the boundary");
+      assert(diagnostics.some(message => message.includes("world.slot")), "The reel world fault must actually reach the boundary");
+    }
+  }
+}
+
+async function checkDecorationMotion(page, project) {
+  const output = "output/playwright/ud2-motion";
+  await mkdir(output, { recursive: true });
+  await exposePresentationContext(page);
+  for (const reduced of [false, true]) for (const level of ["none", "subtle", "normal", "big"]) {
+    await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
+    await page.evaluate(({ key, level }) => {
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.settings = { ...saved.settings, fxLevel: level, autoScan: false, speechEnabled: false, difficultyMode: "practice" };
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, { key: storageKey, level });
+    await page.reload();
+    await page.locator("#startStage").click();
+    await openActivity(page, t("tile.balloon.title"));
+    await page.locator("#gameStage").dispatchEvent("click");
+    await page.waitForTimeout(120);
+    const balloon = await page.evaluate(() => ({
+      animations: document.querySelector("#gameStageContent").getAnimations({ subtree: true }).length,
+      particles: Number(document.querySelector("#fxLayer")?.dataset.emitted || 0),
+      mark: getComputedStyle(document.querySelector(".balloon.is-popping .balloon-mark")).opacity,
+    }));
+    if (reduced || level === "none") {
+      assert(balloon.animations === 0 && balloon.particles === 0, `${level}/${reduced}: balloon decorations must remain still`);
+      assert(balloon.mark === "1", "A press must show a static burst shape immediately");
+    } else assert(balloon.particles > 0, `${level}: enabled effects must still work`);
+    await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-balloon.png` });
+    await page.locator("#gameExit").click();
+    await openActivity(page, t("tile.fishing-corner.title"));
+    await openActivity(page, t("tile.fishing.title"));
+    if (project.browserType === webkit) {
+      // Windows の WebKit は音課題を開始できない場合がある。ここは装飾検査なので
+      // 合図時計だけを代用する。実際の音の確認は Chromium と実機の担当範囲。
+      await page.evaluate(() => {
+        const scheduler = window.__presentationCtx.audio.scheduler;
+        scheduler.canSound = () => true;
+        scheduler.now = () => performance.now() / 1000;
+        scheduler.start = () => performance.now() / 1000 + 0.3;
+        scheduler.stop = () => {};
+      });
+    }
+    await page.waitForTimeout(200);
+    await page.locator("#gameStage").dispatchEvent("click");
+    await page.waitForTimeout(400);
+    const world = await page.evaluate(() => {
+      const nodes = [...document.querySelectorAll(".fishing-cloud, .fishing-sea *, .fishing-otter-eyes")];
+      return { running: nodes.flatMap(node => node.getAnimations()).filter(animation => animation.playState === "running").length,
+        names: nodes.map(node => getComputedStyle(node).animationName).filter(name => name !== "none"),
+        policy: window.__presentationCtx.fx.policy(), ready: Boolean(document.querySelector(".game-ready")) };
+    });
+    assert((world.names.length > 0) === (!reduced && ["normal", "big"].includes(level)), `${level}/${reduced}: the fishing world must follow the shared policy: ${JSON.stringify(world)}`);
+    if (reduced || ["none", "subtle"].includes(level)) assert(world.running === 0, "A quiet world has no running CSS animations");
+    await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-fishing.png` });
+    await page.locator("#gameExit").click();
+  }
+}
+
+async function checkAtmosphereDescriptions(page) {
+  await page.locator("#startStage").click();
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator(".tab[data-view='settings']").click();
+  for (const level of ["none", "subtle", "normal", "big"]) {
+    await page.locator("#fxLevel").selectOption(level);
+    const description = await page.locator("#fxLevelDescription").textContent();
+    assert(description === translate(`party.atmosphere.${level}.description`, "kanji"), "The setting must use the atmosphere's own description");
+    assert(await page.locator(`#fxLevel option[value='${level}']`).textContent() === translate(`party.atmosphere.${level}.label`, "kanji"), "The setting must use the shared Japanese label");
+  }
+  await openSettingsDetails(page, "senses");
+  await page.locator("#textMode").selectOption("en");
+  await page.reload();
+  await page.locator("#startStage").click();
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator(".tab[data-view='settings']").click();
+  assert(await page.locator("#fxLevelDescription").textContent() === translate("party.atmosphere.big.description", "kanji"), "The supporter description stays Japanese after reload in English");
+  assert((await page.locator("#fxLevel").getAttribute("aria-describedby")).includes("fxLevelDescription"), "The selected description must be accessible");
+}
+
+async function checkPresentationCleanup(page) {
+  await page.addInitScript(() => {
+    window.__soundNodes = [];
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) return;
+    for (const name of ["createOscillator", "createBufferSource"]) {
+      const original = Context.prototype[name];
+      Context.prototype[name] = function(...args) {
+        const source = original.apply(this, args);
+        const record = { active: false, hiddenStart: false };
+        window.__soundNodes.push(record);
+        const start = source.start.bind(source), stop = source.stop.bind(source);
+        source.start = (...args) => { record.active = true; record.hiddenStart = document.hidden; return start(...args); };
+        source.stop = (...args) => { if (!args.length || args[0] === 0) record.active = false; return stop(...args); };
+        source.addEventListener("ended", () => { record.active = false; });
+        return source;
+      };
+    }
+  });
+  await exposePresentationContext(page);
+  const prepare = async level => {
+    await page.evaluate(({ key, level }) => {
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.settings = { ...saved.settings, fxLevel: level, autoScan: false, speechEnabled: false,
+        playPrefs: { ...saved.settings.playPrefs, balloon: { background: "light", sound: "pop", cheer: "both" } } };
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, { key: storageKey, level });
+    await page.reload();
+    await page.locator("#startStage").click();
+    await openActivity(page, t("tile.balloon.title"));
+    for (let i = 0; i < 5; i++) {
+      await page.locator("#gameStage").dispatchEvent("click");
+      if (i < 4) await page.waitForTimeout(200);
+    }
+  };
+  const hide = () => page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const silence = async () => {
+    await page.waitForTimeout(700);
+    const status = await page.evaluate(() => ({
+      active: window.__soundNodes.filter(node => node.active).length,
+      hiddenStarts: window.__soundNodes.filter(node => node.hiddenStart).length,
+      music: window.__presentationCtx.audio.music.isPlaying(),
+    }));
+    assert(status.active === 0 && status.hiddenStarts === 0 && !status.music, `Interruption must silence every source and reservation: ${JSON.stringify(status)}`);
+  };
+  await prepare("normal");
+  await page.waitForTimeout(5);
+  await hide();
+  await waitForClass(page, "#homeView", "is-active");
+  await silence();
+  await prepare("big");
+  await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, { timeout: 12000 });
+  await hide();
+  assert(await page.evaluate(() => !window.__presentationCtx.audio.music.isPlaying()), "Result music must stop immediately");
+  await silence();
+  // 通常の終了操作も、非表示と同じ片づけへ通す。
+  await prepare("normal");
+  await page.locator("#gameExit").click();
+  await silence();
 }
 
 async function openActivity(page, name) {

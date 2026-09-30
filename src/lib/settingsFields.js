@@ -2,10 +2,20 @@
 // 保存・既定値・測定の解決規則は state.js / difficultyMode.js のまま。
 // 理由と全項目の対応表: docs/settings-simple-2026-09-30.md。
 import { cranePresets, slotPresets } from './content.js';
+import { ATMOSPHERES } from './party.js';
+import { translate } from './i18n.js';
+
+// 支援者の画面は日本語。雰囲気の名前と説明は舞台と同じ辞書のキーを使う。
+const atmosphereField = {
+  id: "fxLevel", key: "fxLevel", type: "select", label: "遊びの雰囲気",
+  hint: "世界の動きや、押したとき・できたときのお祝いを選びます。",
+  options: Object.values(ATMOSPHERES).map(profile => [profile.level, translate(profile.label, "kanji")]),
+  description: value => translate((Object.hasOwn(ATMOSPHERES, value) ? ATMOSPHERES[value] : ATMOSPHERES.none).description, "kanji"),
+};
 
 export const SETTINGS_GROUPS = [
   { id: "common", title: "よく使う設定", fields: [
-    {"id":"fxLevel","key":"fxLevel","type":"select","label":"遊びの雰囲気","hint":"紙吹雪や星の量を選びます。","options":[["none","なし"],["subtle","すっきり"],["normal","にぎやか"],["big","おおさわぎ"]]},
+    atmosphereField,
     {"id":"speechEnabled","key":"speechEnabled","type":"checkbox","label":"声で読み上げる","hint":"説明やほめ言葉を声で読みます。"},
     {"id":"soundEnabled","key":"soundEnabled","type":"checkbox","label":"効果音","hint":"押した音や拍手を鳴らします。遊びの合図は切れません。"},
     {"id":"scanInterval","key":"scanInterval","type":"range","label":"枠が動く速さ","hint":"次の遊びへ枠が移るまでの時間です。","min":800,"max":3200,"step":100},

@@ -21,6 +21,7 @@
 import { joinSpeech, resolveTextMode } from "../i18n.js";
 import { DEFAULT_PLAY_PREFS } from "../state.js";
 import { PARTY_FINISH_DELAY_MS } from "./partyStage.js";
+import { presentation } from "../presentation.js";
 
 /** はじめの遊びは5回で終わる（colorLegacyPreset と同じ長さ）。 */
 export const BEGINNER_TARGET_PRESSES = 5;
@@ -85,7 +86,7 @@ export function playFinishSound(audio, style) {
   if (style === "none") return;
   if (style === "pop" || style === "boom" || style === "boing") {
     [0, 0.12, 0.24, 0.36].forEach((delayS, index) => {
-      window.setTimeout(() => {
+      presentation.later(delayS * 1000, () => {
         audio.playSweep({
           fromHz: 400 + index * 140,
           toHz: 1300 + index * 260,
@@ -93,7 +94,7 @@ export function playFinishSound(audio, style) {
           gain: 0.04,
           makeupDb: POP_MAKEUP_DB,
         });
-      }, delayS * 1000);
+      });
     });
     FANFARE_SPARKLE.forEach((frequency, index) => {
       audio.playChime(frequency, { delayS: 0.52 + index * 0.12, durationS: 0.7, level: 0.6 });
@@ -129,7 +130,7 @@ export function playFinishSound(audio, style) {
  * @param {string} doneText 読み上げる「できた」の文（プレーン文）
  */
 export function celebrate(ctx, prefs, doneText) {
-  const level = ctx.fx?.level?.() || "normal";
+  const level = ctx.fx?.level?.() || "none";
   if (level === "none" || level === "subtle") {
     if (level === "subtle") ctx.audio.playApplause({ durationS: 0.35 });
     if (ctx.settings.speechEnabled) ctx.voiceFeedback(joinSpeech([ctx.t("color.voice.cheer"), doneText], resolveTextMode(ctx.settings)));
@@ -208,7 +209,7 @@ export function createBeginnerFlow(
     const pressIndex = count;
     count += 1;
     const prefs = playPrefsFor(settings, gameId);
-    const drawn = onPress(pressIndex) || {};
+    const drawn = presentation.run("beginner.press", () => onPress(pressIndex), {}) || {};
     ctx.party?.react({ index: pressIndex, source: drawn.source, name: drawn.name });
     playPressSound(audio, prefs.sound, pressIndex, { creature: drawn.creature ?? null });
 
@@ -222,10 +223,10 @@ export function createBeginnerFlow(
       const big = ctx.party?.isBig();
       if (big) ctx.party.finale();
       else {
-        const level = ctx.fx?.level?.() || "normal";
+        const level = ctx.fx?.level?.() || "none";
         if (level === "none" || level === "subtle") audio.playChime(784, { durationS: 0.24 });
         else finishSound(audio, prefs.sound);
-        onFinale(pressIndex);
+        presentation.run("beginner.finale", () => onFinale(pressIndex));
       }
       // 最後の絵とフィナーレを見せてから、けっかへ。けっかが出るのと同時に、
       // 歓声と拍手・笑い声・「やったー」（この遊びの設定で切れる）。

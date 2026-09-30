@@ -39,6 +39,7 @@
 // =====================================================================
 
 import { findGameModule } from "./registry.js";
+import { presentation } from "../presentation.js";
 import { MAX_SESSIONS } from "../state.js";
 import { gameHowTo } from "../content.js";
 import { entryFor, joinSpeech, resolveTextMode } from "../i18n.js";
@@ -65,12 +66,14 @@ import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS, createPartyStage, re
 
 export function createGameHost(ctx) {
   const { state, elements, scan, announce, save, logEvent } = ctx;
+  const feedback = (...args) => presentation.run("voice.feedback", () => ctx.voiceFeedback(...args));
 
   let activeInstance = null;
   let activeGameId = null;
   let lastResultSummary = null;
   let lastAtmosphereLevel = null;
   let atmosphere = null;
+  let atmosphereFinaleStarted = false;
   let atmosphereFinishTimer = null;
   let resultScanTimer = null;
   let celebrationCompleting = false;
@@ -151,6 +154,7 @@ export function createGameHost(ctx) {
     atmosphere?.destroy({ keepMusic: celebrationCompleting });
     if (!celebrationCompleting) ctx.audio.music?.stop(0.4);
     atmosphere = null;
+    atmosphereFinaleStarted = false;
     delete elements.gameStageContent.dataset.atmosphere;
     elements.gameStageContent.classList.remove("is-party");
     if (activeInstance) {
@@ -161,6 +165,19 @@ export function createGameHost(ctx) {
       }
     }
     activeInstance = null;
+    if (!celebrationCompleting) stopPresentation();
+  }
+
+  /** 中断・画面離脱の共通入口。正常終了の声は結果へ持ち越せる。 */
+  function stopPresentation() {
+    window.clearTimeout(resultScanTimer);
+    resultScanTimer = null;
+    presentation.cancelTimers();
+    ctx.audio.stopAll();
+    ctx.fx.clear();
+    for (const root of [elements.gameStageContent, elements.resultStats]) {
+      root.getAnimations?.({ subtree: true }).forEach(animation => animation.cancel());
+    }
   }
 
   /**
@@ -252,7 +269,7 @@ export function createGameHost(ctx) {
       // 演出（src/lib/fx/）。遊びは「何が起きたか」を名前で呼ぶだけ。
       fx: ctx.fx,
       announce,
-      voiceFeedback: ctx.voiceFeedback,
+      voiceFeedback: feedback,
       // 利用者向け文言の表記解決（src/lib/i18n.js）。ゲームは自前で文言を
       // 持たず、必ずここを通す——表記は設定で変わるので定数にできない。
       //
@@ -311,11 +328,12 @@ export function createGameHost(ctx) {
   function mountAtmosphere(module) {
     if (module.id === "calibration" || (module.taskType && isMeasurementMode(state.settings))) return;
     const gameCtx = buildGameCtx();
-    atmosphere = createPartyStage({
+    atmosphere = presentation.run("party.mount", () => presentation.protect(createPartyStage({
       host: elements.gameStageContent, t: ctx.t, tHtml: ctx.tHtml, fx: ctx.fx, audio: ctx.audio,
-      voiceFeedback: ctx.voiceFeedback, outfits: gameCtx.party.outfits(), claim: gameCtx.party.claim,
+      voiceFeedback: feedback, outfits: gameCtx.party.outfits(), claim: gameCtx.party.claim,
       kind: module.taskType ? "timing" : "beginner", legacy: module.id === "color-legacy",
-    });
+    }), "party"), null);
+    if (!atmosphere) return;
     elements.gameStageContent.dataset.atmosphere = atmosphere.profile.level;
     elements.gameStageContent.classList.toggle("is-party", atmosphere.profile.liveCompanions);
   }
@@ -492,7 +510,9 @@ export function createGameHost(ctx) {
    */
   function finishGame(summary) {
     if (atmosphereFinishTimer !== null) return;
-    if (atmosphere && !atmosphere.finishing() && (atmosphere.profile.reward || (atmosphere.profile.kind === "timing" && atmosphere.profile.level !== "none"))) {
+    if (atmosphere && !atmosphereFinaleStarted && !atmosphere.finishing() && (atmosphere.profile.reward || (atmosphere.profile.kind === "timing" && atmosphere.profile.level !== "none"))) {
+      // 舞台の finale が失敗しても、この待ちを繰り返さない。
+      atmosphereFinaleStarted = true;
       atmosphere.finale();
       if (!atmosphere.profile.reward) {
         ctx.fx?.finale(elements.gameStageContent, {});
@@ -509,8 +529,8 @@ export function createGameHost(ctx) {
     }
     const party = atmosphere?.profile.resultCompanions ? atmosphere.summary() : null;
     lastAtmosphereLevel = atmosphere?.profile.level ?? null;
-    if (atmosphere?.profile.kind === "timing" && atmosphere.profile.reward) ctx.voiceFeedback(atmosphere.rewardSpeech());
-    if (atmosphere?.profile.kind === "timing" && ["none", "subtle"].includes(atmosphere.profile.level)) ctx.voiceFeedback(ctx.t("color.voice.cheer"));
+    if (atmosphere?.profile.kind === "timing" && atmosphere.profile.reward) feedback(atmosphere.rewardSpeech());
+    if (atmosphere?.profile.kind === "timing" && ["none", "subtle"].includes(atmosphere.profile.level)) feedback(ctx.t("color.voice.cheer"));
     lastResultSummary = party ? { ...summary, party } : summary || null;
     const activeModule = activeGameId ? findGameModule(activeGameId) : null;
     const taskType = activeModule?.taskType;
@@ -649,6 +669,7 @@ export function createGameHost(ctx) {
     dispatchInput,
     retry,
     abort: returnHome,
+    stopPresentation,
     /** 設定が開いていれば閉じる（変更は捨てる）。閉じたら true（Esc 用）。 */
     closeSettings: () => gameSettings.close({ apply: false }),
     getActiveGameId: () => activeGameId,
@@ -724,11 +745,12 @@ export function createGameHost(ctx) {
           revealPending = false;
           const shownSummary = lastResultSummary;
           // 描いた次のコマで、星を飛び込ませる（位置が決まってから）。
-          window.requestAnimationFrame(() => {
+          presentation.frame(() => {
+            if (document.hidden || state.currentView !== "result" || lastResultSummary !== shownSummary) return;
             if (elements.resultStats.querySelector(".party-result")) {
-              revealPartyResult(elements.resultStats, { fx: ctx.fx, audio: ctx.audio,
+              presentation.run("party.result", () => revealPartyResult(elements.resultStats, { fx: ctx.fx, audio: ctx.audio,
                 isCurrent: () => state.currentView === "result" && lastResultSummary === shownSummary,
-              });
+              }));
               if (!elements.resultStats.querySelector(".party-result.is-added")) return;
             }
             ctx.fx?.revealResult(elements.resultStats, {
