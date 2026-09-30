@@ -19,20 +19,14 @@
 }
 
 .slot-stage.is-practice .slot-world-landscape { inset: 0; width: 100%; height: 100%; }
-.slot-stage.is-practice .slot-world-cloud { width: clamp(100px, 16vw, 220px); animation: slot-world-cloud-drift 48s ease-in-out infinite alternate; }
+.slot-stage.is-practice .slot-world-cloud { width: clamp(100px, 16vw, 220px); }
 .slot-stage.is-practice .slot-world-cloud-one { top: 12%; left: 4%; }
-.slot-stage.is-practice .slot-world-cloud-two { top: 7%; left: 41%; width: clamp(80px, 12vw, 170px); animation-duration: 59s; animation-delay: -19s; }
-.slot-stage.is-practice .slot-world-cloud-three { top: 25%; right: 5%; animation-duration: 65s; animation-delay: -31s; }
-/* 縦長では札の左の空きへ置き、案内の行と動くスポークを重ねない。 */
-.slot-stage.is-practice .slot-world-wheel { left: 2%; top: 90px; width: min(22vw, 180px); }
-.slot-stage.is-practice .slot-world-wheel-turn { transform-origin: 150px 140px; animation: slot-world-wheel-turn 96s linear infinite; }
-.slot-stage.is-practice .slot-world-cabin { animation: slot-world-cabin-upright 96s linear infinite; }
-.slot-stage.is-practice .slot-world-tent { right: 2%; bottom: 12%; width: clamp(130px, 20vw, 280px); }
+.slot-stage.is-practice .slot-world-cloud-two { top: 7%; left: 41%; width: clamp(80px, 12vw, 170px); }
+.slot-stage.is-practice .slot-world-cloud-three { top: 25%; right: 5%; }
+/* 目標の札と競わないよう、遠景の小さな静止物にする。 */
+.slot-stage.is-practice .slot-world-wheel { left: 2%; top: 90px; width: min(14vw, 112px); }
+.slot-stage.is-practice .slot-world-tent { right: 2%; bottom: 12%; width: clamp(80px, 12vw, 160px); }
 .slot-stage.is-practice .slot-world-shrubs { bottom: 0; width: 100%; height: 10%; }
-
-@keyframes slot-world-cloud-drift { to { transform: translateX(45px); } }
-@keyframes slot-world-wheel-turn { to { transform: rotate(360deg); } }
-@keyframes slot-world-cabin-upright { to { transform: rotate(-360deg); } }
 
 /* 絵の外枠をSVGへ移す。0.68コマの外寸と中央配置はそのままにする。 */
 .slot-task[data-difficulty-mode="practice"] .slot-symbol.slot-world-symbol {
@@ -95,13 +89,16 @@
     left: 16.4%;
     top: auto;
     bottom: 2%;
-    width: min(24vw, 20vh);
+    width: min(14vw, 13vh);
     transform: translateX(-50%);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .slot-stage.is-practice .slot-world-cloud,
-  .slot-stage.is-practice .slot-world-wheel-turn,
-  .slot-stage.is-practice .slot-world-cabin { animation: none; }
+/* 縦長では目標札の隣を空け、背の低い横画面ではリールの脇を空ける。 */
+@media (max-aspect-ratio: 1/1) {
+  .slot-stage.is-practice .slot-world .slot-world-wheel { display: none; }
+}
+
+@media (max-height: 500px) and (min-aspect-ratio: 5/4) {
+  .slot-stage.is-practice .slot-world .slot-world-tent { display: none; }
 }

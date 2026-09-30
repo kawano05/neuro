@@ -30,14 +30,13 @@ export function slotPracticeSymbolHtml(symbolId, { label = "", decorative = true
 
 const cloud = `<path d="M8 48 Q0 22 25 23 Q26 0 51 5 Q73 0 81 24 Q105 19 109 43 Q116 58 94 59 H23 Q7 60 8 48Z" fill="#FFF"/>`;
 
-/** 背景は一度だけ作り、リールの停止・出題・当たりから独立して動かす。 */
+/** 見て止める課題の追視対象を増やさないため、背景は一度作って静止させる。 */
 export function slotWorldHtml() {
   const cabins = Array.from({ length: 8 }, (_, index) => {
     const angle = index * Math.PI / 4;
     const x = 150 + Math.cos(angle) * 103;
     const y = 140 + Math.sin(angle) * 103;
-    const color = ["#FF8082", "#4DC4FF", "#D65DB1", "#03AF7A"][index % 4];
-    return `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)})"><g class="slot-world-cabin"><rect x="-13" y="-9" width="26" height="24" rx="8" fill="${color}" stroke="#6F5BB8" stroke-width="3"/><path d="M-8 -2 H8" stroke="#FFF" stroke-width="5" stroke-linecap="round"/></g></g>`;
+    return `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)})"><rect x="-13" y="-9" width="26" height="24" rx="8" fill="#A8CBB8" stroke="#7BAF9F" stroke-width="3"/><path d="M-8 -2 H8" stroke="#FFF" stroke-width="5" stroke-linecap="round"/></g>`;
   }).join("");
   return `<div class="slot-world" aria-hidden="true">
     <svg class="slot-world-cloud slot-world-cloud-one" viewBox="0 0 120 65" aria-hidden="true">${cloud}</svg>
@@ -50,21 +49,21 @@ export function slotWorldHtml() {
       <path d="M0 776 Q324 723 632 756 Q941 727 1200 758 V800 H0Z" fill="#F3DEC0"/>
     </svg>
     <svg class="slot-world-wheel" viewBox="0 0 300 310" aria-hidden="true">
-      <path d="M150 140 L99 295 H201Z" fill="#E4DCF5" stroke="#9C8ACB" stroke-width="7" stroke-linejoin="round"/>
-      <g class="slot-world-wheel-turn">
-        <circle cx="150" cy="140" r="103" fill="none" stroke="#9C8ACB" stroke-width="6"/>
+      <path d="M150 140 L99 295 H201Z" fill="#D3EBC2" stroke="#9ABAA8" stroke-width="7" stroke-linejoin="round"/>
+      <g>
+        <circle cx="150" cy="140" r="103" fill="none" stroke="#9ABAA8" stroke-width="6"/>
         <circle cx="150" cy="140" r="80" fill="none" stroke="#FFF" stroke-width="3"/>
-        <path d="M47 140 H253 M150 37 V243 M77 67 L223 213 M77 213 L223 67" stroke="#9C8ACB" stroke-width="4"/>
+        <path d="M47 140 H253 M150 37 V243 M77 67 L223 213 M77 213 L223 67" stroke="#9ABAA8" stroke-width="4"/>
         ${cabins}
-      </g><circle cx="150" cy="140" r="13" fill="#6F5BB8" stroke="#FFF" stroke-width="4"/>
+      </g><circle cx="150" cy="140" r="13" fill="#7BAF9F" stroke="#FFF" stroke-width="4"/>
     </svg>
     <svg class="slot-world-tent" viewBox="0 0 240 190" aria-hidden="true">
-      <path d="M120 8 V37 M120 9 L156 19 L120 29" fill="#D65DB1" stroke="#6F5BB8" stroke-width="3"/>
+      <path d="M120 8 V37 M120 9 L156 19 L120 29" fill="#9ABAA8" stroke="#7BAF9F" stroke-width="3"/>
       <path d="M27 83 H213 L198 179 H42Z" fill="#FFF4E9"/>
-      <path d="M120 35 L15 88 H225Z" fill="#FF8082"/>
+      <path d="M120 35 L15 88 H225Z" fill="#A8CBB8"/>
       <path d="M120 35 L85 88 H155Z" fill="#FFF4E9"/>
-      <path d="M101 179 V131 Q120 104 139 131 V179" fill="#9C8ACB"/>
-      <path d="M15 88 H225 M42 179 H198" stroke="#D65DB1" stroke-width="6" stroke-linecap="round"/>
+      <path d="M101 179 V131 Q120 104 139 131 V179" fill="#9ABAA8"/>
+      <path d="M15 88 H225 M42 179 H198" stroke="#9ABAA8" stroke-width="6" stroke-linecap="round"/>
     </svg>
     <svg class="slot-world-shrubs" viewBox="0 0 1200 100" preserveAspectRatio="none" aria-hidden="true">
       <path d="M0 100 V52 Q24 17 47 48 Q79 0 113 48 Q140 32 159 70 V100 M1045 100 V64 Q1070 21 1095 49 Q1128 0 1155 48 Q1185 15 1200 54 V100" fill="#03AF7A"/>

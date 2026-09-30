@@ -297,13 +297,6 @@ const FISHING_WEEDS = [
   [83, 15, "#1FB57A", -2], [88, 27, "#0F8A5F", -4.5], [94, 19, "#1FB57A", -6],
 ];
 
-/** 遠くの魚の小さな群れ。明るい海に溶ける水色で、狙う魚（色つき・白いふち）と見分けがつく。 */
-function schoolSvg(className) {
-  const fish = (x, y, s) =>
-    `<g transform="translate(${x} ${y}) scale(${s})"><ellipse cx="0" cy="0" rx="17" ry="9"/><path d="M14 0 L 30 -9 L 30 9 Z"/></g>`;
-  return `<svg class="fishing-school ${className}" viewBox="0 0 130 64" aria-hidden="true" focusable="false"><g fill="#BFE8FF">${fish(30, 14, 1)}${fish(78, 32, 0.85)}${fish(46, 50, 0.7)}${fish(104, 12, 0.6)}</g></svg>`;
-}
-
 function floorSvg() {
   return `<svg class="sea-floor" viewBox="0 0 1180 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
     <path d="M0 52 C 160 32 300 62 460 46 S 760 30 900 48 S 1100 58 1180 42 V120 H0 Z" fill="#E3C98D"/>
@@ -327,7 +320,6 @@ export function fishingSeaHtml() {
     <span class="sea-spot"></span>
     ${seaSurfaceSvg()}
     <span class="sea-bubbles">${seaBubblesHtml(FISHING_BUBBLES)}</span>
-    ${schoolSvg("fishing-school-a")}${schoolSvg("fishing-school-b")}${schoolSvg("fishing-school-c")}${schoolSvg("fishing-school-d")}
     ${seaWeedsHtml(FISHING_WEEDS, "%")}
     ${floorSvg()}
   </span>`;

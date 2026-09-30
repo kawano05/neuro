@@ -188,26 +188,31 @@ export function createFxPresets({ engine, motion }) {
       });
     },
 
-    /** リール（れんしゅう）: 「ぴったり！」で星がはじける。 */
+    /** リール（れんしゅう）: 次のリールを隠さず、止めた窓の中だけで祝う。 */
     reelHit(reelEl, { streak = 1 } = {}) {
       if (!reelEl) return;
-      const { x, y } = engine.pointOf(reelEl);
-      const e = escalation(Math.min(streak - 1, 4));
-      engine.ring({ x, y, color: "#FFC83D", r0: 20, r1: 150, width: 8, life: 0.5 });
+      const windowEl = reelEl.querySelector(".slot-reel-window") || reelEl;
+      const { x, y, rect } = engine.pointOf(windowEl);
+      const radius = Math.max(0, Math.min(rect.width, rect.height) / 2 - 8);
+      if (!radius) return;
+      const e = escalation(Math.min(Math.max(0, streak - 1), 4));
+      const reach = radius * (0.52 + 0.12 * (e - 1));
+      engine.ring({ x, y, color: "#FFFFFF", r0: radius * 0.2, r1: radius * (0.62 + 0.1 * (e - 1)), width: 3, life: 0.42 });
       engine.burst({
         x,
         y,
-        count: 18 * e,
-        speed: [320, 700],
-        shapes: ["star", "star", "sparkle"],
-        colors: [...PALETTES.gold, "#B98CFF", "#FFFFFF"],
-        size: [12, 22],
-        life: [0.7, 1.2],
-        gravity: 300,
+        count: 8 * e,
+        // 初速×最長寿命＋粒の半径が窓の半幅を超えないようにする。
+        speed: [reach * 0.45 / 0.55, reach / 0.55],
+        shapes: ["star", "sparkle"],
+        colors: ["#F6AA00", "#FFFFFF", "#D8F3FF"],
+        size: [Math.min(7, radius * 0.12), Math.min(12, radius * 0.22)],
+        life: [0.35, 0.55],
+        gravity: 0,
         drag: 2.2,
-        twinkle: 0.2,
+        twinkle: 0.15,
       });
-      engine.glow({ x, y, radius: 200, color: "#FFF4C2", alpha: 0.34, lifeMs: 460 });
+      engine.glow({ x, y, radius: radius * 0.85, color: "#FFFFFF", alpha: 0.18, lifeMs: 420 });
       motion.punch(reelEl, { amount: 0.06 });
     },
 
@@ -240,27 +245,27 @@ export function createFxPresets({ engine, motion }) {
       motion.bump(trayEl, { amount: 0.12 });
     },
 
-    /** さかなつり（れんしゅう）: 釣れた瞬間の水しぶき。大きい魚ほど高く。 */
+    /** さかなつり（れんしゅう）: 巻き上がる魚と長さの札を隠さない小さなしぶき。 */
     fishCatch(fishEl, { lengthCm = 20 } = {}) {
       if (!fishEl) return;
-      const { x, y } = engine.pointOf(fishEl);
-      const power = Math.min(1.8, 0.8 + lengthCm / 40);
+      const { x, y, rect } = engine.pointOf(fishEl);
+      const reach = Math.max(0, Math.min(24, Math.min(rect.width, rect.height) * 0.35));
+      if (!reach) return;
+      const power = Math.min(1.4, 0.8 + lengthCm / 80);
       engine.burst({
         x,
         y,
-        count: 22 * power,
-        speed: [300 * power, 640 * power],
+        count: 4,
+        speed: [reach * 1.1, reach * 2.3 * power],
         angle: -Math.PI / 2,
-        spread: Math.PI * 0.8,
+        spread: Math.PI * 0.65,
         shapes: ["drop", "drop", "dot"],
         colors: PALETTES.sea,
-        size: [7, 14],
-        life: [0.6, 1.05],
-        gravity: 900,
-        drag: 1,
+        size: [reach * 0.12, reach * 0.22],
+        life: [0.18, 0.24],
+        gravity: reach * 5,
+        drag: 2.6,
       });
-      engine.burst({ x, y, count: 10, shapes: ["sparkle", "star"], colors: PALETTES.gold, size: [10, 18], gravity: 80, twinkle: 0.25 });
-      engine.ring({ x, y, color: "#FFFFFF", r0: 16, r1: 110, width: 6, life: 0.45 });
     },
 
     /** 高い音だけ（れんしゅう）: 合った音符がはじける。 */
