@@ -3618,17 +3618,27 @@ async function checkDockStepsAsideForTextEntry(page) {
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
 
   // 支援者が文字を打つ欄は、いまは評価ログの参加者IDだけ（観察メモは
-  // 効果測定セッションごと別紙へ移した。2026-08-29）。
+  // 効果測定セッションごと別紙へ移した。2026-08-29）。評価ログも支援者の世界
+  // なので、ドックは最初から出ていない（走査を動かさない。2026-09-30）。
+  // 打っている最中も、打ち終えたあとも出てこないこと。
   await page.locator('.tab[data-view="log"]').click();
   await waitForClass(page, "#log", "is-active");
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
 
   await page.locator("#participantId").focus();
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
-
-  // 文字入力から離れたらドックは戻る。
   await page.locator("#participantId").evaluate((el) => el.blur());
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  await page.waitForTimeout(150);
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // 利用者の世界へ戻ったら、支援者の世界の印（ドックを隠す class）は外れる。
+  // ドックを出すかどうかは、利用者の世界の決まり（画面の「おす」ボタンの設定）に戻る。
+  await page.locator("#homeReturn").click();
+  await waitForClass(page, "#homeView", "is-active");
+  assert(
+    !(await page.evaluate(() => document.body.classList.contains("supporter-menu-mode"))),
+    "ホームへ戻ったら supporter-menu-mode は外れる"
+  );
 }
 
 /**

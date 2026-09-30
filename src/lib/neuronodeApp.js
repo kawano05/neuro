@@ -286,11 +286,13 @@ export function initNeuroNodeApp() {
     // 「せってい」があると、先に設定しないといけないと思われた
     // （docs/design-renewal-2026-09-25.md §1.2）。
     document.body.classList.toggle("start-mode", nextView === "start");
-    // 支援者の世界では自前走査を動かさない（scan.js の scanningIsOff()）。
-    // ドックの2つは、そこでは押しても何も起きない操作子になるので無効化する
-    // ——効かない操作子を黙って置いておくと、支援者は「押したのに動かない」を
-    // 不具合として報告するしかない。消さずに無効化するのは、下端の版面が
-    // 画面遷移のたびに伸び縮みするのを避けるため。
+    // 支援者の世界（評価ログ・設定）では自前走査を動かさない（scan.js の scanningIsOff()）。
+    // ドックの2つは、そこでは押しても何も起きない操作子になるので、無効化したうえで
+    // ドックごと隠す（styles.css の body.supporter-menu-mode）。効かない操作子を置いて
+    // おくと、支援者は「押したのに動かない」を不具合として報告するしかなく、設定の
+    // タップ標的も覆う。以前は下端の版面の伸び縮みを避けて見せたまま無効化していたが、
+    // 支援者の世界の画面はどれも縦に流れる業務画面なので、伸び縮みは問題にならない。
+    // 無効化も残すのは、CSS が読めない状態でもスイッチ入力が走査を動かさないため。
     const supporterMenu = isSupporterView(nextView);
     document.body.classList.toggle("supporter-menu-mode", supporterMenu);
     [elements.toggleScan, elements.primarySwitch].forEach((control) => {
