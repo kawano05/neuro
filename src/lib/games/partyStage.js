@@ -572,7 +572,8 @@ export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
   const otter = root.querySelector(".party-result-otter");
   const reward = root.querySelector(".party-result-reward");
   const jarStars = [...root.querySelectorAll(".party-result-jar .party-star")];
-  const items = [...root.querySelectorAll(".hk-result-item")];
+  // 添える版の作品と評価は通常の revealResult が担当し、二重に動かさない。
+  const items = root.classList.contains("is-added") ? [] : [...root.querySelectorAll(".hk-result-item")];
   const today = [...root.querySelectorAll(".party-today .party-mini-jar")];
   const moves = otterMotion(otter);
   if (root.dataset.level === "normal") {

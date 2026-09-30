@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 import { JAR_SLOTS } from "../src/lib/art/partyArt.js";
 import { revealPartyResult } from "../src/lib/games/partyStage.js";
+import { renderPartyResult, renderPraise, resultRenderers } from "../src/lib/games/results.js";
 import { MAX_GLOWS_PER_SECOND, MIN_FIREWORK_GAP_S, createBrightLimiter } from "../src/lib/fx/fxSafety.js";
 import {
   PARTY_JAR_CAPACITY,
@@ -32,7 +33,7 @@ let failed = 0;
 test("result music stops after a repaint but never stops the next game's music", () => {
   for (const current of [true, false]) {
     const callbacks = new Map();
-    const root = {dataset:{level:"big"},isConnected:false,querySelector:()=>null,querySelectorAll:()=>[],ownerDocument:{defaultView:{setTimeout:(fn,ms)=>callbacks.set(ms,fn)}}};
+    const root = {dataset:{level:"big"},classList:{contains:()=>false},isConnected:false,querySelector:()=>null,querySelectorAll:()=>[],ownerDocument:{defaultView:{setTimeout:(fn,ms)=>callbacks.set(ms,fn)}}};
     let stops = 0;
     revealPartyResult({querySelector:()=>root}, {audio:{music:{stop:()=>stops++}}, isCurrent:()=>current});
     callbacks.get(3200)();
@@ -51,6 +52,37 @@ function test(name, fn) {
     failed += 1;
   }
 }
+
+test("every atmosphere retains the same score, praise, and three-star rating", () => {
+  const context = {t:(key, values) => `${key}${values ? JSON.stringify(values) : ""}`};
+  for (const [done, stars, key] of [[0,1,"tried"],[3,2,"good"],[5,3,"great"]]) {
+    const primary = renderPraise({done,total:5}, context);
+    for (const level of ["none","subtle","normal","big"]) {
+      const party = ["normal","big"].includes(level) ? {level,stars:done*3,outfits:[],jarsToday:0} : null;
+      const html = renderPartyResult(party, primary, context);
+      assert.ok(html.includes(primary), `${level}: 通常の評価をそのまま残す`);
+      assert.ok(html.includes(`data-praise="result.praise.${key}"`));
+      assert.equal((html.match(/class="fa-solid fa-star hk-star"/g)||[]).length, stars);
+      assert.equal((html.match(/hk-star is-off/g)||[]).length, 3-stars);
+      assert.ok(html.includes(`result.score{"n":${done},"total":5}`));
+      if(party) assert.ok(html.indexOf('data-praise=') < html.indexOf('class="party-result-main"'));
+    }
+  }
+});
+
+test("beginner celebrations keep the completion message and star, with the legacy pop exception", () => {
+  const context = {gameId:"balloon",t:key=>key};
+  for (const level of ["none","subtle","normal","big"]) {
+    const party = ["normal","big"].includes(level) ? {level,stars:15,outfits:[],jarsToday:1} : undefined;
+    const html = resultRenderers.completion({presses:5,balloons:["#FF8082"],party}, context);
+    assert.equal((html.match(/result.completion.title/g)||[]).length,1);
+    assert.equal((html.match(/class="hk-result-medal"/g)||[]).length,1);
+  }
+  const legacy = resultRenderers.completion({presses:5,animals:["dolphin"],party:{level:"big",stars:15,outfits:[],jarsToday:1}}, {...context,gameId:"color-legacy"});
+  assert.ok(legacy.includes('class="hk-result completion-result party-result"'));
+  assert.ok(!legacy.includes('is-added'));
+  assert.ok(!legacy.includes('result.completion.title'));
+});
 
 test("four atmospheres have distinct grammar, with a quiet timing ceiling", () => {
   assert.deepEqual(Object.keys(ATMOSPHERES), ["none", "subtle", "normal", "big"]);

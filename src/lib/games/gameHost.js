@@ -623,6 +623,7 @@ export function createGameHost(ctx) {
       if (lastResultSummary && resultRenderer) {
         const session = currentSession();
         const context = {
+          gameId: activeGameId,
           best: bestBeforeCurrentSession(),
           trials: session?.trials,
           config: session?.config,
@@ -645,7 +646,7 @@ export function createGameHost(ctx) {
           // キャリブレーションは支援者と一緒に使う測定なので、開いたまま出す。
           const open = activeGameId === "calibration" ? " open" : "";
           elements.resultStats.innerHTML = `
-            ${lastResultSummary.party ? renderPartyResult(lastResultSummary.party, "", ctx.tHtml("result.score", {n: score.done, total: score.total}), context) : renderPraise(score, context)}
+            ${renderPartyResult(lastResultSummary.party, renderPraise(score, context), context)}
             <details class="result-details"${open}>
               <summary>${ctx.tHtml("result.details")}</summary>
               ${detailed}
@@ -663,7 +664,7 @@ export function createGameHost(ctx) {
               revealPartyResult(elements.resultStats, { fx: ctx.fx, audio: ctx.audio,
                 isCurrent: () => state.currentView === "result" && lastResultSummary === shownSummary,
               });
-              return;
+              if (!elements.resultStats.querySelector(".party-result.is-added")) return;
             }
             ctx.fx?.revealResult(elements.resultStats, {
               playStar: (index, delayS) =>

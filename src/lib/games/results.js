@@ -4,8 +4,8 @@
 // もとは games/gameHost.js の中にあった（ゲームの起動・入力・終了の処理と、
 // けっかの HTML の組み立てが1つのファイルに混ざり、1000行を超えていた）。
 // 技術負債の返済として分けた（docs/overall-design-2026-09-28.md §6.1）。
-// 中身は移しただけで、変えていない。星が飛び込む動きは fx/fxPresets.js の
-// revealResult（gameHost が、けっかへ来た最初の1回だけ呼ぶ）。
+// 一言と星は雰囲気によらず同じ評価を描き、お祝いはその下へ添える。
+// 星が飛び込む動きは fx/fxPresets.js の revealResult（gameHost が最初の1回だけ呼ぶ）。
 // =====================================================================
 
 import { displayOffsetMs } from "./rhythm.js";
@@ -369,9 +369,12 @@ function renderCompletionResult(summary, context = {}) {
     summaryText = t("result.completion.summary", { n: presses, m: animals.length });
   }
 
-  if (summary?.party) return renderPartyResult(summary.party, items, summaryText, context);
+  // 押すと出てくるの既存のおおさわぎだけは、元のけっかを保つ。
+  if (summary?.party?.level === "big" && context.gameId === "color-legacy") {
+    return renderLegacyPartyResult(summary.party, items, summaryText, context);
+  }
 
-  return `
+  const primary = `
     <div class="hk-result completion-result">
       <div class="hk-result-items" aria-hidden="true">
         <span class="hk-result-medal"><i class="fa-solid fa-star"></i></span>
@@ -381,22 +384,28 @@ function renderCompletionResult(summary, context = {}) {
       <p class="hk-result-summary completion-result-summary">${summaryText}</p>
     </div>
   `;
+  return renderPartyResult(summary?.party, primary, context);
 }
 
-/**
- * 遊びの雰囲気「おおさわぎ」のけっか（押すと 出てくる）。星でいっぱいのキラキラびん、
- * その日にいっぱいにしたびんの並び、もらったラッコの服、会えた動物。
- * 数ではなく、びんと星で見せる（数字を読まない子にも分かるように）。見せ方は
- * games/partyStage.js の revealPartyResult。
- */
-export function renderPartyResult(party, items, summaryText, context = {}) {
+/** 評価は通常の描画をそのまま使い、びんや服で一言・星・点数を置き換えない。 */
+export function renderPartyResult(party, primary, context = {}) {
+  if (!party) return primary;
+  return `
+    <div class="party-result is-added" data-level="${party.level || "big"}" data-stars="${party.stars ?? 15}">
+      ${primary}
+      ${renderPartyCompanions(party, context)}
+    </div>
+  `;
+}
+
+/** 仲間とびんは評価の脇役。にぎやかはその回のびん、おおさわぎは服と今日のびんも。 */
+function renderPartyCompanions(party, context) {
   const t = context.t;
   const stars = Number.isFinite(party.stars) ? party.stars : 15;
   const reward = party.unlocked
     ? t("party.result.reward", { item: t(`party.outfit.${party.unlocked}`) })
     : t("party.result.rewardDone");
   return `
-    <div class="hk-result completion-result party-result" data-level="${party.level || "big"}" data-stars="${stars}">
       <div class="party-result-main">
         <span class="party-result-otter is-cheering ${party.level === "normal" ? "" : outfitClasses(party.outfits)}" aria-hidden="true">${otterSvg()}</span>
         ${fullJarHtml(stars)}
@@ -406,8 +415,15 @@ export function renderPartyResult(party, items, summaryText, context = {}) {
           <span class="party-result-reward">${reward}</span>
         </div>`}
       </div>
+  `;
+}
+
+/** 押すと出てくるのおおさわぎは、動物・びん・服の既存の版面を保つ。 */
+function renderLegacyPartyResult(party, items, summaryText, context) {
+  return `
+    <div class="hk-result completion-result party-result" data-level="${party.level || "big"}" data-stars="${party.stars ?? 15}">
+      ${renderPartyCompanions(party, context)}
       <div class="hk-result-items" aria-hidden="true">${items}</div>
-      ${party.level === "normal" ? `<strong class="hk-result-title completion-result-title">${t("result.completion.title")}</strong>` : ""}
       <p class="hk-result-summary completion-result-summary">${summaryText}</p>
     </div>
   `;

@@ -940,6 +940,8 @@ async function checkSharedBeginnerParty(page, project) {
     const saved = await page.evaluate(key=>JSON.parse(localStorage.getItem(key)||"{}"),storageKey);
     assert(saved.party?.outfits?.includes("hat"),`${gameId}: 終了で服をもらえる`);
     assert((await page.locator(".party-result-jar .party-star").count())===15,`${gameId}: 5回でいっぱい`);
+    assert((await page.locator(".party-result .hk-result-title").textContent()).includes("できた"),`${gameId}: お祝いにも一言を残す`);
+    assert((await page.locator(".party-result .hk-result-medal").count())===1,`${gameId}: 完了の星を残す`);
     assert(!(saved.sessions||[]).some(s=>s.summary?.party),"お祝いを研究の記録に入れない");
   }
 }
@@ -970,6 +972,11 @@ async function checkTimingParty(page, project) {
   const successful=session.trials.filter(row=>row.judgment==="hit"||row.judgment==="correctRejection").length;
   const expected=Math.floor(successful*15/session.trials.length);
   assert((await page.locator(".party-result-jar .party-star").count())===expected,"成功したぶんだけ星を入れる");
+  const ratio=successful/session.trials.length;
+  const rating=ratio>=0.8?3:ratio>=0.5?2:1;
+  const praise=ratio>=0.8?"great":ratio>=0.5?"good":"tried";
+  assert((await page.locator("#resultStats [data-praise]").getAttribute("data-praise"))===`result.praise.${praise}`,"お祝いでも成績に応じた一言を残す");
+  assert((await page.locator("#resultStats .hk-star:not(.is-off)").count())===rating,"びんの星とは別に3つ星で評価する");
   assert(!session.summary.party,"研究のsummaryとお祝いを分ける");
   assert(saved.party?.outfits?.includes("hat"),"課題でも完走したら服をもらえる");
 }

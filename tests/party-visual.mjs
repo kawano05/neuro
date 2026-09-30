@@ -130,6 +130,17 @@ try {
           overflow:document.documentElement.scrollWidth>innerWidth+1,
           overflowElements:[...document.querySelectorAll('body *')].filter(el=>el.getClientRects().length&&el.getBoundingClientRect().right>innerWidth+1).map(el=>({tag:el.tagName,cls:el.getAttribute('class'),right:el.getBoundingClientRect().right})).slice(0,15),
           result:document.querySelector('#resultView').classList.contains('is-active'),
+          praise:document.querySelector('#resultStats [data-praise]')?.dataset.praise,
+          rating:document.querySelectorAll('#resultStats .hk-star:not(.is-off)').length,
+          completionStar:document.querySelectorAll('#resultStats .hk-result-medal').length,
+          title:document.querySelector('#resultStats .hk-result-title')?.textContent || '',
+          evaluationClear:(()=>{
+            const primary=document.querySelector('.party-result.is-added > .hk-result');
+            const companions=document.querySelector('.party-result.is-added > .party-result-main');
+            if(!primary||!companions) return true;
+            const a=primary.getBoundingClientRect(), b=companions.getBoundingClientRect();
+            return a.right<=b.left || a.left>=b.right || a.bottom<=b.top || a.top>=b.bottom;
+          })(),
           buttonsFit:[...document.querySelectorAll('#resultRetry,#resultHome')].every(el=>{const r=el.getBoundingClientRect();return r.bottom<=innerHeight+1&&r.top>=0&&r.left>=0&&r.right<=innerWidth+1;}),
         }));
         assert.equal(result.result,true);
@@ -138,6 +149,14 @@ try {
         assert.equal(result.clothing.length,level==='big'?1:0);
         assert.equal(result.overflow,false,`${size}/${level}/${game} ${JSON.stringify(result.overflowElements)}`);
         assert.equal(result.buttonsFit,true,`${size}/${level}/${game}: けっかのボタンが画面を出る`);
+        if(timing) {
+          assert.equal(result.praise,'result.praise.great',`${level}/${game}: 5回中5回の一言を保つ`);
+          assert.equal(result.rating,3,`${level}/${game}: 3つ星の評価を保つ`);
+        } else if(game!=='color-legacy'||level!=='big') {
+          assert.ok(result.title.includes('できた'),`${level}/${game}: 完了の一言を保つ`);
+          assert.equal(result.completionStar,1);
+        }
+        assert.equal(result.evaluationClear,true,`${size}/${level}/${game}: 評価とお祝いが重なる`);
         assert.deepEqual(errors,[]);
         records.push({size,level,game,placement,result});
         console.log('ok',size,level,game);
