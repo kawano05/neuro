@@ -385,6 +385,11 @@ export function createFxPresets({ engine, motion }) {
       const s = engine.scale();
       if (s.finale === "none") return;
       const { x, y } = engine.pointOf(hero?.querySelector?.("svg") || hero || stageEl);
+      if (s.finale === "ring") {
+        engine.ring({x,y,color:"#D8F3FF",r0:20,r1:100,width:4,life:0.5});
+        engine.burst({x,y,count:12,speed:[100,180],shapes:["star"],colors:PALETTES.sea,size:[10,16],life:[0.4,0.6],gravity:0});
+        return;
+      }
       engine.ring({ x, y, color: "#FFFFFF", r0: 30, r1: 260, width: 10, life: 0.7 });
       engine.ring({ x, y, color: "#FFC83D", r0: 20, r1: 340, width: 6, life: 0.9, delay: 0.1 });
       engine.burst({
@@ -415,6 +420,7 @@ export function createFxPresets({ engine, motion }) {
      */
     revealResult(container, { playStar = null } = {}) {
       if (!container) return 0;
+      if (engine.scale().finale === "none") return 0;
       const stars = [...container.querySelectorAll(".hk-star, .hk-result-medal")];
       const lit = stars.filter((star) => !star.classList.contains("is-off"));
       const items = [...container.querySelectorAll(".hk-result-item, .hk-result-picture")];
@@ -422,7 +428,8 @@ export function createFxPresets({ engine, motion }) {
       const STEP = 230;
       stars.forEach((star, index) => {
         const delayMs = 120 + index * STEP;
-        motion.slamIn(star, { delayMs });
+        if (engine.scale().finale === "ring") motion.popIn(star, {delayMs, from:0.8});
+        else motion.slamIn(star, { delayMs });
         if (!star.classList.contains("is-off")) {
           playStar?.(index, (delayMs + 220) / 1000);
           window.setTimeout(() => {
@@ -438,7 +445,7 @@ export function createFxPresets({ engine, motion }) {
       const titleAt = itemsStart + items.length * 110 + 80;
       if (title) motion.stamp(title, { delayMs: titleAt });
       // 星が2つ以上（または点の無い遊びの「できた」）なら、小さな紙吹雪も。
-      if (lit.length >= 2 || container.querySelector(".completion-result")) {
+      if (engine.scale().finale === "full" && (lit.length >= 2 || container.querySelector(".completion-result"))) {
         window.setTimeout(() => {
           if (!container.isConnected) return;
           const p = engine.pointOf(title || container);

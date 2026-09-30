@@ -20,6 +20,7 @@
 
 import { joinSpeech, resolveTextMode } from "../i18n.js";
 import { DEFAULT_PLAY_PREFS } from "../state.js";
+import { PARTY_FINISH_DELAY_MS } from "./partyStage.js";
 
 /** はじめの遊びは5回で終わる（colorLegacyPreset と同じ長さ）。 */
 export const BEGINNER_TARGET_PRESSES = 5;
@@ -128,6 +129,12 @@ export function playFinishSound(audio, style) {
  * @param {string} doneText 読み上げる「できた」の文（プレーン文）
  */
 export function celebrate(ctx, prefs, doneText) {
+  const level = ctx.fx?.level?.() || "normal";
+  if (level === "none" || level === "subtle") {
+    if (level === "subtle") ctx.audio.playApplause({ durationS: 0.35 });
+    if (ctx.settings.speechEnabled) ctx.voiceFeedback(joinSpeech([ctx.t("color.voice.cheer"), doneText], resolveTextMode(ctx.settings)));
+    return;
+  }
   const cheer = prefs.cheer;
   const withCheer = cheer === "both" || cheer === "applause";
   const withLaugh = cheer === "both" || cheer === "laugh";
@@ -202,25 +209,32 @@ export function createBeginnerFlow(
     count += 1;
     const prefs = playPrefsFor(settings, gameId);
     const drawn = onPress(pressIndex) || {};
+    ctx.party?.react({ index: pressIndex, source: drawn.source, name: drawn.name });
     playPressSound(audio, prefs.sound, pressIndex, { creature: drawn.creature ?? null });
 
     const remaining = target - count;
     if (remaining > 0) {
       speechTimer = window.setTimeout(() => {
         speechTimer = null;
-        voiceFeedback(progressSpeech(remaining, pressIndex));
+        voiceFeedback(ctx.party?.isBig() ? ctx.party.pressSpeech(pressIndex, drawn.name) : progressSpeech(remaining, pressIndex));
       }, ttsDelayMs);
     } else {
-      finishSound(audio, prefs.sound);
-      onFinale(pressIndex);
+      const big = ctx.party?.isBig();
+      if (big) ctx.party.finale();
+      else {
+        const level = ctx.fx?.level?.() || "normal";
+        if (level === "none" || level === "subtle") audio.playChime(784, { durationS: 0.24 });
+        else finishSound(audio, prefs.sound);
+        onFinale(pressIndex);
+      }
       // 最後の絵とフィナーレを見せてから、けっかへ。けっかが出るのと同時に、
       // 歓声と拍手・笑い声・「やったー」（この遊びの設定で切れる）。
       finishTimer = window.setTimeout(() => {
         finishTimer = null;
         finishDelivered = true;
-        celebrate(ctx, playPrefsFor(settings, gameId), finishSpeech());
+        celebrate(ctx, playPrefsFor(settings, gameId), big ? ctx.party.rewardSpeech() : finishSpeech());
         finish(finishSummary());
-      }, finishDelayMs);
+      }, big ? PARTY_FINISH_DELAY_MS : finishDelayMs);
     }
     logEvent({ type: "switch", label: logLabel });
     return true;
@@ -232,8 +246,6 @@ export function createBeginnerFlow(
     count: () => count,
     /** 最後の1回を押したあとか（けっかへ向かっている）。 */
     finishing: () => count >= target,
-    /** けっかへ進んだか（中断ではなく、最後まで遊んだ）。 */
-    delivered: () => finishDelivered,
     reset() {
       count = 0;
       finishDelivered = false;

@@ -751,6 +751,7 @@ export function createCraneGame(ctx) {
     logTrial(session);
 
     const now = audio.scheduler.now();
+    ctx.party?.react({ success: judgment === "grip", source: prizeEl, total: config.targetTrials, endless: config.endless });
     setClawClosed(true);
     sceneEl.classList.add(`is-${judgment}`);
     // 音でも3つの結果を describe する。以前は高さの違うサイン波が1つ鳴るだけで、

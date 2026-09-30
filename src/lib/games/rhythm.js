@@ -740,6 +740,11 @@ export function createRhythmGame(gameId) {
       session.trials.push({ index: session.trials.length, ...row });
       session.summary = computeSummary(session.trials);
       logTrial(session);
+      if (row.beatIndex !== null) ctx.party?.react({
+        success: row.judgment === "hit" || row.judgment === "correctRejection",
+        source: stageEl?.querySelector(".rhythm-hit-line") || stageEl?.querySelector(".rhythm-judgment"),
+        total: plan.judgedBeats.length,
+      });
     }
 
     function playFeedback(judgment) {

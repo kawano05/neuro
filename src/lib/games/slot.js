@@ -322,6 +322,7 @@ export function createSlotGame(gameId) {
       if (result.judgment === "hit") cheerReel(reelIndex);
       else if (source !== "timeout") nudgeReel(reelIndex);
       persist();
+      ctx.party?.react({ success: result.judgment === "hit", source: reelViews[reelIndex].root, total: config.rounds * config.reelCount });
       return row;
     }
 
@@ -349,7 +350,7 @@ export function createSlotGame(gameId) {
       if (statusEl) statusEl.textContent = t("slot.status.complete");
       logTrial(session);
       stopLoop();
-      audio.playTone(784);
+      if (config.difficultyMode === "measure" || !["none", "subtle"].includes(fx?.level?.())) audio.playTone(784);
       finishTimer = window.setTimeout(() => {
         finishTimer = null;
         if (destroyed) return;

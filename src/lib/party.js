@@ -6,7 +6,9 @@
 // 新しい設定を足さず fxLevel に乗せたのは、session.config.fxLevel が CSV まで
 // 残っているから。どの雰囲気で遊んだかが、研究の記録からそのまま分かる。
 //
-// おおさわぎは「押すと 出てくる」で、押すたびに次のものが重なっていく
+// 全部の遊びで同じ段の文法を使う。舞台は「はじめ」「タイミング」の型だけを持ち、
+// 研究の summary とは別にお祝いを扱う（docs/party-all-2026-09-30.md）。
+// おおさわぎでは、押すたびに次のものが重なっていく
 // （docs/party-mode-2026-09-29.md）:
 //   なかま（ラッコ）・音楽（楽器が1つずつ重なる）・キラキラびん（星がたまる）・
 //   観客・旗・最後のパレード、遊ぶたびにもらえるラッコの服。
@@ -34,9 +36,30 @@ export const MAX_PARTY_JARS = 9999;
 
 export const DEFAULT_PARTY = Object.freeze({ day: "", jars: 0, outfits: Object.freeze([]) });
 
-/** 演出の強さが「おおさわぎ」か。 */
-export function isPartyLevel(level) {
-  return level === "big";
+/** 設定の文と演出の文法の所有者。画面側はこのキーを辞書で解決する。 */
+export const ATMOSPHERES = Object.freeze(Object.fromEntries([
+  ["none", false, false, false, "none", false],
+  ["subtle", false, false, false, "ring", false],
+  ["normal", true, true, false, "confetti", false],
+  ["big", true, true, true, "parade", true],
+].map(([level, worldMotion, resultCompanions, liveCompanions, finale, reward]) => [level, Object.freeze({
+  level, label: `party.atmosphere.${level}.label`, description: `party.atmosphere.${level}.description`,
+  worldMotion, resultCompanions, liveCompanions, finale, reward,
+  particles: ({none:"none",subtle:"small",normal:"usual",big:"large"})[level],
+  finishSound: ({none:"chime",subtle:"applause",normal:"usual",big:"fanfare"})[level],
+  resultMotion: level !== "none",
+})])));
+
+/** タイミングの課題には、合図を覆う音楽・観客・旗・待機中の動きを持ち込まない。 */
+export function atmosphereProfile(level, kind = "beginner") {
+  const base = ATMOSPHERES[level] || ATMOSPHERES.normal;
+  return { ...base, kind, music: base.liveCompanions && kind === "beginner", crowd: base.liveCompanions && kind === "beginner" };
+}
+
+/** 成功したぶんだけためる。エンドレスは15個で次のびんへ進む。 */
+export function timingStars(successes, total, endless = false) {
+  const earned = endless ? Math.max(0, Math.floor(successes)) : Math.floor(Math.max(0, Math.min(successes, total)) * PARTY_JAR_CAPACITY / Math.max(1, total));
+  return { earned, jars: Math.floor(earned / PARTY_JAR_CAPACITY), stars: earned > 0 ? (earned % PARTY_JAR_CAPACITY || PARTY_JAR_CAPACITY) : 0 };
 }
 
 /** 押した回（0 から）のあとの、びんの中の星の数。 */
@@ -76,10 +99,10 @@ export function sanitizeParty(candidate) {
  * 日付が変わっていれば数え直す（服は取り上げない）。
  * @returns {{party: {day: string, jars: number, outfits: string[]}, unlocked: string|null, jarsToday: number}}
  */
-export function applyPartyResult(party, dayKey = localDayKey()) {
+export function applyPartyResult(party, dayKey = localDayKey(), jarCount = 1) {
   const current = sanitizeParty(party);
   const base = current.day === dayKey ? current.jars : 0;
-  const jarsToday = Math.min(base + 1, MAX_PARTY_JARS);
+  const jarsToday = Math.min(base + Math.max(0, Math.floor(jarCount)), MAX_PARTY_JARS);
   const unlocked = nextOutfit(current.outfits);
   const outfits = unlocked ? PARTY_OUTFITS.filter((id) => id === unlocked || current.outfits.includes(id)) : current.outfits;
   return { party: { day: dayKey, jars: jarsToday, outfits }, unlocked, jarsToday };

@@ -78,6 +78,8 @@ const checks = [
   ["hits every pitch that is swung at and re-pitches a missed one in the baseball game", checkBaseballFlow],
   ["adds effects within the safety rules and never in a measured run", checkEffectsFollowSafetyRules],
   ["plays the party atmosphere: otter, sparkles, crowd, reward, and a frame that waits", checkPartyAtmosphere],
+  ["plays the shared party atmosphere in balloon, coloring, and baseball without research rewards", checkSharedBeginnerParty],
+  ["keeps the timing party still before cues and counts only resolved successes", checkTimingParty],
   ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
   ["speaks with the app's own natural voice, and with the device voice when asked to", checkAppVoiceSpeaks],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
@@ -889,6 +891,89 @@ async function checkColorCompletionFlow(page) {
  *   - その日にいっぱいにしたびんの数と服が保存される（研究の記録ではない）
  * 音楽の中身は Web Audio なので、デスクトップの Chromium だけで見る。
  */
+async function checkSharedBeginnerParty(page, project) {
+  if (project.name !== "chromium-desktop" && project.name !== "phone-landscape") return SKIPPED;
+  await (await import("node:fs/promises")).mkdir("test-results/party-live", {recursive:true});
+  for (const gameId of ["balloon", "coloring", "baseball"]) {
+    await page.evaluate(({key}) => {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      saved.settings = {...saved.settings, fxLevel:"big", speechEnabled:false, autoScan:false};
+      delete saved.party;
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, {key:storageKey});
+    await page.reload();
+    await page.locator("#startStage").click();
+    await openActivity(page,t(`tile.${gameId}.title`));
+    // 野球は投球前のやりかたを挟む。舞台は遊びを始めてから作られる。
+    if (gameId === "baseball") {
+      await page.locator(".game-ready").waitFor({state:"visible"});
+      await page.locator("#gameStage").click();
+    }
+    await page.locator(".party-otter").waitFor({state:"visible"});
+    for(let press=0;press<5;press+=1) {
+      if(gameId==="baseball") {
+        await page.waitForFunction(()=>document.querySelector(".bb-word")?.textContent==="",null,{timeout:6000});
+        await page.waitForTimeout(350);
+      }
+      await page.locator("#gameStage").click();
+      if(press<4) await page.waitForTimeout(800);
+      if(press===2) {
+        await page.waitForTimeout(1200);
+        await page.screenshot({path:`test-results/party-live/${project.name}-${gameId}-third.png`});
+        assert((await page.locator(".party-jar .party-star").count())===7,`${gameId}: 3回目ではんぶん`);
+        const overlaps = await page.evaluate(() => {
+          const visible = el => el.getClientRects().length && getComputedStyle(el).opacity !== "0";
+          // 割れたふうせんは、非表示のひもを含む箱ではなく実際の印を比べる。
+          const heroes = [...document.querySelectorAll(".balloon:not(.is-popped),.balloon.is-popped .balloon-mark,.coloring-card,.bb-ball,.bb-bat,.balloon-word,.coloring-word,.bb-word")].filter(visible);
+          return [...document.querySelectorAll(".party-fan.is-on,.party-otter,.party-jar,.party-bunting.is-on,.party-stamp")].filter(visible).flatMap(decoration => {
+            const a = decoration.getBoundingClientRect();
+            return heroes.filter(hero => {
+              const b = hero.getBoundingClientRect();
+              return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+            }).map(hero => `${decoration.className}/${hero.className}`);
+          });
+        });
+        assert(overlaps.length === 0, `${gameId}: 仲間・観客・旗・札を主役へ重ねない (${overlaps.join(", ")})`);
+      }
+    }
+    await page.waitForFunction(() => document.querySelector("#resultView")?.classList.contains("is-active"), null, {timeout:PARTY_FINISH_DELAY_MS+4000});
+    const saved = await page.evaluate(key=>JSON.parse(localStorage.getItem(key)||"{}"),storageKey);
+    assert(saved.party?.outfits?.includes("hat"),`${gameId}: 終了で服をもらえる`);
+    assert((await page.locator(".party-result-jar .party-star").count())===15,`${gameId}: 5回でいっぱい`);
+    assert(!(saved.sessions||[]).some(s=>s.summary?.party),"お祝いを研究の記録に入れない");
+  }
+}
+
+async function checkTimingParty(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  await page.evaluate(({key})=>{
+    const saved=JSON.parse(localStorage.getItem(key)||"{}");
+    saved.settings={...saved.settings,fxLevel:"big",difficultyMode:"practice",targetBeats:5,rhythmBpm:120,speechEnabled:false,autoScan:false};
+    delete saved.party;
+    localStorage.setItem(key,JSON.stringify(saved));
+  },{key:storageKey});
+  await page.reload();
+  await page.locator("#startStage").click();
+  await openActivity(page,t("tile.gonogo.title"));
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(300);
+  const waiting=await page.evaluate(()=>({
+    flyers:document.querySelectorAll(".party-star-flyer").length,
+    moving:document.querySelector(".party-layer")?.getAnimations({subtree:true}).filter(a=>a.playState==="running").length||0,
+    crowd:document.querySelectorAll(".party-fan,.party-bunting").length,
+  }));
+  assert(waiting.flyers===0&&waiting.moving===0&&waiting.crowd===0,"合図の前に仲間を動かさない");
+  // 低い音を正しく見送る。高い音の見逃しには星を与えない。
+  await page.waitForFunction(()=>document.querySelector("#resultView")?.classList.contains("is-active"),null,{timeout:25000});
+  const saved=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)||"{}"),storageKey);
+  const session=saved.sessions.find(s=>s.gameId==="gonogo");
+  const successful=session.trials.filter(row=>row.judgment==="hit"||row.judgment==="correctRejection").length;
+  const expected=Math.floor(successful*15/session.trials.length);
+  assert((await page.locator(".party-result-jar .party-star").count())===expected,"成功したぶんだけ星を入れる");
+  assert(!session.summary.party,"研究のsummaryとお祝いを分ける");
+  assert(saved.party?.outfits?.includes("hat"),"課題でも完走したら服をもらえる");
+}
+
 async function checkPartyAtmosphere(page, project) {
   if (project.name !== "chromium-desktop") return SKIPPED;
   await page.evaluate(

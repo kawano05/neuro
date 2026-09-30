@@ -591,6 +591,7 @@ export function createFishingGame(gameId) {
     logTrial(session);
 
     // エンドレスは1回でも失敗したところで終わり（crane と同じ規則）。
+    ctx.party?.react({ success: judgment === "hit" || judgment === "correctRejection", source: swimmerEl, total: trialsPlan.length, endless: config.endless });
     //
     // correctRejection は「押してはいけない合図で押さなかった」で、正しく
     // できた回。失敗に数えない——長靴で待てたことを失敗にすると、抑制の

@@ -389,24 +389,25 @@ function renderCompletionResult(summary, context = {}) {
  * 数ではなく、びんと星で見せる（数字を読まない子にも分かるように）。見せ方は
  * games/partyStage.js の revealPartyResult。
  */
-function renderPartyResult(party, items, summaryText, context = {}) {
+export function renderPartyResult(party, items, summaryText, context = {}) {
   const t = context.t;
   const stars = Number.isFinite(party.stars) ? party.stars : 15;
   const reward = party.unlocked
     ? t("party.result.reward", { item: t(`party.outfit.${party.unlocked}`) })
     : t("party.result.rewardDone");
   return `
-    <div class="hk-result completion-result party-result" data-stars="${stars}">
+    <div class="hk-result completion-result party-result" data-level="${party.level || "big"}" data-stars="${stars}">
       <div class="party-result-main">
-        <span class="party-result-otter is-cheering ${outfitClasses(party.outfits)}" aria-hidden="true">${otterSvg()}</span>
+        <span class="party-result-otter is-cheering ${party.level === "normal" ? "" : outfitClasses(party.outfits)}" aria-hidden="true">${otterSvg()}</span>
         ${fullJarHtml(stars)}
-        <div class="party-result-side">
+        ${party.level === "normal" ? "" : `<div class="party-result-side">
           <span class="party-result-label">${t("party.result.today")}</span>
           <span class="party-today" aria-hidden="true">${todayJarsHtml(party.jarsToday)}</span>
           <span class="party-result-reward">${reward}</span>
-        </div>
+        </div>`}
       </div>
       <div class="hk-result-items" aria-hidden="true">${items}</div>
+      ${party.level === "normal" ? `<strong class="hk-result-title completion-result-title">${t("result.completion.title")}</strong>` : ""}
       <p class="hk-result-summary completion-result-summary">${summaryText}</p>
     </div>
   `;

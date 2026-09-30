@@ -59,6 +59,7 @@ export function createBalloonGame(ctx) {
         poppingIndex = -1;
         update();
       }, BALLOON_POP_MS);
+      return { source: balloons[pressIndex] };
     },
     progressSpeech: (remaining) => t("balloon.voice.progress", { n: remaining }),
     finishSpeech: () => t("balloon.voice.finish", { n: BEGINNER_TARGET_PRESSES }),
