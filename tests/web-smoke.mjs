@@ -1986,7 +1986,13 @@ async function checkSettingsDetails(page) {
   assert(await page.locator("#researcherMode").count() === 0, "The dead researcher-mode switch must stay off the screen");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert(overflow <= 2, `Expanded settings must stay within the viewport, overflow ${overflow}px`);
+  // 回の名前は「れんしゅう」「そくてい」にそろえる。押すタイミングの基準（キャリブレーション）は
+  // 別の言葉で呼ぶ（同じ言葉で別のものを指すと取り違える）。
+  const settingsText = await page.locator("#settings").innerText();
+  assert(!/練習|測定/.test(settingsText), "The settings screen must name the two runs れんしゅう／そくてい only");
+  assert(!(await page.locator("#startCalibration").innerText()).includes("そくてい"), "The calibration button must not reuse the run name");
   await page.locator("#fxLevel").selectOption("subtle");
+  assert((await page.locator("#liveRegion").textContent()).includes("遊びの雰囲気"), "The announcement must use the setting's own name");
   await page.locator("#speechEnabled").uncheck();
   await page.locator("#soundEnabled").uncheck();
   await page.locator("#largeText").uncheck();
@@ -2006,7 +2012,7 @@ async function checkSettingsDetails(page) {
   assert(changed.targetBeats === 10 && changed.craneSweepMs === 3200 && changed.fishingLimitMs === 3000, "Typed values and the targetBeats alias must save correctly");
   await page.locator("#difficultyMode").selectOption("measure");
   await page.locator("#settingsResearch > summary").click();
-  assert((await page.locator("#settingsModeStatus").textContent()).includes("測定の回"), "Measurement status must remain visible with research collapsed");
+  assert((await page.locator("#settingsModeStatus").textContent()).includes("そくていの回"), "Measurement status must remain visible with research collapsed");
   assert(await page.locator("#slotCycleMs").isDisabled(), "Measured settings must remain locked");
   await openSettingsDetails(page, "research");
   await page.locator("#readinessCheck").waitFor({ state: "visible" });

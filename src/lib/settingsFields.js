@@ -43,7 +43,7 @@ export const SETTINGS_GROUPS = [
   { id: "rhythm", title: "高い音だけ", fields: [
     {"id":"rhythmBpm","key":"rhythmBpm","type":"select","label":"音の速さ（テンポ）","hint":"1分に鳴る音の数。少ないほどゆっくりです。","options":[["","あそびごとの既定"],["30","30（とてもゆっくり）"],["40","40"],["50","50"],["60","60"],["80","80（はやめ）"]],"nullable":true,"measured":true},
     {"id":"rhythmTargetBeats","key":"targetBeats","type":"select","label":"1回に鳴る音の数","hint":"1回の遊びで鳴る音の数です。","options":[["","あそびごとの既定"],["5","5"],["10","10"],["20","20"],["30","30"]],"nullable":true,"measured":true},
-    {"id":"visualGuidance","key":"visualGuidance","type":"checkbox","label":"次の音が来る場所を画面に出す","hint":"次の拍を予告します。測定では出ません。","measured":true},
+    {"id":"visualGuidance","key":"visualGuidance","type":"checkbox","label":"次の音が来る場所を画面に出す","hint":"次の拍を予告します。そくていでは出ません。","measured":true},
   ] },
   { id: "crane", title: "アームでつかむ", fields: [
     {"id":"craneSweepMs","key":"craneSweepMs","type":"range","label":"アームの速さ","hint":"端から端までの時間。長いほどゆっくりです。","min":800,"max":6000,"step":100,"measured":true},
@@ -54,8 +54,8 @@ export const SETTINGS_GROUPS = [
   { id: "fishing", title: "さかなつり", fields: [
     {"id":"fishingLimitMs","key":"fishingLimitMs","type":"select","label":"アタリが続く長さ","hint":"魚が逃げるまでの時間です。","options":[["","ふつう（2秒）"],["3000","ながい（3秒）"],["4000","とても ながい（4秒）"],["1400","みじかい（1.4秒）"]],"nullable":true,"measured":true},
   ] },
-  { id: "research", title: "研究（練習／測定・成立確認）", fields: [
-    {"id":"difficultyMode","key":"difficultyMode","type":"select","label":"練習／測定","hint":"測定では速さ・回数・手がかりが固定されます。","options":[["practice","練習（訓練・調整できる）"],["measure","測定（研究・固定）"]]},
+  { id: "research", title: "研究（れんしゅう／そくてい）", fields: [
+    {"id":"difficultyMode","key":"difficultyMode","type":"select","label":"れんしゅう／そくてい","hint":"そくていでは、遊びの速さ・回数・手がかりが固定されます。","options":[["practice","れんしゅう（訓練・調整できる）"],["measure","そくてい（研究・固定）"]]},
   ] },
 ];
 

@@ -126,12 +126,12 @@ export function initSettings(ctx) {
     updateModeStatus(measuring);
   }
 
-  // 研究欄を畳んでも、前の回から残った測定モードを見落とさない。
+  // 研究欄を畳んでも、前の回から残ったそくていの回を見落とさない。
   function updateModeStatus(measuring) {
     const status = document.getElementById("settingsModeStatus");
     status.textContent = measuring
-      ? "測定の回です。難しさは固定です。変更は自動で保存されます。"
-      : "練習の回です。変更は自動で保存されます。";
+      ? "そくていの回です。遊びごとの難しさは固定です。変更は自動で保存されます。"
+      : "れんしゅうの回です。変更は自動で保存されます。";
     status.classList.toggle("is-measuring", measuring);
   }
 
@@ -158,7 +158,7 @@ export function initSettings(ctx) {
       state.evaluation?.participantId || ""
     );
     elements.readinessLead.textContent = allMet
-      ? "3つとも練習の記録から確認できています。"
+      ? "3つとも れんしゅうの記録から確認できています。"
       : "確認できていない項目があります。このまま測ることもできますが、その回の記録には「成立確認なし」が残ります。";
     elements.readinessLead.classList.toggle("is-unmet", !allMet);
 
@@ -302,7 +302,8 @@ export function initSettings(ctx) {
     const field = SETTINGS_FIELDS.find(item => item.id === "fxLevel");
     document.getElementById("fxLevelDescription").textContent = field.description(state.settings.fxLevel);
     ctx.fx.syncPolicy();
-    announce("演出の強さを変えました");
+    // 画面の名前は「遊びの雰囲気」。読み上げだけ古い名前（演出の強さ）だった。
+    announce(`遊びの雰囲気を「${elements.fxLevel.selectedOptions[0]?.textContent ?? ""}」にしました`);
     // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
     ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });
     ctx.fx?.engine.burst({

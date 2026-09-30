@@ -11,7 +11,7 @@
   <div class="section-head">
     <div><p class="eyebrow">支援者の方へ</p><h2 id="settings-title">設定</h2></div>
   </div>
-  <p class="settings-status" id="settingsModeStatus">練習の回です。変更は自動で保存されます。</p>
+  <p class="settings-status" id="settingsModeStatus">れんしゅうの回です。変更は自動で保存されます。</p>
   <SettingsGuide />
   <h3 class="settings-group-title">よく使う設定</h3>
   <SettingsFields fields={group('common').fields} />
@@ -40,7 +40,7 @@
       <div class="settings-details-body">
         <p class="settings-group-note">速さや広さは、遊びの中の「この遊びの設定」でも変えられます。</p>
         <p class="measure-mode-notice" id="measureModeNotice" hidden>
-          測定の回は難しさが固定されます。「研究」の練習／測定で「練習」にすると調整できます。
+          そくていの回は、遊びごとの難しさが固定されます。「研究（れんしゅう／そくてい）」で「れんしゅう」にすると調整できます。
         </p>
         {#each ['slot', 'rhythm', 'crane', 'fishing'] as id}
           <h3 class="settings-group-title">{group(id).title}</h3>
@@ -59,15 +59,23 @@
       <summary>{group('research').title}</summary>
       <div class="settings-details-body">
         <SettingsFields fields={group('research').fields} />
-        <p class="settings-group-note">ふだんは練習のままで大丈夫です。どちらの回かは記録に残ります。</p>
+        <p class="settings-group-note">ふだんは れんしゅうのままで大丈夫です。どちらの回かは記録に残ります。</p>
         <div class="readiness-check" id="readinessCheck" hidden>
-          <h3 class="settings-group-title">測定の前に（成立確認）</h3>
+          <h3 class="settings-group-title">そくていの前に（成立確認）</h3>
           <p class="readiness-lead" id="readinessLead"></p>
           <ul class="readiness-list" id="readinessList"></ul>
         </div>
+        <!-- れんしゅう／そくていの選択とは別のもの（キャリブレーション）。同じ「そくてい」で
+             呼ぶと取り違えるので、見出しで区切り、ボタンの言葉も変える（2026-10-01）。
+             遊びの画面の題名（i18n の tile.calibration.title）は声のパックに入っているので変えず、
+             ここで「そくてい」と出ることを先に伝える。 -->
+        <h3 class="settings-group-title">押すタイミングの基準</h3>
         <div class="supporter-actions">
-          <div><strong>押すタイミングの測定（研究用）</strong><span>ホームには出しません。支援者と一緒に行います。</span></div>
-          <button class="secondary" id="startCalibration" type="button">そくていを始める</button>
+          <div>
+            <strong>押すタイミングの基準をとる（研究用）</strong>
+            <span>音に合わせて続けて押し、判定の基準にするタイミングを調べます。れんしゅう／そくていの切り替えとは別のものです。始めると、遊びの画面に「そくてい」と出ます。ホームには出しません。支援者と一緒に行います。</span>
+          </div>
+          <button class="secondary" id="startCalibration" type="button">基準をとり始める</button>
         </div>
       </div>
     </details>
