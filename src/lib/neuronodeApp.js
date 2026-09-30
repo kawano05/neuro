@@ -31,6 +31,7 @@ import { createFxSystem } from "./fx/index.js";
 import { SOUND_SAMPLE_URLS } from "./soundAssets.js";
 import { VOICE_PACK } from "./voiceAssets.js";
 import { createScanEngine } from "./scan.js";
+import { USER_ACTIVITY_VIEWS, USER_WORLD_VIEWS, isSupporterView } from "./viewWorld.js";
 import { createInputDeduper } from "./utils.js";
 import { createGameHost } from "./games/gameHost.js";
 import { initHome } from "./views/home.js";
@@ -56,7 +57,7 @@ const VIEW_ELEMENT_IDS = {
   result: "resultView",
 };
 
-// 支援者の世界（タブ群）を構成するビュー名（basic-design.md §3.2）。
+// 「ホームへ」を表示する学習画面と支援者の世界のビュー名（basic-design.md §3.2）。
 // #homeReturn（「← ホームへ」導線）はこの集合に属するビューでだけ表示する。
 // 利用者の世界（start/home/game/result）では、home 自体も含めて非表示にする
 // （実機確認2026-07-04：タブビューから戻れない導線欠落の修正、detailed-design.md §10）。
@@ -85,13 +86,6 @@ const TAB_WORLD_VIEWS = new Set([
 //
 // 代わりに残っているもの: 支援者の世界への入口がタップ専用であること、
 // 破壊的な操作（記録の消去・候補値の保存）が走査対象外であること。
-const USER_ACTIVITY_VIEWS = new Set(["matching", "voca", "letters"]);
-/**
- * 利用者の世界（デザイン「はっきりした色」を当てる画面。src/theme-hakkiri.css）。
- * 支援者の世界（評価ログ・設定）は業務画面のまま——こちらは「子ども向けに
- * してほしい」とは言われていない（docs/design-renewal-2026-09-25.md §3.1）。
- */
-const USER_WORLD_VIEWS = new Set(["start", "home", "game", "result", ...USER_ACTIVITY_VIEWS]);
 
 export function initNeuroNodeApp() {
   // --- 状態と要素 ---
@@ -276,12 +270,12 @@ export function initNeuroNodeApp() {
     // 「せってい」があると、先に設定しないといけないと思われた
     // （docs/design-renewal-2026-09-25.md §1.2）。
     document.body.classList.toggle("start-mode", nextView === "start");
-    // 支援者メニューでは自前走査を動かさない（scan.js の isSupporterMenu()）。
+    // 支援者の世界では自前走査を動かさない（scan.js の scanningIsOff()）。
     // ドックの2つは、そこでは押しても何も起きない操作子になるので無効化する
     // ——効かない操作子を黙って置いておくと、支援者は「押したのに動かない」を
     // 不具合として報告するしかない。消さずに無効化するのは、下端の版面が
     // 画面遷移のたびに伸び縮みするのを避けるため。
-    const supporterMenu = nextView === "settings";
+    const supporterMenu = isSupporterView(nextView);
     document.body.classList.toggle("supporter-menu-mode", supporterMenu);
     [elements.toggleScan, elements.primarySwitch].forEach((control) => {
       if (!control) return;
@@ -334,11 +328,10 @@ export function initNeuroNodeApp() {
     tab.addEventListener("click", () => ctx.switchView(tab.dataset.view));
   });
 
-  // 「← ホームへ」: 支援者の世界（タブ群）から利用者の世界（home）へ戻る唯一の
-  // 導線。data-scan を付けているため、スイッチ利用者が誤って評価ログへ入っても
-  // 走査で自力到達できる（実機確認2026-07-04で発覚した欠落の修正）。
-  // 設定画面だけは走査そのものを止めるので、そこからの復帰は支援者のタップに
-  // なる（理由と代償は scan.js の isSupporterMenu()）。
+  // 「← ホームへ」: 学習画面と支援者の世界から利用者のホームへ戻る唯一の
+  // 導線。利用者の学習画面では data-scan によりスイッチでも戻れる。
+  // 支援者の世界（評価ログ・設定）では走査そのものを止めるため、復帰は
+  // 支援者のタップで行う（理由と代償は scan.js の scanningIsOff()）。
   elements.homeReturn.addEventListener("click", () => {
     ctx.views.home.showLobby();
     ctx.switchView("home");

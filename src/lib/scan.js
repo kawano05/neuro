@@ -10,9 +10,11 @@
 //   - Web上の自前走査とiOS実機のSwitch Controlは同時に動かさない。
 //     settings.switchControlMode=true のときは、このエンジンの全入口を
 //     停止し、OS側だけへ走査所有権を委譲する。
-//   - 支援者メニュー（設定画面）でも全入口を停止する。理由と、その代償
-//     （利用者が迷い込むと自力で戻れない）は isSupporterMenu() に書いた。
+//   - 支援者の世界（評価ログ・設定）でも全入口を停止する。理由と、その代償
+//     （利用者が迷い込むと自力で戻れない）は scanningIsOff() に書いた。
 // =====================================================================
+
+import { isSupporterView } from "./viewWorld.js";
 
 /**
  * @param {object} ctx - アプリ共有コンテキスト
@@ -31,9 +33,9 @@ export function createScanEngine(ctx) {
   }
 
   /**
-   * 支援者メニュー（設定画面）を開いているか。
+   * この画面では自前走査を動かさないか。
    *
-   * この画面では自前走査を**一切**動かさない（2026-09-14の指示）。ここの
+   * 支援者の世界（評価ログ・設定）では自前走査を**一切**動かさない。ここの
    * 操作子は支援者がタップ／キーボードで触るもので、走査で回しても利用者が
    * 選ぶ項目は1つもない。輪が伸びるだけで、黄色い枠が支援者の操作の上を
    * うろつく。
@@ -42,26 +44,16 @@ export function createScanEngine(ctx) {
    * タブバー（#homeReturn を含む）と #toggleScan は輪に残していた。
    * それは、スイッチだけの利用者が誤って支援者の世界へ入ったときの
    * 唯一の帰り道だったから——ここを断つと、実機確認2026-07-04で見つけた
-   * 「強制終了以外に戻れない」状態（basic-design.md §3.2）がこの画面に
-   * 限って戻る。支援者が画面をタップして戻す運用で引き受ける、という
+   * 「強制終了以外に戻れない」状態（basic-design.md §3.2）が評価ログにも
+   * 広がる。支援者が「ホームへ」をタップして戻す運用で引き受ける、という
    * 判断のうえで断っている。緩めるときは運用ごと見直すこと。
    *
-   * なお評価ログ（log）は従来どおり走査するので、タブ世界すべてが
-   * 行き止まりになるわけではない。
-   */
-  function isSupporterMenu() {
-    return state.currentView === "settings";
-  }
-
-  /**
-   * この画面では自前走査を動かさないか。
-   *
-   * 委譲中（iPad Switch Control）と支援者メニューは、理由は違うが結論が
+   * 委譲中（iPad Switch Control）と支援者の世界は、理由は違うが結論が
    * 同じ——タイマーも黄色い枠もスイッチ入力の受理も止める。入口ごとに
    * 条件を書き分けると、どこか1つ書き忘れて枠だけが生き残る。
    */
   function scanningIsOff() {
-    return usesNativeSwitchControl() || isSupporterMenu();
+    return usesNativeSwitchControl() || isSupporterView(state.currentView);
   }
 
   /** 残っている黄色い枠を消し、自前走査の位置を破棄する。 */
@@ -74,7 +66,7 @@ export function createScanEngine(ctx) {
   function refresh() {
     if (scanningIsOff()) {
       scanTargets = [];
-      clearScanFocus();
+      stop(true);
       return;
     }
     const activeView = document.querySelector(".view.is-active");
@@ -144,7 +136,7 @@ export function createScanEngine(ctx) {
 
   /** 走査を開始する（既に動いていれば作り直す） */
   function start() {
-    // 委譲中と支援者メニューでは、手動ボタンや将来の呼び出し元からも
+    // 委譲中と支援者の世界では、手動ボタンや将来の呼び出し元からも
     // 再開させない。
     if (scanningIsOff()) {
       stop(true);
@@ -204,7 +196,7 @@ export function createScanEngine(ctx) {
    * 現在のビューに応じた既定アクションへフォールバックする。
    */
   function activate() {
-    // 支援者メニューでは輪が空なので、押しても何も起きない。ここで先に
+    // 支援者の世界では輪が空なので、押しても何も起きない。ここで先に
     // 返すのは、refresh() を通して黄色い枠を触らせないため。
     if (scanningIsOff()) return;
     refresh();
