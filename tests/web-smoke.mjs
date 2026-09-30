@@ -102,6 +102,7 @@ const checks = [
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
   ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
   ["takes any key as switch input on the start screen and inside a game", checkAnyKeyOnUserScreens],
+  ["shows the everyday settings first and folds the rest, with the measuring mark still visible", checkSupporterSettingsLayout],
   ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
@@ -1644,6 +1645,34 @@ async function checkAnyKeyOnUserScreens(page) {
   await waitForClass(page, "#homeView", "is-active");
 }
 
+/**
+ * 支援者の設定の並び。
+ *   - よく使う設定（枠の速さ・声・効果音・雰囲気・文字など）が先に出て、
+ *     残りは「くわしい設定」に畳んである
+ *   - 設定の画面では枠が動かない。押せない入力ドックと「枠は…」の札を、
+ *     項目に重ねて出さない
+ *   - いま測定の回であることは、「くわしい設定」を閉じていても見出しで分かる
+ *     （支援者が前の日の設定のまま測ってしまわないように）
+ */
+async function checkSupporterSettingsLayout(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+
+  await page.locator(".settings-quick").waitFor({ state: "visible" });
+  assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "The detailed settings must start folded");
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await page.locator(".status-pill").waitFor({ state: "hidden" });
+  await page.locator("#settingsMoreState").waitFor({ state: "hidden" });
+
+  await openSettingsTab(page, "measure");
+  await page.locator("#difficultyMode").selectOption("measure");
+  await page.locator("#settingsMore > summary").click();
+  assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "Clicking the heading must fold it again");
+  await page.locator("#settingsMoreState").waitFor({ state: "visible" });
+}
+
 async function checkKeyboardAndSwitchInput(page) {
   // 物理入力代替（画面の「おす」）を確かめるので、出す設定にしておく。
   await enableScreenSwitch(page);
@@ -1900,8 +1929,13 @@ async function checkSettingsTabs(page) {
     (await tabs.first().getAttribute("aria-selected")) === "true",
     "The first settings tab must start selected"
   );
-  // 最初の面の項目は見えていて、他の面の項目は見えていない。
+  // よく使う設定は、開いてすぐ見える。残りは「くわしい設定」に畳んである。
   await page.locator("#scanInterval").waitFor({ state: "visible" });
+  await page.locator("#fxLevel").waitFor({ state: "visible" });
+  await page.locator("#autoScan").waitFor({ state: "hidden" });
+  await openSettingsMore(page);
+  // 最初の面の項目は見えていて、他の面の項目は見えていない。
+  await page.locator("#autoScan").waitFor({ state: "visible" });
   await page.locator("#researcherMode").waitFor({ state: "hidden" });
 
   const hiddenScannable = async () =>
@@ -1919,7 +1953,9 @@ async function checkSettingsTabs(page) {
   // 面を切り替えると入れ替わる。
   await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").waitFor({ state: "visible" });
-  await page.locator("#scanInterval").waitFor({ state: "hidden" });
+  await page.locator("#autoScan").waitFor({ state: "hidden" });
+  // よく使う設定は、どの面を開いていても見えたまま。
+  await page.locator("#scanInterval").waitFor({ state: "visible" });
   assert(
     (await hiddenScannable()) === 0,
     "Hidden settings panels must leave the scan ring after switching"
@@ -2050,6 +2086,7 @@ async function checkIpadSwitchControlMode(page, project) {
   );
   // Safe hand-off order: supporter stops app scanning, then enables iPad
   // Switch Control outside the app, then activates this native checkbox.
+  await openSettingsTab(page, "basic");
   await page.locator("#autoScan").click();
   await waitForText(page, "#scanState", "枠は止まっています");
   assert((await page.locator(".scan-focus").count()) === 0, "Stopping app scan must clear its yellow focus");
@@ -2175,7 +2212,9 @@ async function checkIpadSwitchControlMode(page, project) {
   await openSettingsTab(page, "basic");
   await mode.click();
   await page.waitForFunction(() => !document.body.classList.contains("switch-control-mode"));
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  // 設定の画面では、委譲していなくても入力ドックは出さない（押せないものを
+  // 項目に重ねない。theme-hakkiri.css の「支援者の世界」）。
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
   assert(!(await page.locator("#autoScan").isDisabled()), "Auto scan control must unlock after delegation ends");
   assert(!(await page.locator("#autoScan").isChecked()), "Auto scan must remain stopped until explicitly enabled");
   await page.locator("#autoScan").click();
@@ -3231,9 +3270,20 @@ async function checkFishingGameFlow(page) {
  * 絞る）ので、テストも支援者と同じくまず面を開く。
  */
 async function openSettingsTab(page, name) {
+  // タブは「くわしい設定」（ふだんは閉じている）の中にある。
+  await openSettingsMore(page);
   const tab = page.locator(`.settings-tab[data-settings-tab="${name}"]`);
   await tab.click();
   await page.locator(`.settings-panel[data-settings-panel="${name}"]`).waitFor({ state: "visible" });
+}
+
+/** 設定の「くわしい設定」を開く（開いていればそのまま）。 */
+async function openSettingsMore(page) {
+  // 中に別の畳み（音の素材のクレジット）があるので、直下の見出しだけを押す。
+  const more = page.locator("#settingsMore");
+  if (!(await more.evaluate((details) => details.open))) {
+    await page.locator("#settingsMore > summary").click();
+  }
 }
 
 // 走らせるため。const だと宣言位置より前に実行されて TDZ に落ちる。
@@ -3638,18 +3688,23 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
  *
  * 焦点が外れたら必ず戻ることまで見る。戻らないと、走査で操作する手段が
  * 画面から消えたままになる——利用者にとっては操作不能と同じ。
+ *
+ * ドックは、画面の「おす」ボタンを出す設定のときだけ出る（評価ログも本人の
+ * 画面と同じ）。設定の画面では出さない（押せないものを項目に重ねない）。
  */
 async function checkDockStepsAsideForTextEntry(page) {
+  await enableScreenSwitch(page);
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
 
   // 支援者が文字を打つ欄は、いまは評価ログの参加者IDだけ（観察メモは
   // 効果測定セッションごと別紙へ移した。2026-08-29）。
   await page.locator('.tab[data-view="log"]').click();
   await waitForClass(page, "#log", "is-active");
+  await page.locator(".switch-dock").waitFor({ state: "visible" });
 
   await page.locator("#participantId").focus();
   await page.locator(".switch-dock").waitFor({ state: "hidden" });

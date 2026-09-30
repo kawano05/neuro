@@ -3,7 +3,8 @@
 
    docs/design-renewal-2026-09-25.md。styles.css のあとに読み込む。
    当てる範囲は body.user-world（start / home / game / result と
-   まなぶ・つたえる）だけ。支援者の世界（評価ログ・設定）は業務画面のまま。
+   まなぶ・つたえる）。支援者の世界（評価ログ・設定）は、いちばん下の
+   「支援者の世界」で、色と形だけをそろえる（中身は業務画面のまま）。
 
    決まりは4つ:
      1. 地は白、文字と枠は黒（#1A1A1A）。枠は2pxで、面の境目をはっきりさせる。
@@ -3333,4 +3334,221 @@ body.result-mode.user-world #resultHome::before {
   .coloring-art .cl-part {
     transition: none;
   }
+}
+
+/* =====================================================================
+   支援者の世界（評価ログ・設定）
+
+   以前は業務画面（ティール）のまま残していた。ホームの「支援者の設定」から
+   入ると、色も形も別のアプリに見えた。ホームと同じ「はっきりした色」に
+   そろえる。styles.css の色の変数をここで差し替える——ボタン・トグル・
+   スライダー・タブは変数で色が決まるので、それだけで揃う。
+   字は漢字かな混じりのまま、大きさも styles.css のまま。
+   ===================================================================== */
+
+body:not(.user-world) {
+  --bg: #ffffff;
+  --bg-panel: #f3f6fb;
+  --surface: #ffffff;
+  --surface-strong: #ffffff;
+  --surface-soft: #eef3ff;
+  --ink: #1a1a1a;
+  --muted: #474d57;
+  --line: #cfd5de;
+  --line-strong: #1a1a1a;
+  --accent: #005aff;
+  --accent-strong: #0047cc;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6efff;
+  --accent-warm: #c2410c;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --font-round:
+    "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", "BIZ UDPGothic",
+    "Zen Maru Gothic", "Yu Gothic UI", "Yu Gothic", Meiryo, system-ui, sans-serif;
+  background: #ffffff;
+  color: var(--ink);
+}
+
+body.high-contrast:not(.user-world) {
+  --line: #6b7280;
+  --muted: #1f2329;
+  --surface-soft: #e3ebff;
+}
+
+body:not(.user-world) .topbar {
+  margin-bottom: 14px;
+  padding: 4px 0 10px;
+  border-bottom: 2px solid var(--ink);
+}
+
+body:not(.user-world) .brand-lockup h1 {
+  color: var(--ink);
+  font-family: var(--font-round);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+body:not(.user-world) .brand-mark {
+  color: var(--accent);
+}
+
+/* 「枠は止まっています」は出さない（ホームと同じ。支援者に向けた言葉でもない）。 */
+body:not(.user-world) .status-pill {
+  display: none;
+}
+
+body:not(.user-world) .topbar-actions {
+  grid-column: 3;
+}
+
+/* 入力ドック。設定の画面では枠が動かず、ドックも押せない（neuronodeApp.js）
+   のに、項目の上に重ねて出していた。評価ログはホームと同じく、「おす」ボタンを
+   出す設定のときだけ出す。 */
+body.supporter-menu-mode .switch-dock,
+body:not(.user-world):not(.screen-switch-on) .switch-dock {
+  display: none;
+}
+
+body.supporter-menu-mode .app-shell,
+body:not(.user-world):not(.screen-switch-on) .app-shell {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+body:not(.user-world) .tabbar {
+  padding: 6px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+body:not(.user-world) .tab {
+  color: var(--ink);
+}
+
+body:not(.user-world) .tab.is-active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+/* 戻る導線は、ホームの「支援者の設定」と対の形（白地・黒い2pxの枠）。 */
+body:not(.user-world) .home-return {
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+body:not(.user-world) .section-head h2,
+body:not(.user-world) .settings-group-title {
+  color: var(--ink);
+  font-family: var(--font-round);
+  font-weight: 800;
+}
+
+body:not(.user-world) .setting-row {
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+}
+
+body:not(.user-world) .setting-row strong {
+  color: var(--ink);
+}
+
+body:not(.user-world) .settings-tab.is-active {
+  border-color: var(--ink);
+}
+
+/* よく使う設定。ここだけで用が済むように、先頭に囲んで置く。 */
+.settings-quick {
+  margin: 0 0 18px;
+  padding: 16px 16px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 18px;
+  background: var(--bg-panel);
+}
+
+@media (max-width: 560px) {
+  .settings-quick {
+    padding: 12px 10px 14px;
+  }
+}
+
+.settings-quick-title {
+  margin: 0 0 12px;
+  color: var(--ink);
+  font-family: var(--font-round);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+/* くわしい設定（ふだんは閉じる）。見出し全体を押せる大きさにする。 */
+.settings-more {
+  margin: 0 0 24px;
+}
+
+.settings-more > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  min-height: 56px;
+  padding: 12px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-more > summary::before {
+  content: "▶";
+  font-size: 0.8em;
+  transition: transform 0.15s ease;
+}
+
+.settings-more[open] > summary {
+  margin-bottom: 16px;
+}
+
+.settings-more[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-more > summary::before {
+    transition: none;
+  }
+}
+
+.settings-more-title {
+  font-family: var(--font-round);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.settings-more-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* いま測定の回であることは、閉じていても見える必要がある（settings.js）。 */
+.settings-more-state {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--accent-warm);
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.settings-more-state[hidden] {
+  display: none;
 }

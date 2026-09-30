@@ -124,6 +124,8 @@ export function collectElements() {
     measureModeNotice: document.querySelector("#measureModeNotice"),
     // 設定のタブと、その中身の面。
     settingsTabs: [...document.querySelectorAll(".settings-tab")],
+    settingsMore: document.querySelector("#settingsMore"),
+    settingsMoreState: document.querySelector("#settingsMoreState"),
     settingsPanels: [...document.querySelectorAll(".settings-panel")],
     // そくていに入る前の成立確認（src/lib/readinessCheck.js）。
     readinessCheck: document.querySelector("#readinessCheck"),
