@@ -320,6 +320,11 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
   // 読み上げの番号。新しく読む・止めるたびに進む。読み込みや待ちのあとで、
   // もう古くなった読み上げを鳴らさないために見る。
   let speechToken = 0;
+  const voiceRetryTimers = new Set();
+  function clearVoiceRetry(timer) {
+    window.clearTimeout(timer);
+    voiceRetryTimers.delete(timer);
+  }
   // 鳴っている（鳴る予定の）声のパックの音。
   let voiceSources = [];
   // 声のパック（言語 → 読み込み中の Promise<ArrayBuffer|null>）と、そこから作った音。
@@ -605,7 +610,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
         const retry = () => {
           if (settled) return;
           settled = true;
-          window.clearTimeout(timer);
+          clearVoiceRetry(timer);
           remoteVoiceFailedAt = Date.now();
           if (token !== speechToken) return;
           try {
@@ -616,15 +621,16 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
           if (!speakWithDevice(spokenText, lang, volume, token, { localOnly: true, onFailure })) onFailure();
         };
         const timer = window.setTimeout(retry, REMOTE_VOICE_START_TIMEOUT_MS);
+        voiceRetryTimers.add(timer);
         utterance.onstart = () => {
           settled = true;
-          window.clearTimeout(timer);
+          clearVoiceRetry(timer);
         };
         utterance.onerror = (event) => {
           // 止めた（cancel）ときの知らせは、鳴らなかったことではない。
           if (event?.error === "interrupted" || event?.error === "canceled") {
             settled = true;
-            window.clearTimeout(timer);
+            clearVoiceRetry(timer);
             return;
           }
           if (settled) {
@@ -738,6 +744,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    * 場合も含め、「止める」は常に効くべきなので。
    */
   function stopSpeech() {
+    voiceRetryTimers.forEach(timer => window.clearTimeout(timer));
+    voiceRetryTimers.clear();
     cancelPendingSpeech();
     silenceSpeech();
   }
