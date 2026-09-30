@@ -1,3 +1,4 @@
+import { createRecordBackup } from "../src/lib/recordBackup.js";
 // state復元・CSV安全化・評価結果重複除去の回帰テスト。
 // npm run test:unit に含まれる。単独では次で実行できる:
 //   node tests/data-integrity.test.mjs
@@ -2191,6 +2192,28 @@ test("export names include a safe participant and local hours minutes seconds", 
   assert.match(stamp, /^P_01_+-\d{4}-\d{2}-\d{2}-\d{6}$/);
   assert.ok(stamp.includes('120405') || stamp.includes('030405'), stamp);
   assert.match(exportFileStamp(''), /^no-id-/);
+});
+
+test("backup receipts match record contents and require every relevant CSV", () => {
+  const state = cloneDefaultState();
+  state.sessions = [{ taskType: "slot", trials: [] }, { taskType: "rt", trials: [] }];
+  state.logs = [{ label: "old" }];
+  const backup = createRecordBackup(state);
+  assert.equal(backup.canClear(), false);
+  backup.mark("slot");
+  assert.equal(backup.canClear(), false);
+  backup.mark("ledger"); backup.mark("rt");
+  assert.equal(backup.canClear(), true);
+  state.logs[0].label = "same count, new record";
+  assert.equal(backup.canClear(), false);
+  backup.mark("raw"); assert.equal(backup.canClear(), true);
+  state.sessions[0].trials.push({ index: 0 });
+  assert.equal(backup.canClear(), false);
+  backup.mark("logs"); assert.equal(backup.canClear("logs"), true);
+  state.logs.push({ label: "new" });
+  assert.equal(backup.canClear("logs"), false);
+  backup.mark("raw"); backup.reset();
+  assert.equal(backup.canClear(), false);
 });
 
 for (const { name, fn } of tests) {

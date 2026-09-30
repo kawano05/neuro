@@ -469,6 +469,7 @@ export function initLog(ctx) {
     link.href = url;
     link.download = `neuronode-log-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
+    ctx.recordBackup?.mark("logs");
     URL.revokeObjectURL(url);
   }
 
@@ -493,6 +494,11 @@ export function initLog(ctx) {
     if (count === 0) {
       announce("消すログがありません");
       notifySupporter("消すログがありません。");
+      return;
+    }
+    if (!ctx.recordBackup?.canClear("logs")) {
+      notifySupporter("現在の操作ログを先にCSVまたは生データ(JSON)で書き出してください。");
+      announce("先に書き出してください");
       return;
     }
     if (!window.confirm(`操作ログ ${count}件を消します。元に戻せません。`)) {

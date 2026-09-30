@@ -109,6 +109,7 @@ const checks = [
   ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
   ["lets the supporter reach every game's trend through tabs", checkTrendTabsCoverEveryGame],
   ["wires every export button to a real download", checkExportButtonsAreWired],
+  ["blocks deletion when records change after an export", checkBackupRevision],
   ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
 ];
 
@@ -4746,4 +4747,39 @@ async function readLogCount(page) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+async function openSupporterLog(page) {
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
+}
+
+async function checkBackupRevision(page) {
+  await page.locator("#startStage").click();
+  await openSupporterLog(page);
+  await page.locator("#participantId").fill("P:01/test");
+  const download = page.waitForEvent("download");
+  await page.locator("#exportRawJson").click();
+  const file = await download;
+  assert(/^neuronode-raw-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.json$/.test(file.suggestedFilename()),
+    `Participant and time missing: ${file.suggestedFilename()}`);
+  await page.locator("#homeReturn").click();
+  await openActivity(page, t("tile.color-legacy.title"));
+  await page.waitForTimeout(200);
+  await page.locator("#gameStage").click();
+  await page.keyboard.press("Escape");
+  await openSupporterLog(page);
+  const count = await readLogCount(page);
+  assert(count > 0, "The new game must add records");
+  let dialogs = 0;
+  page.on("dialog", dialog => { dialogs++; return dialog.accept(); });
+  await page.locator("#handOverParticipant").click();
+  assert(dialogs === 0, "New records must require another export before confirmation");
+  assert(await readLogCount(page) === count, "Unexported records were deleted");
+  await page.locator("#clearLog").click();
+  assert(dialogs === 0, "Log deletion also requires a current export");
+  await page.locator("#exportCsv").click();
+  await page.locator("#clearLog").click();
+  assert(dialogs === 1, "Current log CSV permits clearing only the logs");
 }

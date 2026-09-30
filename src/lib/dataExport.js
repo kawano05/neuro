@@ -15,6 +15,7 @@
 // この面は書き出すだけ。
 // =====================================================================
 
+import { createRecordBackup } from "./recordBackup.js";
 import { cloneDefaultState, MAX_SESSIONS } from "./state.js";
 import { escapeCsv, exportFileStamp, toLocalIso } from "./utils.js";
 import { storageKey } from "./content.js";
@@ -413,13 +414,10 @@ export function buildTaskCsvRows(sessions, taskType) {
 export function initDataExport(ctx) {
   const { state, elements, save, announce, notifySupporter } = ctx;
 
-  // この画面で書き出しを押したか。参加者の切り替え（handOverToNextParticipant）
-  // が、消す前に書き出しを求めるために使う。ファイルが保存されたかまでは
-  // アプリからは知れないので、「押した」までしか主張しない。
-  let exportedSinceLastReset = false;
+  const backup = createRecordBackup(state);
+  ctx.recordBackup = backup;
 
-  function downloadCsv(rows, filenameStem) {
-    exportedSinceLastReset = true;
+  function downloadCsv(rows, filenameStem, kind) {
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -427,6 +425,7 @@ export function initDataExport(ctx) {
     link.href = url;
     link.download = `${filenameStem}-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
+    backup.mark(kind);
     URL.revokeObjectURL(url);
   }
 
@@ -445,7 +444,6 @@ export function initDataExport(ctx) {
       );
       return;
     }
-    exportedSinceLastReset = true;
     const rows = buildRhythmCsvRows(sessions);
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
@@ -454,6 +452,7 @@ export function initDataExport(ctx) {
     link.href = url;
     link.download = `neuronode-rhythm-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
+    backup.mark("rhythm");
     URL.revokeObjectURL(url);
   }
 
@@ -464,7 +463,6 @@ export function initDataExport(ctx) {
       notifySupporter("書き出すリール停止データがありません。L1またはL2を1回終えると記録されます。");
       return;
     }
-    exportedSinceLastReset = true;
     const rows = buildSlotCsvRows(sessions);
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
@@ -473,6 +471,7 @@ export function initDataExport(ctx) {
     link.href = url;
     link.download = `neuronode-slot-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
+    backup.mark("slot");
     URL.revokeObjectURL(url);
   }
 
@@ -486,7 +485,6 @@ export function initDataExport(ctx) {
       );
       return;
     }
-    exportedSinceLastReset = true;
     const rows = buildTaskCsvRows(sessions, taskType);
     const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
@@ -495,6 +493,7 @@ export function initDataExport(ctx) {
     link.href = url;
     link.download = `neuronode-${taskType}-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
+    backup.mark(taskType);
     URL.revokeObjectURL(url);
   }
 
@@ -506,11 +505,10 @@ export function initDataExport(ctx) {
       );
       return;
     }
-    downloadCsv(buildSessionLedgerRows(state.sessions), "neuronode-sessions");
+    downloadCsv(buildSessionLedgerRows(state.sessions), "neuronode-sessions", "ledger");
   }
 
   function exportRawJson() {
-    exportedSinceLastReset = true;
     const payload = {
       // 控えの中身は state そのまま（保存はUTC）。読む人のために、
       // 書き出した時刻だけ日本時間も併記する。
@@ -531,6 +529,7 @@ export function initDataExport(ctx) {
     link.href = url;
     link.download = `neuronode-raw-${exportFileStamp(state.evaluation.participantId)}.json`;
     link.click();
+    backup.mark("raw");
     URL.revokeObjectURL(url);
     notifySupporter(
       `生データを書き出しました（セッション${state.sessions.length}件、ログ${state.logs.length}件）。`
@@ -571,9 +570,9 @@ export function initDataExport(ctx) {
       announce("消すものがありません");
       return;
     }
-    if (!exportedSinceLastReset) {
+    if (!backup.canClear()) {
       notifySupporter(
-        `まだ書き出していません。セッション${sessionCount}件・ログ${logCount}件が消えます。` +
+        `現在の記録はまだすべて書き出していません。セッション${sessionCount}件・ログ${logCount}件が消えます。` +
           "先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。"
       );
       announce("先に書き出してください");
@@ -595,7 +594,7 @@ export function initDataExport(ctx) {
     state.logs = [];
     state.evaluation = { ...fresh.evaluation };
     state.arcade = { ...fresh.arcade };
-    exportedSinceLastReset = false;
+    backup.reset();
     save();
     ctx.renderAll();
     notifySupporter(
@@ -625,5 +624,5 @@ export function initDataExport(ctx) {
   elements.exportRawJson?.addEventListener("click", exportRawJson);
   elements.handOverParticipant?.addEventListener("click", handOverToNextParticipant);
 
-  return { render };
+  return { render, exportRawJson };
 }
