@@ -11,6 +11,9 @@ export function collectElements() {
   return {
     scanState: document.querySelector("#scanState"),
     homeSupporterMenu: document.querySelector("#homeSupporterMenu"),
+    storageWarning: document.querySelector("#storageWarning"),
+    storageExport: document.querySelector("#storageExport"),
+    storageRetry: document.querySelector("#storageRetry"),
     liveRegion: document.querySelector("#liveRegion"),
     tabs: [...document.querySelectorAll(".tab")],
     views: [...document.querySelectorAll(".view")],

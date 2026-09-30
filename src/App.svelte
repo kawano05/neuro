@@ -81,6 +81,14 @@
   -->
   <p class="supporter-message" id="supporterMessage" role="status" hidden></p>
 
+  <aside id="storageWarning" class="storage-warning" role="status" hidden>
+    <p>記録を端末に保存できません。読み込み直す前に生データを書き出してください。</p>
+    <div class="action-row wrap">
+      <button id="storageExport" class="secondary" type="button">未保存の記録をJSONで書き出す</button>
+      <button id="storageRetry" class="secondary" type="button">保存をやり直す</button>
+    </div>
+  </aside>
+
   <main>
     <!--
       利用者向けフロー（detailed-design.md §10）: start/home/game/result。

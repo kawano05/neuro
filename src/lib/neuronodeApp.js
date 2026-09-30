@@ -137,9 +137,25 @@ export function initNeuroNodeApp() {
     }, 6000);
   };
 
-  ctx.save = createStateSaver(state, () =>
+  const saveState = createStateSaver(state, () =>
     ctx.announce("データの保存に失敗しました。端末の空き容量を確認してください。")
   );
+
+  // 警告は通常の案内や6秒の支援者メッセージとは別に保持する。
+  // 測定中の入力面には出さず、ホーム・結果・支援者の面で読み上げOFFでも見える。
+  let storageFailed = false;
+  function renderStorageWarning() {
+    elements.storageWarning.hidden = !storageFailed ||
+      !["home", "result", "settings", "log"].includes(state.currentView);
+  }
+  ctx.save = () => {
+    const saved = saveState();
+    storageFailed = !saved;
+    renderStorageWarning();
+    return saved;
+  };
+  elements.storageRetry.addEventListener("click", () => ctx.save());
+  elements.storageExport.addEventListener("click", () => ctx.views.dataExport.exportRawJson());
 
   const audio = createAudio(() => state.settings, ctx.announce, {
     sampleUrls: SOUND_SAMPLE_URLS,
@@ -298,6 +314,7 @@ export function initNeuroNodeApp() {
     ctx.views.log.render();
     ctx.gameHost.render();
     ctx.views.settings.applyClasses();
+    renderStorageWarning();
   };
 
   // --- 入力ファネル（シェル側一元計時、detailed-design.md §3.3） ---

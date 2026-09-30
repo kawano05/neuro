@@ -7649,3 +7649,15 @@ html.text-ruby :is(
 ) {
   line-height: 2;
 }
+
+/* 保存障害だけに出す、通常フロー内の支援者向け案内。遊びの上へ重ねない。 */
+.storage-warning {
+  border: 2px solid #8a4400;
+  background: #fff3cd;
+  color: #3b2400;
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 1rem;
+}
+.storage-warning p { margin: 0 0 6px; }
+.storage-warning button { min-height: 44px; }
