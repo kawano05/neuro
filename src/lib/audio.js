@@ -557,7 +557,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    * 使ったときは、鳴らなかったら端末の中の声で1回だけ言い直す——病院・施設では
    * ネットにつながらないことがあり、そのまま黙ると伝えたいことが届かない。
    */
-  function speakWithDevice(spokenText, lang, volume, token, { localOnly = false } = {}) {
+  function speakWithDevice(spokenText, lang, volume, token, { localOnly = false, onFailure = () => {} } = {}) {
     const synth = window.speechSynthesis;
     if (!synth || typeof synth.speak !== "function" || typeof globalThis.SpeechSynthesisUtterance !== "function") {
       return false;
@@ -589,7 +589,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
           } catch {
             /* noop */
           }
-          speakWithDevice(spokenText, lang, volume, token, { localOnly: true });
+          if (!speakWithDevice(spokenText, lang, volume, token, { localOnly: true, onFailure })) onFailure();
         };
         const timer = window.setTimeout(retry, REMOTE_VOICE_START_TIMEOUT_MS);
         utterance.onstart = () => {
@@ -604,6 +604,12 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
             return;
           }
           retry();
+        };
+      }
+      if (!voice || voice.localService !== false) {
+        utterance.onerror = (event) => {
+          if (token !== speechToken || ["interrupted", "canceled"].includes(event?.error)) return;
+          onFailure();
         };
       }
       synth.speak(utterance);
@@ -622,7 +628,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    * （または設定で「端末の声」を選んでいれば）端末の読み上げで読む。
    * どちらでも、前の読み上げは止めてから読む。
    */
-  function speak(text) {
+  function speak(text, onFailure = () => announce(text)) {
     const speechSettings = getSettings();
     if (!speechSettings.speechEnabled) return false;
     // 表記に合わせて読み上げの言語も変える。英語表記のまま日本語音声で
@@ -640,8 +646,11 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       if (plan && ctx) {
         const token = silenceSpeech();
         playVoiceClips(ctx, token, lang, plan, chunks, volume, () => {
-          if (speakWithDevice(spokenText, lang, volume, token)) {
+          if (speakWithDevice(spokenText, lang, volume, token, { onFailure })) {
             reportSpeech({ text: spokenText, lang, via: "device", fallback: true });
+          } else {
+            // パックの予約は成功ではない。非同期の二重障害でも文字へ所有権を戻す。
+            onFailure();
           }
         });
         reportSpeech({ text: spokenText, lang, via: "voice-pack", chunks, volume });
@@ -649,7 +658,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       }
     }
     const token = silenceSpeech();
-    if (!speakWithDevice(spokenText, lang, volume, token)) return false;
+    if (!speakWithDevice(spokenText, lang, volume, token, { onFailure })) return false;
     // 端末の声は長さが分からないので、短い文ぶん下げる。
     music.duck(1.8);
     reportSpeech({ text: spokenText, lang, via: "device", volume });
@@ -658,7 +667,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
 
   /** アプリTTSかlive regionの一方だけに、その回の音声所有権を与える。 */
   function speakOrAnnounce(spokenText, announcementText = spokenText) {
-    if (speak(spokenText)) return "app-tts";
+    if (speak(spokenText, () => announce(announcementText))) return "app-tts";
     announce(announcementText);
     return "live-region";
   }
