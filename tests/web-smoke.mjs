@@ -92,6 +92,7 @@ const checks = [
   ["keeps every scan target visible above the input dock", checkScanFocusStaysVisible],
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
+  ["starts a cue task once suspended sound comes back, and retries on the next press", checkCueTasksWaitForSuspendedSound],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
   ["keeps the supporter menu itself out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
@@ -100,6 +101,8 @@ const checks = [
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
   ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
+  ["takes any key as switch input on the start screen and inside a game", checkAnyKeyOnUserScreens],
+  ["shows the everyday settings first and folds the rest, with the measuring mark still visible", checkSupporterSettingsLayout],
   ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
@@ -1568,8 +1571,8 @@ async function checkHomeReturnFromTabs(page) {
  * キーを限ると「押しているのに何も起きない」が起きる——本人には理由が
  * 分からない。
  *
- * ただし走査中に限る。止まっているあいだは支援者がキーボードで普通に
- * 操作している場面なので、そこまで奪うと支援者の操作が壊れる。
+ * 走査が止まっていても受けるのは本人の画面だけ（checkAnyKeyOnUserScreens）。
+ * 支援者の画面ではキーボードで普通に操作するので、奪うと支援者の操作が壊れる。
  * 修飾キー単独と修飾キー付き（Ctrl+R 等）も奪わない。
  */
 async function checkAnyKeyWhileScanning(page) {
@@ -1609,6 +1612,65 @@ async function checkAnyKeyWhileScanning(page) {
     moved !== viewBefore,
     `F5 while scanning must activate the highlighted item (view stayed ${moved})`
   );
+}
+
+/**
+ * 本人の画面では、走査が止まっていても、どのキーでもスイッチ入力として受ける。
+ *
+ * スタート画面と遊びの中は走査を動かさない。以前はそこで Space / Enter しか
+ * 届かず、F5 を送るように設定した機器（NeuroNode はほかのアプリに合わせて
+ * キーを変えて使われる）では、パソコンのブラウザがページを読み直していた。
+ */
+async function checkAnyKeyOnUserScreens(page) {
+  await page.evaluate(() => {
+    window.__stillSamePage = true;
+  });
+  const samePage = () => page.evaluate(() => window.__stillSamePage === true);
+
+  // スタート画面：F5 で始まる。ページは読み直さない。
+  await page.keyboard.press("F5");
+  await waitForClass(page, "#homeView", "is-active");
+  assert(await samePage(), "F5 on the start screen must start, not reload the page");
+
+  // 遊びの中：F5 で「やりかた」を抜けて始まる。
+  await openActivity(page, t("tile.gonogo.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  for (let attempt = 0; attempt < 4 && (await page.locator(".game-ready").count()) > 0; attempt += 1) {
+    await page.waitForTimeout(250);
+    await page.keyboard.press("F5");
+  }
+  await page.waitForFunction(() => document.querySelectorAll(".game-ready").length === 0, null, { timeout: 5000 });
+  assert(await samePage(), "F5 inside a game must act as the switch, not reload the page");
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
+}
+
+/**
+ * 支援者の設定の並び。
+ *   - よく使う設定（枠の速さ・声・効果音・雰囲気・文字など）が先に出て、
+ *     残りは「くわしい設定」に畳んである
+ *   - 設定の画面では枠が動かない。押せない入力ドックと「枠は…」の札を、
+ *     項目に重ねて出さない
+ *   - いま測定の回であることは、「くわしい設定」を閉じていても見出しで分かる
+ *     （支援者が前の日の設定のまま測ってしまわないように）
+ */
+async function checkSupporterSettingsLayout(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+
+  await page.locator(".settings-quick").waitFor({ state: "visible" });
+  assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "The detailed settings must start folded");
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await page.locator(".status-pill").waitFor({ state: "hidden" });
+  await page.locator("#settingsMoreState").waitFor({ state: "hidden" });
+
+  await openSettingsTab(page, "measure");
+  await page.locator("#difficultyMode").selectOption("measure");
+  await page.locator("#settingsMore > summary").click();
+  assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "Clicking the heading must fold it again");
+  await page.locator("#settingsMoreState").waitFor({ state: "visible" });
 }
 
 async function checkKeyboardAndSwitchInput(page) {
@@ -1867,8 +1929,13 @@ async function checkSettingsTabs(page) {
     (await tabs.first().getAttribute("aria-selected")) === "true",
     "The first settings tab must start selected"
   );
-  // 最初の面の項目は見えていて、他の面の項目は見えていない。
+  // よく使う設定は、開いてすぐ見える。残りは「くわしい設定」に畳んである。
   await page.locator("#scanInterval").waitFor({ state: "visible" });
+  await page.locator("#fxLevel").waitFor({ state: "visible" });
+  await page.locator("#autoScan").waitFor({ state: "hidden" });
+  await openSettingsMore(page);
+  // 最初の面の項目は見えていて、他の面の項目は見えていない。
+  await page.locator("#autoScan").waitFor({ state: "visible" });
   await page.locator("#researcherMode").waitFor({ state: "hidden" });
 
   const hiddenScannable = async () =>
@@ -1886,7 +1953,9 @@ async function checkSettingsTabs(page) {
   // 面を切り替えると入れ替わる。
   await openSettingsTab(page, "measure");
   await page.locator("#researcherMode").waitFor({ state: "visible" });
-  await page.locator("#scanInterval").waitFor({ state: "hidden" });
+  await page.locator("#autoScan").waitFor({ state: "hidden" });
+  // よく使う設定は、どの面を開いていても見えたまま。
+  await page.locator("#scanInterval").waitFor({ state: "visible" });
   assert(
     (await hiddenScannable()) === 0,
     "Hidden settings panels must leave the scan ring after switching"
@@ -2017,6 +2086,7 @@ async function checkIpadSwitchControlMode(page, project) {
   );
   // Safe hand-off order: supporter stops app scanning, then enables iPad
   // Switch Control outside the app, then activates this native checkbox.
+  await openSettingsTab(page, "basic");
   await page.locator("#autoScan").click();
   await waitForText(page, "#scanState", "枠は止まっています");
   assert((await page.locator(".scan-focus").count()) === 0, "Stopping app scan must clear its yellow focus");
@@ -2142,7 +2212,9 @@ async function checkIpadSwitchControlMode(page, project) {
   await openSettingsTab(page, "basic");
   await mode.click();
   await page.waitForFunction(() => !document.body.classList.contains("switch-control-mode"));
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  // 設定の画面では、委譲していなくても入力ドックは出さない（押せないものを
+  // 項目に重ねない。theme-hakkiri.css の「支援者の世界」）。
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
   assert(!(await page.locator("#autoScan").isDisabled()), "Auto scan control must unlock after delegation ends");
   assert(!(await page.locator("#autoScan").isChecked()), "Auto scan must remain stopped until explicitly enabled");
   await page.locator("#autoScan").click();
@@ -2217,9 +2289,18 @@ async function checkSlotL1GameFlow(page) {
   // 6つの絵の一覧は、そくていの回にだけ出す（れんしゅうでは「リールの周りの
   // 余計なもの」として外した。docs/design-renewal-2026-09-25.md §1.5）。
   // 画像そのものは そくていの回で使うので、読み込めることは見ておく。
-  const imageReady = await page.locator(".slot-symbol-guide img").evaluate(
-    (image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
-  );
+  // 読み込みを待ってから見る。すぐ見ると、読み込み中のときに落ちる（前からあった
+  // タイミング次第の失敗。変更の前後どちらでも起きた）。
+  const imageReady = await page
+    .waitForFunction(
+      () => {
+        const image = document.querySelector(".slot-symbol-guide img");
+        return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+      },
+      null,
+      { timeout: 5000 }
+    )
+    .then(() => true, () => false);
   assert(imageReady, "Generated six-symbol guide PNG must load in the actual game");
   assert(
     !(await page.locator(".slot-symbol-guide").isVisible()),
@@ -3198,9 +3279,20 @@ async function checkFishingGameFlow(page) {
  * 絞る）ので、テストも支援者と同じくまず面を開く。
  */
 async function openSettingsTab(page, name) {
+  // タブは「くわしい設定」（ふだんは閉じている）の中にある。
+  await openSettingsMore(page);
   const tab = page.locator(`.settings-tab[data-settings-tab="${name}"]`);
   await tab.click();
   await page.locator(`.settings-panel[data-settings-panel="${name}"]`).waitFor({ state: "visible" });
+}
+
+/** 設定の「くわしい設定」を開く（開いていればそのまま）。 */
+async function openSettingsMore(page) {
+  // 中に別の畳み（音の素材のクレジット）があるので、直下の見出しだけを押す。
+  const more = page.locator("#settingsMore");
+  if (!(await more.evaluate((details) => details.open))) {
+    await page.locator("#settingsMore > summary").click();
+  }
 }
 
 // 走らせるため。const だと宣言位置より前に実行されて TDZ に落ちる。
@@ -3236,7 +3328,7 @@ async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
 async function checkEndlessEndsOnFailure(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
+  await openActivity(page, t("tile.crane-corner.title"));
   await openActivity(page, "ずっと止める");
   await waitForClass(page, "#gameView", "is-active");
 
@@ -3294,7 +3386,7 @@ async function checkEndlessEndsOnFailure(page) {
 async function checkCraneGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
+  await openActivity(page, t("tile.crane-corner.title"));
   await openActivity(page, "アームを止める");
   await waitForClass(page, "#gameView", "is-active");
   // crane も content.js の gameHowTo を持つようになったので、レディ画面を
@@ -3385,7 +3477,7 @@ async function checkResultScreenStaysInTheUserWorld(page) {
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
+  await openActivity(page, t("tile.crane-corner.title"));
   await openActivity(page, "アームを止める");
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
@@ -3529,7 +3621,7 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
     await page.reload();
     await page.locator("#startStage").click();
     await waitForClass(page, "#homeView", "is-active");
-    await openActivity(page, "アームで つかむ");
+    await openActivity(page, t("tile.crane-corner.title"));
     await openActivity(page, "アームを止める");
     await page.locator(".game-ready").waitFor({ state: "visible" });
     // タイルを押した直後のこの押下は、入力ファネルの多重発火除去
@@ -3605,18 +3697,23 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
  *
  * 焦点が外れたら必ず戻ることまで見る。戻らないと、走査で操作する手段が
  * 画面から消えたままになる——利用者にとっては操作不能と同じ。
+ *
+ * ドックは、画面の「おす」ボタンを出す設定のときだけ出る（評価ログも本人の
+ * 画面と同じ）。設定の画面では出さない（押せないものを項目に重ねない）。
  */
 async function checkDockStepsAsideForTextEntry(page) {
+  await enableScreenSwitch(page);
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await page.locator(".switch-dock").waitFor({ state: "visible" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
 
   // 支援者が文字を打つ欄は、いまは評価ログの参加者IDだけ（観察メモは
   // 効果測定セッションごと別紙へ移した。2026-08-29）。
   await page.locator('.tab[data-view="log"]').click();
   await waitForClass(page, "#log", "is-active");
+  await page.locator(".switch-dock").waitFor({ state: "visible" });
 
   await page.locator("#participantId").focus();
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
@@ -3624,6 +3721,103 @@ async function checkDockStepsAsideForTextEntry(page) {
   // 文字入力から離れたらドックは戻る。
   await page.locator("#participantId").evaluate((el) => el.blur());
   await page.locator(".switch-dock").waitFor({ state: "visible" });
+}
+
+/**
+ * 遊びを始める瞬間に音が止まっていても（iOS のスリープ・ほかのアプリ・読み上げのあと）、
+ * 戻れば始まる。以前は始めた瞬間に1回だけ canSound() を見ていたので、resume() の途中だと
+ * 「おとが ならせません」になり、そのまま戻れなかった（2026-09-30 の打ち合わせで
+ * 「高い音だけ が動かない」）。戻らないときは理由を出し、直したあとで押せば始まる。
+ *
+ * iOS の「resume() のあと少ししてから running になる」を、state の getter を差し替えて作る。
+ */
+async function checkCueTasksWaitForSuspendedSound(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) return SKIPPED;
+  await page.context().addInitScript(() => {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx || typeof BaseAudioContext === "undefined") return;
+    window.__fakeAudio = { state: null, resumeWorks: true };
+    const real = Object.getOwnPropertyDescriptor(BaseAudioContext.prototype, "state");
+    Object.defineProperty(Ctx.prototype, "state", {
+      configurable: true,
+      get() {
+        return window.__fakeAudio.state ?? real.get.call(this);
+      },
+    });
+    const resume = Ctx.prototype.resume;
+    Ctx.prototype.resume = function delayedResume() {
+      if (window.__fakeAudio.state === "suspended" && window.__fakeAudio.resumeWorks) {
+        setTimeout(() => {
+          window.__fakeAudio.state = null;
+        }, 300);
+      }
+      return resume.call(this);
+    };
+  });
+  await page.reload();
+
+  const passReady = async () => {
+    if ((await page.locator(".game-ready").count()) === 0) return;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await page.waitForTimeout(250);
+      await page.locator("#gameStage").click();
+      if ((await page.locator(".game-ready").count()) === 0) break;
+    }
+  };
+  const open = async (corner, task) => {
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+    if (corner) await openActivity(page, corner);
+    await openActivity(page, task);
+    await waitForClass(page, "#gameView", "is-active");
+  };
+  const started = (moduleClass) =>
+    page.evaluate(
+      (cls) => ({
+        running: document.querySelector("#gameStageContent")?.classList.contains(cls) || false,
+        unavailable: Boolean(document.querySelector(".game-unavailable")),
+      }),
+      moduleClass
+    );
+
+  // 1. 押した直後は止まっていて、0.3秒後に戻る（iOS のふつうの戻り方）。どちらの課題も始まる。
+  for (const [corner, task, moduleClass] of [
+    [null, t("tile.gonogo.title"), "module-rhythm"],
+    ["さかなつり", "アタリで釣る", "module-fishing"],
+  ]) {
+    await open(corner, task);
+    await page.evaluate(() => {
+      window.__fakeAudio.state = "suspended";
+      window.__fakeAudio.resumeWorks = true;
+    });
+    await passReady();
+    await page.waitForTimeout(1200);
+    const result = await started(moduleClass);
+    assert(result.running && !result.unavailable, `${task} must start once the suspended sound comes back, got ${JSON.stringify(result)}`);
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+    await page.reload();
+  }
+
+  // 2. 戻らないままなら理由を出す。音を直してから押せば、その場で始まる。
+  await open(null, t("tile.gonogo.title"));
+  await page.evaluate(() => {
+    window.__fakeAudio.state = "suspended";
+    window.__fakeAudio.resumeWorks = false;
+  });
+  await passReady();
+  await page.locator(".game-unavailable").waitFor({ state: "visible" });
+  await page.evaluate(() => {
+    window.__fakeAudio.resumeWorks = true;
+  });
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(1500);
+  const retried = await started("module-rhythm");
+  assert(retried.running && !retried.unavailable, `Pressing again after fixing the sound must start the task, got ${JSON.stringify(retried)}`);
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 /**
@@ -4004,7 +4198,7 @@ async function checkResearcherModeTabsNoRegression(page) {
   // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
   const lobbyTitles = await collectActivityTitles(page);
   assert(
-    !lobbyTitles.includes("アームで つかむ"),
+    !lobbyTitles.includes(t("tile.crane-corner.title")),
     `Visual-task setting must remove the claw corner from the lobby (saw: ${lobbyTitles.join(", ")})`
   );
   assert(

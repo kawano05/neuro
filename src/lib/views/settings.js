@@ -244,6 +244,8 @@ export function initSettings(ctx) {
     tab.classList.toggle("is-measuring", measuring);
     // 印だけで意味を運ばない（色覚・読み上げ）。読み上げ名にも出す。
     tab.setAttribute("aria-label", measuring ? "そくてい（研究・いまは測定の回）" : "そくてい（研究）");
+    // タブは「くわしい設定」の中にある。閉じていても分かるよう、見出しにも出す。
+    if (elements.settingsMoreState) elements.settingsMoreState.hidden = !measuring;
   }
 
   /**

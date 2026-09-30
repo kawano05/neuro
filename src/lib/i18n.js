@@ -149,7 +149,9 @@ const STRINGS = {
   // 旧「色と音」。押すと真っ暗な画面から絵が出てくる、失敗の無い遊びに
   // 作り直した（games/colorLegacy.js、docs/design-renewal-2026-09-25.md §1.4）。
   // gameId は color-legacy のまま——記録（logEvent の switch）をつなげるため。
-  "tile.color-legacy.title": { ruby: "押[お]すと 出[で]てくる", kanji: "押すと 出てくる", kana: "おすと でてくる", en: "Press and see" },
+  // 名前は遊びの名前にそろえる（2026-09-30 の打ち合わせ。「押すと 出てくる」のような
+  // 動作の名前では、何の遊びか分かりにくい）。
+  "tile.color-legacy.title": { ruby: "いないいない ばあ", kanji: "いないいない ばあ", kana: "いないいない ばあ", en: "Peekaboo" },
   "tile.color-legacy.desc": { ruby: "押[お]すと 絵[え]と 音[おと]が 出[で]るよ",
     kanji: "押すと 絵と 音が 出るよ",
     kana: "おすと えと おとが でるよ",
@@ -279,14 +281,14 @@ const STRINGS = {
     kana: "おとに あわせて つづけて おそう",
     en: "Keep pressing with every beat",
   },
-  "tile.gonogo.title": { ruby: "高[たか]い音[おと]だけ", kanji: "高い音だけ", kana: "たかいおとだけ", en: "High notes only" },
+  "tile.gonogo.title": { ruby: "音[おと]あそび", kanji: "音あそび", kana: "おとあそび", en: "Sound game" },
   "tile.gonogo.desc": { ruby: "高[たか]い音[おと]のときだけ押[お]す",
     kanji: "高い音のときだけ押す",
     kana: "たかいおとのとき だけ おそう",
     en: "Press only on the high note",
   },
   // ボールを打つ遊び（games/baseball.js）
-  "tile.baseball.title": { ruby: "ボールを 打[う]つ", kanji: "ボールを 打つ", kana: "ボールを うつ", en: "Hit the ball" },
+  "tile.baseball.title": { ruby: "野球[やきゅう]", kanji: "野球", kana: "やきゅう", en: "Baseball" },
   "tile.baseball.desc": {
     ruby: "ボールが 来[き]たら 押[お]して 打[う]とう",
     kanji: "ボールが 来たら 押して 打とう",
@@ -329,12 +331,13 @@ const STRINGS = {
   },
   // コーナー名は中の課題名（「アームを止める」）と別にする。同じ名前だと、
   // 選んだ先に同じ名前が出て、入ったのか押し損ねたのかが分からない。
-  // ゲームセンターの語（UFOキャッチャー等）は既定表示しない方針なので中立に。
+  // 「UFOキャッチャー」は他社の登録商標なので使わない。「クレーンゲーム」は
+  // 一般の呼び名で、何の遊びかがすぐ分かる。
   "tile.crane-corner.title": {
-    ruby: "アームで つかむ",
-    kanji: "アームで つかむ",
-    kana: "アームで つかむ",
-    en: "Claw grab",
+    ruby: "クレーンゲーム",
+    kanji: "クレーンゲーム",
+    kana: "クレーンゲーム",
+    en: "Claw machine",
   },
   "tile.crane-corner.desc": {
     ruby: "2つの あそびかたから選[えら]ぶ",
@@ -696,10 +699,10 @@ const STRINGS = {
     en: "You did it! You'll win one next time!",
   },
   "crane.voice.finishAnnounce": {
-    ruby: "アームで つかむ、おしまい。{n}こ とれました",
-    kanji: "アームで つかむ、おしまい。{n}こ とれました",
-    kana: "アームで つかむ、おしまい。{n}こ とれました",
-    en: "The claw game is over. You won {n} {n:prize|prizes}.",
+    ruby: "クレーンゲーム、おしまい。{n}こ とれました",
+    kanji: "クレーンゲーム、おしまい。{n}こ とれました",
+    kana: "クレーンゲーム、おしまい。{n}こ とれました",
+    en: "The claw machine is over. You won {n} {n:prize|prizes}.",
   },
   "crane.voice.wait": {
     ruby: "待[ま]ってね",
@@ -921,10 +924,10 @@ const STRINGS = {
   "corner.rhythm.guide": { ruby: "おとの アクティビティを えらびます", kanji: "おとの アクティビティを えらびます", kana: "おとの アクティビティを えらびます", en: "Choose a sound activity" },
   "corner.crane.eyebrow": { ruby: "Crane", kanji: "Crane", kana: "Crane", en: "Crane" },
   "corner.crane.title": {
-    ruby: "アームで つかむ",
-    kanji: "アームで つかむ",
-    kana: "アームで つかむ",
-    en: "Claw grab",
+    ruby: "クレーンゲーム",
+    kanji: "クレーンゲーム",
+    kana: "クレーンゲーム",
+    en: "Claw machine",
   },
   "corner.crane.guide": {
     ruby: "あそびかたを えらびます",
@@ -1067,7 +1070,9 @@ const STRINGS = {
   "tile.slot-l1.desc": { ruby: "同[おな]じ絵[え]が真[ま]ん中[なか]に来[き]たら押[お]そう", kanji: "同じ絵が真ん中に来たら押そう", kana: "おなじ えが まんなかに きたら おそう", en: "Press when the matching shape reaches the centre" },
   "tile.slot-l2.title": { ruby: "3つ 止[と]める", kanji: "3つ 止める", kana: "3つ とめる", en: "Stop three reels" },
   "tile.slot-l2.desc": { ruby: "3つのリールを左[ひだり]から順番[じゅんばん]に止[と]めよう", kanji: "3つのリールを左から順番に止めよう", kana: "3つの リールを ひだりから じゅんばんに とめよう", en: "Stop three reels from left to right" },
-  "tile.slot-corner.title": { ruby: "リールを 止[と]める", kanji: "リールを 止める", kana: "リールを とめる", en: "Stop the reels" },
+  // 「スロット」は利用者の画面で使わない（賭博を連想させる。docs/slot-game-replacement-plan.md）。
+  // 絵をそろえる中身に合う、昔からある遊びの名前にする。
+  "tile.slot-corner.title": { ruby: "絵[え]あわせ", kanji: "絵あわせ", kana: "えあわせ", en: "Picture match" },
   "tile.slot-corner.desc": { ruby: "動[うご]く絵[え]を真[ま]ん中[なか]で止[と]めよう", kanji: "動く絵を真ん中で止めよう", kana: "うごく えを まんなかで とめよう", en: "Stop moving shapes at the centre" },
 
   "howto.slot-l1.1": { ruby: "上[うえ]の目標[もくひょう]の絵[え]を見[み]ます。", kanji: "上の目標の絵を見ます。", kana: "うえの もくひょうの えを みます。", en: "Look at the target shape above." },
@@ -1124,7 +1129,7 @@ const STRINGS = {
   "result.slot.lastRound": { ruby: "最後[さいご]に止[と]まった絵[え]", kanji: "最後に止まった絵", kana: "さいごに とまった え", en: "Shapes stopped in the last round" },
 
   "corner.slot.eyebrow": { ruby: "Reel stop", kanji: "Reel stop", kana: "Reel stop", en: "Reel stop" },
-  "corner.slot.title": { ruby: "リールを 止[と]める", kanji: "リールを 止める", kana: "リールを とめる", en: "Stop the reels" },
+  "corner.slot.title": { ruby: "絵[え]あわせ", kanji: "絵あわせ", kana: "えあわせ", en: "Picture match" },
   "corner.slot.guide": { ruby: "止[と]める本数[ほんすう]を選[えら]びます", kanji: "止める本数を選びます", kana: "とめる ほんすうを えらびます", en: "Choose how many reels to stop" },
 };
 

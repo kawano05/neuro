@@ -59,7 +59,7 @@
       data-scan
       aria-label="ホームへもどる"
     >
-      <span class="tab-full">← ホームへ</span><span class="tab-short">ホーム</span>
+      <span class="tab-full">← ホームへもどる</span><span class="tab-short">ホーム</span>
     </button>
     <!--
       マッチング・VOCA・文字学習は利用者向けアクティビティなので、タブでは
@@ -361,7 +361,7 @@
           </li>
           <li>
             <strong>スイッチコントロールは、ふつうはオフ</strong>
-            NeuroNode をそのまま使うときは、iPad 本体の「スイッチコントロール」も、下の
+            NeuroNode をそのまま使うときは、iPad 本体の「スイッチコントロール」も、下の「くわしい設定」の
             「iPad のスイッチコントロールを使う」もオフのままにします（このアプリの黄色い枠で選びます）。
             iPad 本体のスイッチコントロールで操作するときだけ、両方をオンにします。
             iPad 本体だけをオンにすると、黄色い枠と iPad の枠が両方出て、うまく選べません。
@@ -383,7 +383,7 @@
           <li>
             <strong>この画面に来るには</strong>
             遊びを選ぶ画面の右上「支援者の設定」を、指でさわります（スイッチでは来られません）。
-            戻るときは「← ホームへ」です。
+            戻るときは「← ホームへもどる」です。
           </li>
         </ol>
         <!-- 同じ内容を絵つきで、印刷して渡せる形にしたもの（public/guide.html）。
@@ -392,6 +392,103 @@
           <a href="./guide.html" target="_blank" rel="noopener">印刷用の説明書（A4・絵つき）を開く</a>
         </p>
       </details>
+
+      <!--
+        よく使う設定。支援者がふだん触るのは、枠の速さ・声・効果音・遊びの雰囲気・
+        文字・見続ける遊びの7つ。ここを先に出し、残りは「くわしい設定」に畳む
+        （2026-09-30 の打ち合わせで「項目とボタンが多い」と話に出た）。
+        項目そのものは減らしていない。id も変えていない（settings.js・テストが引く）。
+      -->
+      <section class="settings-quick" aria-labelledby="settingsQuickTitle">
+        <h3 class="settings-quick-title" id="settingsQuickTitle">よく使う設定</h3>
+        <div class="settings-grid">
+        <label class="setting-row">
+          <span>
+            <strong>枠が動く速さ</strong>
+            <small>黄色い枠が次へ動くまでの時間。長くすると、選ぶ時間に余裕ができます</small>
+          </span>
+          <input id="scanInterval" type="range" min="800" max="3200" step="100" />
+          <output id="scanIntervalValue" for="scanInterval">1.6秒</output>
+        </label>
+
+        <label class="setting-row toggle-row">
+          <span>
+            <strong>声で読み上げる</strong>
+            <small>説明やほめ言葉（「やったー」など）を声で読み上げます</small>
+          </span>
+          <input id="speechEnabled" type="checkbox" role="switch" data-scan />
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>読み上げの声の大きさ</strong>
+            <small>このアプリの声だけの大きさです（iPad 全体の音量とは別）</small>
+          </span>
+          <input id="speechVolume" type="range" min="0.2" max="1" step="0.1" />
+          <output id="speechVolumeValue" for="speechVolume">100%</output>
+        </label>
+
+        <label class="setting-row toggle-row">
+          <span>
+            <strong>効果音</strong>
+            <small>
+              押したときの音や拍手を鳴らします。切っても、遊びの合図の音（音あそびの音、
+              さかなつりのアタリの音など）は鳴ります。合図が無いと遊べないためです
+            </small>
+          </span>
+          <input id="soundEnabled" type="checkbox" role="switch" data-scan />
+        </label>
+
+        <!-- 遊びの雰囲気（settings.fxLevel。docs/overall-design-2026-09-28.md §4、
+             docs/party-mode-2026-09-29.md）。値は演出の強さのまま——session.config.fxLevel が
+             記録に残るので、どの雰囲気で遊んだかが研究の記録から分かる。
+             光の点滅・揺れ・粒の数の上限は、どの雰囲気でも同じ。 -->
+        <label class="setting-row">
+          <span>
+            <strong>遊びの雰囲気</strong>
+            <small>できたときの紙吹雪や星の量です。「おおさわぎ」は、いないいない ばあ で、なかまのラッコ・押すたびに重なる音楽・大きな数・観客まで出ます。光の点滅は、どの雰囲気でも1秒に3回までです。刺激に弱い人は「すっきり」か「なし」に</small>
+          </span>
+          <select id="fxLevel" data-scan>
+            <option value="none">なし</option>
+            <option value="subtle">すっきり</option>
+            <option value="normal">にぎやか</option>
+            <option value="big">おおさわぎ</option>
+          </select>
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <strong>文字づかい</strong>
+            <small>
+              遊びの画面の文字と読み上げ。漢字にはふりがなを付けます。支援者の画面（設定・記録）は日本語のままです
+            </small>
+          </span>
+          <select id="textMode" data-scan>
+            <option value="ruby">漢字＋ふりがな</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+
+        <label class="setting-row toggle-row">
+          <span>
+            <strong>画面をよく見る遊びを隠す</strong>
+            <small>「絵あわせ」と「クレーンゲーム」は画面を見続ける遊びです。見るのが難しい人のときは、ホームから外せます</small>
+          </span>
+          <input id="hideVisualTasks" type="checkbox" role="switch" data-scan />
+        </label>
+        </div>
+      </section>
+
+      <!--
+        くわしい設定。ふだんは閉じておく。いま測定の回かどうかは、閉じていても
+        見出しの印で分かるようにする（settings.js の updateMeasureTabState）。
+      -->
+      <details class="settings-more" id="settingsMore">
+        <summary>
+          <span class="settings-more-title">くわしい設定</span>
+          <small class="settings-more-note">スイッチ・見え方と音・遊びごとのむずかしさ・研究</small>
+          <span class="settings-more-state" id="settingsMoreState" hidden>いまは測定の回</span>
+        </summary>
 
       <!--
         設定をタブに分ける。
@@ -459,15 +556,6 @@
           このアプリの読み上げは、ここでいったんオフになります（「見え方・音」でオンに戻せます）。
         </p>
 
-        <label class="setting-row">
-          <span>
-            <strong>枠が動く速さ</strong>
-            <small>黄色い枠が次へ動くまでの時間。長くすると、選ぶ時間に余裕ができます</small>
-          </span>
-          <input id="scanInterval" type="range" min="800" max="3200" step="100" />
-          <output id="scanIntervalValue" for="scanInterval">1.6秒</output>
-        </label>
-
         <label class="setting-row toggle-row">
           <span>
             <strong>枠を自動で動かす</strong>
@@ -506,45 +594,12 @@
         </label>
       </div>
 
-      <h3 class="settings-group-title">ホームに出す遊び</h3>
-
-      <div class="settings-grid">
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>画面をよく見る遊びを隠す</strong>
-            <small>「リールを止める」と「アームでつかむ」は画面を見続ける遊びです。見るのが難しい人のときは外せます</small>
-          </span>
-          <input id="hideVisualTasks" type="checkbox" role="switch" data-scan />
-        </label>
-      </div>
-
       </div>
 
       <div class="settings-panel" data-settings-panel="senses" hidden>
-      <h3 class="settings-group-title">音と言葉</h3>
-      <p class="settings-group-note">
-        効果音を切っても、遊びの合図の音（「高い音だけ」の音や、さかなつりのアタリの音など）は
-        鳴ります。合図が無いと遊べないためです。
-      </p>
+      <h3 class="settings-group-title">読み上げの声</h3>
 
       <div class="settings-grid">
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>声で読み上げる</strong>
-            <small>説明やほめ言葉（「やったー」など）を声で読み上げます</small>
-          </span>
-          <input id="speechEnabled" type="checkbox" role="switch" data-scan />
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>読み上げの声の大きさ</strong>
-            <small>このアプリの声だけの大きさです（iPad 全体の音量とは別）</small>
-          </span>
-          <input id="speechVolume" type="range" min="0.2" max="1" step="0.1" />
-          <output id="speechVolumeValue" for="speechVolume">100%</output>
-        </label>
-
         <!-- 読み上げの声（settings.speechVoice。src/lib/voicePack.js）。 -->
         <label class="setting-row">
           <span>
@@ -560,36 +615,11 @@
           </select>
         </label>
 
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>効果音</strong>
-            <small>
-              押したときの音や拍手（アームの音、水の音、リールの音など）を鳴らします
-            </small>
-          </span>
-          <input id="soundEnabled" type="checkbox" role="switch" data-scan />
-        </label>
       </div>
 
       <h3 class="settings-group-title">見え方</h3>
-      <p class="settings-group-note">
-        遊びの画面の文字は、漢字にふりがなを付けて出します。英語にもできます。
-      </p>
 
       <div class="settings-grid">
-        <label class="setting-row">
-          <span>
-            <strong>文字づかい</strong>
-            <small>
-              遊びの画面の文字。支援者の画面（設定・記録）は日本語のままです
-            </small>
-          </span>
-          <select id="textMode" data-scan>
-            <option value="ruby">漢字＋ふりがな</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-
         <label class="setting-row toggle-row">
           <span>
             <strong>大きい文字</strong>
@@ -606,22 +636,6 @@
           <input id="highContrast" type="checkbox" role="switch" data-scan />
         </label>
 
-        <!-- 遊びの雰囲気（settings.fxLevel。docs/overall-design-2026-09-28.md §4、
-             docs/party-mode-2026-09-29.md）。値は演出の強さのまま——session.config.fxLevel が
-             記録に残るので、どの雰囲気で遊んだかが研究の記録から分かる。
-             光の点滅・揺れ・粒の数の上限は、どの雰囲気でも同じ。 -->
-        <label class="setting-row">
-          <span>
-            <strong>遊びの雰囲気</strong>
-            <small>できたときの紙吹雪や星の量です。「おおさわぎ」は、押すと 出てくる で、なかまのラッコ・押すたびに重なる音楽・大きな数・観客まで出ます。光の点滅は、どの雰囲気でも1秒に3回までです。刺激に弱い人は「すっきり」か「なし」に</small>
-          </span>
-          <select id="fxLevel" data-scan>
-            <option value="none">なし</option>
-            <option value="subtle">すっきり</option>
-            <option value="normal">にぎやか</option>
-            <option value="big">おおさわぎ</option>
-          </select>
-        </label>
       </div>
 
       <!-- 録音の素材のクレジット（src/lib/soundCredits.js。views/settings.js が中を描く）。
@@ -656,7 +670,7 @@
         </span>
       </p>
 
-      <h3 class="settings-group-title">リールを止める</h3>
+      <h3 class="settings-group-title">絵あわせ</h3>
       <p class="settings-group-note">
         練習の回にだけ効きます。測定の回は決まった値です（1周3.2秒・「合った」の広さ0.22秒・
         「ひとつ止める」8回・「3つ止める」4回）。
@@ -700,7 +714,7 @@
         </label>
       </div>
 
-      <h3 class="settings-group-title">高い音だけ</h3>
+      <h3 class="settings-group-title">音あそび</h3>
       <p class="settings-group-note">
         練習の回にだけ効きます。測定の回と「押すタイミングの測定」は、決まった条件で行います。
       </p>
@@ -758,7 +772,7 @@
         </label>
       </div>
 
-      <h3 class="settings-group-title">アームでつかむ</h3>
+      <h3 class="settings-group-title">クレーンゲーム</h3>
       <p class="settings-group-note">
         変えた値は、次に始めるときから効きます。どの設定で遊んだかは記録に残ります。
       </p>
@@ -921,6 +935,7 @@
       </div>
 
       </div>
+      </details>
     </section>
   </main>
 

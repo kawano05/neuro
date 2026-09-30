@@ -27,6 +27,7 @@
 // =====================================================================
 
 import { cueTones, fishingPresets, fishingSpecies } from "../content.js";
+import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
   ENDLESS_PROTOCOL_VERSION,
   endlessDifficultyStep,
@@ -49,8 +50,9 @@ const fishLargeUrl = new URL("../../assets/fishing/fish-large.png", import.meta.
 const fishMediumUrl = new URL("../../assets/fishing/fish-medium.png", import.meta.url).href;
 const fishSmallUrl = new URL("../../assets/fishing/fish-small.png", import.meta.url).href;
 
-const FEEDBACK_GAIN = 0.05;
-const MISS_GAIN = 0.018;
+// アタリと当たりの音は合図の大きさ、外れは小さく（audio.js の CUE_TONE_GAIN / CUE_SOFT_GAIN）。
+const FEEDBACK_GAIN = CUE_TONE_GAIN;
+const MISS_GAIN = CUE_SOFT_GAIN;
 
 /** 魚の見た目（content.js の species.asset → 画像URL）。 */
 const FISH_ART = {
@@ -291,6 +293,11 @@ export function createFishingGame(gameId) {
   let castTimer = null;
   let catchTimer = null;
   let destroyed = false;
+  // 始める前に作った計画と、音が止まっていて始められないとき（おとが ならせません）・
+  // 戻るのを待っているあいだの印。
+  let preparedPlan = null;
+  let soundUnavailable = false;
+  let waitingForSound = false;
   let finished = false;
   let sessionStartAudioMs = 0;
   let anchorPerfMs = 0;
@@ -354,7 +361,7 @@ export function createFishingGame(gameId) {
     if (!stageEl) return;
     const stopped = audioState === "suspended" || audioState === "interrupted";
     const why = stopped
-      ? "音が止まっているため、さかなつりは始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。"
+      ? "音が止まっているため、さかなつりは始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。画面を押すと、もう一度ためします。"
       : "この端末では音を鳴らす機能が使えないため、さかなつりは始められません。";
     stageEl.innerHTML = `
       <div class="game-unavailable">
@@ -806,6 +813,12 @@ export function createFishingGame(gameId) {
   }
 
   function handleInput(perfMs) {
+    // 「おとが ならせません」の画面で押したら、もう一度ためす（押した操作の中で
+    // 止まった音を戻せる。neuronodeApp.js の resumeIfSuspended）。記録はしない。
+    if (!destroyed && !session && soundUnavailable) {
+      waitForSound({ remount: true });
+      return;
+    }
     if (destroyed || finished || !session) return;
     pullLine();
     const inputMs = toSessionRelativeMs(toAudioAbsMs(perfMs));
@@ -905,8 +918,42 @@ export function createFishingGame(gameId) {
     stageEl = el;
     stageEl.classList.add("module-fishing");
     renderMarkup();
+    preparedPlan = buildPlan();
 
-    const { trials, kindSequence, foreperiods } = buildPlan();
+    // 音が止まっていたら（iOS のスリープ・ほかのアプリ・読み上げのあと）、戻るのを
+    // 少し待ってから始める。戻らなければ理由を出し、次のひと押しでもう一度ためす
+    // （audio.js の waitUntilRunning。games/rhythm.js と同じ）。
+    if (audio.scheduler.canSound()) beginSession();
+    else waitForSound();
+  }
+
+  /** 音が鳴るようになるのを待って始める。鳴らないままなら「おとが ならせません」。 */
+  function waitForSound({ remount = false } = {}) {
+    if (waitingForSound) return;
+    waitingForSound = true;
+    const waiting = audio.scheduler.waitUntilRunning
+      ? audio.scheduler.waitUntilRunning()
+      : Promise.resolve(audio.scheduler.canSound());
+    waiting.then((running) => {
+      waitingForSound = false;
+      if (destroyed || session) return;
+      if (!running) {
+        soundUnavailable = true;
+        renderUnavailable(audio.scheduler.state());
+        return;
+      }
+      soundUnavailable = false;
+      if (remount && stageEl) {
+        stageEl.classList.add("module-fishing");
+        renderMarkup();
+      }
+      beginSession();
+    });
+  }
+
+  /** セッションを始める（合図の予約・記録の用意）。音が鳴る状態で呼ぶ。 */
+  function beginSession() {
+    const { trials, kindSequence, foreperiods } = preparedPlan;
     trialsPlan = trials;
     currentIndex = 0;
     endlessFailed = false;
@@ -948,6 +995,7 @@ export function createFishingGame(gameId) {
     // CI には出てこない種類の失敗。
     if (startAt === null || !audio.scheduler.canSound()) {
       audio.scheduler.stop();
+      soundUnavailable = true;
       renderUnavailable(audio.scheduler.state());
       return;
     }
@@ -979,6 +1027,9 @@ export function createFishingGame(gameId) {
       finished: false,
       config: {
         ...config,
+        // 合図音の大きさ（audio.js の CUE_TONE_GAIN）。2026-09-30 に 0.05 から上げたので、
+        // どちらの大きさで取った記録かを分けられるように残す。
+        cueGain: FEEDBACK_GAIN,
         seedSequence: foreperiods,
         kindSequence,
         // その回が「そくてい」か「れんしゅう」か（src/lib/difficultyMode.js）。

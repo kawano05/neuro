@@ -14,6 +14,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+  CUE_SOFT_GAIN,
+  CUE_TONE_GAIN,
   DEFAULT_TONE_GAIN,
   DEFAULT_SPEECH_VOLUME,
   EFFECT_GAIN_CEILING,
@@ -21,6 +23,7 @@ import {
   clampEffectGain,
   clampSpeechVolume,
   createAudio,
+  createBeatScheduler,
   effectOutputGain,
 } from "../src/lib/audio.js";
 
@@ -44,6 +47,80 @@ test("the effect ceiling stays below the cue tone", () => {
     EFFECT_GAIN_CEILING < DEFAULT_TONE_GAIN,
     `効果音の上限 ${EFFECT_GAIN_CEILING} は合図音 ${DEFAULT_TONE_GAIN} より小さくなければならない`
   );
+});
+
+test("the cue tone is loud enough to hear next to the voice, and effects stay below it", () => {
+  // 声は −15dBFS（scripts/voice/generate.py の TARGET_ST_DB）。0.05 のピッは
+  // iPad のスピーカー相当で −36dBFS で、2026-09-30 の打ち合わせでは聞こえなかった。
+  // 0.4 で −18dBFS。ここを下げると、また聞こえなくなる。
+  assert.ok(CUE_TONE_GAIN >= 0.3, `合図音 ${CUE_TONE_GAIN} が小さすぎる（声より15dB以上小さくなる）`);
+  // ほかの音と重なっても割れない高さ（合図＋当たりの音で 1 を越えない）。
+  assert.ok(CUE_TONE_GAIN * 2 < 1, `合図音 ${CUE_TONE_GAIN} が大きすぎる（重なると割れる）`);
+  assert.ok(CUE_SOFT_GAIN < CUE_TONE_GAIN);
+  assert.ok(EFFECT_GAIN_CEILING < CUE_SOFT_GAIN, "効果音の上限は、外れの音よりも下に置く");
+});
+
+test("a scheduled cue starts at its full level at the moment it sounds", () => {
+  // 以前は下げ始めが「予約した時刻」からだった（Web Audio では、前の予定が無い
+  // ランプは呼んだ時刻から始まる）。先読みの分だけ、鳴る前にもう小さくなっていた。
+  const calls = [];
+  const param = (name) => ({
+    value: 0,
+    setValueAtTime: (v, t) => calls.push([name, "set", v, t]),
+    exponentialRampToValueAtTime: (v, t) => calls.push([name, "exp", v, t]),
+    linearRampToValueAtTime: (v, t) => calls.push([name, "lin", v, t]),
+  });
+  const ctx = {
+    currentTime: 10,
+    destination: {},
+    createOscillator: () => ({
+      frequency: { value: 0 },
+      type: "",
+      connect() {},
+      start: (t) => calls.push(["osc", "start", null, t]),
+      stop: (t) => calls.push(["osc", "stop", null, t]),
+      disconnect() {},
+    }),
+    createGain: () => ({ gain: param("gain"), connect() {}, disconnect() {} }),
+  };
+  const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  let tick = null;
+  globalThis.window = {
+    setInterval: (fn) => {
+      tick = fn;
+      return 1;
+    },
+    clearInterval() {},
+  };
+  try {
+    const scheduler = createBeatScheduler(ctx);
+    const plan = { beats: [{ index: 0, timeS: 0, tone: 880, gain: CUE_TONE_GAIN }] };
+    const at = scheduler.start(plan);
+    // 先読み（0.1秒前）で予約される時刻まで進める。
+    ctx.currentTime = at - 0.09;
+    tick();
+    const find = (kind) => calls.find(([name, k]) => name === "gain" && k === kind);
+    assert.deepEqual(find("set"), ["gain", "set", CUE_TONE_GAIN, at], "鳴る時刻に、設定の大きさから始める");
+    const [, , floor, decayAt] = find("exp");
+    assert.ok(Math.abs(floor - CUE_TONE_GAIN / 50) < 1e-12, "形は以前と同じ（0.18秒で 1/50）");
+    assert.ok(Math.abs(decayAt - (at + 0.18)) < 1e-9);
+    const [, , end] = find("lin");
+    assert.equal(end, 0, "止める前に0へ寄せる");
+    scheduler.stop();
+  } finally {
+    if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow);
+    else delete globalThis.window;
+  }
+});
+
+test("the cue games take their cue level from one place", () => {
+  // 0.05 などの数字を各遊びに書き散らすと、大きさを直したときに取り残される。
+  ["../src/lib/games/rhythm.js", "../src/lib/games/crane.js", "../src/lib/games/fishing.js"].forEach((relative) => {
+    const text = readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
+    assert.match(text, /CUE_TONE_GAIN/, `${relative} が CUE_TONE_GAIN を使っていない`);
+    assert.doesNotMatch(text, /const \w*GAIN\w* = 0\.0\d+;/, `${relative} に合図音の数字が直に書かれている`);
+    assert.match(text, /cueGain:/, `${relative} が記録に cueGain を残していない`);
+  });
 });
 
 test("clamps anything a caller passes", () => {

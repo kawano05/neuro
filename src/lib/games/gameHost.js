@@ -526,6 +526,8 @@ export function createGameHost(ctx) {
     abort: returnHome,
     /** 設定が開いていれば閉じる（変更は捨てる）。閉じたら true（Esc 用）。 */
     closeSettings: () => gameSettings.close({ apply: false }),
+    /** 支援者が「この遊びの設定」を開いているか（キーを支援者の操作に返すため）。 */
+    settingsOpen: () => gameSettings.isOpen(),
     getActiveGameId: () => activeGameId,
     getLastSummary: () => lastResultSummary,
     /** gameProgress / resultStats の表示更新（ctx.renderAll() から呼ばれる）。 */

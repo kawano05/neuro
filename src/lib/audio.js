@@ -27,6 +27,36 @@ import { chunkGapS, planVoiceClips, splitSpeechChunks, voiceLang } from "./voice
 
 /** ビート予約の既定包絡（sine, gain 0.05, 約0.18秒で減衰）。detailed-design.md §6.2。 */
 export const DEFAULT_TONE_GAIN = 0.05;
+
+/**
+ * 音の課題（高い音だけ・リズム・さかなつり・アーム）の合図音の大きさ。
+ *
+ * 以前は DEFAULT_TONE_GAIN（0.05）で鳴らしていた。読み上げの声は −15dBFS に
+ * そろえてある（scripts/voice/generate.py）のに、0.18秒のピッ（0.05）は、iPad の
+ * スピーカー相当で測ると −36dBFS。声より約21dB小さい。さらに予約した音は、
+ * 鳴り始めの時点で10〜21dB下がっていた（scheduleOscillatorTone）。
+ * 2026-09-30 の打ち合わせでは、声と効果音に合わせた音量のまま「高い音だけ」を
+ * 見せ、合図が聞こえなかった（録音では声より約30dB小さかった）。
+ *
+ * 0.4 で −18dBFS（880Hz）。声より少し小さく、はっきり聞こえる。音の形
+ * （0.18秒で 1/50 へ下がる）は変えない。効果音の上限（EFFECT_GAIN_CEILING）は
+ * これよりずっと下にあるので、合図を覆わない決まりはそのまま守られる。
+ * 測定の記録には、その回の値を session.config.cueGain として残す。
+ */
+export const CUE_TONE_GAIN = 0.4;
+
+/**
+ * 外れ・余分な押しの音と、アームの通過音。合図より約9dB小さくして、罰のように
+ * 聞こえないようにする（以前の 0.018 / 0.05 と同じ比）。
+ */
+export const CUE_SOFT_GAIN = CUE_TONE_GAIN * 0.36;
+
+/**
+ * 合図が音の課題を始めるときに音が止まっていたら（iOS）、戻るのをこれだけ待つ（ms）。
+ * resume() のあと動き出すまでは、ふつう数十〜数百ms。待ちすぎると押しても始まらない
+ * 時間が長くなるので、1.5秒で打ち切って理由を出す（scheduler.waitUntilRunning）。
+ */
+export const SOUND_RESUME_WAIT_MS = 1500;
 /** 既存利用者の通常時音量を変えない。Switch ControlモードはTTS自体を既定OFFにする。 */
 export const DEFAULT_SPEECH_VOLUME = 1;
 
@@ -60,10 +90,17 @@ function scheduleOscillatorTone(audioContext, frequency, atTimeS, gain = DEFAULT
     oscillator.frequency.value = frequency;
     oscillator.type = "sine";
     gainNode.gain.value = gain;
+    // 下げ始めを、鳴らす時刻にそろえる。これが無いと、ランプは「予約した時刻」
+    // から始まる（Web Audio の決まり）。先読みで0.1秒前、始めの拍は0.3秒前に
+    // 予約するので、鳴り始めにはもう10〜21dB下がっていた。拍ごとに大きさも揺れる。
+    gainNode.gain.setValueAtTime(gain, atTimeS);
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
     oscillator.start(atTimeS);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, atTimeS + TONE_DECAY_S);
+    // 0.18秒で 1/50 まで下げる（0.05 → 0.001 と同じ形。大きい合図でも形は同じ）。
+    gainNode.gain.exponentialRampToValueAtTime(Math.max(0.001, gain / 50), atTimeS + TONE_DECAY_S);
+    // 止める前に0へ寄せて、止めた瞬間のプツッを出さない。
+    gainNode.gain.linearRampToValueAtTime(0, atTimeS + TONE_DECAY_S + TONE_STOP_MARGIN_S);
     oscillator.stop(atTimeS + TONE_DECAY_S + TONE_STOP_MARGIN_S);
     return { oscillator, gainNode };
   } catch {
@@ -168,7 +205,7 @@ export function createBeatScheduler(audioContext) {
 // 「結果が届かない」ということそのものになる。
 //
 // 守る条件は1つ。**測定の合図音を覆わないこと**。
-//   - 音量は合図音（DEFAULT_TONE_GAIN = 0.05）より下に置く。
+//   - 音量は合図音（CUE_TONE_GAIN。以前は DEFAULT_TONE_GAIN = 0.05）より下に置く。
 //   - 帯域を分ける。合図は 440Hz / 880Hz の純音なので、効果音は
 //     ノイズ（広帯域）と低い帯に寄せて、同じ高さで competing させない。
 //   - 鳴らすのは「入力より後」の出来事だけにする。さかなつりのアタリ音
@@ -1453,6 +1490,37 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       canSound() {
         const ctx = ensureContext();
         return Boolean(ctx) && ctx.state === "running";
+      },
+      /**
+       * 音が鳴る状態になるまで待つ。
+       *
+       * iOS では、スリープ・ほかのアプリ・着信・端末の読み上げのあと、AudioContext が
+       * "suspended" や "interrupted" のまま残る。resume() を呼んでも、動き出すのは少し
+       * あと（Promise が解けてから）。以前は遊びを始めた瞬間に1回だけ canSound() を見て
+       * いたので、戻る途中だと「おとが ならせません」になり、そのまま戻れなかった
+       * （2026-09-30 の打ち合わせで「高い音だけ が動かない」）。
+       * @param {number} [timeoutMs] これだけ待っても鳴らなければ false
+       * @returns {Promise<boolean>}
+       */
+      waitUntilRunning(timeoutMs = SOUND_RESUME_WAIT_MS) {
+        const ctx = ensureContext();
+        if (!ctx) return Promise.resolve(false);
+        if (ctx.state === "running") return Promise.resolve(true);
+        preferPlaybackSession();
+        try {
+          ctx.resume().catch(() => {});
+        } catch {
+          // resume できない環境でも、待つだけは待つ。
+        }
+        const started = performance.now();
+        return new Promise((resolve) => {
+          const check = () => {
+            if (ctx.state === "running") resolve(true);
+            else if (ctx.state === "closed" || performance.now() - started >= timeoutMs) resolve(false);
+            else window.setTimeout(check, 50);
+          };
+          check();
+        });
       },
       /** いまの AudioContext の状態（表示・記録用。無ければ null）。 */
       state() {

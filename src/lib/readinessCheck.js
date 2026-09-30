@@ -119,7 +119,7 @@ function checkDiscrimination(sessions) {
   const runs = sessions.filter((session) => isUsable(session) && session.taskType === "gonogo");
   const usable = runs.filter((session) => countTrials(session) >= MIN_TRIALS);
   if (usable.length < MIN_SESSIONS) {
-    return { met: false, value: null, reason: `「高い音だけ」をあと${MIN_SESSIONS - usable.length}回` };
+    return { met: false, value: null, reason: `「音あそび」をあと${MIN_SESSIONS - usable.length}回` };
   }
   const margins = usable.map(
     (session) => (session.summary?.goHitRate ?? 0) - (session.summary?.commissionRate ?? 0)
