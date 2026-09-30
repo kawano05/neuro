@@ -3337,7 +3337,7 @@ body.result-mode.user-world #resultHome::before {
 }
 
 /* =====================================================================
-   支援者の世界（評価ログ・設定）
+   支援者の世界（設定）
 
    以前は業務画面（ティール）のまま残していた。ホームの「支援者の設定」から
    入ると、色も形も別のアプリに見えた。ホームと同じ「はっきりした色」に
@@ -3403,8 +3403,7 @@ body:not(.user-world) .topbar-actions {
 }
 
 /* 入力ドック。設定の画面では枠が動かず、ドックも押せない（neuronodeApp.js）
-   のに、項目の上に重ねて出していた。評価ログはホームと同じく、「おす」ボタンを
-   出す設定のときだけ出す。 */
+   のに、項目の上に重ねて出していた。 */
 body.supporter-menu-mode .switch-dock,
 body:not(.user-world):not(.screen-switch-on) .switch-dock {
   display: none;
@@ -3536,19 +3535,4 @@ body:not(.user-world) .settings-tab.is-active {
 .settings-more-note {
   color: var(--muted);
   font-size: 0.9rem;
-}
-
-/* いま測定の回であることは、閉じていても見える必要がある（settings.js）。 */
-.settings-more-state {
-  margin-left: auto;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: var(--accent-warm);
-  color: #ffffff;
-  font-size: 0.9rem;
-  font-weight: 800;
-}
-
-.settings-more-state[hidden] {
-  display: none;
 }

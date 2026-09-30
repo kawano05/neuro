@@ -18,8 +18,8 @@ import {
   buildRhythmCsvRows,
   buildTaskCsvRows,
   SESSION_LEDGER_HEADERS,
+  buildLogCsvRows,
 } from "../src/lib/dataExport.js";
-import { buildLogCsvRows } from "../src/lib/views/log.js";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PRIZE_ART } from "../src/lib/games/craneArt.js";

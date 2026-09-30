@@ -3,9 +3,7 @@
 // =====================================================================
 
 import { cranePresets, slotPresets } from "../content.js";
-import { isMeasurementMode, resolveDifficultyMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
-import { evaluateReadiness } from "../readinessCheck.js";
 import { SOUND_CREDITS } from "../soundCredits.js";
 
 /**
@@ -51,7 +49,7 @@ export function renderSoundCredits(listEl, { links = true } = {}) {
 }
 
 export function initSettings(ctx) {
-  const { state, elements, save, scan, announce, logEvent, audio } = ctx;
+  const { state, elements, save, scan, announce, audio } = ctx;
 
   // 印刷用の説明書（public/guide.html）へのリンクは、iPad のアプリ版では隠す。
   // アプリの中から別の画面を開けず、開けても戻る手段が無いため。ウェブ版だけ。
@@ -158,14 +156,11 @@ export function initSettings(ctx) {
     elements.largeText.checked = settings.largeText;
     elements.highContrast.checked = settings.highContrast;
     elements.hideVisualTasks.checked = settings.hideVisualTasks;
-    elements.researcherMode.checked = settings.researcherMode;
     elements.visualGuidance.checked = settings.visualGuidance;
     elements.craneAudioGuidance.checked = settings.craneAudioGuidance;
-    elements.difficultyMode.value = resolveDifficultyMode(settings);
     elements.textMode.value = resolveTextMode(settings);
     applySwitchControlMode();
     applySpeechSettings();
-    applyDifficultyMode();
   }
 
   /** 使えない操作子を無効化し、自前走査の輪からも外す。 */
@@ -191,111 +186,10 @@ export function initSettings(ctx) {
     setControlAvailable(elements.speechVoice, Boolean(state.settings.speechEnabled));
   }
 
-  /**
-   * そくていの回では、むずかしさのつまみを無効にして理由を出す。
-   *
-   * 値そのものは protocol 側が優先するので（src/lib/difficultyMode.js）、
-   * つまみを触れても効かない。効かない操作子を黙って置いておくのは、この
-   * アプリが何度も直してきた「動くが伝わらない」欠陥そのものなので、
-   * 触れないことと、その理由を同時に見せる。
-   *
-   * 走査対象からも外す。効かない操作子を走査の輪に残すと、利用者が
-   * そこで止まって押しても何も起きない。
-   */
-  function applyDifficultyMode() {
-    const measuring = isMeasurementMode(state.settings);
-    elements.measureModeNotice.hidden = !measuring;
-    const locked = [
-      ...slotSliders.map(({ input }) => input),
-      elements.rhythmBpm,
-      elements.rhythmTargetBeats,
-      elements.visualGuidance,
-      elements.craneSweepMs,
-      elements.craneToleranceR,
-      elements.craneTargetTrials,
-      elements.craneAudioGuidance,
-      elements.fishingLimitMs,
-    ];
-    locked.forEach((control) => {
-      if (!control) return;
-      control.disabled = measuring;
-      control.setAttribute("aria-disabled", String(measuring));
-      const row = control.closest(".setting-row");
-      if (row) row.classList.toggle("is-protocol-locked", measuring);
-      if (measuring) delete control.dataset.scan;
-      else control.dataset.scan = "";
-    });
-    renderReadiness(measuring);
-    updateMeasureTabState(measuring);
-  }
-
-  /**
-   * 「そくてい」タブに、いま測定の回であることを出す。
-   *
-   * 測定条件は「そくてい」タブの中にあるので、別の面を見ているあいだは
-   * 状態が見えない。畳めるもの（面を分けてよいもの）と、面をまたいで
-   * 伝えねばならないものは別——支援者が昨日の設定のまま測ってしまう。
-   */
-  function updateMeasureTabState(measuring) {
-    const tab = (elements.settingsTabs || []).find(
-      (item) => item.dataset.settingsTab === "measure"
-    );
-    if (!tab) return;
-    tab.classList.toggle("is-measuring", measuring);
-    // 印だけで意味を運ばない（色覚・読み上げ）。読み上げ名にも出す。
-    tab.setAttribute("aria-label", measuring ? "そくてい（研究・いまは測定の回）" : "そくてい（研究）");
-    // タブは「くわしい設定」の中にある。閉じていても分かるよう、見出しにも出す。
-    if (elements.settingsMoreState) elements.settingsMoreState.hidden = !measuring;
-  }
-
-  /**
-   * そくていに入る前の成立確認（src/lib/readinessCheck.js）を描く。
-   *
-   * 測定を止めない。止めるかどうかは支援者と研究者の判断で、アプリが決める
-   * ことではない——代わりに「何が確かめられていないか」をその場で出し、
-   * 通っていない状態で測った回には readiness="overridden" を残す
-   * （測定条件は禁止せず記録する、という全体の方針）。
-   *
-   * 走査対象にはしない。利用者が選ぶものではなく、支援者が読むものなので、
-   * 走査の輪に入れると押しても何も起きない項目が増えるだけになる。
-   */
-  function renderReadiness(measuring) {
-    const box = elements.readinessCheck;
-    if (!box) return;
-    // れんしゅうの回には関係がない。常設すると設定画面が長くなるだけ。
-    box.hidden = !measuring;
-    if (!measuring) return;
-
-    const { checks, allMet } = evaluateReadiness(
-      state.sessions || [],
-      state.evaluation?.participantId || ""
-    );
-    elements.readinessLead.textContent = allMet
-      ? "3つとも練習の記録から確認できています。"
-      : "確認できていない項目があります。このまま測ることもできますが、その回の記録には「成立確認なし」が残ります。";
-    elements.readinessLead.classList.toggle("is-unmet", !allMet);
-
-    elements.readinessList.innerHTML = "";
-    checks.forEach((check) => {
-      const item = document.createElement("li");
-      item.className = `readiness-item ${check.met ? "is-met" : "is-unmet"}`;
-      const icon = document.createElement("i");
-      // アイコンだけで意味を運ばない（色覚・読み上げ）。文言側にも理由を出す。
-      icon.className = check.met ? "fa-solid fa-circle-check" : "fa-regular fa-circle";
-      icon.setAttribute("aria-hidden", "true");
-      const label = document.createElement("span");
-      label.className = "readiness-label";
-      label.textContent = check.met ? check.label : `${check.label}（${check.reason}）`;
-      item.append(icon, label);
-      elements.readinessList.append(item);
-    });
-  }
-
-  /** body へ表示系クラス（大きい文字・高コントラスト・研究者モード）を反映する */
+  /** body へ表示系クラス（大きい文字・高コントラスト など）を反映する */
   function applyClasses() {
     document.body.classList.toggle("large-text", state.settings.largeText);
     document.body.classList.toggle("high-contrast", state.settings.highContrast);
-    document.body.classList.toggle("researcher-mode", state.settings.researcherMode);
     document.body.classList.toggle("switch-control-mode", state.settings.switchControlMode);
     // 利用者の画面に「おす」ボタンを出すか（theme-hakkiri.css が見る）。
     document.body.classList.toggle("screen-switch-on", Boolean(state.settings.showScreenSwitch));
@@ -386,7 +280,6 @@ export function initSettings(ctx) {
     ["largeText", elements.largeText],
     ["highContrast", elements.highContrast],
     ["hideVisualTasks", elements.hideVisualTasks],
-    ["researcherMode", elements.researcherMode],
     ["visualGuidance", elements.visualGuidance],
     ["craneAudioGuidance", elements.craneAudioGuidance],
   ].forEach(([key, element]) => {
@@ -412,30 +305,10 @@ export function initSettings(ctx) {
         applySpeechSettings();
         scan.refresh();
       }
-      // researcherMode はタブの表示/非表示を切り替えるため、走査対象の再収集が要る。
-      if (key === "researcherMode") scan.restartIfNeeded();
       if (key === "hideVisualTasks") {
         ctx.views.home.render();
         scan.restartIfNeeded();
       }
-    });
-  });
-
-  elements.difficultyMode.addEventListener("change", () => {
-    state.settings.difficultyMode = elements.difficultyMode.value;
-    save();
-    applyDifficultyMode();
-    // 走査対象が増減する（そくていではむずかしさのつまみが輪から外れる）。
-    scan.restartIfNeeded();
-    announce(
-      isMeasurementMode(state.settings)
-        ? "そくていの回にしました。むずかしさは固定されます"
-        : "れんしゅうの回にしました。むずかしさを調整できます"
-    );
-    logEvent({
-      type: "measurement",
-      label: `難易度モードを ${state.settings.difficultyMode} に変更`,
-      skipEvaluation: true,
     });
   });
 
@@ -499,10 +372,6 @@ export function initSettings(ctx) {
       showSettingsTab(tab.dataset.settingsTab);
       announce(`${tab.textContent.trim()}の設定`);
     });
-  });
-
-  elements.startCalibration.addEventListener("click", () => {
-    ctx.gameHost.launch("calibration");
   });
 
   return { render, applyClasses };

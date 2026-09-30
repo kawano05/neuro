@@ -1321,7 +1321,8 @@ export function sanitizeState(candidate) {
       speechVoice: enumOr(settings.speechVoice, SPEECH_VOICES, fallback.settings.speechVoice),
       fxLevel: enumOr(settings.fxLevel, FX_LEVELS, fallback.settings.fxLevel),
       playPrefs: sanitizePlayPrefs(settings.playPrefs),
-      researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),
+      // 研究者モードの画面も外した。保存されていても効かせない。
+      researcherMode: false,
       judgmentWindowMs: numberInRange(
         settings.judgmentWindowMs,
         fallback.settings.judgmentWindowMs,
@@ -1363,11 +1364,11 @@ export function sanitizeState(candidate) {
       fishingLimitMs: nullableNumberInRange(settings.fishingLimitMs, null, 800, 6000, true),
       craneTargetTrials: nullableNumberInRange(settings.craneTargetTrials, null, 3, 15, true),
       visualGuidance: booleanOr(settings.visualGuidance, fallback.settings.visualGuidance),
-      difficultyMode: enumOr(
-        settings.difficultyMode,
-        DIFFICULTY_MODES,
-        fallback.settings.difficultyMode
-      ),
+      // 測定の回は選べなくした（2026-09-30。設定の「そくてい（研究）」を外した）。
+      // 以前に「測定」を保存した端末は、戻す画面が無いまま速さや回数が固定されて
+      // しまうので、読み込むときに必ず練習へ戻す。記録（session.config）の値は
+      // 下の sanitize で当時のまま残す。
+      difficultyMode: "practice",
       // 設定は「いまどう表示するか」なので、選べる表記へ倒す。以前の
       // kanji / kana が保存された端末はここでルビ付き漢字になる。
       // セッション記録側（下の sanitize）は当時の値をそのまま残す——

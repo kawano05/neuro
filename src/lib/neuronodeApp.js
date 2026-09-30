@@ -37,8 +37,6 @@ import { initHome } from "./views/home.js";
 import { initMatching } from "./views/matching.js";
 import { initVoca } from "./views/voca.js";
 import { initLetters } from "./views/letters.js";
-import { initDataExport } from "./dataExport.js";
-import { initLog } from "./views/log.js";
 import { initSettings } from "./views/settings.js";
 
 // 同一物理入力（pointerdown → click 等）の多重発火を1入力に畳む閾値
@@ -64,7 +62,6 @@ const TAB_WORLD_VIEWS = new Set([
   "matching",
   "voca",
   "letters",
-  "log",
   "settings",
 ]);
 
@@ -88,8 +85,8 @@ const TAB_WORLD_VIEWS = new Set([
 const USER_ACTIVITY_VIEWS = new Set(["matching", "voca", "letters"]);
 /**
  * 利用者の世界（デザイン「はっきりした色」を当てる画面。src/theme-hakkiri.css）。
- * 支援者の世界（評価ログ・設定）は業務画面のまま——こちらは「子ども向けに
- * してほしい」とは言われていない（docs/design-renewal-2026-09-25.md §3.1）。
+ * 支援者の世界（設定）は、色と形だけをそろえ、字は漢字かな混じりのまま
+ * （theme-hakkiri.css の「支援者の世界」）。
  */
 const USER_WORLD_VIEWS = new Set(["start", "home", "game", "result", ...USER_ACTIVITY_VIEWS]);
 
@@ -173,7 +170,6 @@ export function initNeuroNodeApp() {
     });
     state.logs = state.logs.slice(0, MAX_LOG_ENTRIES);
     ctx.save();
-    ctx.views.log.render();
   };
 
   /** 画面の切り替え。visibleViews にない画面は start へフォールバックする。 */
@@ -195,9 +191,8 @@ export function initNeuroNodeApp() {
   ctx.views.matching = initMatching(ctx);
   ctx.views.voca = initVoca(ctx);
   ctx.views.letters = initLetters(ctx);
-  // 支援者のデータ画面（書き出し・参加者ID・切り替え）は評価ログの中に置く。
-  ctx.views.dataExport = initDataExport(ctx);
-  ctx.views.log = initLog(ctx);
+  // 評価ログ（書き出し・参加者ID・切り替え）の画面は、2026-09-30 に外した。
+  // 記録（state.sessions / state.logs）は今までどおり残る（src/lib/dataExport.js）。
   ctx.views.settings = initSettings(ctx);
 
   /**
@@ -299,9 +294,7 @@ export function initNeuroNodeApp() {
     ctx.views.matching.render();
     ctx.views.voca.render();
     ctx.views.letters.render();
-    ctx.views.dataExport.render();
     ctx.views.settings.render();
-    ctx.views.log.render();
     ctx.gameHost.render();
     ctx.views.settings.applyClasses();
   };
