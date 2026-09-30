@@ -11,6 +11,7 @@ import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLe
 import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
 import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS } from "../src/lib/games/partyStage.js";
 import { PARTY_JAR_CAPACITY, PARTY_STARS } from "../src/lib/party.js";
+import { SETTINGS_FIELDS } from "../src/lib/settingsFields.js";
 import { checkResponsiveScreens, checkReadyInputSafety, finishReady } from "./responsive-screens.mjs";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
@@ -108,7 +109,7 @@ const checks = [
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
   ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
-  ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
+  ["keeps researcher data on the one log screen, with no dead researcher-mode switch", checkResearcherDataOnOneScreen],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps every screen free of overflow and undersized targets", checkLayoutInvariants],
@@ -1981,7 +1982,8 @@ async function checkSettingsDetails(page) {
   for (const name of ["switch", "senses", "play", "research", "credits"]) await openSettingsDetails(page, name);
   const unnamed = await page.locator("#settings input, #settings select").evaluateAll(nodes => nodes.filter(node => !node.labels?.length || ![...node.labels].some(label => label.textContent.trim())).map(node => node.id));
   assert(unnamed.length === 0, "Every control must have a readable label: " + unnamed.join(", "));
-  assert(await page.locator("#settings input, #settings select").count() === 28, "All 28 settings must remain reachable");
+  assert(await page.locator("#settings input, #settings select").count() === SETTINGS_FIELDS.length, `All ${SETTINGS_FIELDS.length} settings must remain reachable`);
+  assert(await page.locator("#researcherMode").count() === 0, "The dead researcher-mode switch must stay off the screen");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert(overflow <= 2, `Expanded settings must stay within the viewport, overflow ${overflow}px`);
   await page.locator("#fxLevel").selectOption("subtle");
@@ -4021,12 +4023,8 @@ async function checkEmptyExportIsExplained(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await openSettingsDetails(page, "research");
-  await page.locator("#researcherMode").click();
-  await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
-
-    await page.locator('.tab[data-view="log"]').click();
-    await waitForClass(page, "#log", "is-active");
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
 
   // まだ1回も遊んでいないので走査課題データは0件。
   const message = page.locator("#supporterMessage");
@@ -4043,7 +4041,7 @@ async function checkEmptyExportIsExplained(page) {
   );
 }
 
-async function checkResearcherModeTabsNoRegression(page) {
+async function checkResearcherDataOnOneScreen(page) {
   // The tabbar is hidden on the start screen (body.start-mode, design pass);
   // go through home first.
   await page.locator("#startStage").click();
@@ -4052,14 +4050,12 @@ async function checkResearcherModeTabsNoRegression(page) {
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
 
-  // 支援者の世界では、研究者モードを入れても走査は再開しない。
-
-  // researcherMode は設定の面（そくてい）の出し分けに使う。効果測定・操作訓練・
-  // 研究の3タブは 2026-08-29 に削除したので、ここで確かめるのは「支援者の
-  // データ画面が評価ログ1枚にまとまっていること」。
+  // 研究者モードは、押しても何も変わらない操作子になっていたので画面から外した
+  // （2026-10-01。効果測定・操作訓練・研究の3タブは 2026-08-29 に消えていた）。
+  // 効かない操作子を黙って置かない。保存のキーは残す（state.js）。
   await openSettingsDetails(page, "research");
-  await page.locator("#researcherMode").click();
-  await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
+  assert((await page.locator("#researcherMode").count()) === 0, "The dead researcher-mode switch must be gone");
+  assert(!(await page.evaluate(() => document.body.classList.contains("researcher-mode"))), "Nothing may add the dead researcher-mode class");
 
   await page.locator('.tab[data-view="log"]').click();
   await waitForClass(page, "#log", "is-active");
@@ -4090,11 +4086,11 @@ async function checkResearcherModeTabsNoRegression(page) {
     `Expected three shell tabs (home / log / settings), got ${tabs.length}: ${tabs.join(" ")}`
   );
 
-  // 設定そのものは、researcherMode を入れたあとも動く。
+  // 評価ログから設定へ戻っても、研究の欄は使える（走査は止まったまま）。
   await page.locator('.tab[data-view="settings"]').click();
   await waitForClass(page, "#settings", "is-active");
   await openSettingsDetails(page, "research");
-  await page.locator("#researcherMode").waitFor({ state: "visible" });
+  await page.locator("#difficultyMode").waitFor({ state: "visible" });
   await assertSupporterScanStopped(page, "settings");
   // ホームに出す遊びは、常設の「よく使う設定」で調整する。
   await openSettingsDetails(page, "switch");
@@ -4385,14 +4381,13 @@ async function checkLayoutInvariants(page) {
     }
   });
 
-  // 支援者の世界。研究者モードを開けて、列の多い画面まで含めて見る。
+  // 支援者の世界。くわしい設定を開けて、列の多い画面まで含めて見る。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await inspect("settings (locked)");
+  await inspect("settings (collapsed)");
 
   await openSettingsDetails(page, "research");
-  await page.locator("#researcherMode").click();
-  await inspect("settings (unlocked)");
+  await inspect("settings (research open)");
 
   // 支援者が見る面は評価ログと設定の2つだけになった（2026-08-29）。
   // 評価ログは列の多い画面（書き出し9個・推移のタブ・セッション一覧）なので、

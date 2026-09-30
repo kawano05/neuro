@@ -198,7 +198,9 @@ export const defaultState = {
     // はじめの遊びの、遊びごとの見え方と音（ゲームの中の「この遊びの設定」で
     // 変える）。中身と理由は上の DEFAULT_PLAY_PREFS。
     playPrefs: JSON.parse(JSON.stringify(DEFAULT_PLAY_PREFS)),
-    // 既定OFF。ONで操作訓練/効果測定/研究タブを表示する（P0-0, detailed-design.md §0.2）。
+    // 研究者モード。もとは操作訓練・効果測定・研究のタブを出し分けていたが、その3タブは
+    // 2026-08-29 に消え、押しても何も変わらない操作子になっていたので、2026-10-01 に
+    // 設定画面から外した。保存の形を変えないためにキーと sanitize だけ残す（どこからも読まない）。
     researcherMode: false,
     // P0-2（ゲーム系設定、detailed-design.md §9.1）。judgmentWindowMs は判定窓の
     // 設定半幅（既定600・範囲200〜1500）、baselineOffsetMs はキャリブレーション由来の

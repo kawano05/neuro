@@ -695,7 +695,7 @@ body.supporter-menu-mode .switch-dock { display: none; }
 }
 
 .tab {
-  /* タブは支援者機能（評価ログ・設定＋研究者モード）だけになったので、
+  /* タブは支援者機能（評価ログ・設定）だけになったので、
      全幅に伸ばさずコンテンツ幅＋余白で並べる。 */
   flex: 0 1 auto;
   min-height: 52px;
@@ -740,16 +740,6 @@ body.supporter-menu-mode .switch-dock { display: none; }
 .home-return:hover {
   background: var(--surface-soft);
   border-color: var(--line-strong);
-}
-
-/* 研究者モード（設定画面のトグル、既定OFF）が有効なときだけ
-   支援者向けタブ（操作訓練・効果測定・研究）を表示する。P0-0 §0.2 手順3。 */
-.researcher-tab {
-  display: none;
-}
-
-body.researcher-mode .researcher-tab {
-  display: grid;
 }
 
 main {

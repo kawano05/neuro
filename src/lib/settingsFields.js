@@ -55,7 +55,6 @@ export const SETTINGS_GROUPS = [
     {"id":"fishingLimitMs","key":"fishingLimitMs","type":"select","label":"アタリが続く長さ","hint":"魚が逃げるまでの時間です。","options":[["","ふつう（2秒）"],["3000","ながい（3秒）"],["4000","とても ながい（4秒）"],["1400","みじかい（1.4秒）"]],"nullable":true,"measured":true},
   ] },
   { id: "research", title: "研究（練習／測定・成立確認）", fields: [
-    {"id":"researcherMode","key":"researcherMode","type":"checkbox","label":"研究者モード","hint":"研究用の表示モードです。"},
     {"id":"difficultyMode","key":"difficultyMode","type":"select","label":"練習／測定","hint":"測定では速さ・回数・手がかりが固定されます。","options":[["practice","練習（訓練・調整できる）"],["measure","測定（研究・固定）"]]},
   ] },
 ];

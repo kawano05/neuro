@@ -178,11 +178,10 @@ export function initSettings(ctx) {
     });
   }
 
-  /** body へ表示系クラス（大きい文字・高コントラスト・研究者モード）を反映する */
+  /** body へ表示系クラス（大きい文字・くっきり表示・スイッチコントロール・「おす」ボタン）を反映する */
   function applyClasses() {
     document.body.classList.toggle("large-text", state.settings.largeText);
     document.body.classList.toggle("high-contrast", state.settings.highContrast);
-    document.body.classList.toggle("researcher-mode", state.settings.researcherMode);
     document.body.classList.toggle("switch-control-mode", state.settings.switchControlMode);
     // 利用者の画面に「おす」ボタンを出すか（theme-hakkiri.css が見る）。
     document.body.classList.toggle("screen-switch-on", Boolean(state.settings.showScreenSwitch));
@@ -266,8 +265,6 @@ export function initSettings(ctx) {
         applySpeechSettings();
         scan.refresh();
       }
-      // researcherMode は研究用の機能タブを出し分ける。
-      if (key === "researcherMode") scan.restartIfNeeded();
       if (key === "hideVisualTasks") {
         ctx.views.home.render();
         scan.restartIfNeeded();

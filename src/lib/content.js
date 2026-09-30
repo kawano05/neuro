@@ -694,13 +694,9 @@ export const environmentLabels = {
 /**
  * タブから到達できる画面の集合。
  *
- * P0-0 で "operation" / "evaluation" / "research" を追加し、
- * リファクタリングノート（2026-06-10）記載のP1課題「導線がない」を解消した。
- * この3画面は支援者向けのため、タブ自体の表示/非表示は
- * settings.researcherMode（設定画面「研究者モード」トグル、既定OFF）で
- * 出し分ける（App.svelte の .researcher-tab クラス + styles.css）。
- * switchView() のフォールバック判定にはこのSetをそのまま使うため、
- * 研究者モードがOFFでも（既にそのビューにいた場合等は）到達自体は可能。
+ * "operation" / "evaluation" / "research" の3画面は 2026-08-29 に消した（支援者のデータ画面は
+ * 評価ログ1枚）。名前だけ残しているのは、古い操作ログの view にこの値が入っていて、
+ * 読み込みの検査（state.js の sanitizeLogEntry）がこの集合で確かめるため。
  *
  * P1-2（detailed-design.md §2.1）: 利用者向けフロー "start" / "home" /
  * "game" / "result" を追加する。この4画面はタブを持たず、スタート導線・

@@ -65,7 +65,7 @@
     <!--
       マッチング・VOCA・文字学習は利用者向けアクティビティなので、タブでは
       なくホームの「まなぶ・つたえる」二階層から入る。
-      タブバーに残るのは支援者機能（評価ログ・設定＋研究者モードの3タブ）のみ。
+      タブバーに残るのは支援者機能（評価ログ・設定）のみ。
     -->
     <button class="tab" data-view="log" data-scan aria-label="評価ログ">
       <span class="tab-full">評価ログ</span><span class="tab-short">ログ</span>

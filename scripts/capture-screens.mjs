@@ -78,7 +78,7 @@ async function captureLayoutScreens(target) {
   const browser = await webkit.launch();
   try {
     const context = await browser.newContext({ ...target, deviceScaleFactor: 2 });
-    await seed(context, { researcherMode: true });
+    await seed(context, {});
     const page = await context.newPage();
     await page.goto(baseUrl);
     await page.waitForTimeout(500);
