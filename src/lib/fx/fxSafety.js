@@ -49,14 +49,15 @@ export const MAX_GLOW_ALPHA = 0.55;
  */
 export function resolveFxLevel(settings, { reducedMotion = false, measurement = false } = {}) {
   if (measurement) return "none";
-  const chosen = FX_LEVELS.includes(settings?.fxLevel) ? settings.fxLevel : DEFAULT_FX_LEVEL;
+  // 保存の sanitize は既定の normal に戻す。実行中の未知値は装飾を足さない。
+  const chosen = FX_LEVELS.includes(settings?.fxLevel) ? settings.fxLevel : "none";
   if (reducedMotion && (chosen === "normal" || chosen === "big")) return "subtle";
   return chosen;
 }
 
-/** 強さの係数（知らない値は既定）。 */
+/** 実行時の係数（未知値は none。保存の既定値とは別）。 */
 export function fxScale(level) {
-  return FX_SCALE[level] || FX_SCALE[DEFAULT_FX_LEVEL];
+  return FX_LEVELS.includes(level) ? FX_SCALE[level] : FX_SCALE.none;
 }
 
 /**

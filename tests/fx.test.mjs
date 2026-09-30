@@ -59,8 +59,12 @@ function seeded(seed = 1) {
 test("the chosen strength is respected, and a measured run adds nothing", () => {
   assert.equal(resolveFxLevel({ fxLevel: "big" }), "big");
   assert.equal(resolveFxLevel({ fxLevel: "subtle" }), "subtle");
-  assert.equal(resolveFxLevel({}), DEFAULT_FX_LEVEL);
-  assert.equal(resolveFxLevel({ fxLevel: "nonsense" }), DEFAULT_FX_LEVEL);
+  assert.equal(DEFAULT_FX_LEVEL, "normal", "保存の既定は変えない");
+  assert.equal(resolveFxLevel({}), "none");
+  for (const value of ["nonsense", null, {}, "toString"]) {
+    assert.equal(resolveFxLevel({ fxLevel: value }), "none");
+    assert.equal(fxScale(value), fxScale("none"));
+  }
   // そくていの回は何も足さない（どの強さを選んでいても）。
   for (const level of FX_LEVELS) assert.equal(resolveFxLevel({ fxLevel: level }, { measurement: true }), "none");
 });

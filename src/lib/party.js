@@ -52,7 +52,8 @@ export const ATMOSPHERES = Object.freeze(Object.fromEntries([
 
 /** タイミングの課題には、合図を覆う音楽・観客・旗・待機中の動きを持ち込まない。 */
 export function atmosphereProfile(level, kind = "beginner") {
-  const base = ATMOSPHERES[level] || ATMOSPHERES.normal;
+  // 実行中の未知値は none。保存の既定 normal は state.js が保つ。
+  const base = Object.hasOwn(ATMOSPHERES, level) ? ATMOSPHERES[level] : ATMOSPHERES.none;
   return { ...base, kind, music: base.liveCompanions && kind === "beginner", crowd: base.liveCompanions && kind === "beginner" };
 }
 
