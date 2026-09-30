@@ -203,6 +203,28 @@ test("リールの成功演出は窓内に収まり、連続成功で段階が�
   }
 });
 
+test("釣れたときのしぶきは数粒だけで、魚の近くから広がらない", () => {
+  for (const lengthCm of [10, 30, 80]) {
+    const bursts = [];
+    const fx = createFxPresets({
+      engine: {
+        pointOf: () => ({ x: 0, y: 0, rect: { width: 60, height: 40 } }),
+        burst: options => bursts.push(options),
+        ring() { assert.fail("長さの札を隠す輪を出している"); },
+        glow() { assert.fail("魚を隠す光を出している"); },
+      }, motion: {},
+    });
+    fx.fishCatch({}, { lengthCm });
+    assert.equal(bursts.length, 1);
+    assert.equal(bursts[0].count, 4);
+    assert.deepEqual(bursts[0].shapes, ["drop", "drop", "dot"]);
+    assert.deepEqual(bursts[0].colors, PALETTES.sea);
+    for (const p of spawnBurst({ ...bursts[0], random: seeded(13) })) {
+      while (stepParticle(p, 1 / 120)) assert.ok(Math.hypot(p.x, p.y) + sizeOf(p) < 20);
+    }
+  }
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);
 console.log("fx tests passed");

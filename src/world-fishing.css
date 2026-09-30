@@ -210,65 +210,6 @@
   }
 }
 
-/* 遠くの魚の小さな群れ。狙う魚より小さく、水色で、水の中に溶ける。
-   糸の魚の道筋（水の中の高さ36〜56%）を避けて流れる。 */
-.module-fishing.is-practice .fishing-school {
-  position: absolute;
-  left: 0;
-  width: clamp(64px, 9%, 116px);
-  height: auto;
-  opacity: 0.55;
-}
-
-.module-fishing.is-practice .fishing-school-a {
-  top: 12%;
-  animation: fishing-school-drift 23s linear infinite;
-  animation-delay: -7s;
-}
-
-.module-fishing.is-practice .fishing-school-b {
-  top: 70%;
-  width: clamp(48px, 7%, 90px);
-  scale: -1 1;
-  animation: fishing-school-drift-back 17s linear infinite;
-  animation-delay: -3s;
-}
-
-.module-fishing.is-practice .fishing-school-c {
-  top: 80%;
-  width: clamp(40px, 6%, 76px);
-  animation: fishing-school-drift 13s linear infinite;
-  animation-delay: -9s;
-}
-
-.module-fishing.is-practice .fishing-school-d {
-  top: 24%;
-  width: clamp(36px, 5.5%, 70px);
-  scale: -1 1;
-  animation: fishing-school-drift-back 23s linear infinite;
-  animation-delay: -15s;
-}
-
-@keyframes fishing-school-drift {
-  from {
-    translate: 112vw 0;
-  }
-
-  to {
-    translate: -20vw 0;
-  }
-}
-
-@keyframes fishing-school-drift-back {
-  from {
-    translate: -20vw 0;
-  }
-
-  to {
-    translate: 112vw 0;
-  }
-}
-
 .module-fishing.is-practice .fishing-sea .sea-weed {
   position: absolute;
   bottom: 6%;
@@ -450,8 +391,7 @@ body.high-contrast .module-fishing.is-practice .fishing-line::after {
     animation: none;
   }
 
-  .module-fishing.is-practice .fishing-sea .sea-bubbles,
-  .module-fishing.is-practice .fishing-school {
+  .module-fishing.is-practice .fishing-sea .sea-bubbles {
     display: none;
   }
 

@@ -152,7 +152,7 @@ test("world-fishing.css only styles the practice run", () => {
 
 test("endless motion stays on translate / rotate / scale (opacity only on the small bubbles)", () => {
   const keyframes = [...worldCss.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/@keyframes\s+([\w-]+)\s*\{([\s\S]*?)\n\}/g)];
-  assert.ok(keyframes.length >= 8, "キーフレームが読み取れていない");
+  assert.ok(keyframes.length >= 6, "キーフレームが読み取れていない");
   keyframes.forEach(([, name, body]) => {
     const props = new Set([...body.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]));
     props.forEach((prop) => {
