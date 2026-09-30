@@ -109,6 +109,11 @@ const checks = [
   ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
   ["lets the supporter reach every game's trend through tabs", checkTrendTabsCoverEveryGame],
   ["wires every export button to a real download", checkExportButtonsAreWired],
+  ["keeps storage failures visible and exports the unsaved state", checkStorageRecovery],
+  ["announces the explanation after both voices fail asynchronously", checkDoubleVoiceFailure],
+  ["names downloads with participant and time", checkExportFileName],
+  ["lets one switch finish both endless games without changing measured input", checkSwitchEndlessExit],
+  ["lets one switch leave the screen where audio cannot start", checkSwitchUnavailableExit],
   ["blocks deletion when records change after an export", checkBackupRevision],
   ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
 ];
@@ -132,7 +137,7 @@ const selectedChecks = onlyChecks.length
   ? checks.filter(([name]) => onlyChecks.some((keyword) => name.includes(keyword)))
   : checks;
 
-const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
+const server = spawn(process.execPath, ["scripts/serve-dist.mjs", process.env.SMOKE_DIST || "dist", String(port)], {
   stdio: ["ignore", "pipe", "pipe"],
   windowsHide: true,
   env: { ...process.env, BASE_PATH: basePath },
@@ -186,6 +191,7 @@ try {
           // 気づけない（素材の欠落は画面が寂しくなるだけで、テストは通る）。
           // わざと存在しないURLを叩くのは PWA の検査だけなので、そこに限る。
           if (allowsMissingResources && /Failed to load resource/i.test(message.text())) return;
+          if (check === checkStorageRecovery && message.text().startsWith("[neuro] 状態の保存に失敗しました")) return;
           pageProblems.push(`console.error: ${message.text()}`);
         });
         try {
@@ -3158,7 +3164,6 @@ async function checkFishingGameFlow(page) {
       sessions === 0,
       `A task that never presented a cue must not record trials, found ${sessions} session(s)`
     );
-    await page.locator("#gameExit").click();
     await waitForClass(page, "#homeView", "is-active");
     return;
   }
@@ -4761,9 +4766,7 @@ async function checkBackupRevision(page) {
   await page.locator("#participantId").fill("P:01/test");
   const download = page.waitForEvent("download");
   await page.locator("#exportRawJson").click();
-  const file = await download;
-  assert(/^neuronode-raw-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.json$/.test(file.suggestedFilename()),
-    `Participant and time missing: ${file.suggestedFilename()}`);
+  await download;
   await page.locator("#homeReturn").click();
   await openActivity(page, t("tile.color-legacy.title"));
   await page.waitForTimeout(200);
@@ -4782,4 +4785,170 @@ async function checkBackupRevision(page) {
   await page.locator("#exportCsv").click();
   await page.locator("#clearLog").click();
   assert(dialogs === 1, "Current log CSV permits clearing only the logs");
+}
+
+async function checkStorageRecovery(page) {
+  for (const name of ["QuotaExceededError", "SecurityError"]) {
+    await page.evaluate(({key, name}) => {
+      const state = JSON.parse(localStorage.getItem(key));
+      state.settings.speechEnabled = false;
+      localStorage.setItem(key, JSON.stringify(state));
+    }, {key: storageKey, name});
+    await page.reload();
+    await page.evaluate(name => {
+      const original = Storage.prototype.setItem;
+      window.__storageBlocked = true;
+      Storage.prototype.setItem = function(...args) {
+        if (window.__storageBlocked) throw new DOMException("test storage failure", name);
+        return original.apply(this, args);
+      };
+    }, name);
+    await page.locator("#startStage").click();
+    await page.locator("#storageWarning").waitFor({state: "visible"});
+    await page.waitForTimeout(6200);
+    assert(await page.locator("#storageWarning").isVisible(), "Warning must survive normal notices");
+    await openActivity(page, t("tile.color-legacy.title"));
+    assert(await page.locator("#storageWarning").isHidden(), "Warning must not cover a game");
+    for (let i=0; i<BEGINNER_TARGET_PRESSES; i++) {
+      await page.waitForTimeout(200);
+      await page.locator("#gameStage").click();
+    }
+    await waitForClass(page, "#resultView", "is-active");
+    await page.locator("#storageWarning").waitFor({state: "visible"});
+    await page.evaluate(() => {
+      const original = URL.createObjectURL;
+      URL.createObjectURL = blob => { window.__recoveryBlob = blob; return original(blob); };
+    });
+    const downloaded = page.waitForEvent("download");
+    await page.locator("#storageExport").click();
+    await downloaded;
+    const payload = await page.evaluate(async () => JSON.parse(await window.__recoveryBlob.text()));
+    assert(payload.state.logs.some(log => log.view === "game"), "Unsaved game records must be recoverable");
+    await page.evaluate(() => { window.__storageBlocked = false; });
+    await page.locator("#storageRetry").click();
+    assert(await page.locator("#storageWarning").isHidden(), "Successful save clears the warning");
+    assert((await readLogCount(page)) === payload.state.logs.length, "Recovered state must be persisted");
+  }
+}
+
+async function checkDoubleVoiceFailure(page) {
+  await page.addInitScript(() => {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (url, ...args) => /\.bin(?:\?|$)/.test(String(url))
+      ? Promise.reject(new Error("test voice pack unavailable")) : nativeFetch(url, ...args);
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: undefined });
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: undefined });
+  });
+  await page.evaluate(key => {
+    const state = JSON.parse(localStorage.getItem(key));
+    state.settings.speechEnabled = true;
+    state.settings.speechVoice = "app";
+    localStorage.setItem(key, JSON.stringify(state));
+  }, storageKey);
+  await page.reload();
+  await page.locator("#startStage").click();
+  await openActivity(page, t("tile.slot-corner.title"));
+  await openActivity(page, t("tile.slot-l1.title"));
+  await page.locator(".game-ready").waitFor({state:"visible"});
+  await page.waitForFunction(text => document.querySelector("#liveRegion").textContent.includes(text), t("howto.slot-l1.1"));
+}
+
+async function checkExportFileName(page) {
+  await page.locator("#startStage").click();
+  await openSupporterLog(page);
+  await page.locator("#participantId").fill("P:01/test");
+  const download = page.waitForEvent("download");
+  await page.locator("#exportRawJson").click();
+  const file = await download;
+  assert(/^neuronode-raw-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.json$/.test(file.suggestedFilename()),
+    `Participant and time missing: ${file.suggestedFilename()}`);
+}
+
+async function scanTo(page, selector) {
+  for (let i=0; i<80; i++) {
+    if (await page.locator(selector + ".scan-focus").count()) {
+      await page.keyboard.press("Space");
+      await page.clock.runFor(200);
+      return;
+    }
+    await page.clock.runFor(800);
+  }
+  assert(false, `Single-switch scan cannot reach ${selector}`);
+}
+
+async function checkSwitchEndlessExit(page) {
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now()+1000));
+  for (const game of ["crane", "fishing"]) {
+    await page.evaluate(key => {
+      const state = JSON.parse(localStorage.getItem(key));
+      state.settings.autoScan = true;
+      state.settings.scanInterval = 800;
+      state.settings.speechEnabled = false;
+      state.settings.difficultyMode = "practice";
+      localStorage.setItem(key, JSON.stringify(state));
+    }, storageKey);
+    await page.reload();
+    await page.keyboard.press("Space");
+    await page.clock.runFor(500);
+    await scanTo(page, `[data-tile-id="${game}-corner"]`);
+    await scanTo(page, `[data-tile-id="${game}-endless"]`);
+    await page.keyboard.press("Space");
+    if (await page.locator(".game-unavailable").count()) {
+      await page.clock.runFor(200);
+      await page.keyboard.press("Space");
+      await page.clock.runFor(200);
+      assert(await page.locator("#homeView.is-active").count() === 1, "Unavailable endless fishing returns with one switch");
+      continue;
+    }
+    await page.clock.runFor(21_000);
+    if (game === "fishing" && await page.locator("#resultView.is-active").count()) {
+      // アタリを見送った場合は既存のfailure終了から結果へ進む。そこも1スイッチで抜ける。
+      await scanTo(page, "#resultHome");
+    } else {
+      assert(await page.locator("#gameSwitchMenu").isVisible(), `${game} needs an exit choice`);
+      const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+      const run = saved.sessions.filter(s => s.gameId === game).at(-1);
+      assert(run?.endReason === "manual", "Waiting uses the existing manual end record");
+      if (game === "crane") {
+        await scanTo(page, "#gameSwitchAgain");
+        assert(await page.locator(".game-ready").isVisible(), "Again starts a new ready screen");
+        await page.keyboard.press("Space");
+        await page.clock.runFor(21_000);
+      }
+      await scanTo(page, "#gameSwitchEnd");
+    }
+    assert(await page.locator("#homeView.is-active").count() === 1, "One switch returns home");
+  }
+}
+
+async function checkSwitchUnavailableExit(page) {
+  await page.addInitScript(() => {
+    const NativeAudio = window.AudioContext || window.webkitAudioContext;
+    if (sessionStorage.getItem("audio-fault") === "suspended" && NativeAudio) {
+      window.AudioContext = class extends NativeAudio {
+        get state() { return "suspended"; }
+        resume() { return Promise.resolve(); }
+      };
+      window.webkitAudioContext = window.AudioContext;
+    } else {
+      window.AudioContext = undefined;
+      window.webkitAudioContext = undefined;
+    }
+  });
+  for (const fault of ["missing", "suspended"]) for (const game of ["fishing", "gonogo"]) {
+    await page.evaluate(fault => sessionStorage.setItem("audio-fault", fault), fault);
+    await page.reload();
+    await page.keyboard.press("Space");
+    if (game === "fishing") await openActivity(page, t("tile.fishing-corner.title"));
+    await openActivity(page, t(`tile.${game}.title`));
+    await page.waitForTimeout(180);
+    await page.keyboard.press("Space");
+    await page.locator(".game-unavailable").waitFor({state:"visible"});
+    await page.waitForTimeout(180);
+    await page.keyboard.press("Space");
+    await waitForClass(page, "#homeView", "is-active");
+    const count = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).sessions.length, storageKey);
+    assert(count === 0, "Unavailable audio must not create a measurement session");
+  }
 }
