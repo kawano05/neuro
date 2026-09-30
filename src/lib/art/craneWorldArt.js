@@ -23,6 +23,18 @@
 import { project } from "../games/craneGeometry.js";
 import { artSvg } from "./hakkiriArt.js";
 
+/**
+ * 見え方の版。session.config.artVersion に残し、CSV の最後の列に出す。
+ *
+ * 景品・アーム・箱の中の絵は、れんしゅうの回に画面へ出る刺激そのもの。絵が変わった前後の回を
+ * 同じ分布に混ぜないよう、どの版で走った回かを残す（リールの SLOT_ENGINE_VERSION と
+ * 同じ考え方。測定条件は禁止せず記録する）。この列を持たない古い記録は空欄。
+ *   1 … 画像ファイル（PNG）の絵。そくていの回は今もこの見え方
+ *   2 … れんしゅうの回だけ、このファイルの SVG の絵と世界にした（2026-09-30）。
+ *       位置・大きさ・時刻は 1 と同じ。そくていの回の見え方は 1 と同じ
+ */
+export const CRANE_ART_VERSION = 2;
+
 const INK = "#1A1A1A";
 const EYE = "#10222E";
 

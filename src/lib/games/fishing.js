@@ -34,7 +34,7 @@ import {
   resolveEndlessMode,
   resolveFishingDifficulty,
 } from "../difficultyMode.js";
-import { fishingBoatSvg, fishingCatchSvg, fishingSeaHtml, fishingSkyHtml } from "../art/fishingWorldArt.js";
+import { FISHING_ART_VERSION, fishingBoatSvg, fishingCatchSvg, fishingSeaHtml, fishingSkyHtml } from "../art/fishingWorldArt.js";
 import { generateGoNoGoSequence } from "./judge.js";
 import { generateForeperiods, judgeReaction } from "./reaction.js";
 
@@ -1023,6 +1023,9 @@ export function createFishingGame(gameId) {
         difficultyMode: resolveDifficultyMode(ctx.settings),
         // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
         fxLevel: ctx.fx?.level() ?? null,
+        // 見え方の版（art/fishingWorldArt.js）。れんしゅうの回の釣り人・魚・長靴の絵が
+        // 変わった前後を分けるため。
+        artVersion: FISHING_ART_VERSION,
         // 成立確認の状態（met / overridden / n/a）。他の課題と同じ意味。
         measurementReadiness: ctx.readiness || "n/a",
       },

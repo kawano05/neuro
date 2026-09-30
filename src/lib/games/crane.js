@@ -54,6 +54,7 @@ import {
 } from "./craneGeometry.js";
 import { PRIZE_ART, clawClosedUrl, clawOpenUrl } from "./craneArt.js";
 import {
+  CRANE_ART_VERSION,
   clawHtml,
   cranePrizeSvg,
   craneMatHtml,
@@ -312,6 +313,9 @@ function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = nul
     difficultyMode: resolveDifficultyMode(settings),
     // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
     fxLevel,
+    // 見え方の版（art/craneWorldArt.js）。れんしゅうの回の景品やアームの絵が変わった
+    // 前後を分けるため。
+    artVersion: CRANE_ART_VERSION,
     // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
     // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
     measurementReadiness: readiness || "n/a",

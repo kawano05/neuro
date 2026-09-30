@@ -921,6 +921,9 @@ function sanitizeScanSession(session) {
     // 成績に効きうるので、実際に効いていた強さを残す。この列を持たない古い記録は
     // 演出エンジンが無かった頃のもので、null（分からない）のまま。
     fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
+    // 見え方の版（art/craneWorldArt.js・art/fishingWorldArt.js）。落とすと再読み込みで
+    // 消え、絵が変わる前後の回を分けられない。持たない古い記録は null（分からない）。
+    artVersion: numberInRange(config.artVersion, null, 1, 1_000, true),
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
     textMode: enumOr(config.textMode, TEXT_MODES, "kana"),
@@ -1081,6 +1084,9 @@ function sanitizeReactionSession(session) {
     // 成績に効きうるので、実際に効いていた強さを残す。この列を持たない古い記録は
     // 演出エンジンが無かった頃のもので、null（分からない）のまま。
     fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
+    // 見え方の版（art/craneWorldArt.js・art/fishingWorldArt.js）。落とすと再読み込みで
+    // 消え、絵が変わる前後の回を分けられない。持たない古い記録は null（分からない）。
+    artVersion: numberInRange(config.artVersion, null, 1, 1_000, true),
     // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
     measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
   };

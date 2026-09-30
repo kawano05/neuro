@@ -106,6 +106,9 @@ export const SESSION_LEDGER_HEADERS = Object.freeze([
   // 演出の強さ（src/lib/fx/）。configJson の中にもあるが、層別にすぐ使えるよう列にも出す。
   // 末尾に足す（列位置を動かさない）。演出エンジンより前の記録は空欄。
   "fxLevel",
+  // 見え方の版（アームとさかなつり。config.artVersion）。fxLevel の後ろに足す。
+  // ほかの課題と、この列より前の記録は空欄。
+  "artVersion",
 ]);
 
 function deviceColumns(session) {
@@ -248,6 +251,7 @@ export function buildSessionLedgerRows(sessions) {
       JSON.stringify(session.config ?? {}),
       JSON.stringify(session.summary ?? {}),
       session.config?.fxLevel ?? "",
+      session.config?.artVersion ?? "",
     ]);
   });
   return rows;
@@ -294,6 +298,9 @@ export function buildTaskCsvRows(sessions, taskType) {
         // 当たったときの星や紙吹雪が成績に効きうる。末尾に足す（列位置を動かさない）。
         // 演出エンジンより前の記録は空欄。
         "fxLevel",
+        // 見え方の版（config.artVersion）。れんしゅうの回の絵が変わった前後を分ける。
+        // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
+        "artVersion",
       ],
     ];
     sessions
@@ -328,6 +335,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.config?.endlessProtocolVersion ?? "",
             session.endReason ?? "",
             session.config?.fxLevel ?? "",
+            session.config?.artVersion ?? "",
           ]);
         });
       });
@@ -361,6 +369,9 @@ export function buildTaskCsvRows(sessions, taskType) {
         // 当たったときの星や紙吹雪が成績に効きうる。末尾に足す（列位置を動かさない）。
         // 演出エンジンより前の記録は空欄。
         "fxLevel",
+        // 見え方の版（config.artVersion）。れんしゅうの回の絵が変わった前後を分ける。
+        // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
+        "artVersion",
       ],
     ];
     sessions
@@ -390,6 +401,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.config?.endlessProtocolVersion ?? "",
             session.endReason ?? "",
             session.config?.fxLevel ?? "",
+            session.config?.artVersion ?? "",
           ]);
         });
       });

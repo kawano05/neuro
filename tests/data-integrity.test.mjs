@@ -45,6 +45,8 @@ import { coloringMarkup } from "../src/lib/games/coloring.js";
 import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
 import { POP_ANIMALS } from "../src/lib/art/hakkiriArt.js";
 import { SLOT_ENGINE_VERSION } from "../src/lib/games/slotJudge.js";
+import { CRANE_ART_VERSION } from "../src/lib/art/craneWorldArt.js";
+import { FISHING_ART_VERSION } from "../src/lib/art/fishingWorldArt.js";
 
 class MemoryStorage {
   constructor() {
@@ -1083,9 +1085,10 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // 既存18列 ＋ audioGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness
   // ＋ endless ＋ sweepMs。
   // ＋ endless ＋ sweepMs ＋ endlessProtocolVersion ＋ endReason。
-  // ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
-  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 6);
-  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 6);
+  // ＋ fxLevel（演出の強さ。2026-09-28）。
+  // ＋ artVersion（見え方の版。2026-09-30、いちばん後ろ）。
+  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 7);
+  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 7);
   assert.equal(scanRows[0][17], "judgment");
   assert.equal(scanRows[1][17], "grip");
   assert.equal(scanRows[0][18], "audioGuidance");
@@ -1116,12 +1119,14 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、toleranceR
   // だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
   assert.equal(scanRows[0][29], "sweepMs");
-  assert.equal(scanRows[0].at(-2), "endReason");
-  assert.equal(scanRows[0].at(-1), "fxLevel");
+  assert.equal(scanRows[0].at(-3), "endReason");
+  assert.equal(scanRows[0].at(-2), "fxLevel");
+  assert.equal(scanRows[0].at(-1), "artVersion");
   assert.equal(scanRows[1][29], "");
   // 終了理由を持たない回は空欄（「分からない」と「予定どおり」は違う）。
+  assert.equal(scanRows[1].at(-3), "");
+  // 演出の強さ・見え方の版を持たない古い記録も空欄。
   assert.equal(scanRows[1].at(-2), "");
-  // 演出の強さを持たない古い記録も空欄。
   assert.equal(scanRows[1].at(-1), "");
 
   const rtRows = buildTaskCsvRows(
@@ -1151,9 +1156,10 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // 同じ2列を、既存列の**うしろ**に足す。
   // ＋ difficultyMode ＋ readiness ＋ endless ＋ limitMs
   //   ＋ endlessProtocolVersion ＋ endReason。
-  //   ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
-  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 7);
-  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 7);
+  //   ＋ fxLevel（演出の強さ。2026-09-28）。
+  //   ＋ artVersion（見え方の版。2026-09-30、いちばん後ろ）。
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 8);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 8);
   assert.equal(rtRows[0][13], "excluded");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 2], "deviceUserAgent");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceInputMethod");
@@ -1162,8 +1168,9 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 2], "endless");
   // 試行ごとの受付時間。エンドレスでは試行ごとに短くなる。
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 3], "limitMs");
-  assert.equal(rtRows[0].at(-2), "endReason");
-  assert.equal(rtRows[0].at(-1), "fxLevel");
+  assert.equal(rtRows[0].at(-3), "endReason");
+  assert.equal(rtRows[0].at(-2), "fxLevel");
+  assert.equal(rtRows[0].at(-1), "artVersion");
   // 列を持たない古い記録は practice / n/a / false に倒す（scan と同じ既定）。
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS], "practice");
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 1], "n/a");
@@ -2048,14 +2055,87 @@ test("the effect level survives config -> sanitize -> CSV for every timing game"
   const unknown = sanitized.sessions.find((session) => session.sessionId === "fx-unknown");
   assert.equal(unknown.config.fxLevel, null, "知らない値は null（分からない）");
   const rows = buildTaskCsvRows([kept], "rt");
-  assert.equal(rows[0].at(-1), "fxLevel");
-  assert.equal(rows[1].at(-1), "big");
+  assert.equal(rows[0].at(-2), "fxLevel");
+  assert.equal(rows[1].at(-2), "big");
   const ledger = buildSessionLedgerRows([kept]);
-  assert.equal(ledger[0].at(-1), "fxLevel");
-  assert.equal(ledger[1].at(-1), "big");
+  assert.equal(ledger[0].at(-2), "fxLevel");
+  assert.equal(ledger[1].at(-2), "big");
   // 設定そのものも保存をまたいで残り、知らない値は既定（ふつう）へ戻る。
   assert.equal(sanitizeState({ settings: { fxLevel: "subtle" } }).settings.fxLevel, "subtle");
   assert.equal(sanitizeState({ settings: { fxLevel: "strobe" } }).settings.fxLevel, "normal");
+});
+
+test("the art version survives config -> sanitize -> CSV for the arm and fishing games", () => {
+  // れんしゅうの回の景品・アーム・魚の絵は刺激そのもの。絵を替えた前後の回を分けられるよう、
+  // 見え方の版を残す（art/craneWorldArt.js・art/fishingWorldArt.js）。3経路のどれかで
+  // 落ちると、残したつもりの値が再読み込みや書き出しで消える。
+  const base = {
+    startedAtIso: "2026-09-30T00:00:00.000Z",
+    aborted: false,
+    finished: true,
+    device: {},
+  };
+  const sanitized = sanitizeState({
+    sessions: [
+      {
+        ...base,
+        sessionId: "art-scan",
+        taskType: "scan",
+        gameId: "crane",
+        config: { targetTrials: 1, difficultyMode: "practice", artVersion: CRANE_ART_VERSION },
+        trials: [
+          {
+            index: 0,
+            targetX: 30,
+            targetY: 40,
+            toleranceR: 15,
+            // 真ん中でつかんだ試行（sanitize は距離と判定の食い違いを捨てる）。
+            selectedX: 30,
+            selectedY: 40,
+            dx: 0,
+            dy: 0,
+            distance: 0,
+            xPhaseMs: 500,
+            yPhaseMs: 600,
+            judgment: "grip",
+          },
+        ],
+      },
+      {
+        ...base,
+        sessionId: "art-rt",
+        taskType: "rt",
+        gameId: "fishing",
+        config: { targetTrials: 1, limitMs: 2000, difficultyMode: "practice", artVersion: FISHING_ART_VERSION },
+        trials: [{ index: 0, kind: "real", foreperiodMs: 1500, cueMs: 1800, inputMs: 2100, reactionTimeMs: 300, judgment: "hit", excluded: false }],
+      },
+      {
+        ...base,
+        sessionId: "art-old",
+        taskType: "rt",
+        gameId: "fishing",
+        config: { targetTrials: 1, limitMs: 2000, artVersion: "two" },
+        trials: [],
+      },
+    ],
+  });
+  const byId = (id) => sanitized.sessions.find((session) => session.sessionId === id);
+  assert.equal(byId("art-scan").config.artVersion, CRANE_ART_VERSION);
+  assert.equal(byId("art-rt").config.artVersion, FISHING_ART_VERSION);
+  assert.equal(byId("art-old").config.artVersion, null, "数でない値・列の無い古い記録は null（分からない）");
+
+  const scanRows = buildTaskCsvRows([byId("art-scan")], "scan");
+  assert.equal(scanRows[0].at(-1), "artVersion");
+  assert.equal(scanRows[1].at(-1), CRANE_ART_VERSION);
+  const rtRows = buildTaskCsvRows([byId("art-rt")], "rt");
+  assert.equal(rtRows[0].at(-1), "artVersion");
+  assert.equal(rtRows[1].at(-1), FISHING_ART_VERSION);
+  const ledger = buildSessionLedgerRows([byId("art-scan"), byId("art-rt"), byId("art-old")]);
+  assert.equal(ledger[0].at(-1), "artVersion");
+  assert.deepEqual(
+    ledger.slice(1).map((row) => row.at(-1)),
+    [CRANE_ART_VERSION, FISHING_ART_VERSION, ""]
+  );
 });
 
 test("the phrase board has English for every phrase and group", () => {
