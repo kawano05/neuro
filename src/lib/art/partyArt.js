@@ -127,24 +127,45 @@ const WEEDS = [
   [3, 150, "#0F8A5F", -1], [7.5, 120, "#1FB57A", -3], [88, 130, "#1FB57A", -2], [93, 160, "#0F8A5F", -4.5],
 ];
 
+/** 差し込む光の筋。位置・幅・ゆれは CSS（.sea-rays i）。 */
+export const SEA_RAYS_HTML = `<span class="sea-rays"><i></i><i></i><i></i><i></i></span>`;
+
+/**
+ * 水面の波（白い帯。波の下の縁がゆっくり寄せる）。さかなつり（れんしゅう）の水面も
+ * これを使うので、海がつながって見える。
+ */
+export function seaSurfaceSvg() {
+  return `<svg class="sea-surface" viewBox="0 0 1340 60" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M0 34 Q 67 16 134 34 T 268 34 T 402 34 T 536 34 T 670 34 T 804 34 T 938 34 T 1072 34 T 1206 34 T 1340 34 V0 H0 Z" fill="rgba(255,255,255,0.2)"/></svg>`;
+}
+
+/** 泡（[左 %, 秒, 大きさ px, 遅れ秒] の並びから。動きは CSS の var(--d)・var(--s)）。 */
+export function seaBubblesHtml(list = BUBBLES) {
+  return list
+    .map(([left, seconds, size, delay]) => `<i style="left:${left}%;--d:${seconds}s;--s:${size}px;animation-delay:${delay}s"></i>`)
+    .join("");
+}
+
+/** 海藻（[左 %, 高さ, 色, 遅れ秒] の並びから。高さの単位は既定で px、画面に合わせたいときは "%"）。 */
+export function seaWeedsHtml(list = WEEDS, unit = "px") {
+  return list
+    .map(
+      ([left, height, color, delay]) =>
+        `<svg class="sea-weed" style="left:${left}%;height:${height}${unit};animation-delay:${delay}s" viewBox="0 0 60 160" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M30 160 C 8 128, 52 104, 30 76 S 48 28, 30 4" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/></svg>`
+    )
+    .join("");
+}
+
 /**
  * 海の背景（「押すと 出てくる」の背景「海」）。水面の波・差し込む光・泡・海藻・砂。
  * 動きはどれもゆっくりで、明るさは変えない（点滅にならない）。
  */
 export function seaSceneHtml() {
-  const bubbles = BUBBLES.map(
-    ([left, seconds, size, delay]) => `<i style="left:${left}%;--d:${seconds}s;--s:${size}px;animation-delay:${delay}s"></i>`
-  ).join("");
-  const weeds = WEEDS.map(
-    ([left, height, color, delay]) =>
-      `<svg class="sea-weed" style="left:${left}%;height:${height}px;animation-delay:${delay}s" viewBox="0 0 60 160" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M30 160 C 8 128, 52 104, 30 76 S 48 28, 30 4" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/></svg>`
-  ).join("");
   return `
-    <span class="sea-rays"><i></i><i></i><i></i><i></i></span>
+    ${SEA_RAYS_HTML}
     <span class="sea-spot"></span>
-    <svg class="sea-surface" viewBox="0 0 1340 60" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M0 34 Q 67 16 134 34 T 268 34 T 402 34 T 536 34 T 670 34 T 804 34 T 938 34 T 1072 34 T 1206 34 T 1340 34 V0 H0 Z" fill="rgba(255,255,255,0.2)"/></svg>
-    <span class="sea-bubbles">${bubbles}</span>
-    ${weeds}
+    ${seaSurfaceSvg()}
+    <span class="sea-bubbles">${seaBubblesHtml()}</span>
+    ${seaWeedsHtml()}
     <svg class="sea-floor" viewBox="0 0 1180 110" preserveAspectRatio="none" aria-hidden="true" focusable="false">
       <path d="M0 52 C 160 34, 300 62, 460 48 S 760 34, 900 50 S 1100 58, 1180 44 V110 H0 Z" fill="#E3C98D"/>
       <path d="M90 86 q 30 -9 60 0 M 400 92 q 30 -9 60 0 M 700 88 q 30 -9 60 0 M 1000 94 q 30 -9 60 0" stroke="#CDB073" stroke-width="4" fill="none" stroke-linecap="round"/>
