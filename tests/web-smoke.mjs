@@ -73,6 +73,7 @@ const projects = [
 const checks = [
   ["isolates presentation faults and completes recorded beginner and timing runs", checkPresentationFaults],
   ["stops decorative motion for all four atmospheres and reduced motion", checkDecorationMotion],
+  ["cancels scheduled sounds and result music when hidden or interrupted", checkPresentationCleanup],
   ["loads the main learning app", checkMainApp],
   ["keeps the start press from falling through into a home activity", checkStartInputGuard],
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
@@ -172,7 +173,7 @@ try {
     try {
       for (const [name, check] of selectedChecks) {
         const context = await browser.newContext({ ...project.contextOptions,
-          serviceWorkers: [checkPresentationFaults, checkDecorationMotion].includes(check) ? "block" : "allow",
+          serviceWorkers: [checkPresentationFaults, checkDecorationMotion, checkPresentationCleanup].includes(check) ? "block" : "allow",
         });
         await context.addInitScript(() => {
           const marker = "neuro-smoke-initialized";
@@ -4752,6 +4753,70 @@ async function checkDecorationMotion(page, project) {
     await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-fishing.png` });
     await page.locator("#gameExit").click();
   }
+}
+
+async function checkPresentationCleanup(page) {
+  await page.addInitScript(() => {
+    window.__soundNodes = [];
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) return;
+    for (const name of ["createOscillator", "createBufferSource"]) {
+      const original = Context.prototype[name];
+      Context.prototype[name] = function(...args) {
+        const source = original.apply(this, args);
+        const record = { active: false, hiddenStart: false };
+        window.__soundNodes.push(record);
+        const start = source.start.bind(source), stop = source.stop.bind(source);
+        source.start = (...args) => { record.active = true; record.hiddenStart = document.hidden; return start(...args); };
+        source.stop = (...args) => { if (!args.length || args[0] === 0) record.active = false; return stop(...args); };
+        source.addEventListener("ended", () => { record.active = false; });
+        return source;
+      };
+    }
+  });
+  await exposePresentationContext(page);
+  const prepare = async level => {
+    await page.evaluate(({ key, level }) => {
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.settings = { ...saved.settings, fxLevel: level, autoScan: false, speechEnabled: false,
+        playPrefs: { ...saved.settings.playPrefs, balloon: { background: "light", sound: "pop", cheer: "both" } } };
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, { key: storageKey, level });
+    await page.reload();
+    await page.locator("#startStage").click();
+    await openActivity(page, t("tile.balloon.title"));
+    for (let i = 0; i < 5; i++) {
+      await page.locator("#gameStage").dispatchEvent("click");
+      if (i < 4) await page.waitForTimeout(200);
+    }
+  };
+  const hide = () => page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const silence = async () => {
+    await page.waitForTimeout(700);
+    const status = await page.evaluate(() => ({
+      active: window.__soundNodes.filter(node => node.active).length,
+      hiddenStarts: window.__soundNodes.filter(node => node.hiddenStart).length,
+      music: window.__presentationCtx.audio.music.isPlaying(),
+    }));
+    assert(status.active === 0 && status.hiddenStarts === 0 && !status.music, `Interruption must silence every source and reservation: ${JSON.stringify(status)}`);
+  };
+  await prepare("normal");
+  await page.waitForTimeout(5);
+  await hide();
+  await waitForClass(page, "#homeView", "is-active");
+  await silence();
+  await prepare("big");
+  await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, { timeout: 12000 });
+  await hide();
+  assert(await page.evaluate(() => !window.__presentationCtx.audio.music.isPlaying()), "Result music must stop immediately");
+  await silence();
+  // 通常の終了操作も、非表示と同じ片づけへ通す。
+  await prepare("normal");
+  await page.locator("#gameExit").click();
+  await silence();
 }
 
 async function openActivity(page, name) {

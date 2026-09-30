@@ -507,8 +507,12 @@ export function initNeuroNodeApp() {
   // ゲーム中にタブが非アクティブ化したらセッションを中断して home へ直帰する
   // （detailed-design.md §2.4 終了条件3。計時汚染防止のため再開はしない）。
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && state.currentView === "game") {
-      ctx.gameHost.abort();
+    if (document.hidden) {
+      if (state.currentView === "game") ctx.gameHost.abort();
+      else ctx.gameHost.stopPresentation();
+      ctx.scan.stop(true);
+    } else {
+      ctx.scan.restartIfNeeded();
     }
   });
 

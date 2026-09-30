@@ -86,7 +86,7 @@ export function playFinishSound(audio, style) {
   if (style === "none") return;
   if (style === "pop" || style === "boom" || style === "boing") {
     [0, 0.12, 0.24, 0.36].forEach((delayS, index) => {
-      window.setTimeout(() => {
+      presentation.later(delayS * 1000, () => {
         audio.playSweep({
           fromHz: 400 + index * 140,
           toHz: 1300 + index * 260,
@@ -94,7 +94,7 @@ export function playFinishSound(audio, style) {
           gain: 0.04,
           makeupDb: POP_MAKEUP_DB,
         });
-      }, delayS * 1000);
+      });
     });
     FANFARE_SPARKLE.forEach((frequency, index) => {
       audio.playChime(frequency, { delayS: 0.52 + index * 0.12, durationS: 0.7, level: 0.6 });

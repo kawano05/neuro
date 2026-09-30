@@ -165,6 +165,19 @@ export function createGameHost(ctx) {
       }
     }
     activeInstance = null;
+    if (!celebrationCompleting) stopPresentation();
+  }
+
+  /** 中断・画面離脱の共通入口。正常終了の声は結果へ持ち越せる。 */
+  function stopPresentation() {
+    window.clearTimeout(resultScanTimer);
+    resultScanTimer = null;
+    presentation.cancelTimers();
+    ctx.audio.stopAll();
+    ctx.fx.clear();
+    for (const root of [elements.gameStageContent, elements.resultStats]) {
+      root.getAnimations?.({ subtree: true }).forEach(animation => animation.cancel());
+    }
   }
 
   /**
@@ -656,6 +669,7 @@ export function createGameHost(ctx) {
     dispatchInput,
     retry,
     abort: returnHome,
+    stopPresentation,
     /** 設定が開いていれば閉じる（変更は捨てる）。閉じたら true（Esc 用）。 */
     closeSettings: () => gameSettings.close({ apply: false }),
     getActiveGameId: () => activeGameId,
@@ -731,7 +745,8 @@ export function createGameHost(ctx) {
           revealPending = false;
           const shownSummary = lastResultSummary;
           // 描いた次のコマで、星を飛び込ませる（位置が決まってから）。
-          window.requestAnimationFrame(() => {
+          presentation.frame(() => {
+            if (document.hidden || state.currentView !== "result" || lastResultSummary !== shownSummary) return;
             if (elements.resultStats.querySelector(".party-result")) {
               presentation.run("party.result", () => revealPartyResult(elements.resultStats, { fx: ctx.fx, audio: ctx.audio,
                 isCurrent: () => state.currentView === "result" && lastResultSummary === shownSummary,
