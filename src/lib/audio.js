@@ -327,6 +327,10 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
   }
   // 鳴っている（鳴る予定の）声のパックの音。
   let voiceSources = [];
+  // 声のパックの読み上げが続いているか（isSpeaking）の手がかり。読み込み・音の
+  // 準備のあいだは voiceLoading、鳴らし始めたら終わる時刻（AudioContext の秒）。
+  let voiceLoading = false;
+  let voiceEndsAt = 0;
   // 声のパック（言語 → 読み込み中の Promise<ArrayBuffer|null>）と、そこから作った音。
   const voicePackData = new Map();
   const voiceClips = new Map();
@@ -538,6 +542,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    */
   function silenceSpeech() {
     speechToken += 1;
+    voiceLoading = false;
+    voiceEndsAt = 0;
     stopVoiceClips();
     try {
       window.speechSynthesis?.cancel?.();
@@ -555,6 +561,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     Promise.all([Promise.all(plan.map((range) => decodeVoiceClip(ctx, lang, range))), audioRunning(ctx)])
       .then(([buffers, running]) => {
         if (token !== speechToken) return;
+        voiceLoading = false;
         // 音の出口が止まったまま（iOS で電話のあとなど。戻せるのは操作の中だけ）なら、
         // 予約しても鳴らない。黙るより、端末の声で読む。
         if (buffers.some((buffer) => !buffer) || !running) {
@@ -573,11 +580,14 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
           voiceSources.push(source);
           at += buffer.duration + (index < buffers.length - 1 ? chunkGapS(chunks[index]) : 0);
         });
+        voiceEndsAt = at;
         // 声のあいだは音楽を下げる（声が音楽に埋もれないように）。
         music.duck(at - ctx.currentTime);
       })
       .catch(() => {
-        if (token === speechToken) fallback();
+        if (token !== speechToken) return;
+        voiceLoading = false;
+        fallback();
       });
   }
 
@@ -679,6 +689,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       const ctx = plan ? ensureContext() : null;
       if (plan && ctx) {
         const token = silenceSpeech();
+        voiceLoading = true;
         playVoiceClips(ctx, token, lang, plan, chunks, volume, () => {
           if (speakWithDevice(spokenText, lang, volume, token, { onFailure })) {
             reportSpeech({ text: spokenText, lang, via: "device", fallback: true });
@@ -743,6 +754,26 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    * speechEnabled の判定は掛けない。設定を切った直後に発話が残っている
    * 場合も含め、「止める」は常に効くべきなので。
    */
+  /**
+   * いま声が鳴っているか（鳴らす準備中も含む）。遊ぶ前の説明の画面が、スイッチの
+   * ひと押しを「声を止める」と「始める」のどちらにするかを決めるのに使う
+   * （games/readyScreen.js）。
+   *
+   * 声のパックは鳴り終わる時刻が分かる。端末の声は speechSynthesis.speaking を
+   * 見る（端末によっては終わっても true が残ることがある。そのときは押下が1回
+   * 「声を止める」になるだけで、次のひと押しで始まる——安全な側に倒れる）。
+   */
+  function isSpeaking() {
+    if (voiceLoading) return true;
+    if (voiceEndsAt > 0 && audioContext && audioContext.currentTime < voiceEndsAt) return true;
+    try {
+      const synth = window.speechSynthesis;
+      return Boolean(synth && (synth.speaking || synth.pending));
+    } catch {
+      return false;
+    }
+  }
+
   function stopSpeech() {
     voiceRetryTimers.forEach(timer => window.clearTimeout(timer));
     voiceRetryTimers.clear();
@@ -1458,6 +1489,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     speakOrAnnounce,
     speakOrAnnounceLater,
     stopSpeech,
+    isSpeaking,
     stopAll,
     prefetchVoice,
     setProfile,

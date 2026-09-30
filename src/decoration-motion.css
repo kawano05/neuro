@@ -1,7 +1,25 @@
-/* 共通の装飾判定だけを見る。課題の移動・測定画面・配置は変更しない。 */
+/* =====================================================================
+   decoration-motion.css — 装飾の動きを止める決まり（ただ1か所）
+
+   いつ止めるかは fx/index.js の syncPolicy が body に付ける2つの印だけで決める
+   （段の中身は src/lib/atmosphere.js の表、判定は fx/fxSafety.js の resolveDecorationPolicy）:
+     data-world-motion="off"      … 世界のゆっくりした動き（海の光・泡・海藻、雲、ふうせんの浮遊）
+                                    なし・すっきり・動きを減らす・そくていの回
+     data-decoration-motion="off" … 押したもの・おいわいの弾みと出入りの動き
+                                    なし・動きを減らす・そくていの回
+   課題の動き（リールの帯・アーム・魚・音符）と、そくていの回の画面には触れない。
+   いちばん最後に読む（src/main.js）ので、ほかの CSS の動きより後から効く。
+
+   決まり: 動きを止めても、合図と結果は「最後の姿」で見せる。出てくる動きで初めて
+   見えるもの（さかなつりの「！」など）は、動きを消すと見えなくなる——合図を消すと、
+   聞こえにくい人に届くはずの目の合図が無くなる（点検 A1）。
+   ===================================================================== */
+
+/* --- 世界の動き -------------------------------------------------------- */
+
 body[data-world-motion="off"] :is(.pop-sea, .module-fishing.is-practice .fishing-sea) *,
-body[data-world-motion="off"] .module-fishing.is-practice :is(.fishing-cloud, .fishing-otter-eyes, .fishing-shaft, .fishing-far),
-body[data-world-motion="off"] .balloon {
+body[data-world-motion="off"] .module-fishing.is-practice :is(.fishing-cloud, .fishing-otter-eyes),
+body[data-world-motion="off"] .balloon:not(.is-popping) {
   animation: none !important;
 }
 
@@ -13,6 +31,24 @@ body[data-world-motion="off"] :is(.pop-sea, .module-fishing.is-practice .fishing
   display: none;
 }
 
+/* 予備: 描画の判定（JS）が動かなかったときも、端末の「動きを減らす」では止める。 */
+@media (prefers-reduced-motion: reduce) {
+  :is(.pop-sea, .module-fishing.is-practice .fishing-sea) *,
+  .module-fishing.is-practice :is(.fishing-cloud, .fishing-otter-eyes) {
+    animation: none !important;
+  }
+
+  .module-fishing.is-practice .fishing-cloud {
+    translate: var(--rest) 0;
+  }
+
+  :is(.pop-sea, .module-fishing.is-practice .fishing-sea) .sea-bubbles {
+    display: none;
+  }
+}
+
+/* --- 押したもの・おいわいの動き ------------------------------------------ */
+
 body[data-decoration-motion="off"] :is(.module-pop, .module-balloon, .module-coloring, .module-baseball, .party-layer, #resultStats) *,
 body[data-decoration-motion="off"] .slot-stage.is-practice :is(.slot-cheer-word, .slot-cheer-streak),
 body[data-decoration-motion="off"] .module-crane.is-practice :is(.crane-collected-item, .crane-prize.is-lifted, .crane-prize.is-slipped),
@@ -21,10 +57,19 @@ body[data-decoration-motion="off"] .module-fishing.is-practice :is(.fishing-bite
   transition: none !important;
 }
 
+/* --- 動きを止めても、合図と結果は最後の姿で見せる -------------------------- */
+
+/* さかなつりの「！」（アタリの目の合図）。 */
+body[data-decoration-motion="off"] .module-fishing.is-practice .fishing-scene.is-bite .fishing-bite-mark {
+  opacity: 1;
+  transform: none;
+}
+
 /* 割れたことは、移動せずに形を変えて即時に示す。 */
 body[data-decoration-motion="off"] .balloon.is-popping .balloon-svg {
   opacity: 0;
 }
+
 body[data-decoration-motion="off"] .balloon.is-popping .balloon-mark {
   opacity: 1;
 }

@@ -2,7 +2,7 @@
 // 保存・既定値・測定の解決規則は state.js / difficultyMode.js のまま。
 // 理由と全項目の対応表: docs/settings-simple-2026-09-30.md。
 import { cranePresets, slotPresets } from './content.js';
-import { ATMOSPHERES } from './party.js';
+import { ATMOSPHERES } from "./atmosphere.js";
 import { translate } from './i18n.js';
 
 // 支援者の画面は日本語。雰囲気の名前と説明は舞台と同じ辞書のキーを使う。

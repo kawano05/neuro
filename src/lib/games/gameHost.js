@@ -1,14 +1,28 @@
 // =====================================================================
 // games/gameHost.js — ゲームの起動・入力振り分け・終了処理
-// お祝いはホストの一時的な表示情報で持つ。研究の summary を書き換えず、
-// ゲームが終了と判定して保存したあとにだけ、共通舞台のフィナーレを待つ。
 //
-// detailed-design.md §3.2 のライフサイクルを実装する:
-//   launch(id):    scan.stop(true) → currentView="game" → create → mount
-//   finish(summary) (ゲーム側から呼ばれる正常終了): destroy → currentView="result"
-//                  → scan.restartIfNeeded()
+// 遊びの画面の流れは「段階（phase）」ひとつで持つ。スイッチの押下の意味・走査の
+// 範囲・「この遊びの設定」を開けるか・後片付けは、この段階だけを見て決める
+// （以前は pendingModule・DOM の有無・タイマーの有無をあちこちで問い合わせていて、
+// お祝いの待ちのあいだに設定を開くと、けっかを飛ばしてしまっていた）:
+//
+//   idle        … 遊びの画面にいない（ホーム・けっか）
+//   ready       … 遊ぶ前の説明（games/readyScreen.js）。押下は「声を止める／始める」
+//   playing     … 遊んでいる最中。押下は課題の入力。走査しない
+//   unavailable … 音が出せず始められない画面（ゲームが ctx.markUnavailable で知らせる）。押下でホームへ
+//   finale      … 遊び終えてから、けっかへ移る前のお祝いの待ち。押下は受けない
+//   exitChoice  … エンドレスで押さずに待ったときの「もういちど／おわる」。ここだけ走査する
+//
+// detailed-design.md §3.2 のライフサイクル:
+//   launch(id):    scan.stop(true) → currentView="game" → ready（説明のある遊び）か playing
+//   finish(summary) (ゲーム側から呼ばれる正常終了): finale（お祝いの待ち。段の表
+//                  src/lib/atmosphere.js の finaleWaitMs）→ destroy → currentView="result"
+//                  → scan.restartIfNeeded()（お祝いのけっかは resultRevealMs 待ってから）
 //   abort()（ホスト側の強制終了。おわる/Esc/visibilitychange）:
 //                  destroy → currentView="home" 直帰 → scan.restartIfNeeded()
+//
+// お祝いはホストの一時的な表示情報で持つ。研究の summary を書き換えず、
+// ゲームが終了と判定して保存したあとにだけ、共通舞台のフィナーレを待つ。
 //
 // destroy() は冪等（二重呼び出し許容）。launch() は「前回 instance の
 // destroy() を必ず呼ぶ」（多重起動防止、MUST）。
@@ -63,7 +77,22 @@ import { tileThemeFor } from "../homeTheme.js";
 import { createGameSettings } from "./gameSettings.js";
 import { resolveReadinessState } from "../readinessCheck.js";
 import { applyPartyResult, localDayKey } from "../party.js";
-import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS, createPartyStage, revealPartyResult } from "./partyStage.js";
+import { atmosphereFor } from "../atmosphere.js";
+import { createPartyStage, revealPartyResult } from "./partyStage.js";
+import { READY_GUARD_MS } from "./readyScreen.js";
+
+/**
+ * エンドレスでスイッチを押さずにこれだけ待つと、「もういちど／おわる」を出す（点検 U4）。
+ * エンドレスには終わりが無く、遊んでいる最中は走査を止めている（押下は課題の入力）ので、
+ * スイッチ1つの人が自分で終われる道がほかに無い。説明の画面でもこの長さを知らせる。
+ */
+export const EXIT_CHOICE_IDLE_MS = 20_000;
+
+/** 合図が音の課題（taskType）。おおさわぎでも、試行のあいだに節目の音を鳴らさない。 */
+const AUDIO_CUE_TASKS = new Set(["rt", "gonogo", "rhythm", "sms"]);
+
+/** 「この遊びの設定」を開いてよい段階（お祝いの待ち・終わりの選択では開かない）。 */
+const SETTINGS_PHASES = new Set(["ready", "playing", "unavailable"]);
 
 export function createGameHost(ctx) {
   const { state, elements, scan, announce, save, logEvent } = ctx;
@@ -74,10 +103,10 @@ export function createGameHost(ctx) {
   let lastResultSummary = null;
   let lastAtmosphereLevel = null;
   let atmosphere = null;
-  let atmosphereFinaleStarted = false;
-  let atmosphereFinishTimer = null;
+  // 遊びの画面の段階（冒頭の説明）。
+  let phase = "idle";
+  let finaleTimer = null;
   let resultScanTimer = null;
-  let celebrationCompleting = false;
   // けっかの星を飛び込ませるのは、けっかへ来た最初の1回だけ（描き直しのたびに
   // 最初からやり直さない。docs/overall-design-2026-09-28.md §6.1）。
   let revealPending = false;
@@ -94,10 +123,14 @@ export function createGameHost(ctx) {
   const modeKey = () => activeGameId === "calibration" || isMeasurementMode(state.settings) ? "session.measure" : "session.practice";
   const modeText = () => ctx.t(`${modeKey()}Short`);
 
-  const switchMenu = document.querySelector("#gameSwitchMenu");
-  const switchAgain = document.querySelector("#gameSwitchAgain");
-  const switchEnd = document.querySelector("#gameSwitchEnd");
+  const {
+    gameSwitchMenu: switchMenu,
+    gameSwitchMenuTitle: switchMenuTitle,
+    gameSwitchAgain: switchAgain,
+    gameSwitchEnd: switchEnd,
+  } = elements;
   let exitChoiceTimer = null;
+  let exitChoiceGuardUntil = 0;
 
   function closeSwitchMenu() {
     window.clearTimeout(exitChoiceTimer);
@@ -106,34 +139,59 @@ export function createGameHost(ctx) {
     elements.gameStage.hidden = false;
   }
 
+  /**
+   * エンドレスで押さずに待ったら「もういちど／おわる」を出す（点検 U4）。押すたびに数え直す。
+   * 測定の試行に待ち・長押し・走査を混ぜないので、れんしゅうのエンドレスを自前の走査で
+   * 遊んでいるときだけ。いまの回は manual 終了で閉じる（再開は新しい回）。
+   */
   function armExitChoice() {
     window.clearTimeout(exitChoiceTimer);
-    // 測定試行に待ち・長押し・走査を混ぜない。エンドレスの自前走査だけに
-    // 無入力20秒の出口を用意し、古い回は既存のmanual終了で閉じる（再開は新しい回）。
-    if (!requestedEndless || isMeasurementMode(state.settings) || !state.settings.autoScan ||
-        state.settings.switchControlMode || pendingModule || !activeInstance || gameSettings.isOpen() ||
-        elements.gameStageContent.querySelector(".game-unavailable")) return;
-    exitChoiceTimer = window.setTimeout(() => {
-      if (state.currentView !== "game" || gameSettings.isOpen() || !activeInstance) return;
-      ctx.audio.stopSpeech();
-      destroyActive();
-      elements.gameStageContent.innerHTML = "";
-      elements.gameStage.hidden = true;
-      const english = resolveTextMode(state.settings) === "en";
-      document.querySelector("#gameSwitchMenuTitle").textContent = english ? "Play again or finish?" : "もういちど あそぶ？ おわる？";
-      switchAgain.textContent = ctx.t("result.retry");
-      switchEnd.textContent = ctx.t("game.exit");
-      switchMenu.hidden = false;
-      announce(document.querySelector("#gameSwitchMenuTitle").textContent);
-      scan.restartIfNeeded();
-    }, 20_000);
+    exitChoiceTimer = null;
+    if (
+      phase !== "playing" ||
+      !requestedEndless ||
+      isMeasurementMode(state.settings) ||
+      !state.settings.autoScan ||
+      state.settings.switchControlMode ||
+      !activeInstance
+    ) {
+      return;
+    }
+    exitChoiceTimer = window.setTimeout(openExitChoice, EXIT_CHOICE_IDLE_MS);
   }
-  switchAgain.addEventListener("click", event => {
+
+  function openExitChoice() {
+    exitChoiceTimer = null;
+    if (phase !== "playing" || gameSettings.isOpen() || !activeInstance) return;
+    ctx.audio.stopSpeech();
+    // 研究の記録では、支援者の「おわる」と同じ manual 終了になる。区別できるよう、
+    // 押さずに待ったことを操作ログに残す（保存の形は変えない）。
+    logEvent({
+      type: "game",
+      label: `${activeGameId} エンドレス 無入力${Math.round(EXIT_CHOICE_IDLE_MS / 1000)}秒で「もういちど／おわる」を出した`,
+    });
+    destroyActive();
+    elements.gameStageContent.innerHTML = "";
+    elements.gameStage.hidden = true;
+    switchMenuTitle.innerHTML = ctx.tHtml("game.switchMenuTitle");
+    switchAgain.innerHTML = ctx.tHtml("result.retry");
+    switchEnd.innerHTML = ctx.tHtml("game.exit");
+    switchMenu.hidden = false;
+    phase = "exitChoice";
+    // 出た瞬間のひと押し（待っていた最中の押下が遅れて届いたもの）で選ばない。
+    exitChoiceGuardUntil = performance.now() + READY_GUARD_MS;
+    elements.gameSettings.hidden = true;
+    feedback(ctx.t("game.switchMenuTitle"));
+    scan.restartIfNeeded();
+  }
+  switchAgain.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (performance.now() < exitChoiceGuardUntil) return;
     launch(activeGameId, { endless: true });
   });
-  switchEnd.addEventListener("click", event => {
+  switchEnd.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (performance.now() < exitChoiceGuardUntil) return;
     returnHome();
   });
 
@@ -141,24 +199,27 @@ export function createGameHost(ctx) {
   // 関数宣言は巻き上がるので、ここで launch / destroyActive を渡してよい。
   const gameSettings = createGameSettings(ctx, {
     activeGameId: () => activeGameId,
-    sessionRunning: () => Boolean(activeInstance) && !pendingModule,
+    sessionRunning: () => phase === "playing",
     abortSession: () => destroyActive(),
     relaunch: () => {
       if (activeGameId) launch(activeGameId, { endless: requestedEndless });
     },
     applyLive: () => activeInstance?.applySettings?.(),
+    canOpen: () => SETTINGS_PHASES.has(phase),
   });
 
-  /** instance.destroy() を安全に呼ぶ（例外を握りつぶし、activeInstance を必ずクリアする）。 */
-  function destroyActive() {
+  /**
+   * いまの遊びを片づける（例外を握りつぶし、activeInstance を必ずクリアする）。
+   * keepCelebration … けっかへ進むとき。おおさわぎの音楽と、けっかへ持ち越す声・演出を残す。
+   */
+  function destroyActive({ keepCelebration = false } = {}) {
     closeSwitchMenu();
-    window.clearTimeout(atmosphereFinishTimer);
+    window.clearTimeout(finaleTimer);
     window.clearTimeout(resultScanTimer);
-    atmosphereFinishTimer = resultScanTimer = null;
-    atmosphere?.destroy({ keepMusic: celebrationCompleting });
-    if (!celebrationCompleting) ctx.audio.music?.stop(0.4);
+    finaleTimer = resultScanTimer = null;
+    atmosphere?.destroy({ keepMusic: keepCelebration });
+    if (!keepCelebration) ctx.audio.music?.stop(0.4);
     atmosphere = null;
-    atmosphereFinaleStarted = false;
     delete elements.gameStageContent.dataset.atmosphere;
     elements.gameStageContent.classList.remove("is-party");
     if (activeInstance) {
@@ -169,7 +230,7 @@ export function createGameHost(ctx) {
       }
     }
     activeInstance = null;
-    if (!celebrationCompleting) stopPresentation();
+    if (!keepCelebration) stopPresentation();
   }
 
   /** 中断・画面離脱の共通入口。正常終了の声は結果へ持ち越せる。 */
@@ -325,6 +386,12 @@ export function createGameHost(ctx) {
       abort() {
         returnHome();
       },
+      /** 音が出せず、この回を始められない画面を出した（次のひと押しでホームへ）。 */
+      markUnavailable() {
+        if (phase !== "playing") return;
+        phase = "unavailable";
+        armExitChoice();
+      },
     };
   }
 
@@ -332,14 +399,39 @@ export function createGameHost(ctx) {
   function mountAtmosphere(module) {
     if (module.id === "calibration" || (module.taskType && isMeasurementMode(state.settings))) return;
     const gameCtx = buildGameCtx();
-    atmosphere = presentation.run("party.mount", () => presentation.protect(createPartyStage({
-      host: elements.gameStageContent, t: ctx.t, tHtml: ctx.tHtml, fx: ctx.fx, audio: ctx.audio,
-      voiceFeedback: feedback, outfits: gameCtx.party.outfits(), claim: gameCtx.party.claim,
-      kind: module.taskType ? "timing" : "beginner", legacy: module.id === "color-legacy",
-    }), "party"), null);
+    atmosphere = presentation.run(
+      "party.mount",
+      () =>
+        presentation.protect(
+          createPartyStage({
+            host: elements.gameStageContent,
+            t: ctx.t,
+            tHtml: ctx.tHtml,
+            fx: ctx.fx,
+            audio: ctx.audio,
+            voiceFeedback: feedback,
+            outfits: gameCtx.party.outfits(),
+            claim: gameCtx.party.claim,
+            kind: module.taskType ? "timing" : "beginner",
+            legacy: module.id === "color-legacy",
+            audioCue: AUDIO_CUE_TASKS.has(module.taskType),
+          }),
+          "party"
+        ),
+      null
+    );
     if (!atmosphere) return;
     elements.gameStageContent.dataset.atmosphere = atmosphere.profile.level;
     elements.gameStageContent.classList.toggle("is-party", atmosphere.profile.liveCompanions);
+  }
+
+  /** 課題を始める（説明の画面のあと・説明の無い遊びは開いてすぐ）。 */
+  function startPlaying(module) {
+    phase = "playing";
+    activeInstance = module.create(buildGameCtx());
+    activeInstance.mount(elements.gameStageContent);
+    mountAtmosphere(module);
+    armExitChoice();
   }
 
   /**
@@ -431,14 +523,15 @@ export function createGameHost(ctx) {
     // 題名と手順は文として区切って読む（句点が無いと、分かち書きを外したときに
     // 題名と1行目が1語のようにつながる。i18n.js の joinSpeech）。
     const spoken = joinSpeech([moduleTitle(module), ...spokenSteps], resolveTextMode(state.settings));
+    // エンドレスは終わりが無い。スイッチだけで終わる道（しばらく押さずに待つと
+    // 「もういちど／おわる」が出る）を、始める前に知らせておく。
     if (requestedEndless && !isMeasurementMode(state.settings) && state.settings.autoScan && !state.settings.switchControlMode) {
       const hint = document.createElement("span");
       hint.className = "game-ready-endless";
-      hint.textContent = resolveTextMode(state.settings) === "en"
-        ? 'To finish, wait 20 seconds without pressing and choose Finish.'
-        : 'おわりたいときは 20びょう おさずに まって、えらんでね。';
+      hint.innerHTML = ctx.tHtml("ready.endlessExit", { n: Math.round(EXIT_CHOICE_IDLE_MS / 1000) });
       elements.gameStageContent.querySelector(".game-ready-go").append(hint);
     }
+    phase = "ready";
     ctx.voiceFeedback(spoken);
     readyScreen.open();
   }
@@ -447,7 +540,7 @@ export function createGameHost(ctx) {
   function beginSession() {
     const module = pendingModule;
     pendingModule = null;
-    if (!module) return;
+    if (!module || phase !== "ready") return;
     readyScreen.close();
     // 案内の読み上げを途中で打ち切る。読み終わるのを待たずに始められる以上、
     // 放っておくと課題の合図音（低音・高音）に人の声が重なる。合図音を
@@ -456,10 +549,8 @@ export function createGameHost(ctx) {
     elements.gameStageContent.classList.remove("is-ready");
     delete elements.gameStageContent.dataset.readyWorld;
     scan.stop(true);
-    activeInstance = module.create(buildGameCtx());
-    activeInstance.mount(elements.gameStageContent);
-    mountAtmosphere(module);
-    armExitChoice();
+    startPlaying(module);
+    ctx.renderAll();
   }
 
   /** ゲームを起動する（detailed-design.md §3.2）。 */
@@ -486,6 +577,7 @@ export function createGameHost(ctx) {
     destroyActive(); // 多重起動防止（MUST）: 前回 instance の destroy() を必ず呼ぶ
     ctx.fx?.clear(); // 前の画面の粒を、次の合図より前へ持ち越さない。
     scan.stop(true);
+    phase = "idle";
     activeGameId = gameId;
     lastResultSummary = null;
     lastAtmosphereLevel = null;
@@ -508,10 +600,7 @@ export function createGameHost(ctx) {
     }
 
     announce(ctx.t("voice.gameStart", { name: moduleTitle(module) }));
-    activeInstance = module.create(buildGameCtx());
-    activeInstance.mount(elements.gameStageContent);
-    mountAtmosphere(module);
-    armExitChoice();
+    startPlaying(module);
   }
 
   /**
@@ -522,28 +611,40 @@ export function createGameHost(ctx) {
    * （detailed-design.md §9.4、失敗系のみ）・操作ログ・読み上げを行う。
    */
   function finishGame(summary) {
-    if (atmosphereFinishTimer !== null) return;
-    if (atmosphere && !atmosphereFinaleStarted && !atmosphere.finishing() && (atmosphere.profile.reward || (atmosphere.profile.kind === "timing" && atmosphere.profile.level !== "none"))) {
-      // 舞台の finale が失敗しても、この待ちを繰り返さない。
-      atmosphereFinaleStarted = true;
+    if (phase === "finale" || phase === "idle") return;
+    const profile = atmosphere?.profile ?? null;
+    // タイミングの遊びは、ゲームが終わりの声（「できた！ 3こ…」）を言ってから finish を
+    // 呼ぶ。ここで「やったー」を重ねると、その声が消えて何回できたかが届かない。
+    // 静かな段（なし・すっきり）の音は、ここで鳴らす（段の表の finishCue）。
+    if (profile?.kind === "timing" && profile.quietFinish) {
+      ctx.audio.playChime(784, { durationS: 0.24 });
+      if (profile.finishCue === "chimeApplause") ctx.audio.playApplause({ durationS: 0.35 });
+    }
+    // お祝いの待ち（段の表の finaleWaitMs）。はじめの遊びは自分の流れで待つので、
+    // ホストが待つのは、タイミングの遊びと、まだフィナーレを始めていないおおさわぎだけ。
+    const hostFinale =
+      profile && !atmosphere.finishing() && (profile.reward || (profile.kind === "timing" && profile.finaleWaitMs > 0));
+    if (hostFinale) {
+      phase = "finale";
+      armExitChoice();
+      elements.gameSettings.hidden = true;
       atmosphere.finale();
-      if (!atmosphere.profile.reward) {
-        ctx.fx?.finale(elements.gameStageContent, {});
-        if (atmosphere.profile.level === "subtle") {
-          ctx.audio.playChime(784, {durationS:0.24});
-          ctx.audio.playApplause({durationS:0.35});
-        }
-      }
-      atmosphereFinishTimer = window.setTimeout(() => {
-        atmosphereFinishTimer = null;
-        finishGame(summary);
-      }, atmosphere.profile.reward ? PARTY_FINISH_DELAY_MS : atmosphere.profile.level === "subtle" ? 650 : 1600);
+      if (!profile.reward) ctx.fx?.finale(elements.gameStageContent, {});
+      finaleTimer = window.setTimeout(() => {
+        finaleTimer = null;
+        showResult(summary);
+      }, profile.finaleWaitMs);
       return;
     }
-    const party = atmosphere?.profile.resultCompanions ? atmosphere.summary() : null;
-    lastAtmosphereLevel = atmosphere?.profile.level ?? null;
-    if (atmosphere?.profile.kind === "timing" && atmosphere.profile.reward) feedback(atmosphere.rewardSpeech());
-    if (atmosphere?.profile.kind === "timing" && ["none", "subtle"].includes(atmosphere.profile.level)) feedback(ctx.t("color.voice.cheer"));
+    showResult(summary);
+  }
+
+  /** お祝いの待ちのあと（または待たずに）、けっかの画面へ移る。 */
+  function showResult(summary) {
+    const profile = atmosphere?.profile ?? null;
+    const party = profile?.resultCompanions ? atmosphere.summary() : null;
+    lastAtmosphereLevel = profile?.level ?? null;
+    if (profile?.kind === "timing" && profile.reward) feedback(atmosphere.rewardSpeech());
     lastResultSummary = party ? { ...summary, party } : summary || null;
     const activeModule = activeGameId ? findGameModule(activeGameId) : null;
     const taskType = activeModule?.taskType;
@@ -556,23 +657,23 @@ export function createGameHost(ctx) {
         label: `${activeGameId} 終了 taskType=${taskType}`,
       });
     }
-    if (atmosphere?.profile.kind === "timing" && atmosphere.profile.level === "none") ctx.audio.playChime(784, { durationS: 0.24 });
-    celebrationCompleting = true;
-    destroyActive();
-    celebrationCompleting = false;
+    destroyActive({ keepCelebration: true });
+    phase = "idle";
     ctx.audio.setProfile?.("play");
     ctx.fx?.setMeasurement(false);
     revealPending = true;
     state.currentView = "result";
     save();
     ctx.renderAll();
-    if (party) {
-      // おおさわぎのけっかは、数え上げ・ラッコ・ごほうび・花火を見せてから枠を動かす
-      // （紙吹雪の下で枠を進めない。docs/party-mode-2026-09-29.md）。
+    // お祝いのけっか（ラッコ・びん）は、見せ終わってから枠を動かす（紙吹雪の下で枠を
+    // 進めない。docs/party-mode-2026-09-29.md）。長さは段の表の resultRevealMs、
+    // 動きを止めているときは待たない。
+    const revealMs = party && ctx.fx?.policy?.().motion ? atmosphereFor(party.level).resultRevealMs : 0;
+    if (revealMs > 0) {
       resultScanTimer = window.setTimeout(() => {
         resultScanTimer = null;
         if (state.currentView === "result") scan.restartIfNeeded();
-      }, party.level === "normal" ? 1400 : PARTY_RESULT_SCAN_DELAY_MS);
+      }, revealMs);
     } else {
       scan.restartIfNeeded();
     }
@@ -595,6 +696,7 @@ export function createGameHost(ctx) {
     elements.gameStageContent.classList.remove("is-ready");
     delete elements.gameStageContent.dataset.readyWorld;
     destroyActive();
+    phase = "idle";
     ctx.audio.setProfile?.("play");
     ctx.fx?.setMeasurement(false);
     ctx.fx?.clear();
@@ -611,32 +713,34 @@ export function createGameHost(ctx) {
     // 支援者が設定を開いているあいだは、スイッチを押しても遊びは進まない
     // （時間で進む遊びは、開いた時点でその回を止めてある。gameSettings.js）。
     if (gameSettings.isOpen()) return;
-    // レディ画面のひと押しは「説明を読み終えた合図」であって課題の入力では
-    // ないので、ゲームへは渡さず、logEvent にも残さない。これを渡すと
-    // セッション開始前の入力が1件目の試行として記録されてしまう。
-    if (!switchMenu.hidden) {
-      scan.activate();
-      return;
+    switch (phase) {
+      case "ready":
+        // 説明の画面のひと押しは「声を止める／始める」。課題の入力ではないので、
+        // ゲームへは渡さず、logEvent にも残さない（渡すと、始まる前の押下が
+        // 1件目の試行として記録されてしまう）。
+        readyScreen.press();
+        return;
+      case "playing":
+        activeInstance?.handleInput(t, source);
+        armExitChoice();
+        return;
+      case "unavailable":
+        // 音が出ず課題が始まらない画面には試行がない。次のひと押しで戻れる。
+        returnHome();
+        return;
+      case "exitChoice":
+        scan.activate();
+        return;
+      default:
+        // finale（お祝いの待ち）・idle では受けない。
+        return;
     }
-    // 音が出ず課題が始まらない画面には試行がない。次の一押しで戻れる。
-    if (elements.gameStageContent.querySelector(".game-unavailable")) {
-      returnHome();
-      return;
-    }
-    if (pendingModule) {
-      if (state.settings.autoScan && !state.settings.switchControlMode) scan.activate();
-      else readyScreen.advance();
-      return;
-    }
-    if (!activeInstance) return;
-    activeInstance.handleInput(t, source);
-    armExitChoice();
   }
 
-  /** リザルト画面「もういちど」: 同一ゲームを再起動する。 */
+  /** リザルト画面「もういちど」: 同一ゲームを、同じ遊び方（エンドレスかどうか）で再起動する。 */
   function retry() {
     if (!activeGameId) return;
-    launch(activeGameId);
+    launch(activeGameId, { endless: requestedEndless });
   }
 
   /**
@@ -681,8 +785,10 @@ export function createGameHost(ctx) {
 
   return {
     launch,
-    isSwitchMenuOpen: () => !switchMenu.hidden,
-    isReadyOpen: readyScreen.isOpen,
+    /** 遊びの画面で走査してよい範囲（セレクタ）。null なら走査しない（scan.js）。 */
+    scanScope: () => (phase === "exitChoice" ? "#gameSwitchMenu" : null),
+    /** いまの段階（テスト・診断用）。 */
+    phase: () => phase,
     dispatchInput,
     retry,
     abort: returnHome,
@@ -699,13 +805,15 @@ export function createGameHost(ctx) {
       // ——registry の title は日本語のままなので、直に出すと英語表記でも
       // ここだけ日本語になる。
       elements.gameProgress.textContent = activeModule ? `${modeText()} · ${moduleTitle(activeModule)}` : "";
-      document.querySelector("#resultMode").innerHTML = activeModule?.taskType ? ctx.tHtml(modeKey()) : "";
-      document.querySelector("#resultMode").hidden = !activeModule?.taskType;
-      document.querySelector("#resultView").dataset.world = tileThemeFor(activeGameId)?.palette || "pop";
+      elements.resultMode.innerHTML = activeModule?.taskType ? ctx.tHtml(modeKey()) : "";
+      elements.resultMode.hidden = !activeModule?.taskType;
+      elements.resultView.dataset.world = tileThemeFor(activeGameId)?.palette || "pop";
       // 変えられる項目のある遊びでだけ出す（そくていの回で速さしか無い遊びは出さない）。
+      // お祝いの待ち・終わりの選択では出さない（開くと、けっかを飛ばしてしまう）。
       elements.gameSettings.hidden = !(
         state.currentView === "game" &&
         activeGameId &&
+        SETTINGS_PHASES.has(phase) &&
         gameSettings.available(activeGameId)
       );
 

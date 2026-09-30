@@ -391,35 +391,9 @@ body.high-contrast .module-fishing.is-practice .fishing-line::after {
 
 /* --- 動きを減らす設定（止めても遊べる。動きには課題の情報は入っていない） ------- */
 
-/* なし・すっきりでは海と空を静止させる。アタリと魚の課題の動きは残す。 */
-.module-fishing.is-practice[data-atmosphere="none"] .fishing-cloud,
-.module-fishing.is-practice[data-atmosphere="subtle"] .fishing-cloud,
-.module-fishing.is-practice[data-atmosphere="none"] .fishing-sea *,
-.module-fishing.is-practice[data-atmosphere="subtle"] .fishing-sea *,
-.module-fishing.is-practice[data-atmosphere="none"] .fishing-otter-eyes,
-.module-fishing.is-practice[data-atmosphere="subtle"] .fishing-otter-eyes { animation: none !important; }
-.module-fishing.is-practice[data-atmosphere="none"] .fishing-cloud,
-.module-fishing.is-practice[data-atmosphere="subtle"] .fishing-cloud { translate: var(--rest) 0; }
-.module-fishing.is-practice[data-atmosphere="none"] .sea-bubbles,
-.module-fishing.is-practice[data-atmosphere="subtle"] .sea-bubbles { display: none; }
-
+/* 海と空の動きを止める決まり（なし・すっきり・動きを減らす）は src/decoration-motion.css の1か所。
+   アタリと魚の課題の動きは、どの段でも残す。 */
 @media (prefers-reduced-motion: reduce) {
-  .module-fishing.is-practice .fishing-cloud {
-    animation: none;
-    translate: var(--rest) 0;
-  }
-
-  .module-fishing.is-practice .fishing-sea .sea-rays i,
-  .module-fishing.is-practice .fishing-sea .sea-surface,
-  .module-fishing.is-practice .fishing-sea .sea-weed,
-  .module-fishing.is-practice .fishing-otter-eyes {
-    animation: none;
-  }
-
-  .module-fishing.is-practice .fishing-sea .sea-bubbles {
-    display: none;
-  }
-
   .module-fishing.is-practice :is(.fishing-dusk-sky, .fishing-dusk) {
     transition: none;
   }

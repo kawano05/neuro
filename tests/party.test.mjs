@@ -24,8 +24,10 @@ import {
   nextOutfit,
   sanitizeParty,
   starsAfter,
-  ATMOSPHERES, atmosphereProfile, timingStars,
+  timingStars,
 } from "../src/lib/party.js";
+import { ATMOSPHERES, ATMOSPHERE_LEVELS, DEFAULT_ATMOSPHERE, atmosphereFor, atmosphereLevel } from "../src/lib/atmosphere.js";
+import { FX_SCALE } from "../src/lib/fx/fxSafety.js";
 
 let passed = 0;
 let failed = 0;
@@ -86,14 +88,34 @@ test("beginner celebrations keep the completion message and star, with the legac
 
 test("four atmospheres have distinct grammar, with a quiet timing ceiling", () => {
   assert.deepEqual(Object.keys(ATMOSPHERES), ["none", "subtle", "normal", "big"]);
-  assert.deepEqual(Object.values(ATMOSPHERES).map(p => p.finale), ["none", "ring", "confetti", "parade"]);
-  assert.deepEqual(Object.values(ATMOSPHERES).map(p => p.resultCompanions), [false,false,true,true]);
-  for (const level of Object.keys(ATMOSPHERES)) {
-    const timing = atmosphereProfile(level, "timing");
-    assert.equal(timing.music, false);
-    assert.equal(timing.crowd, false);
+  assert.deepEqual(ATMOSPHERE_LEVELS, ["none", "subtle", "normal", "big"]);
+  assert.equal(DEFAULT_ATMOSPHERE, "normal", "保存の既定は変えない");
+  // 段ごとに、何が出るかが目で分かるほど違う（粒の数だけの違いにしない）。
+  assert.deepEqual(ATMOSPHERE_LEVELS.map((level) => ATMOSPHERES[level].finale), ["none", "ring", "confetti", "parade"]);
+  assert.deepEqual(ATMOSPHERE_LEVELS.map((level) => ATMOSPHERES[level].companions), ["none", "none", "result", "live"]);
+  assert.deepEqual(ATMOSPHERE_LEVELS.map((level) => ATMOSPHERES[level].worldMotion), [false, false, true, true]);
+  assert.deepEqual(ATMOSPHERE_LEVELS.map((level) => ATMOSPHERES[level].reward), [false, false, false, true]);
+  for (const level of ATMOSPHERE_LEVELS) {
+    const timing = atmosphereFor(level, "timing");
+    assert.equal(timing.music, false, "タイミングの遊びでは音楽を鳴らさない");
+    assert.equal(timing.crowd, false, "タイミングの遊びでは観客・旗を出さない");
+    assert.equal(atmosphereFor(level, "timing", { audioCue: true }).milestoneSound, false, "音の課題では節目の音を鳴らさない");
   }
-  assert.equal(atmosphereProfile("big").music, true);
+  assert.equal(atmosphereFor("big").music, true);
+  assert.equal(atmosphereLevel("strobe"), "none", "分からない値は何も足さない側へ");
+});
+
+test("the effects engine reads its scale from the one atmosphere table", () => {
+  for (const level of ATMOSPHERE_LEVELS) {
+    const row = ATMOSPHERES[level];
+    for (const [key, value] of Object.entries(row.effects)) {
+      assert.equal(FX_SCALE[level][key], value, `${level}.${key} は表の値`);
+    }
+    assert.equal(FX_SCALE[level].motion, row.pressMotion);
+  }
+  // 待ち時間も表から。にぎやかのけっかは短く、おおさわぎは見せ終わるまで長く待つ。
+  assert.ok(ATMOSPHERES.normal.resultRevealMs < ATMOSPHERES.big.resultRevealMs);
+  assert.equal(ATMOSPHERES.none.finaleWaitMs, 0);
 });
 
 test("timing jars count successes, preserve zero, and start a new endless jar", () => {

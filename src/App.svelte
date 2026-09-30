@@ -144,10 +144,17 @@
         <div class="game-stage-content" id="gameStageContent" aria-hidden="true"></div>
       </div>
       <div class="game-progress" id="gameProgress" aria-live="polite"></div>
+      <!--
+        遊ぶ前の説明の画面の操作（games/readyScreen.js）。走査で回るのは「はじめる」と
+        「おわる」だけ。前後の説明は支援者のタップ用なので data-scan を付けない。
+      -->
       <div id="gameReadyControls" class="game-ready-controls" hidden>
-        <span id="gameReadyPage" aria-live="polite"></span>
-        <button id="gameReadyPrevious" type="button" data-scan hidden>前の説明</button>
-        <button id="gameReadyNext" type="button" data-scan>はじめる</button>
+        <span class="game-ready-pager">
+          <button id="gameReadyPrevious" type="button" hidden>前の説明</button>
+          <span id="gameReadyPage" aria-live="polite"></span>
+          <button id="gameReadyForward" type="button" hidden>次の説明</button>
+        </span>
+        <button id="gameReadyStart" type="button" data-scan>はじめる</button>
       </div>
       <!--
         この遊びの設定（支援者がその場で変える。docs/design-renewal-2026-09-25.md §1.8）。

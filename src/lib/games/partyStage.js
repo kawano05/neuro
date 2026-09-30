@@ -30,16 +30,24 @@ import {
   outfitClasses,
   starSvg,
 } from "../art/partyArt.js";
-import { PARTY_FINAL_KEY_SHIFT, PARTY_JAR_CAPACITY, PARTY_MUSIC_LEVELS, PARTY_TEMPOS, atmosphereProfile, jarMomentAt, starsAfter, timingStars } from "../party.js";
+import {
+  PARTY_FINAL_KEY_SHIFT,
+  PARTY_JAR_CAPACITY,
+  PARTY_MUSIC_LEVELS,
+  PARTY_TEMPOS,
+  jarMomentAt,
+  starsAfter,
+  timingStars,
+} from "../party.js";
+import { atmosphereFor } from "../atmosphere.js";
 
-/** 5回目を押してから、けっかへ進むまで（星が入りきって「いっぱい！」→ フィナーレとパレード）。 */
-export const PARTY_FINISH_DELAY_MS = 7200;
+// 待ち時間の持ち主は atmosphere.js の表。遊びとテストがここから引けるよう、名前だけ渡す。
+export { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS } from "../atmosphere.js";
+
 /** 5回目を押してから、フィナーレ（ラッコが大きくなる・ふたが飛ぶ）が始まるまで。 */
 const FINALE_AFTER_MS = 2300;
 /** 星がびんに入りきってから「はんぶん」「いっぱい」を言うまでの、いちばん早い時刻。 */
 const JAR_MOMENT_MIN_MS = 1600;
-/** けっかで、お祝いが終わって枠が動き出すまで。紙吹雪の下で枠を進めない。 */
-export const PARTY_RESULT_SCAN_DELAY_MS = 3400;
 /** けっかの見せ終わりから、音楽を小さくして止めるまで。 */
 const RESULT_MUSIC_FADE_S = 1.6;
 /** 「きょうの びん」をいくつまで並べるか（それより多いと「+n」）。 */
@@ -143,9 +151,26 @@ function playFanfare(audio, semitones = 0) {
  * @param {string[]} [options.outfits] いま持っているラッコの服
  * @param {() => ({unlocked: string|null, jarsToday: number, party: object})|null} [options.claim]
  *   遊び終えたときに、その日のびんの数と服を保存する（gameHost）
+ * @param {"beginner"|"timing"} [options.kind] 遊びの型（atmosphere.js の atmosphereFor）
+ * @param {string} [options.level] 雰囲気の段（既定は fx の今の段）
+ * @param {boolean} [options.legacy] 押すと 出てくる（動物の名前と配置を元のまま使う）
+ * @param {boolean} [options.audioCue] 合図が音の課題（高い音だけ・さかなつり）。節目の音を鳴らさない
  */
-export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, outfits = [], claim = null, kind = "beginner", level = fx?.level?.() || "none", legacy = false }) {
-  const profile = atmosphereProfile(level, kind);
+export function createPartyStage({
+  host,
+  t,
+  tHtml,
+  fx,
+  audio,
+  voiceFeedback,
+  outfits = [],
+  claim = null,
+  kind = "beginner",
+  level = fx?.level?.() || "none",
+  legacy = false,
+  audioCue = false,
+}) {
+  const profile = atmosphereFor(level, kind, { audioCue });
   const doc = host.ownerDocument;
   const win = doc.defaultView;
   const timers = new Set();
@@ -163,7 +188,6 @@ export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, out
   let finishing = false;
   let successes = 0;
   let fullJars = 0;
-  let lastSource = null;
 
   const layer = doc.createElement("span");
   layer.className = `party-layer${kind === "timing" ? " is-timing" : ""}${!legacy && kind === "beginner" ? " is-beginner" : ""}`;
@@ -176,7 +200,6 @@ export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, out
     <span class="party-otter ${outfitClasses(outfits)}">${otterSvg()}</span>
     <span class="party-jar" data-stars="0">${jarSvg()}<span class="party-jar-stars"></span></span>
     <span class="party-callouts"></span>`;
-  if (profile.liveCompanions) host.append(layer);
   const q = (sel) => layer.querySelector(sel);
   const otter = q(".party-otter");
   const moves = otterMotion(otter);
@@ -200,16 +223,19 @@ export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, out
       jarStars.innerHTML = jarStarsHtml(stars);
     }
   };
-  fit();
-  win.addEventListener("resize", fit);
-
   // まばたきと、盛り上がってからの小さな跳ね（待っているあいだも生きているように）。
   const idle = () => {
     moves.blink();
     if (pressed >= 3 && !finishing) moves.hop(14);
     later(2400 + Math.random() * 1800, idle);
   };
-  if (profile.liveCompanions && kind === "beginner") later(1600, idle);
+  // ここから先は、面・窓・音楽に手を出す。部品の組み立て（上）が済んでから。
+  if (profile.liveCompanions) {
+    host.append(layer);
+    fit();
+    win.addEventListener("resize", fit);
+    if (kind === "beginner") later(1600, idle);
+  }
   if (profile.music) audio?.music?.start(0);
 
   function pointIn(el) {
@@ -366,14 +392,12 @@ export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, out
     react({ index = pressed, source = null, name = null, success = true, total = 5, endless = false } = {}) {
       const pressIndex = index;
       const figure = source;
-      lastSource = source;
       pressed = pressIndex + 1;
       const previous = stars;
       if (success) successes += 1;
       const collected = kind === "timing" ? timingStars(successes, total, endless) : { stars: starsAfter(pressIndex), jars: pressIndex >= 4 ? 1 : 0 };
       stars = collected.stars;
       fullJars = collected.jars;
-      if (level === "none" && kind === "beginner" && source) animate(source, [{scale:"1"},{scale:"1.03 .97"},{scale:"1"}], {duration:180});
       if (!profile.liveCompanions) return;
       if (kind === "timing") {
         // 合図の間へ長い音や声を持ち越さない。成功の反応は220msで閉じる。
@@ -393,7 +417,8 @@ export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, out
           tag.classList.add("is-short");
           tag.getAnimations().forEach(animation => animation.cancel());
           later(200, () => tag.remove());
-          audio?.playChime?.(1318.51, {durationS:0.08,level:0.2});
+          // 合図が音の課題では鳴らさない（高い音の合図と取り違えうる。atmosphere.js）。
+          if (profile.milestoneSound) audio?.playChime?.(1318.51, { durationS: 0.08, level: 0.2 });
         }
         return;
       }
@@ -476,7 +501,9 @@ export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, out
       if (kind === "timing") jarStars.innerHTML = jarStarsHtml(stars);
       later(FINALE_AFTER_MS, () => {
         clearStamps();
-        const figure = legacy ? host.querySelector(".pop-figure") : lastSource;
+        // 押すと 出てくる の動物だけは消して、ラッコを真ん中へ出す（元の作り）。ほかの遊びの
+        // 主役（塗った場所・止めたリール・判定の線）は、子どもの作ったもの・課題の絵なので消さない。
+        const figure = legacy ? host.querySelector(".pop-figure") : null;
         if (figure) animate(figure, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" });
         const from = pointIn(otter);
         const box = host.getBoundingClientRect();
@@ -571,6 +598,7 @@ export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
   if (fx?.policy?.().motion === false) return 0;
   const root = container?.querySelector?.(".party-result");
   if (!root) return 0;
+  const profile = atmosphereFor(root.dataset.level);
   const win = root.ownerDocument.defaultView;
   const otter = root.querySelector(".party-result-otter");
   const reward = root.querySelector(".party-result-reward");
@@ -579,12 +607,15 @@ export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
   const items = root.classList.contains("is-added") ? [] : [...root.querySelectorAll(".hk-result-item")];
   const today = [...root.querySelectorAll(".party-today .party-mini-jar")];
   const moves = otterMotion(otter);
-  if (root.dataset.level === "normal") {
+  // ごほうびの無い段（にぎやか）は、その回のびんとラッコが出てくるだけ。
+  if (!profile.reward) {
     fx?.motion?.slamIn(root.querySelector(".party-result-jar"), { delayMs: 60 });
     jarStars.forEach((star, index) => fx?.motion?.popIn(star, { delayMs: 160 + index * 35 }));
     fx?.motion?.popIn(otter, { delayMs: 500 });
-    presentation.later(650, () => { if (root.isConnected) moves.clap(2); }, win);
-    return 1400;
+    presentation.later(650, () => {
+      if (root.isConnected) moves.clap(2);
+    }, win);
+    return profile.resultRevealMs;
   }
   fx?.motion?.slamIn(root.querySelector(".party-result-jar"), { delayMs: 60 });
   jarStars.forEach((star, index) => {
@@ -607,6 +638,8 @@ export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
   }, win);
   presentation.later(2300, () => { if (root.isConnected) fx?.engine?.fireworks?.({ colors: PARTY_COLORS, bursts: 2 }); }, win);
   // けっかの描き直しでも曲を止める。次の遊びへ移ったあとは、その曲を止めない。
-  presentation.later(3200, () => { if (isCurrent ? isCurrent() : root.isConnected) audio?.music?.stop(RESULT_MUSIC_FADE_S); }, win);
-  return PARTY_RESULT_SCAN_DELAY_MS;
+  presentation.later(3200, () => {
+    if (isCurrent ? isCurrent() : root.isConnected) audio?.music?.stop(RESULT_MUSIC_FADE_S);
+  }, win);
+  return profile.resultRevealMs;
 }

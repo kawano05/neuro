@@ -38,6 +38,7 @@ import {
 import { FISHING_ART_VERSION, fishingBoatSvg, fishingCatchSvg, fishingSeaHtml, fishingSkyHtml } from "../art/fishingWorldArt.js";
 import { generateGoNoGoSequence } from "./judge.js";
 import { generateForeperiods, judgeReaction } from "./reaction.js";
+import { renderAudioUnavailable } from "./unavailableScreen.js";
 
 // 素材の URL。`import boat from "...png"` ではなく new URL(...) を使う。
 // 前者だと Vite は解決できるが、素の Node が .png を読めずに落ちる
@@ -357,23 +358,7 @@ export function createFishingGame(gameId) {
    * 読む相手は支援者なので、原因と次の手を書く（games/rhythm.js と同型）。
    */
   function renderUnavailable(audioState) {
-    if (!stageEl) return;
-    const stopped = audioState === "suspended" || audioState === "interrupted";
-    const why = stopped
-      ? "音が止まっているため、さかなつりは始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。"
-      : "この端末では音を鳴らす機能が使えないため、さかなつりは始められません。";
-    stageEl.innerHTML = `
-      <div class="game-unavailable">
-        <strong>おとが ならせません</strong>
-        <p>${why} アタリの合図が音なので、続けても はやさの記録になりません。</p>
-        <p class="game-unavailable-hint">
-          もういちど スイッチを おすか、右上の「おわる」で もどれます。${
-            stopped ? "直したあと、もう一度えらんでください。" : "音の出る端末で もう一度おためしください。"
-          }
-        </p>
-      </div>
-    `;
-    announce("音が鳴らせないため、さかなつりを始められません");
+    renderAudioUnavailable(stageEl, ctx, "fishing", audioState);
   }
 
   function renderMarkup() {

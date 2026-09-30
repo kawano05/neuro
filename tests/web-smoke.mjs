@@ -112,7 +112,7 @@ const checks = [
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps every screen free of overflow and undersized targets", checkLayoutInvariants],
-  ["keeps responsive explanations and results inside short and tall screens", checkResponsiveScreens],
+  ["keeps responsive explanations and results inside short and tall screens", checkResponsiveScreensOncePerEngine],
   ["guards the explanation press and exposes ready controls to both scan methods", checkReadyInputSafety],
   ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
   ["keeps the hidden attribute effective against CSS display rules", checkHiddenAttributeIsRespected],
@@ -3807,12 +3807,10 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
 
     await finishReady(page);
     await page.locator(".game-unavailable").waitFor({ state: "visible" });
-    // 「止まっている」ときは、端末を変えろではなく直せる案内を出す。
-    const text = await page.locator(".game-unavailable").innerText();
-    assert(
-      text.includes("音が止まっている"),
-      `Expected the stopped-audio wording, got: ${text.replace(/\s+/g, " ")}`
-    );
+    // 「止まっている」ときは、端末を変えろではなく直せる案内を出す（文は表記で変わるので、
+    // 理由の印で見る。games/unavailableScreen.js）。
+    const reason = await page.locator(".game-unavailable").getAttribute("data-reason");
+    assert(reason === "stopped", `Expected the stopped-audio wording, got reason: ${reason}`);
 
     await page.waitForTimeout(200);
     await page.locator("#gameStage").click();
@@ -4703,8 +4701,7 @@ async function checkPresentationFaults(page) {
     await openActivity(page, t("tile.slot-l1.title"));
     // 説明の声はこの検査の対象外なので、開始時だけ通常の声へ戻す。
     await page.evaluate(() => { window.__presentationCtx.voiceFeedback = () => {}; });
-    await page.waitForTimeout(200);
-    await page.locator("#gameStage").dispatchEvent("click");
+    await finishReady(page);
     await page.evaluate(() => {
       const broken = () => { throw Error("SMOKE_TIMING_PRESENTATION"); };
       window.__presentationCtx.voiceFeedback = broken;
@@ -4765,15 +4762,17 @@ async function checkDecorationMotion(page, project) {
         scheduler.stop = () => {};
       });
     }
-    await page.waitForTimeout(200);
-    await page.locator("#gameStage").dispatchEvent("click");
+    // 説明の画面を抜けてから数える（短い画面では説明が1手順ずつに分かれ、抜けないまま
+    // 数えると、世界の部品が0個のまま「止まっている」と合格してしまう）。
+    await finishReady(page);
     await page.waitForTimeout(400);
     const world = await page.evaluate(() => {
       const nodes = [...document.querySelectorAll(".fishing-cloud, .fishing-sea *, .fishing-otter-eyes")];
-      return { running: nodes.flatMap(node => node.getAnimations()).filter(animation => animation.playState === "running").length,
+      return { nodes: nodes.length, running: nodes.flatMap(node => node.getAnimations()).filter(animation => animation.playState === "running").length,
         names: nodes.map(node => getComputedStyle(node).animationName).filter(name => name !== "none"),
         policy: window.__presentationCtx.fx.policy(), ready: Boolean(document.querySelector(".game-ready")) };
     });
+    assert(world.nodes > 0 && !world.ready, `${level}/${reduced}: the fishing world must be on screen before counting: ${JSON.stringify(world)}`);
     assert((world.names.length > 0) === (!reduced && ["normal", "big"].includes(level)), `${level}/${reduced}: the fishing world must follow the shared policy: ${JSON.stringify(world)}`);
     if (reduced || ["none", "subtle"].includes(level)) assert(world.running === 0, "A quiet world has no running CSS animations");
     await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-fishing.png` });
@@ -5216,12 +5215,21 @@ async function scanTo(page, selector) {
   assert(false, `Single-switch scan cannot reach ${selector}`);
 }
 
+// 走査だけで説明の画面を抜ける（枠が「はじめる」に来たら押す）。読み上げは切ってあるので
+// ひと押しで始まるはずだが、押下を受けない時間に当たったときのために数回まで試す。
+// 画面の大きさは検査の中で変えるので、エンジンごとに1実寸だけで回す（5実寸で同じ仕事を
+// 5回しない）。
+async function checkResponsiveScreensOncePerEngine(page, project) {
+  if (project.name !== "chromium-desktop" && project.name !== "phone-landscape") return SKIPPED;
+  return checkResponsiveScreens(page);
+}
+
 async function scanReady(page) {
-  for(let i=0;i<8&&await page.locator(".game-ready").count();i++) {
+  for (let attempt = 0; attempt < 4 && (await page.locator(".game-ready").count()); attempt += 1) {
     await page.clock.runFor(500);
-    await scanTo(page,"#gameReadyNext");
+    await scanTo(page, "#gameReadyStart");
   }
-  await page.locator(".game-ready").waitFor({state:"detached"});
+  await page.locator(".game-ready").waitFor({ state: "detached" });
 }
 
 async function checkSwitchEndlessExit(page) {

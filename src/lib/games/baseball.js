@@ -21,7 +21,7 @@
 
 import { BALL_FIELD_ART } from "../art/hakkiriArt.js";
 import { BEGINNER_TARGET_PRESSES, celebrate, playPrefsFor } from "./beginnerKit.js";
-import { PARTY_FINISH_DELAY_MS } from "./partyStage.js";
+import { PARTY_FINISH_DELAY_MS, atmosphereFor } from "../atmosphere.js";
 
 const GAME_ID = "baseball";
 
@@ -246,7 +246,7 @@ export function createBaseballGame(ctx) {
       // ⑤ フィナーレ（5本打てた）。
       if (ctx.party?.isBig()) ctx.party.finale();
       else fx?.finale(boardEl, {});
-      if (["none", "subtle"].includes(fx?.level?.())) audio.playChime(784, {durationS:0.24});
+      if (atmosphereFor(fx?.level?.()).quietFinish) audio.playChime(784, { durationS: 0.24 });
       fx?.motion.stamp(wordEl, {});
       schedule(() => {
         finishDelivered = true;

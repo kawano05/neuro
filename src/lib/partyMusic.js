@@ -66,6 +66,9 @@ const TICK_MS = 25;
  */
 export function createPartyMusic({ getContext, getOutput, enabled }) {
   let bus = null;
+  // bus → compressor → 効果音の出口。止めるときは両方を外す（compressor を残すと、
+  // おおさわぎで遊ぶたびに1つずつ出口につながったまま増えていく）。
+  let compressor = null;
   let noise = null;
   let timer = null;
   let playing = false;
@@ -87,15 +90,15 @@ export function createPartyMusic({ getContext, getOutput, enabled }) {
     const ctx = getContext();
     if (!ctx) return null;
     if (!bus) {
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -12;
-      comp.ratio.value = 8;
-      comp.attack.value = 0.003;
-      comp.release.value = 0.2;
+      compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = -12;
+      compressor.ratio.value = 8;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.2;
       bus = ctx.createGain();
       bus.gain.value = 0.0001;
-      bus.connect(comp);
-      comp.connect(getOutput(ctx));
+      bus.connect(compressor);
+      compressor.connect(getOutput(ctx));
     }
     if (!noise) {
       noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -213,7 +216,9 @@ export function createPartyMusic({ getContext, getOutput, enabled }) {
       }
       sources.clear();
       bus?.disconnect();
+      compressor?.disconnect();
       bus = null;
+      compressor = null;
     },
     /** 最初の段で鳴らしはじめる（鳴っていれば頭から）。 */
     start(startLevel = 0) {

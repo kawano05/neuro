@@ -1,169 +1,336 @@
+// 遊ぶ前の説明の画面（レディ画面）と、けっかの画面の検査。
+//
+// 説明の画面の押し方は games/readyScreen.js: 声が鳴っていれば止めるだけ、止まって
+// いればひと押しで始まる。前後の説明は支援者のタップ用で、始める条件ではない。
+// ここに置くのは、その押し方の検査と、画面の大きさを変えても説明とけっかが
+// 画面に収まることの検査。web-smoke.mjs の checks から呼ぶ。
+
 import assert from "node:assert/strict";
+import { storageKey } from "../src/lib/content.js";
+import { READY_GUARD_MS } from "../src/lib/games/readyScreen.js";
 
-const key = "neuronode-prototype-state-v4";
-const viewports = [[667,375], [844,390], [390,844], [834,1194], [1180,820], [1366,650], [1920,1080]];
+// 押下を受けない時間（READY_GUARD_MS）を越えるのに待つ長さ。
+const PAST_GUARD_MS = READY_GUARD_MS + 50;
+const VIEWPORTS = [
+  [667, 375],
+  [844, 390],
+  [390, 844],
+  [834, 1194],
+  [1180, 820],
+  [1366, 650],
+  [1920, 1080],
+];
 
-export async function finishReady(page) {
-  for (let i=0; i<8 && await page.locator(".game-ready").count(); i++) {
-    const before=await page.evaluate(()=>performance.now());
-    await page.clock.runFor(470).catch(() => page.waitForTimeout(470));
-    const after=await page.evaluate(()=>performance.now());
-    // 未導入の仮想時計は最初のrunForで時刻を0へ戻す。実時間の押下ガードを逆行させない。
-    if(after<before+450)await page.clock.runFor(Math.ceil(before+470-after)).catch(()=>page.waitForTimeout(470));
-    if(!await page.locator('.game-ready').count())break;
-    // 他の検査の遷移補助。実際のポインター・キー操作は入力安全性の検査で別に確認する。
-    await page.locator("#gameReadyNext").evaluate(e=>e.click());
+/**
+ * 説明の画面を抜けて課題を始める（ほかの検査の下ごしらえ）。
+ *
+ * 「はじめる」を押す。声が鳴っていれば1回目は声を止めるだけなので、始まるまで
+ * 繰り返す（3回までで必ず始まる）。時計を入れた検査は virtualClock を true にする
+ * ——入れていないページで page.clock を動かすと、時刻が巻き戻る。
+ */
+export async function finishReady(page, { virtualClock = false } = {}) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (!(await page.locator(".game-ready").count())) break;
+    if (virtualClock) await page.clock.runFor(PAST_GUARD_MS);
+    else await page.waitForTimeout(PAST_GUARD_MS);
+    if (!(await page.locator(".game-ready").count())) break;
+    await page.locator("#gameReadyStart").evaluate((button) => button.click());
   }
-  await page.locator(".game-ready").waitFor({state:"detached"});
+  await page.locator(".game-ready").waitFor({ state: "detached" });
 }
 
-export async function checkReadyInputSafety(page) {
-  await page.evaluate(key=>{
-    const state=JSON.parse(localStorage.getItem(key));
-    Object.assign(state.settings,{speechEnabled:true,autoScan:false,textMode:"ruby"});
-    localStorage.setItem(key,JSON.stringify(state));
-  },key);
+/** 設定を書き換えて読み込み直す。 */
+async function patchSettings(page, patch) {
+  await page.evaluate(
+    ({ key, patch }) => {
+      const state = JSON.parse(localStorage.getItem(key));
+      Object.assign(state.settings, patch);
+      localStorage.setItem(key, JSON.stringify(state));
+    },
+    { key: storageKey, patch }
+  );
   await page.reload();
+}
+
+const sessionCount = (page) =>
+  page.evaluate((key) => JSON.parse(localStorage.getItem(key)).sessions.length, storageKey);
+
+/** ホームのタイルを開く（ページに分かれた画面では「つぎ」で送る）。 */
+async function openTile(page, id) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const tile = page.locator(`[data-tile-id="${id}"]`);
+    if (await tile.count()) {
+      await tile.evaluate((element) => element.click());
+      return;
+    }
+    await page.locator(".game-tile.scan-pager").evaluate((element) => element.click());
+  }
+  throw new Error(`見つからない遊び: ${id}`);
+}
+
+/**
+ * 説明の画面の押し方（点検 U15 と、押す回数の両立）。
+ * - 開いた直後の押下（タイルを選んだ押下の跳ね返り）では始まらない
+ * - 声が鳴っているあいだの押下は声を止めるだけで、記録も作らない
+ * - 声が止まっていれば、ひと押しで始まる
+ * - 走査では「はじめる」と「おわる」だけを回り、スイッチコントロールにも両方が見える
+ * - 始まったら走査は止まる
+ */
+export async function checkReadyInputSafety(page) {
+  await patchSettings(page, { speechEnabled: true, autoScan: false, textMode: "ruby" });
   await page.locator("#startStage").click();
-  await open(page,"slot-corner");
-  await open(page,"slot-l1");
+  await openTile(page, "slot-corner");
+  await openTile(page, "slot-l1");
   await page.locator(".game-ready").waitFor();
-  const sessions=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).sessions.length,key);
-  await page.waitForTimeout(200);
+  const before = await sessionCount(page);
+
+  // 開いた直後の押下は受けない。
   await page.locator("#gameStage").click();
-  assert(await page.locator(".game-ready").count(),"説明を終わる1押しで課題を開始しない");
-  assert.equal(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).sessions.length,key),sessions,"説明の押下は記録しない");
-  await page.locator("#gameReadyNext").click();
-  assert(await page.locator(".game-ready").count(),"連打で確認を飛ばさない");
-  await finishReady(page);
-  assert(await page.locator(".slot-task").count(),"支援者は固定の長い待ち時間なしに開始できる");
+  assert(await page.locator(".game-ready").count(), "開いた直後の押下で始まらない");
+
+  // 声が鳴っている（ことにした）あいだの押下は、声を止めるだけ。
+  await page.waitForTimeout(PAST_GUARD_MS);
+  await page.evaluate(() => {
+    const audio = window.__presentationCtx.audio;
+    audio.__realIsSpeaking = audio.__realIsSpeaking || audio.isSpeaking;
+    audio.isSpeaking = () => true;
+  });
+  await page.locator("#gameStage").click();
+  assert(await page.locator(".game-ready").count(), "声が鳴っているあいだの押下で始まらない");
+  assert.equal(await sessionCount(page), before, "説明の押下は記録しない");
+
+  // 声が止まっていれば、ひと押しで始まる。
+  await page.evaluate(() => {
+    const audio = window.__presentationCtx.audio;
+    audio.isSpeaking = () => false;
+  });
+  await page.waitForTimeout(PAST_GUARD_MS);
+  await page.locator("#gameStage").click();
+  await page.locator(".game-ready").waitFor({ state: "detached" });
+  assert(await page.locator(".slot-task").count(), "声が止まっていれば、ひと押しで始まる");
+  await page.evaluate(() => {
+    const audio = window.__presentationCtx.audio;
+    if (audio.__realIsSpeaking) audio.isSpeaking = audio.__realIsSpeaking;
+  });
   await page.locator("#gameExit").click();
 
-  // 自前走査とOS委譲を別々に確認する。説明の操作は入力面の兄弟として公開する。
-  for(const switchControlMode of [false,true]) {
-    await page.evaluate(({key,switchControlMode})=>{
-      const state=JSON.parse(localStorage.getItem(key));
-      Object.assign(state.settings,{speechEnabled:false,autoScan:true,scanInterval:500,switchControlMode});
-      localStorage.setItem(key,JSON.stringify(state));
-    },{key,switchControlMode});
-    await page.reload();
+  // 走査（自前）と iPad のスイッチコントロール（OS）の両方で、はじめる・おわる に届く。
+  for (const switchControlMode of [false, true]) {
+    await patchSettings(page, { speechEnabled: false, autoScan: true, scanInterval: 500, switchControlMode });
     await page.locator("#startStage").click();
-    await open(page,"slot-corner");await open(page,"slot-l1");
+    await openTile(page, "slot-corner");
+    await openTile(page, "slot-l1");
     await page.locator(".game-ready").waitFor();
-    if(switchControlMode) {
-      const tree=await page.locator("#gameView").ariaSnapshot();
-      assert(tree.includes("始める")&&tree.includes("おわる"),"OSから開始と終了へ届く");
+    if (switchControlMode) {
+      const start = page.getByRole("button", { name: /始める|はじめる/ });
+      const exit = page.locator("#gameExit");
+      assert(await start.isVisible(), "スイッチコントロールから「はじめる」が見える");
+      assert(await exit.isVisible(), "スイッチコントロールから「おわる」が見える");
       await finishReady(page);
     } else {
-      for(let i=0;i<8&&await page.locator(".game-ready").count();i++) {
-        await page.waitForTimeout(500);
-        await page.waitForFunction(()=>document.querySelector("#gameReadyNext").classList.contains("scan-focus"));
-        await page.keyboard.press("Space");
-      }
+      const ring = await page.evaluate(() =>
+        [...document.querySelectorAll("#gameView [data-scan]")]
+          .filter((element) => !element.hidden && element.getBoundingClientRect().width > 0)
+          .map((element) => element.id)
+      );
+      assert.deepEqual(ring.sort(), ["gameExit", "gameReadyStart"], `走査で回るのは はじめる と おわる だけ: ${ring}`);
+      await page.waitForFunction(() => document.querySelector("#gameReadyStart").classList.contains("scan-focus"));
+      await page.waitForTimeout(PAST_GUARD_MS);
+      await page.keyboard.press("Space");
     }
-    await page.locator(".game-ready").waitFor({state:"detached"});
-    assert.equal(await page.locator("#gameView .scan-focus").count(),0,"課題を始めたら走査を止める");
+    await page.locator(".game-ready").waitFor({ state: "detached" });
+    assert.equal(await page.locator("#gameView .scan-focus").count(), 0, "課題を始めたら走査を止める");
     await page.locator("#gameExit").click();
   }
 }
 
-async function open(page, id) {
-  for (let i=0; i<10; i++) {
-    const tile=page.locator(`[data-tile-id="${id}"]`);
-    if(await tile.count()) { await tile.evaluate(e=>e.click()); return; }
-    await page.locator(".game-tile.scan-pager").evaluate(e=>e.click());
+/** Windows のヘッドレス WebKit には Web Audio が無い。版面の検査のために時計だけを用意する。 */
+function installLayoutAudio() {
+  if (!window.AudioContext && !window.webkitAudioContext) {
+    const parameter = () => ({
+      value: 0,
+      setValueAtTime() {},
+      linearRampToValueAtTime() {},
+      exponentialRampToValueAtTime() {},
+      cancelScheduledValues() {},
+      setTargetAtTime() {},
+    });
+    const node = () => ({
+      connect() {},
+      disconnect() {},
+      start() {},
+      stop() {},
+      addEventListener() {},
+      gain: parameter(),
+      frequency: parameter(),
+      Q: parameter(),
+      detune: parameter(),
+      playbackRate: parameter(),
+    });
+    window.AudioContext = class {
+      sampleRate = 44100;
+      destination = node();
+      get currentTime() {
+        return performance.now() / 1000;
+      }
+      resume() {
+        return Promise.resolve();
+      }
+      createGain() {
+        return node();
+      }
+      createOscillator() {
+        return node();
+      }
+      createBufferSource() {
+        return node();
+      }
+      createBiquadFilter() {
+        return node();
+      }
+      createBuffer(channels, length) {
+        return { duration: length / this.sampleRate, getChannelData: () => new Float32Array(length) };
+      }
+      decodeAudioData() {
+        return Promise.resolve(this.createBuffer(1, 4410));
+      }
+    };
   }
-  throw Error(`見つからない遊び: ${id}`);
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (AudioContextClass) {
+    // 版面の検査の時計を WebKit でも進める。実際に音が出るかは別の検査が見る。
+    Object.defineProperty(AudioContextClass.prototype, "currentTime", {
+      get: () => performance.now() / 1000,
+      configurable: true,
+    });
+    Object.defineProperty(AudioContextClass.prototype, "state", { get: () => "running", configurable: true });
+  }
 }
 
+const CORNER_OF = {
+  "slot-l1": "slot-corner",
+  "slot-l2": "slot-corner",
+  crane: "crane-corner",
+  fishing: "fishing-corner",
+  "fishing-gonogo": "fishing-corner",
+  gonogo: null,
+};
+
+/**
+ * 説明とけっかが、画面の大きさを変えても収まる（大きい文字＋くっきり表示で、
+ * 日本語と英語）。アームの状態札が隠れないことも見る。
+ * 画面の大きさは自分で変えるので、実寸の数だけ同じ仕事を繰り返さないよう、
+ * 呼び出し側（web-smoke）はエンジンごとに1実寸だけで呼ぶ。
+ */
 export async function checkResponsiveScreens(page) {
-  await page.addInitScript(() => {
-    if (!window.AudioContext && !window.webkitAudioContext) {
-      // Windows版のヘッドレスWebKitにはWeb Audio自体がない。
-      // 版面用に予約時計だけを供給する。音が出るという実機の保証には使わない。
-      const parameter=()=>({value:0,setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){},cancelScheduledValues(){},setTargetAtTime(){}});
-      const node=()=>({connect(){},disconnect(){},start(){},stop(){},addEventListener(){},gain:parameter(),frequency:parameter(),Q:parameter(),detune:parameter(),playbackRate:parameter()});
-      window.AudioContext=class {
-        sampleRate=44100;destination=node();state="running";
-        get currentTime(){return performance.now()/1000;}
-        resume(){return Promise.resolve();}
-        createGain(){return node();} createOscillator(){return node();}
-        createBufferSource(){return node();} createBiquadFilter(){return node();}
-        createBuffer(channels,length){return {duration:length/this.sampleRate,getChannelData:()=>new Float32Array(length)};}
-        decodeAudioData(){return Promise.resolve(this.createBuffer(1,4410));}
-      };
-    }
-    const Audio = window.AudioContext || window.webkitAudioContext;
-    if (Audio) {
-      Object.defineProperty(Audio.prototype,"currentTime",{get:()=>performance.now()/1000,configurable:true});
-      // 版面検査の時計をWebKitでも進める。実際の音の可用性は別の検査が担う。
-      Object.defineProperty(Audio.prototype,"state",{get:()=>"running",configurable:true});
-    }
-  });
+  await page.addInitScript(installLayoutAudio);
   await page.clock.install();
-  await page.clock.pauseAt(new Date(Date.now()+1000));
-  for(const [width,height] of viewports) for(const textMode of ["ruby","en"]) {
-    await page.setViewportSize({width,height});
-    await page.evaluate(({key,textMode})=>{
-      const state=JSON.parse(localStorage.getItem(key));
-      Object.assign(state.settings,{textMode,largeText:true,highContrast:true,speechEnabled:false,autoScan:false,fxLevel:"none",difficultyMode:"practice"});
-      localStorage.setItem(key,JSON.stringify(state));
-    },{key,textMode});
-    await page.reload();
-    await page.locator("#startStage").click({force:true});
-    for(const game of ["slot-l1","slot-l2","crane","fishing","fishing-gonogo","gonogo"]) {
-      if(game!=="gonogo") await open(page, game.startsWith("slot")?"slot-corner":game==="crane"?"crane-corner":"fishing-corner");
-      await open(page,game);
-      await page.clock.fastForward(500);
-      for(let i=0; i<5; i++) {
-        assert.equal(await page.locator('#gameReadyPage').evaluate(e=>getComputedStyle(e).color),'rgb(255, 255, 255)','くっきり表示の説明ページ番号を白くする');
-        const found=await page.evaluate(()=>{
-          const selectors=[".game-ready-title",".game-ready-steps li:not([hidden])",".game-ready-go","#gameReadyNext","#gameExit"];
-          const stage=document.querySelector(".game-ready").getBoundingClientRect();
-          return selectors.flatMap(s=>[...document.querySelectorAll(s)]).filter(e=>e.getBoundingClientRect().width).map(e=>{
-            const r=e.getBoundingClientRect();
-            return {name:e.id||e.className,inside:r.left>=-1&&r.top>=-1&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1,
-              clips:e.matches("li")&&(r.top<stage.top-1||r.bottom>stage.bottom+1)};
-          });
-        });
-        assert(found.every(e=>e.inside&&!e.clips),`${game} ${width}x${height} ${textMode}: ${JSON.stringify(found)}`);
-        const label=await page.locator("#gameReadyNext").getAttribute("aria-label");
-        if(!["次の説明","Next step"].includes(label)) break;
-        await page.clock.fastForward(500);
-        await page.locator("#gameReadyNext").evaluate(e=>e.click());
-      }
-      await page.clock.fastForward(500);
-      await page.locator("#gameReadyNext").evaluate(e=>e.click());
-      await page.locator(".game-ready").waitFor({state:"detached"});
-      if(game==="crane") {
-        const hidden=await page.locator(".crane-status").evaluate(e=>{
-          const r=e.getBoundingClientRect();const center=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
-          return !center?.closest(".crane-console")||r.bottom>innerHeight||r.top<60;
-        });
-        assert(!hidden,`アームの状態札が隠れる: ${width}x${height}`);
-      }
-      // 終了後の版面を検査する。経過時計で状態を進め、途中の全描画フレームは再生しない。
-      for(let i=0; i<100&&!await page.locator("#resultView.is-active").count();i++) {
-        await page.clock.fastForward(500);
-        if(game==="crane") await page.locator("#gameStage").evaluate(e=>e.click());
-        else await page.clock.fastForward(10000);
-      }
-      assert(await page.locator("#resultView.is-active").count(),`けっかに進まない: ${game} ${width}x${height} ${await page.locator("#gameStageContent").textContent()}`);
-      await page.clock.fastForward(1000);
-      const result=await page.evaluate(()=>{
-        const controls=[...document.querySelectorAll("#resultRetry,#resultHome")].map(e=>{
-          const r=e.getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1&&r.width>=44&&r.height>=44;
-        });
-        const stats=document.querySelector("#resultStats");
-        return {controls,overflow:stats.scrollHeight-stats.clientHeight};
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  for (const [width, height] of VIEWPORTS) {
+    for (const textMode of ["ruby", "en"]) {
+      await page.setViewportSize({ width, height });
+      await patchSettings(page, {
+        textMode,
+        largeText: true,
+        highContrast: true,
+        speechEnabled: false,
+        autoScan: false,
+        fxLevel: "none",
+        difficultyMode: "practice",
       });
-      assert(result.controls.every(Boolean),`けっかのボタン: ${game} ${width}x${height} ${textMode}`);
-      assert(result.overflow<=2,`けっかが切れる: ${game} ${width}x${height} ${textMode} ${result.overflow}px`);
-      for (const title of await page.locator("#resultView .hk-result-title").all()) {
-        assert.equal(await title.evaluate(e=>getComputedStyle(e).color),"rgb(255, 255, 255)","くっきり表示の結果見出しを白くする");
+      await page.locator("#startStage").click({ force: true });
+      for (const [game, corner] of Object.entries(CORNER_OF)) {
+        const where = `${game} ${width}x${height} ${textMode}`;
+        if (corner) await openTile(page, corner);
+        await openTile(page, game);
+        await page.clock.fastForward(PAST_GUARD_MS);
+        await assertReadyFits(page, where);
+        await finishReady(page, { virtualClock: true });
+        if (game === "crane") await assertCraneStatusVisible(page, where);
+        await playToResult(page, game, where);
+        await assertResultFits(page, where);
+        await page.locator("#resultHome").evaluate((button) => button.click());
       }
-      await page.locator("#resultHome").evaluate(e=>e.click());
-      console.log(`responsive ${width}x${height} ${textMode} ${game}: 説明・状態札・けっかの収まり`);
     }
+  }
+}
+
+/** 説明の題名・見えている手順・案内・はじめる・おわる が画面の中にあり、手順が切れていない。 */
+async function assertReadyFits(page, where) {
+  const pages = (await page.locator("#gameReadyPage").textContent()) || "";
+  const total = Number(pages.split("/")[1] || 1);
+  for (let shown = 0; shown < total; shown += 1) {
+    const found = await page.evaluate(() => {
+      const selectors = [
+        ".game-ready-title",
+        ".game-ready-steps li:not([hidden])",
+        ".game-ready-go",
+        "#gameReadyStart",
+        "#gameExit",
+      ];
+      const stage = document.querySelector(".game-ready").getBoundingClientRect();
+      return selectors
+        .flatMap((selector) => [...document.querySelectorAll(selector)])
+        .filter((element) => element.getBoundingClientRect().width)
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            name: element.id || element.className,
+            inside: rect.left >= -1 && rect.top >= -1 && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1,
+            clipped: element.matches("li") && (rect.top < stage.top - 1 || rect.bottom > stage.bottom + 1),
+          };
+        });
+    });
+    assert(found.every((item) => item.inside && !item.clipped), `説明が収まらない ${where}: ${JSON.stringify(found)}`);
+    assert.equal(
+      await page.locator("#gameReadyPage").evaluate((element) => getComputedStyle(element).color),
+      "rgb(255, 255, 255)",
+      "くっきり表示の説明ページ番号を白くする"
+    );
+    if (total > 1) await page.locator("#gameReadyForward").evaluate((button) => button.click());
+  }
+}
+
+async function assertCraneStatusVisible(page, where) {
+  const hidden = await page.locator(".crane-status").evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const center = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    return !center?.closest(".crane-console") || rect.bottom > innerHeight || rect.top < 60;
+  });
+  assert(!hidden, `アームの状態札が隠れる: ${where}`);
+}
+
+/** 経過時計で終わりまで進める（途中の描画フレームは再生しない）。 */
+async function playToResult(page, game, where) {
+  for (let step = 0; step < 100 && !(await page.locator("#resultView.is-active").count()); step += 1) {
+    await page.clock.fastForward(500);
+    if (game === "crane") await page.locator("#gameStage").evaluate((stage) => stage.click());
+    else await page.clock.fastForward(10_000);
+  }
+  assert(await page.locator("#resultView.is-active").count(), `けっかに進まない: ${where}`);
+  await page.clock.fastForward(1000);
+}
+
+/** けっかのボタンが画面の中にあり 44px 以上、中身がスクロールなしで収まる。 */
+async function assertResultFits(page, where) {
+  const result = await page.evaluate(() => {
+    const controls = [...document.querySelectorAll("#resultRetry, #resultHome")].map((button) => {
+      const rect = button.getBoundingClientRect();
+      return (
+        rect.left >= 0 &&
+        rect.top >= 0 &&
+        rect.right <= innerWidth + 1 &&
+        rect.bottom <= innerHeight + 1 &&
+        rect.width >= 44 &&
+        rect.height >= 44
+      );
+    });
+    const stats = document.querySelector("#resultStats");
+    return { controls, overflow: stats.scrollHeight - stats.clientHeight };
+  });
+  assert(result.controls.every(Boolean), `けっかのボタン: ${where}`);
+  assert(result.overflow <= 2, `けっかが切れる: ${where} ${result.overflow}px`);
+  for (const title of await page.locator("#resultView .hk-result-title").all()) {
+    assert.equal(await title.evaluate((element) => getComputedStyle(element).color), "rgb(255, 255, 255)", "くっきり表示の結果見出しを白くする");
   }
 }

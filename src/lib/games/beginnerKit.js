@@ -20,7 +20,7 @@
 
 import { joinSpeech, resolveTextMode } from "../i18n.js";
 import { DEFAULT_PLAY_PREFS } from "../state.js";
-import { PARTY_FINISH_DELAY_MS } from "./partyStage.js";
+import { PARTY_FINISH_DELAY_MS, atmosphereFor } from "../atmosphere.js";
 import { presentation } from "../presentation.js";
 
 /** はじめの遊びは5回で終わる（colorLegacyPreset と同じ長さ）。 */
@@ -130,10 +130,17 @@ export function playFinishSound(audio, style) {
  * @param {string} doneText 読み上げる「できた」の文（プレーン文）
  */
 export function celebrate(ctx, prefs, doneText) {
-  const level = ctx.fx?.level?.() || "none";
-  if (level === "none" || level === "subtle") {
-    if (level === "subtle") ctx.audio.playApplause({ durationS: 0.35 });
-    if (ctx.settings.speechEnabled) ctx.voiceFeedback(joinSpeech([ctx.t("color.voice.cheer"), doneText], resolveTextMode(ctx.settings)));
+  const profile = atmosphereFor(ctx.fx?.level?.());
+  if (profile.quietFinish) {
+    // 静かな段（なし・すっきり）。この遊びの「できたときのおいわい」を なし にしてあれば、
+    // 拍手も「やったー」も足さない（いちばん静かな段のほうが音が多い、にならないように）。
+    const cheer = prefs.cheer !== "none";
+    if (cheer && profile.finishCue === "chimeApplause") ctx.audio.playApplause({ durationS: 0.35 });
+    if (ctx.settings.speechEnabled) {
+      ctx.voiceFeedback(
+        cheer ? joinSpeech([ctx.t("color.voice.cheer"), doneText], resolveTextMode(ctx.settings)) : doneText
+      );
+    }
     return;
   }
   const cheer = prefs.cheer;
@@ -223,8 +230,7 @@ export function createBeginnerFlow(
       const big = ctx.party?.isBig();
       if (big) ctx.party.finale();
       else {
-        const level = ctx.fx?.level?.() || "none";
-        if (level === "none" || level === "subtle") audio.playChime(784, { durationS: 0.24 });
+        if (atmosphereFor(ctx.fx?.level?.()).quietFinish) audio.playChime(784, { durationS: 0.24 });
         else finishSound(audio, prefs.sound);
         presentation.run("beginner.finale", () => onFinale(pressIndex));
       }

@@ -14,6 +14,7 @@ import { slotSymbolHtml } from "./slotArt.js";
 import { POP_ANIMALS, artSvg, burstSvg } from "../art/hakkiriArt.js";
 import { otterSvg, outfitClasses } from "../art/partyArt.js";
 import { fullJarHtml, todayJarsHtml } from "./partyStage.js";
+import { atmosphereFor } from "../atmosphere.js";
 
 /** 符号付きms表記（"+62ms" 等）。値が無ければ "--"。 */
 export function formatSignedMs(value) {
@@ -370,7 +371,7 @@ function renderCompletionResult(summary, context = {}) {
   }
 
   // 押すと出てくるの既存のおおさわぎだけは、元のけっかを保つ。
-  if (summary?.party?.level === "big" && context.gameId === "color-legacy") {
+  if (summary?.party && atmosphereFor(summary.party.level).reward && context.gameId === "color-legacy") {
     return renderLegacyPartyResult(summary.party, items, summaryText, context);
   }
 
@@ -402,18 +403,23 @@ export function renderPartyResult(party, primary, context = {}) {
 function renderPartyCompanions(party, context) {
   const t = context.t;
   const stars = Number.isFinite(party.stars) ? party.stars : 15;
-  const reward = party.unlocked
+  // ごほうびのある段（おおさわぎ）だけ、服ときょうのびんを添える（atmosphere.js）。
+  const reward = atmosphereFor(party.level).reward;
+  const rewardText = party.unlocked
     ? t("party.result.reward", { item: t(`party.outfit.${party.unlocked}`) })
     : t("party.result.rewardDone");
-  return `
-      <div class="party-result-main">
-        <span class="party-result-otter is-cheering ${party.level === "normal" ? "" : outfitClasses(party.outfits)}" aria-hidden="true">${otterSvg()}</span>
-        ${fullJarHtml(stars)}
-        ${party.level === "normal" ? "" : `<div class="party-result-side">
+  const side = reward
+    ? `<div class="party-result-side">
           <span class="party-result-label">${t("party.result.today")}</span>
           <span class="party-today" aria-hidden="true">${todayJarsHtml(party.jarsToday)}</span>
-          <span class="party-result-reward">${reward}</span>
-        </div>`}
+          <span class="party-result-reward">${rewardText}</span>
+        </div>`
+    : "";
+  return `
+      <div class="party-result-main">
+        <span class="party-result-otter is-cheering ${reward ? outfitClasses(party.outfits) : ""}" aria-hidden="true">${otterSvg()}</span>
+        ${fullJarHtml(stars)}
+        ${side}
       </div>
   `;
 }

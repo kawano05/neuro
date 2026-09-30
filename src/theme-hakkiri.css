@@ -1547,14 +1547,7 @@ body.user-world .game-stage-content.is-ready {
 .party-layer.is-timing.is-finale .party-otter { left: 20px !important; width: 100px; }
 .party-layer.is-timing.is-finale .party-jar { left: auto !important; right: 18px; top: 76px; bottom: auto; width: 90px; }
 
-/* 動く世界はにぎやかから。測定画面にはこの属性を付けない。 */
-[data-atmosphere="none"] .pop-sea *,
-[data-atmosphere="subtle"] .pop-sea * { animation: none !important; }
-[data-atmosphere="none"] .pop-sea .sea-bubbles,
-[data-atmosphere="subtle"] .pop-sea .sea-bubbles { display: none; }
-/* 割れる動きは手応えなので残し、待っているふうせんの浮遊だけを止める。 */
-[data-atmosphere="none"] .balloon:not(.is-popped),
-[data-atmosphere="subtle"] .balloon:not(.is-popped) { animation: none; }
+/* 世界の動き（海・ふうせんの浮遊）を止める決まりは src/decoration-motion.css の1か所。 */
 .party-result[data-level="normal"] .o-all { animation: none; }
 
 @media (max-height: 500px) {
@@ -1896,19 +1889,13 @@ body.user-world .game-stage-content.is-ready {
 .party-result.is-added .party-result-reward { font-size: 1rem; }
 .party-result.is-added .party-mini-jar { width: 26px; }
 
+/* 海の動きを止めるのは src/decoration-motion.css（動きを減らすの予備も そこ）。 */
 @media (prefers-reduced-motion: reduce) {
-  .pop-sea .sea-rays i,
-  .pop-sea .sea-surface,
-  .pop-sea .sea-weed,
   .party-otter-svg .o-all,
   .party-fan.is-on,
   .party-bunting.is-on,
   .party-parade-item {
     animation: none;
-  }
-
-  .pop-sea .sea-bubbles {
-    display: none;
   }
 }
 

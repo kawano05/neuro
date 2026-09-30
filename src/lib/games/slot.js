@@ -21,6 +21,7 @@ import {
 import { slotSymbolHtml, slotSymbolStripUrl } from "./slotArt.js";
 import { SLOT_ART_VERSION, slotPracticeSymbolHtml, slotWorldHtml } from "../art/slotWorldArt.js";
 import { presentation } from "../presentation.js";
+import { atmosphereFor } from "../atmosphere.js";
 import { fitMeasuredReels, reelCellPx } from "./slotFit.js";
 
 const INPUT_GUARD_MS = 300;
@@ -351,7 +352,11 @@ export function createSlotGame(gameId) {
       if (statusEl) statusEl.textContent = t("slot.status.complete");
       logTrial(session);
       stopLoop();
-      if (config.difficultyMode === "measure" || !["none", "subtle"].includes(fx?.level?.())) audio.playTone(784);
+      // 静かな段（なし・すっきり）の終わりの音はホストが鳴らす（gameHost の finishGame）。
+      // そくていの回はいつもの音のまま（測定の条件）。
+      if (config.difficultyMode === "measure" || !atmosphereFor(fx?.level?.(), "timing").quietFinish) {
+        audio.playTone(784);
+      }
       finishTimer = window.setTimeout(() => {
         finishTimer = null;
         if (destroyed) return;

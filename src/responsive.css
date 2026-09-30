@@ -78,9 +78,17 @@ body.game-mode.user-world .game-stage-content.is-ready {
   color: #1a1a1a;
   font-weight: 800;
 }
-#gameReadyControls[hidden], #gameReadyPrevious[hidden], .game-ready-steps li[hidden] { display: none; }
+#gameReadyControls[hidden], #gameReadyPrevious[hidden], #gameReadyForward[hidden], .game-ready-steps li[hidden] { display: none; }
 .game-ready-endless { display: block; font-size: 16px; }
-#gameReadyPrevious {
+/* 前後の説明は支援者のタップ用（走査の輪に入れない。games/readyScreen.js）。 */
+.game-ready-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.game-ready-pager:not(:has(button:not([hidden]))) { display: none; }
+#gameReadyPrevious,
+#gameReadyForward {
   min-width: 44px;
   min-height: 52px;
   padding: 6px 12px;
@@ -89,7 +97,7 @@ body.game-mode.user-world .game-stage-content.is-ready {
   color: #1a1a1a;
   font-size: 18px;
 }
-#gameReadyNext {
+#gameReadyStart {
   min-width: 180px;
   min-height: 56px;
   padding: 8px 24px;
@@ -120,7 +128,7 @@ body.large-text .game-ready-go { font-size: clamp(20px, 2.5vmin, 28px); }
   .game-ready-go { font-size: 16px; padding: 2px 8px; }
   body.large-text .game-ready-go { font-size: 20px; }
   .game-ready-controls { bottom: max(8px, env(safe-area-inset-bottom)); }
-  #gameReadyNext { min-height: 52px; }
+  #gameReadyStart { min-height: 52px; }
 }
 body.high-contrast.game-mode.user-world .game-stage-content.is-ready { background: #000; color: #fff; }
 body.high-contrast .game-ready-controls { color: #fff; }

@@ -990,6 +990,74 @@ const STRINGS = {
   "start.lead": { ruby: "押[お]して、はじめよう。", kanji: "押して、はじめよう。", kana: "おして、はじめよう。", en: "Press to start." },
   "game.srTitle": { ruby: "ゲーム画面[がめん]", kanji: "ゲーム画面", kana: "ゲームがめん", en: "Activity screen" },
   "game.exit": { ruby: "おわる", kanji: "おわる", kana: "おわる", en: "Finish" },
+  // 音が出せず、合図が音の課題を始められないとき（games/unavailableScreen.js）
+  "game.unavailable.title": { ruby: "音[おと]が 鳴[な]らせません", kanji: "音が 鳴らせません", kana: "おとが ならせません", en: "Sound cannot play" },
+  "game.unavailable.stopped.fishing": {
+    ruby: "音[おと]が止[と]まっているため、さかなつりは始[はじ]められません。ほかのアプリの音[おと]や着信[ちゃくしん]、消音[しょうおん]スイッチ、音量[おんりょう]を確[たし]かめてください。",
+    kanji: "音が止まっているため、さかなつりは始められません。ほかのアプリの音や着信、消音スイッチ、音量を確かめてください。",
+    kana: "おとが とまっているため、さかなつりは はじめられません。ほかの アプリの おとや ちゃくしん、しょうおん スイッチ、おんりょうを たしかめてください。",
+    en: "Sound is paused, so fishing cannot start. Check other apps, calls, the silent switch, and the volume.",
+  },
+  "game.unavailable.missing.fishing": {
+    ruby: "この端末[たんまつ]では音[おと]を鳴[な]らす機能[きのう]が使[つか]えないため、さかなつりは始[はじ]められません。",
+    kanji: "この端末では音を鳴らす機能が使えないため、さかなつりは始められません。",
+    kana: "この たんまつでは おとを ならす きのうが つかえないため、さかなつりは はじめられません。",
+    en: "This device cannot play sound, so fishing cannot start.",
+  },
+  "game.unavailable.stopped.rhythm": {
+    ruby: "音[おと]が止[と]まっているため、この遊[あそ]びは始[はじ]められません。ほかのアプリの音[おと]や着信[ちゃくしん]、消音[しょうおん]スイッチ、音量[おんりょう]を確[たし]かめてください。",
+    kanji: "音が止まっているため、この遊びは始められません。ほかのアプリの音や着信、消音スイッチ、音量を確かめてください。",
+    kana: "おとが とまっているため、この あそびは はじめられません。ほかの アプリの おとや ちゃくしん、しょうおん スイッチ、おんりょうを たしかめてください。",
+    en: "Sound is paused, so this game cannot start. Check other apps, calls, the silent switch, and the volume.",
+  },
+  "game.unavailable.missing.rhythm": {
+    ruby: "この端末[たんまつ]では音[おと]を鳴[な]らす機能[きのう]が使[つか]えないため、この遊[あそ]びは始[はじ]められません。",
+    kanji: "この端末では音を鳴らす機能が使えないため、この遊びは始められません。",
+    kana: "この たんまつでは おとを ならす きのうが つかえないため、この あそびは はじめられません。",
+    en: "This device cannot play sound, so this game cannot start.",
+  },
+  "game.unavailable.purpose.fishing": {
+    ruby: "アタリの合図[あいず]が音[おと]なので、続[つづ]けても はやさの記録[きろく]になりません。",
+    kanji: "アタリの合図が音なので、続けても はやさの記録になりません。",
+    kana: "アタリの あいずが おとなので、つづけても はやさの きろくに なりません。",
+    en: "The bite signal is a sound, so playing on would not measure speed.",
+  },
+  "game.unavailable.purpose.rhythm": {
+    ruby: "合図[あいず]が音[おと]なので、続[つづ]けても測定[そくてい]になりません。",
+    kanji: "合図が音なので、続けても測定になりません。",
+    kana: "あいずが おとなので、つづけても そくていに なりません。",
+    en: "The signal is a sound, so playing on would not be a measurement.",
+  },
+  "game.unavailable.hint": {
+    ruby: "もういちど スイッチを 押[お]すか、右上[みぎうえ]の「おわる」で 戻[もど]れます。",
+    kanji: "もういちど スイッチを 押すか、右上の「おわる」で 戻れます。",
+    kana: "もういちど スイッチを おすか、みぎうえの「おわる」で もどれます。",
+    en: "Press the switch again, or tap Finish at the top right, to go back.",
+  },
+  "game.unavailable.next.stopped": {
+    ruby: "直[なお]したあと、もう一度[いちど] 選[えら]んでください。",
+    kanji: "直したあと、もう一度 選んでください。",
+    kana: "なおした あと、もういちど えらんでください。",
+    en: "After fixing it, choose the game again.",
+  },
+  "game.unavailable.next.missing": {
+    ruby: "音[おと]の出[で]る端末[たんまつ]で もう一度[いちど] おためしください。",
+    kanji: "音の出る端末で もう一度 おためしください。",
+    kana: "おとの でる たんまつで もういちど おためしください。",
+    en: "Please try again on a device that can play sound.",
+  },
+  "game.unavailable.announce.fishing": {
+    ruby: "音[おと]が鳴[な]らせないため、さかなつりを始[はじ]められません",
+    kanji: "音が鳴らせないため、さかなつりを始められません",
+    kana: "おとが ならせないため、さかなつりを はじめられません",
+    en: "Sound cannot play, so fishing cannot start",
+  },
+  "game.unavailable.announce.rhythm": {
+    ruby: "音[おと]が鳴[な]らせないため、この遊[あそ]びを始[はじ]められません",
+    kanji: "音が鳴らせないため、この遊びを始められません",
+    kana: "おとが ならせないため、この あそびを はじめられません",
+    en: "Sound cannot play, so this game cannot start",
+  },
   // 遊びの中の設定（支援者がその場で変える）。docs/design-renewal-2026-09-25.md §1.8
   "game.settings": { ruby: "この遊[あそ]びの設定[せってい]", kanji: "この遊びの設定", kana: "この あそびの せってい", en: "Game settings" },
   "result.title": { ruby: "けっか", kanji: "けっか", kana: "けっか", en: "Result" },
@@ -1002,12 +1070,20 @@ const STRINGS = {
   "scale.late": { ruby: "おそい", kanji: "おそい", kana: "おそい", en: "Late" },
 
   // レディ画面
+  // 押し方の決まりは games/readyScreen.js（声が鳴っていれば止めるだけ、止まっていれば始める）。
   "ready.next": { ruby: "次[つぎ]の説明[せつめい]", kanji: "次の説明", kana: "つぎの せつめい", en: "Next step" },
   "ready.previous": { ruby: "前[まえ]の説明[せつめい]", kanji: "前の説明", kana: "まえの せつめい", en: "Previous step" },
-  "ready.nextHint": { ruby: "押[お]すと次[つぎ]の説明[せつめい]へ", kanji: "押すと次の説明へ", kana: "おすと つぎの せつめいへ", en: "Press to read the next step" },
-  "ready.confirm": { ruby: "説明[せつめい]を終[お]わる", kanji: "説明を終わる", kana: "せつめいを おわる", en: "Finish explanation" },
   "ready.start": { ruby: "始[はじ]める", kanji: "始める", kana: "はじめる", en: "Start" },
-  "ready.confirmHint": { ruby: "説明[せつめい]を終[お]えたら、もう一度[いちど]押[お]して始[はじ]めます", kanji: "説明を終えたら、もう一度押して始めます", kana: "せつめいを おえたら、もういちど おして はじめます", en: "Finish the explanation, then press again to start" },
+  "ready.stopVoice": { ruby: "声[こえ]を止[と]める", kanji: "声を止める", kana: "こえを とめる", en: "Stop voice" },
+  "ready.stopHint": { ruby: "押[お]すと声[こえ]が止[と]まります", kanji: "押すと声が止まります", kana: "おすと こえが とまります", en: "Press to stop the voice" },
+  "ready.stopped": { ruby: "声[こえ]を止[と]めました。押[お]すと始[はじ]まります", kanji: "声を止めました。押すと始まります", kana: "こえを とめました。おすと はじまります", en: "Voice stopped. Press to start" },
+  "ready.endlessExit": {
+    ruby: "おわりたいときは {n}秒[びょう] 押[お]さずに 待[ま]って、選[えら]んでね",
+    kanji: "おわりたいときは {n}秒 押さずに 待って、選んでね",
+    kana: "おわりたいときは {n}びょう おさずに まって、えらんでね",
+    en: "To finish, wait {n} seconds without pressing, then choose",
+  },
+  "game.switchMenuTitle": { ruby: "もういちど 遊[あそ]ぶ？ おわる？", kanji: "もういちど 遊ぶ？ おわる？", kana: "もういちど あそぶ？ おわる？", en: "Play again or finish?" },
   "session.measure": { ruby: "そくていの回[かい]", kanji: "そくていの回", kana: "そくていの かい", en: "Measurement" },
   "session.practice": { ruby: "れんしゅうの回[かい]", kanji: "れんしゅうの回", kana: "れんしゅうの かい", en: "Practice" },
   "session.measureShort": { ruby: "そくてい", kanji: "そくてい", kana: "そくてい", en: "Measurement" },

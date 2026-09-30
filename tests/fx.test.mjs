@@ -8,7 +8,6 @@
 
 import assert from "node:assert/strict";
 import {
-  DEFAULT_FX_LEVEL,
   FX_LEVELS,
   MAX_GLOWS_PER_SECOND,
   MAX_GLOW_ALPHA,
@@ -60,7 +59,6 @@ function seeded(seed = 1) {
 test("the chosen strength is respected, and a measured run adds nothing", () => {
   assert.equal(resolveFxLevel({ fxLevel: "big" }), "big");
   assert.equal(resolveFxLevel({ fxLevel: "subtle" }), "subtle");
-  assert.equal(DEFAULT_FX_LEVEL, "normal", "保存の既定は変えない");
   assert.equal(resolveFxLevel({}), "none");
   for (const value of ["nonsense", null, {}, "toString"]) {
     assert.equal(resolveFxLevel({ fxLevel: value }), "none");

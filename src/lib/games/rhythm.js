@@ -53,6 +53,7 @@ import {
   generateGoNoGoSequence,
 } from "./judge.js";
 import { createRhythmVisuals } from "./rhythmVisuals.js";
+import { renderAudioUnavailable } from "./unavailableScreen.js";
 
 // フィードバック音（detailed-design.md §5.3）: hit は既定音量、miss/extra は
 // 小音量・短めにして罰的にしない。
@@ -600,25 +601,7 @@ export function createRhythmGame(gameId) {
       offsetTrackEl = null;
       offsetMeanEl = null;
       stageEl.classList.remove("module-rhythm");
-      // 原因で次の手が変わるので書き分ける。音が「使えない端末」なら端末を
-      // 変えるしかないが、「止まっている」だけなら消音スイッチや音量、
-      // 割り込みを直せばその場で続けられる。
-      const stopped = audioState === "suspended" || audioState === "interrupted";
-      const why = stopped
-        ? "音が止まっているため、リズムの課題は始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。"
-        : "この端末では音を鳴らす機能が使えないため、リズムの課題は始められません。";
-      stageEl.innerHTML = `
-        <div class="game-unavailable">
-          <strong>おとが ならせません</strong>
-          <p>${why} 合図が音なので、続けても測定になりません。</p>
-          <p class="game-unavailable-hint">
-            もういちど スイッチを おすか、右上の「おわる」で もどれます。${
-              stopped ? "直したあと、もう一度えらんでください。" : "音の出る端末で もう一度おためしください。"
-            }
-          </p>
-        </div>
-      `;
-      announce("音が鳴らせないため、リズムの課題を始められません");
+      renderAudioUnavailable(stageEl, ctx, "rhythm", audioState);
     }
 
     function mountStageVisuals() {

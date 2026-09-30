@@ -498,7 +498,8 @@ export function initNeuroNodeApp() {
       if (event.repeat) return; // 押しっぱなしの連続 keydown は無視する（MUST, §3.3）
       acceptSwitchEvent("keyboard");
     }
-    if (event.key === "ArrowRight" && (state.currentView !== "game" || ctx.gameHost.isReadyOpen())) {
+    // 遊びの画面では、ホストが走査してよい範囲を持つときだけ（エンドレスの終わりの選択）。
+    if (event.key === "ArrowRight" && (state.currentView !== "game" || ctx.gameHost.scanScope())) {
       event.preventDefault();
       ctx.scan.step();
     }

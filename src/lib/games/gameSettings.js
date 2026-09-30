@@ -241,6 +241,7 @@ function escapeHtml(value) {
  * @param {() => void} host.abortSession その回を中断として閉じる
  * @param {() => void} host.relaunch 同じ遊びを はじめから（レディ画面から）
  * @param {() => void} host.applyLive live な遊びへ、変えた設定を伝える
+ * @param {() => boolean} [host.canOpen] いま開いてよいか（遊び終えたあとの待ちなどでは false）
  */
 export function createGameSettings(ctx, host) {
   const { state, elements, save, announce } = ctx;
@@ -335,7 +336,9 @@ export function createGameSettings(ctx, host) {
 
   function open() {
     const gameId = host.activeGameId();
-    if (isOpen() || !gameSettingsAvailable(gameId, state.settings)) return;
+    // 遊び終えたあとのお祝いの待ち・エンドレスの「もういちど／おわる」では開かない
+    // （開くと回を止めて、けっかを飛ばしてしまう。gameHost の段階）。
+    if (isOpen() || !gameSettingsAvailable(gameId, state.settings) || host.canOpen?.() === false) return;
     const definition = GAME_SETTINGS[gameId];
     openFor = gameId;
     draft = Object.fromEntries(

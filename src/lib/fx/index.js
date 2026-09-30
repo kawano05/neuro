@@ -1,9 +1,9 @@
 // =====================================================================
 // fx/index.js — 演出のまとめ役（neuronodeApp.js が1つ作って ctx.fx に置く）
 //
-// docs/overall-design-2026-09-28.md §5・§6。強さは毎回その場で決める:
-//   - 支援者の設定（settings.fxLevel）
-//   - 端末の「動きを減らす」（prefers-reduced-motion）→ ひかえめより強くしない
+// docs/overall-design-2026-09-28.md §5・§6。段は毎回その場で決める:
+//   - 支援者の設定「遊びの雰囲気」（settings.fxLevel。段の中身は src/lib/atmosphere.js）
+//   - 端末の「動きを減らす」（prefers-reduced-motion）→ 粒・弾み・世界の動きを止める
 //   - そくていの回の遊び → 何も足さない（gameHost が setMeasurement で知らせる）
 // =====================================================================
 
@@ -12,7 +12,7 @@ import { createMotion } from "./fxMotion.js";
 import { createFxPresets } from "./fxPresets.js";
 import { resolveDecorationPolicy } from "./fxSafety.js";
 
-export { FX_LEVELS, DEFAULT_FX_LEVEL, resolveFxLevel } from "./fxSafety.js";
+export { FX_LEVELS, resolveFxLevel } from "./fxSafety.js";
 
 /**
  * @param {{getSettings: () => object, doc?: Document}} options

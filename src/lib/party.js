@@ -1,13 +1,9 @@
 // =====================================================================
 // party.js — 遊びの雰囲気「おおさわぎ」の決まり（DOM に触れない純粋関数）
 //
-// 遊びの雰囲気は、演出の強さ（settings.fxLevel）の見せ方を変えたもの:
-//   subtle … すっきり / normal … にぎやか（既定）/ big … おおさわぎ / none … なし
-// 新しい設定を足さず fxLevel に乗せたのは、session.config.fxLevel が CSV まで
-// 残っているから。どの雰囲気で遊んだかが、研究の記録からそのまま分かる。
-//
-// 全部の遊びで同じ段の文法を使う。舞台は「はじめ」「タイミング」の型だけを持ち、
-// 研究の summary とは別にお祝いを扱う（docs/party-all-2026-09-30.md）。
+// 遊びの雰囲気（なし・すっきり・にぎやか・おおさわぎ）の段ごとの中身は
+// src/lib/atmosphere.js の表がただ1つの持ち主。ここはおおさわぎの「たまるもの」
+// （びんの星・服・その日のびん）の決まりだけを持つ。研究の summary とは別に扱う。
 // おおさわぎでは、押すたびに次のものが重なっていく
 // （docs/party-mode-2026-09-29.md）:
 //   なかま（ラッコ）・音楽（楽器が1つずつ重なる）・キラキラびん（星がたまる）・
@@ -36,31 +32,20 @@ export const MAX_PARTY_JARS = 9999;
 
 export const DEFAULT_PARTY = Object.freeze({ day: "", jars: 0, outfits: Object.freeze([]) });
 
-/** 設定の文と演出の文法の所有者。画面側はこのキーを辞書で解決する。 */
-export const ATMOSPHERES = Object.freeze(Object.fromEntries([
-  ["none", false, false, false, "none", false],
-  ["subtle", false, false, false, "ring", false],
-  ["normal", true, true, false, "confetti", false],
-  ["big", true, true, true, "parade", true],
-].map(([level, worldMotion, resultCompanions, liveCompanions, finale, reward]) => [level, Object.freeze({
-  level, label: `party.atmosphere.${level}.label`, description: `party.atmosphere.${level}.description`,
-  worldMotion, resultCompanions, liveCompanions, finale, reward,
-  particles: ({none:"none",subtle:"small",normal:"usual",big:"large"})[level],
-  finishSound: ({none:"chime",subtle:"applause",normal:"usual",big:"fanfare"})[level],
-  resultMotion: level !== "none",
-})])));
-
-/** タイミングの課題には、合図を覆う音楽・観客・旗・待機中の動きを持ち込まない。 */
-export function atmosphereProfile(level, kind = "beginner") {
-  // 実行中の未知値は none。保存の既定 normal は state.js が保つ。
-  const base = Object.hasOwn(ATMOSPHERES, level) ? ATMOSPHERES[level] : ATMOSPHERES.none;
-  return { ...base, kind, music: base.liveCompanions && kind === "beginner", crowd: base.liveCompanions && kind === "beginner" };
-}
-
-/** 成功したぶんだけためる。エンドレスは15個で次のびんへ進む。 */
+/**
+ * タイミングの遊びで、成功したぶんだけ星をためる。全部成功で 15（いっぱい）。
+ * エンドレスは成功1回で星1つ、15個ごとに次のびんへ進む。
+ */
 export function timingStars(successes, total, endless = false) {
-  const earned = endless ? Math.max(0, Math.floor(successes)) : Math.floor(Math.max(0, Math.min(successes, total)) * PARTY_JAR_CAPACITY / Math.max(1, total));
-  return { earned, jars: Math.floor(earned / PARTY_JAR_CAPACITY), stars: earned > 0 ? (earned % PARTY_JAR_CAPACITY || PARTY_JAR_CAPACITY) : 0 };
+  const clamped = Math.max(0, Math.min(successes, total));
+  const earned = endless
+    ? Math.max(0, Math.floor(successes))
+    : Math.floor((clamped * PARTY_JAR_CAPACITY) / Math.max(1, total));
+  return {
+    earned,
+    jars: Math.floor(earned / PARTY_JAR_CAPACITY),
+    stars: earned > 0 ? earned % PARTY_JAR_CAPACITY || PARTY_JAR_CAPACITY : 0,
+  };
 }
 
 /** 押した回（0 から）のあとの、びんの中の星の数。 */
