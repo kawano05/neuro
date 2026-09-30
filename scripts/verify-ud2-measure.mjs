@@ -1,5 +1,5 @@
 // gpt-b/capture.mjs の固定乱数・固定音時計・描画リセットを用いた、測定画面の RGB 比較。
-// node scripts/verify-ud2-measure.mjs output/ud2/before-dist dist
+// node scripts/verify-ud2-measure.mjs output/playwright/ud2/before-dist dist
 import { chromium } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
