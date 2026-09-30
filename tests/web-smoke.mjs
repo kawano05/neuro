@@ -10,6 +10,7 @@ import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLe
 import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
 import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS } from "../src/lib/games/partyStage.js";
 import { PARTY_JAR_CAPACITY, PARTY_STARS } from "../src/lib/party.js";
+import { checkResponsiveScreens, checkReadyInputSafety, finishReady } from "./responsive-screens.mjs";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
 // 持つと、辞書を直したときにテストだけが古い文言を主張して落ちる——あるいは
@@ -106,6 +107,8 @@ const checks = [
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps every screen free of overflow and undersized targets", checkLayoutInvariants],
+  ["keeps responsive explanations and results inside short and tall screens", checkResponsiveScreens],
+  ["guards the explanation press and exposes ready controls to both scan methods", checkReadyInputSafety],
   ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
   ["keeps the hidden attribute effective against CSS display rules", checkHiddenAttributeIsRespected],
   ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
@@ -915,6 +918,7 @@ async function checkSharedBeginnerParty(page, project) {
     if (gameId === "baseball") {
       await page.locator(".game-ready").waitFor({state:"visible"});
       await page.locator("#gameStage").click();
+      await finishReady(page);
     }
     await page.locator(".party-otter").waitFor({state:"visible"});
     for(let press=0;press<5;press+=1) {
@@ -1164,7 +1168,7 @@ async function checkEffectsFollowSafetyRules(page) {
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
   if (!audioAvailable) return SKIPPED;
   const measuredBefore = await emitted();
@@ -1383,6 +1387,7 @@ async function checkBaseballFlow(page) {
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await assertNoSplitRuby(page, "baseball how-to");
   await page.locator("#gameStage").click();
+  await finishReady(page);
   await page.locator("#gameStageContent.module-baseball .bb-field").waitFor({ state: "visible" });
 
   const state = () =>
@@ -2314,7 +2319,7 @@ async function checkSlotL1GameFlow(page) {
   await assertNoSplitRuby(page, "slot-l1 how-to");
 
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
   assert(
     (await page.locator(".slot-reel").count()) === 1,
@@ -2324,6 +2329,7 @@ async function checkSlotL1GameFlow(page) {
   // 6つの絵の一覧は、そくていの回にだけ出す（れんしゅうでは「リールの周りの
   // 余計なもの」として外した。docs/design-renewal-2026-09-25.md §1.5）。
   // 画像そのものは そくていの回で使うので、読み込めることは見ておく。
+  await page.waitForFunction(()=>{const image=document.querySelector('.slot-symbol-guide img');return image?.complete&&image.naturalWidth>0&&image.naturalHeight>0;});
   const imageReady = await page.locator(".slot-symbol-guide img").evaluate(
     (image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0
   );
@@ -2423,7 +2429,7 @@ async function checkPracticeReelsFillTheScreen(page) {
     await waitForClass(page, "#gameView", "is-active");
     await page.locator(".game-ready").waitFor({ state: "visible" });
     await page.locator("#gameStage").click();
-    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await finishReady(page);
     await page.locator(".slot-task[data-difficulty-mode='practice']").waitFor({ state: "visible" });
     await page.waitForTimeout(150);
     const fit = await page.evaluate(() => {
@@ -2489,7 +2495,7 @@ async function checkMeasuredReelsStayOnScreen(page) {
     await waitForClass(page, "#gameView", "is-active");
     await page.locator(".game-ready").waitFor({ state: "visible" });
     await page.locator("#gameStage").click();
-    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await finishReady(page);
     await page.locator(".slot-task[data-difficulty-mode='measure']").waitFor({ state: "visible" });
     await page.waitForTimeout(150);
     const seen = await page.evaluate((key) => {
@@ -2566,7 +2572,7 @@ async function checkSlotSequentialFlow(page) {
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   await page.locator(".slot-task[data-game-id='slot-l2']").waitFor({ state: "visible" });
   assert(
     (await page.locator(".slot-reel").count()) === 3,
@@ -2721,7 +2727,7 @@ async function checkRhythmL1GameFlow(page) {
   // testing the abort path below.
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
 
   // Let the countdown/first beat render a moment before aborting.
   await page.waitForTimeout(500);
@@ -2814,7 +2820,7 @@ async function checkRhythmVisualProfiles(page, project) {
     // タイルを選んだ物理入力と、開始のひと押しを同じ入力としてdedupeしない。
     await page.waitForTimeout(180);
     await page.locator("#gameStage").click();
-    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await finishReady(page);
     await page.locator("#gameStageContent[data-rhythm-profile]").waitFor({ state: "visible" });
   }
 
@@ -3124,7 +3130,7 @@ async function checkRhythmVisualProfiles(page, project) {
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.waitForTimeout(180);
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   await page.locator("#gameStageContent.module-color").waitFor({ state: "visible" });
   await assertShortColorComposition(619, 390);
   await assertShortColorComposition(568, 320);
@@ -3196,7 +3202,7 @@ async function checkEndlessFishingHasNoClock(page) {
   );
 
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
 
   const audioAvailable = await page.evaluate(
     () => Boolean(window.AudioContext || window.webkitAudioContext)
@@ -3239,7 +3245,7 @@ async function checkFishingGameFlow(page) {
   // ひと押しで抜けてからでないとセッションが始まらない。
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   await page.waitForTimeout(220);
 
   // 音が鳴らせない端末では、そもそもセッションを開かない。
@@ -3346,7 +3352,7 @@ async function checkEndlessEndsOnFailure(page) {
   );
 
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
 
   // わざと外す。ガードを抜けた直後（掃引の約18%）で止める作りにしていたが、
   // 狙いは craneGeometry.pickTarget が x∈[20,80] / y∈[22,78] に置くので、
@@ -3397,7 +3403,7 @@ async function checkCraneGameFlow(page) {
   // ひと押しで抜けてからでないとセッションが始まらない。
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   // カウントインの長さを固定の待ち時間で当てにいくと、AudioContext の
   // 立ち上がりが遅い環境（WebKit系）で走査開始前に押してしまう。
   // 走査が始まったことを状態表示で確かめてから押す。
@@ -3486,7 +3492,7 @@ async function checkResultScreenStaysInTheUserWorld(page) {
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
 
   // 1試行 = 横で1回・奥で1回。あとは掴みの演出が終わると次の試行へ進む。
   for (let trial = 0; trial < 3; trial += 1) {
@@ -3642,7 +3648,7 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
         // まだレディ画面のまま。もう一度押す。
       }
     }
-    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await finishReady(page);
     const before = await page.evaluate(() => ({ ...window.__soundCounts }));
     await waitForCraneStatus(page, "横に動きます");
     await page.waitForTimeout(400);
@@ -3792,14 +3798,7 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
     }
     await waitForClass(page, "#gameView", "is-active");
 
-    // レディ画面をひと押しで抜けると、そこで始められないと分かる。
-    if ((await page.locator(".game-ready").count()) > 0) {
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        await page.waitForTimeout(250);
-        await page.locator("#gameStage").click();
-        if ((await page.locator(".game-ready").count()) === 0) break;
-      }
-    }
+    await finishReady(page);
     await page.locator(".game-unavailable").waitFor({ state: "visible" });
     // 「止まっている」ときは、端末を変えろではなく直せる案内を出す。
     const text = await page.locator(".game-unavailable").innerText();
@@ -3808,6 +3807,7 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
       `Expected the stopped-audio wording, got: ${text.replace(/\s+/g, " ")}`
     );
 
+    await page.waitForTimeout(200);
     await page.locator("#gameStage").click();
     await page.waitForTimeout(300);
     const sessions = await page.evaluate((key) => {
@@ -3818,7 +3818,7 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
       sessions === 0,
       `A task whose cue never sounds must not record trials, found ${sessions} session(s)`
     );
-    await page.locator("#gameExit").click();
+    // 音を鳴らせない画面のひと押しは、既存の安全な出口からホームへ戻る。
     await waitForClass(page, "#homeView", "is-active");
     await page.reload();
   }
@@ -3867,7 +3867,7 @@ async function checkRhythmRecordsRealOffsets(page, project) {
   await openActivity(page, "リズム 練習");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   const startedAt = Date.now();
 
   // わざと早い側・遅い側へずらして押す。どちらの符号も出ることを見たいので、
@@ -4980,6 +4980,14 @@ async function scanTo(page, selector) {
   assert(false, `Single-switch scan cannot reach ${selector}`);
 }
 
+async function scanReady(page) {
+  for(let i=0;i<8&&await page.locator(".game-ready").count();i++) {
+    await page.clock.runFor(500);
+    await scanTo(page,"#gameReadyNext");
+  }
+  await page.locator(".game-ready").waitFor({state:"detached"});
+}
+
 async function checkSwitchEndlessExit(page) {
   await page.clock.install();
   await page.clock.pauseAt(new Date(Date.now()+1000));
@@ -4997,7 +5005,7 @@ async function checkSwitchEndlessExit(page) {
     await page.clock.runFor(500);
     await scanTo(page, `[data-tile-id="${game}-corner"]`);
     await scanTo(page, `[data-tile-id="${game}-endless"]`);
-    await page.keyboard.press("Space");
+    await scanReady(page);
     if (await page.locator(".game-unavailable").count()) {
       await page.clock.runFor(200);
       await page.keyboard.press("Space");
@@ -5017,7 +5025,7 @@ async function checkSwitchEndlessExit(page) {
       if (game === "crane") {
         await scanTo(page, "#gameSwitchAgain");
         assert(await page.locator(".game-ready").isVisible(), "Again starts a new ready screen");
-        await page.keyboard.press("Space");
+        await scanReady(page);
         await page.clock.runFor(21_000);
       }
       await scanTo(page, "#gameSwitchEnd");
@@ -5048,6 +5056,7 @@ async function checkSwitchUnavailableExit(page) {
     await openActivity(page, t(`tile.${game}.title`));
     await page.waitForTimeout(180);
     await page.keyboard.press("Space");
+    await finishReady(page);
     await page.locator(".game-unavailable").waitFor({state:"visible"});
     await page.waitForTimeout(180);
     await page.keyboard.press("Space");
