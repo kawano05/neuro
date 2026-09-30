@@ -685,8 +685,8 @@ export function sweepExpired(now, pendingBeats, W, C) { ... }
   - fishing: 釣り上げ（上がる掃引＋高域の水しぶき）、長靴（重く鈍い低域）、
     逃げられた（沈む低域、いちばん小さく）。
 - **守る条件は「測定の合図音を覆わないこと」**。
-  - 音量は `EFFECT_GAIN_CEILING`(0.04) で丸め、合図音 `DEFAULT_TONE_GAIN`(0.05)
-    より必ず下に置く（`clampEffectGain`）。呼び出し側の実引数も
+  - 音量は `EFFECT_GAIN_CEILING`(0.04) で丸め、合図音（`CUE_TONE_GAIN` 0.4。
+    以前は `DEFAULT_TONE_GAIN` 0.05）より必ず下に置く（`clampEffectGain`）。呼び出し側の実引数も
     tests/effect-gain.test.mjs で突き合わせる。
   - 帯域を分ける。合図は 440/880Hz の純音なので、効果音はノイズと低域、
     掃引は三角波にして同じ高さで competing させない。
@@ -723,7 +723,11 @@ scheduler.now();         // audioContext.currentTime（秒）
 - start(plan) は現在時刻 + 0.3s を plan.startAt とし、各ビートを
   `osc.start(startAt + beat.timeS)` で先読み予約する。**setInterval の発火時刻を
   音の発生時刻に使ってはならない（MUST NOT）。**
-- 各音の包絡は既存 playTone と同型（sine、gain 0.05、~0.18s 減衰）。
+- 各音の包絡は既存 playTone と同型（sine、~0.18s で 1/50 へ減衰）。音量は、音の
+  課題の合図では `CUE_TONE_GAIN`（0.4。2026-09-30 に 0.05 から上げた。読み上げの声
+  −15dBFS に並ぶ大きさ）。値は `session.config.cueGain` に残す。
+  減衰は、鳴らす時刻に `setValueAtTime(gain, atTimeS)` を置いてから始める。置かないと、
+  ランプは予約した時刻から始まり、先読みの分だけ鳴り始めが小さくなる。
   時刻指定版 `playToneAt(freq, atTimeS)` を audio.js に追加し、playTone(freq) は
   playToneAt(freq, now) の別名として残す（既存呼び出しの互換維持）。
 
