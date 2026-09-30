@@ -2010,6 +2010,11 @@ async function checkSettingsDetails(page) {
   await page.locator("#craneAudioGuidance").check();
   const changed = await savedSettings();
   assert(changed.targetBeats === 10 && changed.craneSweepMs === 3200 && changed.fishingLimitMs === 3000, "Typed values and the targetBeats alias must save correctly");
+  // VoiceOver はつまみの値を aria-valuetext で読む。画面の文（「2.2秒」）と同じで、生の値（2200）ではない。
+  for (const [id, text] of [["scanInterval", "2.2秒"], ["slotCycleMs", "4.8秒"], ["craneSweepMs", "3.2秒"]]) {
+    assert(await page.locator("#" + id).getAttribute("aria-valuetext") === text, `${id} must read as ${text}`);
+    assert(await page.locator(`#${id}Value`).textContent() === text, `${id} must show ${text}`);
+  }
   await page.locator("#difficultyMode").selectOption("measure");
   await page.locator("#settingsResearch > summary").click();
   assert((await page.locator("#settingsModeStatus").textContent()).includes("そくていの回"), "Measurement status must remain visible with research collapsed");

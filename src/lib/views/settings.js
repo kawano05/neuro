@@ -5,8 +5,7 @@
 // =====================================================================
 
 import { SETTINGS_FIELDS, fieldValue, formatFieldValue, readFieldValue } from "../settingsFields.js";
-export { formatSeconds } from "../settingsFields.js";
-import { isMeasurementMode, resolveDifficultyMode } from "../difficultyMode.js";
+import { isMeasurementMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
 import { evaluateReadiness } from "../readinessCheck.js";
 import { SOUND_CREDITS } from "../soundCredits.js";
@@ -65,16 +64,25 @@ export function initSettings(ctx) {
     output: elements[field.id + "Value"],
   }));
 
+  /**
+   * つまみの値を字で出す。画面の数字と読み上げ（aria-valuetext）に同じ文を使う。
+   * aria-valuetext が無いと、VoiceOver は枠の速さを「1600」と生の値で読む。
+   */
+  function showRangeValue(field, value) {
+    if (!field.output) return;
+    const text = formatFieldValue(field, value);
+    field.output.value = text;
+    field.control.setAttribute("aria-valuetext", text);
+  }
+
   function render() {
     fields.forEach(field => {
       const value = fieldValue(field, state.settings);
       if (field.type === "checkbox") field.control.checked = value;
       else field.control.value = value === null ? "" : String(value);
-      if (field.output) field.output.value = formatFieldValue(field, value);
+      showRangeValue(field, value);
       if (field.description) document.getElementById(field.id + "Description").textContent = field.description(value);
     });
-    elements.difficultyMode.value = resolveDifficultyMode(state.settings);
-    elements.textMode.value = resolveTextMode(state.settings);
     applySwitchControlMode();
     applySpeechSettings();
     applyDifficultyMode();
@@ -236,7 +244,7 @@ export function initSettings(ctx) {
     field.control.addEventListener(field.type === "range" ? "input" : "change", () => {
       if (field.id === "scanInterval" && state.settings.switchControlMode) return;
       state.settings[field.key] = readFieldValue(field, field.control);
-      if (field.output) field.output.value = formatFieldValue(field, state.settings[field.key]);
+      showRangeValue(field, state.settings[field.key]);
       save();
       if (field.id === "scanInterval" && scan.isRunning()) scan.start();
     });
