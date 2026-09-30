@@ -2019,10 +2019,17 @@ async function checkSettingsDetails(page) {
   await page.locator("#settingsResearch > summary").click();
   assert((await page.locator("#settingsModeStatus").textContent()).includes("そくていの回"), "Measurement status must remain visible with research collapsed");
   assert(await page.locator("#slotCycleMs").isDisabled(), "Measured settings must remain locked");
+  // 灰色のつまみには れんしゅうの値（4.8秒）が残る。そくていで実際に使う値を同じ行に添える。
+  await page.locator("#slotCycleMsReason").waitFor({ state: "visible" });
+  assert((await page.locator("#slotCycleMsReason").textContent()).includes("そくていでは 3.2秒"), "A locked row must show the protocol value");
+  assert((await page.locator("#slotCycleMs").getAttribute("aria-describedby")).includes("slotCycleMsReason"), "The reason must be read with the control");
+  assert(!(await page.locator("#scanInterval").isDisabled()), "Settings that are not measured stay usable while measuring");
   await openSettingsDetails(page, "research");
   await page.locator("#readinessCheck").waitFor({ state: "visible" });
   await page.locator("#difficultyMode").selectOption("practice");
   assert(!(await page.locator("#slotCycleMs").isDisabled()), "Practice must unlock adjustments");
+  assert(await page.locator("#slotCycleMsReason").isHidden(), "The reason must go away with the lock");
+  assert(!(await page.locator("#slotCycleMs").getAttribute("aria-describedby")).includes("Reason"), "A usable control must not read a stale reason");
   assert(JSON.stringify(await savedSettings()) === JSON.stringify(changed), "Measurement mode must preserve the saved practice values");
   await page.reload();
   await waitForClass(page, "#startView", "is-active");
@@ -2036,6 +2043,21 @@ async function checkSettingsDetails(page) {
   for (const [id, expected] of [["fxLevel", "subtle"], ["scanInterval", "2200"]]) assert(await page.locator("#" + id).inputValue() === expected, "Restored UI value for " + id);
   assert(await page.locator("#settings details[open]").count() === 0, "Reload must collapse details without resetting values");
   assert(await page.locator("#supporterEditToggle").count() === 0, "The obsolete editing lock must be gone");
+
+  // iPad のスイッチコントロールを使うと「枠が動く速さ」（よく使う設定）が使えなくなる。
+  // 理由は閉じた「スイッチのくわしい設定」の中ではなく、その行に出る。
+  await openSettingsDetails(page, "switch");
+  await page.locator("#switchControlMode").click();
+  await page.locator("#settingsSwitch > summary").click();
+  assert(await page.locator("#scanInterval").isDisabled(), "Scan speed is locked while iPad Switch Control scans");
+  await page.locator("#scanIntervalReason").waitFor({ state: "visible" });
+  assert((await page.locator("#scanIntervalReason").textContent()).includes("スイッチコントロール"), "The scan speed row must say why");
+  assert((await page.locator("#scanInterval").getAttribute("aria-describedby")).includes("scanIntervalReason"), "VoiceOver must read the reason");
+  await openSettingsDetails(page, "senses");
+  await page.locator("#speechVolumeReason").waitFor({ state: "visible" });
+  await openSettingsDetails(page, "switch");
+  await page.locator("#switchControlMode").click();
+  assert(!(await page.locator("#scanInterval").isDisabled()) && await page.locator("#scanIntervalReason").isHidden(), "Ending delegation unlocks the scan speed");
 }
 
 /**

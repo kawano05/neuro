@@ -8,7 +8,14 @@
 // 走査の設定を変えても、ここで走査を始め直さない——ホームへ戻ったときに scan.js が読む。
 // =====================================================================
 
-import { SETTINGS_FIELDS, fieldValue, formatFieldValue, readFieldValue } from "../settingsFields.js";
+import {
+  SETTINGS_FIELDS,
+  describedByIds,
+  fieldValue,
+  formatFieldValue,
+  readFieldValue,
+  unavailableReason,
+} from "../settingsFields.js";
 import { isMeasurementMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
 import { evaluateReadiness } from "../readinessCheck.js";
@@ -69,6 +76,7 @@ export function initSettings(ctx) {
     output: elements[`${field.id}Value`],
     // 選んだものの説明（雰囲気）。field.description は説明文を作る関数。
     descriptionOutput: elements[`${field.id}Description`],
+    reasonOutput: elements[`${field.id}Reason`],
   }));
 
   /**
@@ -90,50 +98,30 @@ export function initSettings(ctx) {
       showRangeValue(field, value);
       if (field.description) field.descriptionOutput.textContent = field.description(value);
     });
-    applySwitchControlMode();
-    applySpeechSettings();
-    applyDifficultyMode();
-  }
-
-  /** 使えない操作子を無効化する。 */
-  function setControlAvailable(control, available) {
-    if (!control) return;
-    control.disabled = !available;
-    control.setAttribute("aria-disabled", String(!available));
-    const row = control.closest(".setting-row");
-    if (row) row.classList.toggle("is-setting-disabled", !available);
-  }
-
-  /** iPad Switch Controlへ委譲中は自前走査の設定自体を操作不能にする。 */
-  function applySwitchControlMode() {
-    const delegated = Boolean(state.settings.switchControlMode);
-    elements.switchControlModeNotice.hidden = !delegated;
-    setControlAvailable(elements.scanInterval, !delegated);
-    setControlAvailable(elements.autoScan, !delegated);
-  }
-
-  /** アプリTTSがOFFなら、効かない音量つまみ・声の選択を使えなくする。 */
-  function applySpeechSettings() {
-    setControlAvailable(elements.speechVolume, Boolean(state.settings.speechEnabled));
-    setControlAvailable(elements.speechVoice, Boolean(state.settings.speechEnabled));
+    applyAvailability();
   }
 
   /**
-   * そくていの回では、むずかしさのつまみを無効にして理由を出す。
+   * いま変えられない項目を使えなくし、その理由を行に出して読み上げにも渡す（ただ1つの道）。
    *
-   * 値そのものは protocol 側が優先するので（src/lib/difficultyMode.js）、
-   * つまみを触れても効かない。効かない操作子を黙って置いておくのは、この
-   * アプリが何度も直してきた「動くが伝わらない」欠陥そのものなので、
-   * 触れないことと、その理由を同時に見せる。
+   * 理由は settingsFields.js の unavailableReason が決める（そくていで固定・iPad の
+   * スイッチコントロール中・読み上げがオフ）。効かない操作子を黙って置いておくのは、この
+   * アプリが何度も直してきた「動くが伝わらない」欠陥そのものなので、触れないことと、その
+   * 理由を同じ行で同時に見せる。まとまりの注記は、どちらの回か・何をすれば戻るかの案内。
    */
-  function applyDifficultyMode() {
-    const measuring = isMeasurementMode(state.settings);
-    elements.measureModeNotice.hidden = !measuring;
-    fields.filter(field => field.measured).forEach(({ control }) => {
-      control.disabled = measuring;
-      control.setAttribute("aria-disabled", String(measuring));
-      control.closest(".setting-row")?.classList.toggle("is-protocol-locked", measuring);
+  function applyAvailability() {
+    fields.forEach((field) => {
+      const reason = unavailableReason(field, state.settings);
+      field.control.disabled = Boolean(reason);
+      field.control.setAttribute("aria-disabled", String(Boolean(reason)));
+      field.control.setAttribute("aria-describedby", describedByIds(field, state.settings));
+      field.control.closest(".setting-row")?.classList.toggle("is-setting-disabled", Boolean(reason));
+      field.reasonOutput.textContent = reason;
+      field.reasonOutput.hidden = !reason;
     });
+    const measuring = isMeasurementMode(state.settings);
+    elements.switchControlModeNotice.hidden = !state.settings.switchControlMode;
+    elements.measureModeNotice.hidden = !measuring;
     renderReadiness(measuring);
     updateModeStatus(measuring);
   }
@@ -263,7 +251,7 @@ export function initSettings(ctx) {
       }
       if (key === "speechEnabled") {
         if (!element.checked) audio.stopSpeech();
-        applySpeechSettings();
+        applyAvailability();
       }
       // ホームに出す遊びが変わる。走査の輪はホームへ戻ったときに作り直される。
       if (key === "hideVisualTasks") ctx.views.home.render();
@@ -273,7 +261,7 @@ export function initSettings(ctx) {
   elements.difficultyMode.addEventListener("change", () => {
     state.settings.difficultyMode = elements.difficultyMode.value;
     save();
-    applyDifficultyMode();
+    applyAvailability();
     announce(
       isMeasurementMode(state.settings)
         ? "そくていの回にしました。むずかしさは固定されます"

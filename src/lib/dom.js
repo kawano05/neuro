@@ -13,12 +13,13 @@ import { SETTINGS_FIELDS } from "./settingsFields.js";
 export function collectElements() {
   return {
     // 設定UIと同じ定義からIDを収集し、手書きの項目一覧を重複させない
-    // （入力・つまみの値・選んだものの説明。SettingsFields.svelte と同じ id）。
+    // （入力・つまみの値・選んだものの説明・変えられない理由。SettingsFields.svelte と同じ id）。
     ...Object.fromEntries(
       SETTINGS_FIELDS.flatMap((field) => [
         [field.id, document.getElementById(field.id)],
         ...(field.type === "range" ? [[`${field.id}Value`, document.getElementById(`${field.id}Value`)]] : []),
         ...(field.description ? [[`${field.id}Description`, document.getElementById(`${field.id}Description`)]] : []),
+        [`${field.id}Reason`, document.getElementById(`${field.id}Reason`)],
       ])
     ),
     // 設定画面の常設部分（SettingsView.svelte / SettingsGuide.svelte）。

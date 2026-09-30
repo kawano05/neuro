@@ -41,7 +41,7 @@
       <summary>遊びごとの難しさ</summary>
       <div class="settings-details-body">
         <p class="measure-mode-notice" id="measureModeNotice" hidden>
-          そくていの回は、遊びごとの難しさが固定されます。「研究（れんしゅう／そくてい）」で「れんしゅう」にすると調整できます。
+          そくていの回は、遊びごとの難しさが固定されます。行ごとに、そくていで使う値を出しています。「研究（れんしゅう／そくてい）」で「れんしゅう」にすると調整できます。
         </p>
         {#each playGroups as playGroup (playGroup.id)}
           <h3 class="settings-group-title">{playGroup.title}</h3>

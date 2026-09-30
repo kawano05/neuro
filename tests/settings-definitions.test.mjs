@@ -12,7 +12,15 @@ import { ATMOSPHERE_LEVELS } from "../src/lib/atmosphere.js";
 import { MEASUREMENT_PROTOCOL } from "../src/lib/difficultyMode.js";
 import { GAME_SETTINGS } from "../src/lib/games/gameSettings.js";
 import { SETTING_DEFINITIONS, inGameSettingKeys, protocolText } from "../src/lib/settingDefinitions.js";
-import { SETTINGS_FIELDS, SETTINGS_GROUPS, fieldValue, formatFieldValue, settingsField } from "../src/lib/settingsFields.js";
+import {
+  SETTINGS_FIELDS,
+  SETTINGS_GROUPS,
+  describedByIds,
+  fieldValue,
+  formatFieldValue,
+  settingsField,
+  unavailableReason,
+} from "../src/lib/settingsFields.js";
 import { defaultState, sanitizeState } from "../src/lib/state.js";
 
 let passed = 0;
@@ -134,6 +142,42 @@ test("values read as the same sentence on screen and in VoiceOver", () => {
   assert.equal(fieldValue(settingsField("rhythmBpm"), { rhythmBpm: null }), null, "選択肢の null は「あそびごとの既定」のまま");
   assert.equal(fieldValue(settingsField("textMode"), { textMode: "kana" }), "ruby", "選べなくなった表記は読み替える");
   assert.equal(fieldValue(settingsField("difficultyMode"), { difficultyMode: "???" }), "practice");
+});
+
+test("a control that cannot be changed says why in its own row, from one function", () => {
+  const practice = { ...defaultState.settings };
+  SETTINGS_FIELDS.forEach((field) => {
+    assert.equal(unavailableReason(field, practice), "", `${field.key} は既定のままなら変えられる`);
+    assert.ok(!describedByIds(field, practice).includes("Reason"), `${field.key} は理由を読ませない`);
+  });
+
+  // iPad のスイッチコントロール中: 枠の速さ（よく使う設定）にも理由が出る。
+  const delegated = { ...practice, switchControlMode: true, autoScan: false };
+  const scanInterval = settingsField("scanInterval");
+  assert.match(unavailableReason(scanInterval, delegated), /スイッチコントロール/);
+  assert.equal(describedByIds(scanInterval, delegated), "scanIntervalHint scanIntervalReason");
+  assert.match(unavailableReason(settingsField("autoScan"), delegated), /スイッチコントロール/);
+  assert.ok(describedByIds(settingsField("switchControlMode"), delegated).includes("switchControlModeNotice"));
+  assert.equal(unavailableReason(settingsField("switchControlMode"), delegated), "", "戻すスイッチ自体は使える");
+
+  // 読み上げがオフ: 声の大きさ・声の選択。
+  const silent = { ...practice, speechEnabled: false };
+  assert.match(unavailableReason(settingsField("speechVolume"), silent), /声で読み上げる/);
+  assert.match(unavailableReason(settingsField("speechVoice"), silent), /声で読み上げる/);
+
+  // そくていの回: 固定される項目だけ。れんしゅうの値ではなく、そくていで使う値を添える。
+  const measuring = { ...practice, difficultyMode: "measure", slotCycleMs: 4800 };
+  SETTINGS_FIELDS.forEach((field) => {
+    const reason = unavailableReason(field, measuring);
+    if (field.measured) {
+      assert.ok(reason.includes(`そくていでは ${protocolText(field.key)}`), `${field.key}: ${reason}`);
+      assert.ok(describedByIds(field, measuring).endsWith(`${field.id}Reason`));
+    } else {
+      assert.equal(reason, "", `${field.key} はそくていでも変えられる`);
+    }
+  });
+  assert.equal(unavailableReason(settingsField("slotCycleMs"), measuring), "そくていの回は固定です（そくていでは 3.2秒）。");
+  assert.equal(describedByIds(settingsField("fxLevel"), practice), "fxLevelHint fxLevelDescription");
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

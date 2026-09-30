@@ -586,6 +586,22 @@ body.supporter-menu-mode .switch-dock { display: none; }
 #settings .setting-row output { grid-column: 2; min-width: 3.5em; text-align: right; }
 #settings .setting-row label { cursor: pointer; }
 #settings .setting-row select { grid-column: 1 / -1; width: 100%; min-width: 0; max-width: 100%; }
+/* いま変えられない理由（settingsFields.js の unavailableReason）。灰色の行の中に字で出す。
+   色だけで伝えない（左の太い線と、字そのもの）。.setting-row small の display:block が
+   hidden を打ち消すので、[hidden] を添える。 */
+#settings .setting-reason {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 4px solid var(--accent-warm);
+  border-radius: 4px;
+  background: var(--warn-soft);
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.5;
+}
+#settings .setting-reason[hidden] { display: none; }
+body.high-contrast #settings .setting-reason { border-left-color: #000000; background: #ffffff; color: #000000; }
 @media (max-width: 700px) {
   #settings .settings-grid { grid-template-columns: minmax(0, 1fr); }
   .settings-details-body { padding: 12px; }

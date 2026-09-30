@@ -1,6 +1,9 @@
 <script>
   // 1つのまとまりの項目を描く。名前・入力型は settingsFields.js、値の読み書きは settings.js。
   // ネイティブ入力と明示的なラベルで、タップ・キーボード・読み上げに同じ操作を渡す。
+  // aria-describedby と「変えられない理由」は、いまの設定で変わるので settings.js が書く。
+  import { describedByIds } from "../settingsFields.js";
+
   export let group;
 </script>
 
@@ -18,12 +21,12 @@
         </small>
       </span>
       {#if field.type === "checkbox"}
-        <input id={field.id} type="checkbox" role="switch" aria-describedby={`${field.id}Hint${field.key === "switchControlMode" ? " switchControlModeNotice" : ""}`} />
+        <input id={field.id} type="checkbox" role="switch" aria-describedby={describedByIds(field)} />
       {:else if field.type === "range"}
-        <input id={field.id} type="range" min={field.min} max={field.max} step={field.step} aria-describedby={`${field.id}Hint`} />
+        <input id={field.id} type="range" min={field.min} max={field.max} step={field.step} aria-describedby={describedByIds(field)} />
         <output id={`${field.id}Value`} for={field.id}></output>
       {:else}
-        <select id={field.id} aria-describedby={`${field.id}Hint${field.description ? ` ${field.id}Description` : ""}`}>
+        <select id={field.id} aria-describedby={describedByIds(field)}>
           {#each field.options as [value, label]}
             <option {value}>{label}</option>
           {/each}
@@ -32,6 +35,8 @@
           <small class="setting-option-description" id={`${field.id}Description`} aria-live="polite"></small>
         {/if}
       {/if}
+      <!-- いま変えられない理由（settingsFields.js の unavailableReason）。行の中に字で出す。 -->
+      <small class="setting-reason" id={`${field.id}Reason`} hidden></small>
     </div>
   {/each}
 </div>
