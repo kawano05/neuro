@@ -82,6 +82,14 @@
   -->
   <p class="supporter-message" id="supporterMessage" role="status" hidden></p>
 
+  <aside id="storageWarning" class="storage-warning" role="status" hidden>
+    <p>記録を端末に保存できません。読み込み直す前に生データを書き出してください。</p>
+    <div class="action-row wrap">
+      <button id="storageExport" class="secondary" type="button">未保存の記録をJSONで書き出す</button>
+      <button id="storageRetry" class="secondary" type="button">保存をやり直す</button>
+    </div>
+  </aside>
+
   <main>
     <!--
       利用者向けフロー（detailed-design.md §10）: start/home/game/result。
@@ -145,6 +153,11 @@
       <div class="game-actions">
         <button class="game-settings" id="gameSettings" type="button" hidden>この遊びの設定</button>
         <button class="game-exit" id="gameExit" type="button">おわる</button>
+      </div>
+      <div id="gameSwitchMenu" class="game-switch-menu" role="dialog" aria-labelledby="gameSwitchMenuTitle" hidden>
+        <strong id="gameSwitchMenuTitle"></strong>
+        <button id="gameSwitchAgain" class="primary-small" type="button" data-scan>もういちど</button>
+        <button id="gameSwitchEnd" class="secondary" type="button" data-scan>おわる</button>
       </div>
       <div
         class="game-settings-dialog"

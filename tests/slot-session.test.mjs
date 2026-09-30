@@ -240,6 +240,15 @@ test("slot art version survives config -> reload -> slot CSV and ledger without 
   assert.equal(sanitizeSlotSession(invalid).config.artVersion, null);
 });
 
+test("artVersion preserves positive integers without clamping or rounding", () => {
+  for (const value of [-1, 0, 1.8, "2", NaN, Infinity, null, undefined, 1, 1001]) {
+    const session = makeSession();
+    session.config.artVersion = value;
+    assert.equal(sanitizeSlotSession(session).config.artVersion,
+      Number.isInteger(value) && value >= 1 ? value : null);
+  }
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed) process.exit(1);
 console.log("slot session tests passed");

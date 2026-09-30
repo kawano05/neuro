@@ -2,7 +2,7 @@
 // views/log.js — 評価ログ画面（操作ログの集計・一覧・CSV書き出し）
 // =====================================================================
 
-import { escapeHtml, escapeCsv, formatTime, localFileStamp, toLocalIso } from "../utils.js";
+import { escapeHtml, escapeCsv, formatTime, exportFileStamp, toLocalIso } from "../utils.js";
 import { MAX_LOG_ENTRIES } from "../state.js";
 import {
   describeSessionConditions,
@@ -467,8 +467,9 @@ export function initLog(ctx) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `neuronode-log-${localFileStamp()}.csv`;
+    link.download = `neuronode-log-${exportFileStamp(state.evaluation.participantId)}.csv`;
     link.click();
+    ctx.recordBackup?.mark("logs");
     URL.revokeObjectURL(url);
   }
 
@@ -493,6 +494,11 @@ export function initLog(ctx) {
     if (count === 0) {
       announce("消すログがありません");
       notifySupporter("消すログがありません。");
+      return;
+    }
+    if (!ctx.recordBackup?.canClear("logs")) {
+      notifySupporter("現在の操作ログを先にCSVまたは生データ(JSON)で書き出してください。");
+      announce("先に書き出してください");
       return;
     }
     if (!window.confirm(`操作ログ ${count}件を消します。元に戻せません。`)) {

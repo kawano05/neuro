@@ -80,6 +80,49 @@ export function createGameHost(ctx) {
   // 二重保存を防ぎ、保存後は確認文言に切り替える。launch() のたびにリセット）。
   let calibrationOffsetSaved = false;
 
+  const switchMenu = document.querySelector("#gameSwitchMenu");
+  const switchAgain = document.querySelector("#gameSwitchAgain");
+  const switchEnd = document.querySelector("#gameSwitchEnd");
+  let exitChoiceTimer = null;
+
+  function closeSwitchMenu() {
+    window.clearTimeout(exitChoiceTimer);
+    exitChoiceTimer = null;
+    switchMenu.hidden = true;
+    elements.gameStage.hidden = false;
+  }
+
+  function armExitChoice() {
+    window.clearTimeout(exitChoiceTimer);
+    // 測定試行に待ち・長押し・走査を混ぜない。エンドレスの自前走査だけに
+    // 無入力20秒の出口を用意し、古い回は既存のmanual終了で閉じる（再開は新しい回）。
+    if (!requestedEndless || isMeasurementMode(state.settings) || !state.settings.autoScan ||
+        state.settings.switchControlMode || pendingModule || !activeInstance || gameSettings.isOpen() ||
+        elements.gameStageContent.querySelector(".game-unavailable")) return;
+    exitChoiceTimer = window.setTimeout(() => {
+      if (state.currentView !== "game" || gameSettings.isOpen() || !activeInstance) return;
+      ctx.audio.stopSpeech();
+      destroyActive();
+      elements.gameStageContent.innerHTML = "";
+      elements.gameStage.hidden = true;
+      const english = resolveTextMode(state.settings) === "en";
+      document.querySelector("#gameSwitchMenuTitle").textContent = english ? "Play again or finish?" : "もういちど あそぶ？ おわる？";
+      switchAgain.textContent = ctx.t("result.retry");
+      switchEnd.textContent = ctx.t("game.exit");
+      switchMenu.hidden = false;
+      announce(document.querySelector("#gameSwitchMenuTitle").textContent);
+      scan.restartIfNeeded();
+    }, 20_000);
+  }
+  switchAgain.addEventListener("click", event => {
+    event.stopPropagation();
+    launch(activeGameId, { endless: true });
+  });
+  switchEnd.addEventListener("click", event => {
+    event.stopPropagation();
+    returnHome();
+  });
+
   // この遊びの設定（遊んでいる最中に支援者が変える。games/gameSettings.js）。
   // 関数宣言は巻き上がるので、ここで launch / destroyActive を渡してよい。
   const gameSettings = createGameSettings(ctx, {
@@ -94,6 +137,7 @@ export function createGameHost(ctx) {
 
   /** instance.destroy() を安全に呼ぶ（例外を握りつぶし、activeInstance を必ずクリアする）。 */
   function destroyActive() {
+    closeSwitchMenu();
     if (activeInstance) {
       try {
         activeInstance.destroy();
@@ -328,6 +372,14 @@ export function createGameHost(ctx) {
     // 題名と手順は文として区切って読む（句点が無いと、分かち書きを外したときに
     // 題名と1行目が1語のようにつながる。i18n.js の joinSpeech）。
     const spoken = joinSpeech([moduleTitle(module), ...spokenSteps], resolveTextMode(state.settings));
+    if (requestedEndless && !isMeasurementMode(state.settings) && state.settings.autoScan && !state.settings.switchControlMode) {
+      const hint = document.createElement("span");
+      hint.className = "game-ready-go";
+      hint.textContent = resolveTextMode(state.settings) === "en"
+        ? 'To finish, wait 20 seconds without pressing and choose Finish.'
+        : 'おわりたいときは 20びょう おさずに まって、えらんでね。';
+      elements.gameStageContent.querySelector(".game-ready").append(hint);
+    }
     ctx.voiceFeedback(spoken);
   }
 
@@ -343,6 +395,7 @@ export function createGameHost(ctx) {
     elements.gameStageContent.classList.remove("is-ready");
     activeInstance = module.create(buildGameCtx());
     activeInstance.mount(elements.gameStageContent);
+    armExitChoice();
   }
 
   /** ゲームを起動する（detailed-design.md §3.2）。 */
@@ -390,6 +443,7 @@ export function createGameHost(ctx) {
     announce(ctx.t("voice.gameStart", { name: moduleTitle(module) }));
     activeInstance = module.create(buildGameCtx());
     activeInstance.mount(elements.gameStageContent);
+    armExitChoice();
   }
 
   /**
@@ -465,12 +519,22 @@ export function createGameHost(ctx) {
     // レディ画面のひと押しは「説明を読み終えた合図」であって課題の入力では
     // ないので、ゲームへは渡さず、logEvent にも残さない。これを渡すと
     // セッション開始前の入力が1件目の試行として記録されてしまう。
+    if (!switchMenu.hidden) {
+      scan.activate();
+      return;
+    }
+    // 音が出ず課題が始まらない画面には試行がない。次の一押しで戻れる。
+    if (elements.gameStageContent.querySelector(".game-unavailable")) {
+      returnHome();
+      return;
+    }
     if (pendingModule) {
       beginSession();
       return;
     }
     if (!activeInstance) return;
     activeInstance.handleInput(t, source);
+    armExitChoice();
   }
 
   /** リザルト画面「もういちど」: 同一ゲームを再起動する。 */
@@ -521,6 +585,7 @@ export function createGameHost(ctx) {
 
   return {
     launch,
+    isSwitchMenuOpen: () => !switchMenu.hidden,
     dispatchInput,
     retry,
     abort: returnHome,

@@ -111,11 +111,12 @@ test("the voices are credited in the app", () => {
 });
 
 /** audio.js を、偽の window・AudioContext・fetch の上で動かす。 */
-async function withFakeAudio(settings, fn, { contextState = "running" } = {}) {
+async function withFakeAudio(settings, fn, { contextState = "running", missingDevice = false, failedPack = false } = {}) {
   const saved = {};
   for (const name of ["window", "SpeechSynthesisUtterance", "fetch", "CustomEvent"]) {
     saved[name] = Object.getOwnPropertyDescriptor(globalThis, name);
   }
+  const announcements = [];
   const events = [];
   const utterances = [];
   const started = [];
@@ -160,7 +161,7 @@ async function withFakeAudio(settings, fn, { contextState = "running" } = {}) {
       configurable: true,
       value: {
         AudioContext: FakeContext,
-        speechSynthesis: { cancel() {}, speak: (utterance) => utterances.push(utterance), getVoices: () => [] },
+        speechSynthesis: missingDevice ? undefined : { cancel() {}, speak: (utterance) => utterances.push(utterance), getVoices: () => [] },
         dispatchEvent: (event) => events.push(event.detail),
         setTimeout,
         clearTimeout,
@@ -175,16 +176,17 @@ async function withFakeAudio(settings, fn, { contextState = "running" } = {}) {
         }
       },
     });
-    Object.defineProperty(globalThis, "SpeechSynthesisUtterance", { configurable: true, value: FakeUtterance });
+    Object.defineProperty(globalThis, "SpeechSynthesisUtterance", { configurable: true, value: missingDevice ? undefined : FakeUtterance });
     Object.defineProperty(globalThis, "fetch", {
       configurable: true,
       value: async (url) => {
+        if (failedPack) throw Error("voice unavailable");
         const bytes = packs[url];
         return { ok: true, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length) };
       },
     });
-    const audio = createAudio(() => settings, () => {}, { voicePack: { index, urls: { ja: "ja", en: "en" } } });
-    await fn({ audio, events, utterances, started, stopped });
+    const audio = createAudio(() => settings, text => announcements.push(text), { voicePack: { index, urls: { ja: "ja", en: "en" } } });
+    await fn({ audio, events, utterances, started, stopped, announcements });
   } finally {
     for (const [name, descriptor] of Object.entries(saved)) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
@@ -271,6 +273,39 @@ test("reads with the device voice when the sound output cannot be resumed", asyn
     },
     { contextState: "interrupted" }
   );
+});
+
+test("returns asynchronous double voice failures to the requested announcement", async () => {
+  await withFakeAudio({ speechEnabled: true }, async ({ audio, announcements }) => {
+    assert.equal(audio.speakOrAnnounce("やったー！", "文字の説明"), "app-tts");
+    await settle();
+    assert.deepEqual(announcements, ["文字の説明"]);
+  }, { failedPack: true, missingDevice: true });
+});
+
+test("announces asynchronous local device errors but ignores canceled old utterances", async () => {
+  await withFakeAudio({ speechEnabled: true, speechVoice: "device" }, async ({ audio, utterances, announcements }) => {
+    audio.speakOrAnnounce("古い文", "古い文字");
+    const old = utterances.at(-1);
+    audio.speakOrAnnounce("新しい文", "新しい文字");
+    old.onerror({ error: "audio-busy" });
+    utterances.at(-1).onerror({ error: "canceled" });
+    assert.deepEqual(announcements, []);
+    utterances.at(-1).onerror({ error: "audio-busy" });
+    assert.deepEqual(announcements, ["新しい文字"]);
+  });
+});
+
+test("a remote device error after speech starts also returns ownership to text", async () => {
+  await withFakeAudio({ speechEnabled: true, speechVoice: "device" }, async ({ audio, utterances, announcements }) => {
+    window.speechSynthesis.getVoices = () => [{name:"remote", lang:"ja-JP", localService:false}];
+    audio.speakOrAnnounce("やったー！", "文字で知らせる");
+    const utterance = utterances.at(-1);
+    assert.equal(utterance.voice.localService, false);
+    utterance.onstart();
+    utterance.onerror({error:"network"});
+    assert.deepEqual(announcements, ["文字で知らせる"]);
+  });
 });
 
 let passed = 0;

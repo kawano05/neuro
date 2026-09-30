@@ -1,3 +1,4 @@
+import { createRecordBackup } from "../src/lib/recordBackup.js";
 // state復元・CSV安全化・評価結果重複除去の回帰テスト。
 // npm run test:unit に含まれる。単独では次で実行できる:
 //   node tests/data-integrity.test.mjs
@@ -11,7 +12,7 @@ import {
   sanitizeState,
   summarizeRhythmTrials,
 } from "../src/lib/state.js";
-import { escapeCsv, formatTime, localFileStamp, toLocalIso } from "../src/lib/utils.js";
+import { escapeCsv, formatTime, exportFileStamp, localFileStamp, toLocalIso } from "../src/lib/utils.js";
 import {
   buildSessionLedgerRows,
   buildSlotCsvRows,
@@ -2126,6 +2127,16 @@ test("the art version survives config -> sanitize -> CSV for the arm and fishing
   assert.equal(byId("art-rt").config.artVersion, FISHING_ART_VERSION);
   assert.equal(byId("art-old").config.artVersion, null, "数でない値・列の無い古い記録は null（分からない）");
 
+  for (const value of [-1, 0, 1.8, "2", NaN, Infinity, null, undefined, 1, 1001]) {
+    const sessions = [byId("art-scan"), byId("art-rt")].map(session => ({
+      ...session, config: { ...session.config, artVersion: value },
+    }));
+    const restored = sanitizeState({ sessions }).sessions;
+    assert.equal(restored.length, 2);
+    restored.forEach(session => assert.equal(session.config.artVersion,
+      Number.isInteger(value) && value >= 1 ? value : null));
+  }
+
   const scanRows = buildTaskCsvRows([byId("art-scan")], "scan");
   assert.equal(scanRows[0].at(-1), "artVersion");
   assert.equal(scanRows[1].at(-1), CRANE_ART_VERSION);
@@ -2174,6 +2185,35 @@ test("every recorded sound has a credit, and every credit is complete", () => {
   const files = readdirSync(dir).filter((file) => /\.(mp3|m4a|aac|wav|ogg)$/.test(file));
   assert.ok(files.length > 0, "録音が1つも無い");
   files.forEach((file) => assert.ok(readme.includes(file), `${file} が README の表に無い`));
+});
+
+test("export names include a safe participant and local hours minutes seconds", () => {
+  const stamp = exportFileStamp('P:01/\\<>"|?*', new Date('2026-09-30T03:04:05Z'));
+  assert.match(stamp, /^P_01_+-\d{4}-\d{2}-\d{2}-\d{6}$/);
+  assert.ok(stamp.includes('120405') || stamp.includes('030405'), stamp);
+  assert.match(exportFileStamp(''), /^no-id-/);
+});
+
+test("backup receipts match record contents and require every relevant CSV", () => {
+  const state = cloneDefaultState();
+  state.sessions = [{ taskType: "slot", trials: [] }, { taskType: "rt", trials: [] }];
+  state.logs = [{ label: "old" }];
+  const backup = createRecordBackup(state);
+  assert.equal(backup.canClear(), false);
+  backup.mark("slot");
+  assert.equal(backup.canClear(), false);
+  backup.mark("ledger"); backup.mark("rt");
+  assert.equal(backup.canClear(), true);
+  state.logs[0].label = "same count, new record";
+  assert.equal(backup.canClear(), false);
+  backup.mark("raw"); assert.equal(backup.canClear(), true);
+  state.sessions[0].trials.push({ index: 0 });
+  assert.equal(backup.canClear(), false);
+  backup.mark("logs"); assert.equal(backup.canClear("logs"), true);
+  state.logs.push({ label: "new" });
+  assert.equal(backup.canClear("logs"), false);
+  backup.mark("raw"); backup.reset();
+  assert.equal(backup.canClear(), false);
 });
 
 for (const { name, fn } of tests) {

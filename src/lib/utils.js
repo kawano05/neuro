@@ -129,3 +129,12 @@ export function localFileStamp(date = new Date()) {
   const iso = toLocalIso(date instanceof Date ? date.toISOString() : String(date));
   return iso ? iso.slice(0, 10) : "";
 }
+
+/** 書き出しの識別子。保存時刻やCSVの時刻表現は変えない。 */
+export function exportFileStamp(participantId, date = new Date()) {
+  const iso = toLocalIso(date instanceof Date ? date.toISOString() : String(date));
+  const participant = String(participantId || "no-id")
+    .replace(/[<>:"/\\|?*\x00-\x1f\x7f]/g, "_")
+    .replace(/[. ]+$/g, "_");
+  return `${participant}-${iso ? iso.slice(0, 19).replace("T", "-").replace(/:/g, "") : "unknown-time"}`;
+}
