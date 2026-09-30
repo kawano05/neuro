@@ -144,7 +144,7 @@ function playFanfare(audio, semitones = 0) {
  * @param {() => ({unlocked: string|null, jarsToday: number, party: object})|null} [options.claim]
  *   遊び終えたときに、その日のびんの数と服を保存する（gameHost）
  */
-export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, outfits = [], claim = null, kind = "beginner", level = fx?.level?.() || "normal", legacy = false }) {
+export function createPartyStage({ host, t, tHtml, fx, audio, voiceFeedback, outfits = [], claim = null, kind = "beginner", level = fx?.level?.() || "none", legacy = false }) {
   const profile = atmosphereProfile(level, kind);
   const doc = host.ownerDocument;
   const win = doc.defaultView;

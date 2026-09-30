@@ -130,7 +130,7 @@ export function playFinishSound(audio, style) {
  * @param {string} doneText 読み上げる「できた」の文（プレーン文）
  */
 export function celebrate(ctx, prefs, doneText) {
-  const level = ctx.fx?.level?.() || "normal";
+  const level = ctx.fx?.level?.() || "none";
   if (level === "none" || level === "subtle") {
     if (level === "subtle") ctx.audio.playApplause({ durationS: 0.35 });
     if (ctx.settings.speechEnabled) ctx.voiceFeedback(joinSpeech([ctx.t("color.voice.cheer"), doneText], resolveTextMode(ctx.settings)));
@@ -223,7 +223,7 @@ export function createBeginnerFlow(
       const big = ctx.party?.isBig();
       if (big) ctx.party.finale();
       else {
-        const level = ctx.fx?.level?.() || "normal";
+        const level = ctx.fx?.level?.() || "none";
         if (level === "none" || level === "subtle") audio.playChime(784, { durationS: 0.24 });
         else finishSound(audio, prefs.sound);
         presentation.run("beginner.finale", () => onFinale(pressIndex));

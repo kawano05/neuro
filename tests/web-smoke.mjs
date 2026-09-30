@@ -4667,6 +4667,8 @@ async function exposePresentationContext(page) {
 }
 
 async function checkPresentationFaults(page) {
+  const diagnostics = [];
+  page.on("console", message => { if (message.type() === "warning") diagnostics.push(message.text()); });
   await exposePresentationContext(page);
   for (const fault of ["press", "finale", "music", "voice", "party", "world"]) {
     await page.evaluate(({ key, fault }) => {
@@ -4716,6 +4718,10 @@ async function checkPresentationFaults(page) {
     await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, { timeout: 12000 });
     const session = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).sessions.at(-1), storageKey);
     assert(session.finished === true && session.trials.length === 3, "Timing faults must preserve completion and all trial records");
+    if (fault === "world") {
+      assert(diagnostics.some(message => message.includes("world.sea")), "The sea art fault must actually reach the boundary");
+      assert(diagnostics.some(message => message.includes("world.slot")), "The reel world fault must actually reach the boundary");
+    }
   }
 }
 
