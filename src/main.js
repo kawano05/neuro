@@ -16,6 +16,10 @@ import "./world-slot.css";
 import "./world-crane.css";
 // さかなつり（押すと 出てくる とつながる海）。
 import "./world-fishing.css";
+// 説明・けっか・れんしゅうの割り付けを、画面の大きさに合わせる。
+import "./responsive.css";
+// 装飾の動きを止める決まり（雰囲気・動きを減らす・そくてい）。どの動きより
+// 後から効かせたいので、いちばん最後に読む。
 import "./decoration-motion.css";
 
 const app = mount(App, {

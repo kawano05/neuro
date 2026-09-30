@@ -144,6 +144,11 @@
         <div class="game-stage-content" id="gameStageContent" aria-hidden="true"></div>
       </div>
       <div class="game-progress" id="gameProgress" aria-live="polite"></div>
+      <div id="gameReadyControls" class="game-ready-controls" hidden>
+        <span id="gameReadyPage" aria-live="polite"></span>
+        <button id="gameReadyPrevious" type="button" data-scan hidden>前の説明</button>
+        <button id="gameReadyNext" type="button" data-scan>はじめる</button>
+      </div>
       <!--
         この遊びの設定（支援者がその場で変える。docs/design-renewal-2026-09-25.md §1.8）。
         「おわる」と同じく #gameStage の兄弟に置く——入れ子にすると
@@ -170,6 +175,7 @@
     </section>
 
     <section class="view" id="resultView" aria-labelledby="result-title">
+      <span id="resultMode" class="session-mode"></span>
       <div class="section-head">
         <div>
           <p class="eyebrow">Result</p>

@@ -1002,6 +1002,16 @@ const STRINGS = {
   "scale.late": { ruby: "おそい", kanji: "おそい", kana: "おそい", en: "Late" },
 
   // レディ画面
+  "ready.next": { ruby: "次[つぎ]の説明[せつめい]", kanji: "次の説明", kana: "つぎの せつめい", en: "Next step" },
+  "ready.previous": { ruby: "前[まえ]の説明[せつめい]", kanji: "前の説明", kana: "まえの せつめい", en: "Previous step" },
+  "ready.nextHint": { ruby: "押[お]すと次[つぎ]の説明[せつめい]へ", kanji: "押すと次の説明へ", kana: "おすと つぎの せつめいへ", en: "Press to read the next step" },
+  "ready.confirm": { ruby: "説明[せつめい]を終[お]わる", kanji: "説明を終わる", kana: "せつめいを おわる", en: "Finish explanation" },
+  "ready.start": { ruby: "始[はじ]める", kanji: "始める", kana: "はじめる", en: "Start" },
+  "ready.confirmHint": { ruby: "説明[せつめい]を終[お]えたら、もう一度[いちど]押[お]して始[はじ]めます", kanji: "説明を終えたら、もう一度押して始めます", kana: "せつめいを おえたら、もういちど おして はじめます", en: "Finish the explanation, then press again to start" },
+  "session.measure": { ruby: "そくていの回[かい]", kanji: "そくていの回", kana: "そくていの かい", en: "Measurement" },
+  "session.practice": { ruby: "れんしゅうの回[かい]", kanji: "れんしゅうの回", kana: "れんしゅうの かい", en: "Practice" },
+  "session.measureShort": { ruby: "そくてい", kanji: "そくてい", kana: "そくてい", en: "Measurement" },
+  "session.practiceShort": { ruby: "れんしゅう", kanji: "れんしゅう", kana: "れんしゅう", en: "Practice" },
   "ready.go": { ruby: "画面[がめん]のどこでも押[お]すと始[はじ]まります",
     kanji: "画面のどこでも押すと始まります",
     kana: "がめんの どこでも おすと はじまります",

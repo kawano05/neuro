@@ -4,9 +4,8 @@
    .crane-world・.crane-room・.crane-mat などを足す）。
 
    守る線: そくていの回は今のまま（1px も変えない）。なので、この中の規則は
-   すべて .module-crane.is-practice の下に書く。台の外側の大きさ・枠の太さ
-   （border の幅、看板・本体・箱の並び）は変えない——色と飾りだけを替える。
-   ガラスの箱の中の景品・アーム・当たりの輪の位置と大きさは、styles.css と
+   すべて .module-crane.is-practice の下に書く。れんしゅうの台の割り付けと
+   スマホ縦の主役の大きさは画面に合わせる。判定座標と時刻は
    games/craneGeometry.js のまま。
 
    背景は無地と近い色の明暗だけにし、動かさない。目で追うアーム・走査の線・
@@ -15,6 +14,56 @@
 
 .game-stage-content.module-crane.is-practice {
   background: #d7f4ea;
+}
+
+/* れんしゅうでは箱へ高さを割り当て、状態札と受け皿は別の行に保つ。
+   測定の4:3の箱と刺激寸法には、この規則を当てない。 */
+.module-crane.is-practice .crane-cabinet {
+  padding: 78px max(16px, 3vw) 18px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
+  gap: 0;
+}
+.module-crane.is-practice .crane-stage,
+.module-crane.is-practice .crane-marquee,
+.module-crane.is-practice .crane-console { width: min(100%, 1100px); }
+.module-crane.is-practice .crane-stage {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+}
+.module-crane.is-practice .crane-marquee { padding: 8px 16px; }
+.module-crane.is-practice .crane-console { padding: 12px 16px; gap: 10px; z-index: 1; min-width: 0; }
+.module-crane.is-practice .crane-status { white-space: normal; overflow-wrap: anywhere; text-align: center; max-width: 100%; }
+.module-crane.is-practice .crane-tray { min-height: 64px; padding: 8px 12px; }
+@media (min-aspect-ratio: 5/4) {
+  /* 横画面はガラスを4:3に保ち、状態と受け皿を右に移す。 */
+  .module-crane.is-practice .crane-cabinet {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 22%);
+    grid-template-rows: minmax(0, 1fr);
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+  }
+  .module-crane.is-practice .crane-marquee { display: none; }
+  .module-crane.is-practice .crane-stage {
+    width: min(100%, calc((100dvh - 96px) * 4 / 3));
+    height: auto;
+    aspect-ratio: 4 / 3;
+  }
+  .module-crane.is-practice .crane-console { width: 100%; border-top: 3px solid #1a1a1a; border-radius: 18px; }
+  .module-crane.is-practice .crane-tray { display: grid; }
+  .module-crane.is-practice .crane-status { max-width: 100%; padding: 8px; font-size: clamp(18px, 2.2vw, 26px); }
+}
+@media (max-height: 500px) {
+  .module-crane.is-practice .crane-cabinet { padding: 62px 14px 10px; gap: 12px; }
+  .module-crane.is-practice .crane-stage { width: min(100%, calc((100dvh - 72px) * 4 / 3)); }
+  .module-crane.is-practice .crane-console { padding: 10px; }
+}
+@media (max-width: 560px) and (max-aspect-ratio: 1/1) {
+  .module-crane.is-practice .crane-prize { width: 13.5%; }
+  .module-crane.is-practice .crane-claw { width: 17%; }
 }
 
 /* --- 台の外（店内） ---------------------------------------------------- */
