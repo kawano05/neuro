@@ -4968,12 +4968,21 @@ async function checkExportFileName(page) {
     `Participant and time missing: ${file.suggestedFilename()}`);
 }
 
+// スイッチ1つの利用者と同じ手順で、目的のものまで枠を送って選ぶ。
+// ホームがページに分かれる画面（スマホ横など）では、目的のタイルが今のページに
+// 無いあいだは「つぎ」（scan-next-page）を選んでページを送る——利用者もそうする。
 async function scanTo(page, selector) {
-  for (let i=0; i<80; i++) {
+  for (let i = 0; i < 160; i++) {
     if (await page.locator(selector + ".scan-focus").count()) {
       await page.keyboard.press("Space");
       await page.clock.runFor(200);
       return;
+    }
+    const onThisPage = await page.locator(selector).count();
+    if (!onThisPage && (await page.locator('[data-tile-id="scan-next-page"].scan-focus').count())) {
+      await page.keyboard.press("Space");
+      await page.clock.runFor(200);
+      continue;
     }
     await page.clock.runFor(800);
   }
