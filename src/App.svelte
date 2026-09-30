@@ -153,6 +153,11 @@
         <button class="game-settings" id="gameSettings" type="button" hidden>この遊びの設定</button>
         <button class="game-exit" id="gameExit" type="button">おわる</button>
       </div>
+      <div id="gameSwitchMenu" class="game-switch-menu" role="dialog" aria-labelledby="gameSwitchMenuTitle" hidden>
+        <strong id="gameSwitchMenuTitle"></strong>
+        <button id="gameSwitchAgain" class="primary-small" type="button" data-scan>もういちど</button>
+        <button id="gameSwitchEnd" class="secondary" type="button" data-scan>おわる</button>
+      </div>
       <div
         class="game-settings-dialog"
         id="gameSettingsDialog"

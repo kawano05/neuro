@@ -366,7 +366,7 @@ export function createFishingGame(gameId) {
         <strong>おとが ならせません</strong>
         <p>${why} アタリの合図が音なので、続けても はやさの記録になりません。</p>
         <p class="game-unavailable-hint">
-          右上の「おわる」で もどれます。${
+          もういちど スイッチを おすか、右上の「おわる」で もどれます。${
             stopped ? "直したあと、もう一度えらんでください。" : "音の出る端末で もう一度おためしください。"
           }
         </p>

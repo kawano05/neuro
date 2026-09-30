@@ -7661,3 +7661,22 @@ html.text-ruby :is(
 }
 .storage-warning p { margin: 0 0 6px; }
 .storage-warning button { min-height: 44px; }
+
+.game-switch-menu {
+  position: absolute;
+  inset: 80px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  background: #fff;
+  color: #10222e;
+  border-radius: 24px;
+  padding: 20px;
+  overflow: auto;
+  font-size: clamp(1.2rem, 3vw, 2rem);
+}
+.game-switch-menu button { min-width: 180px; min-height: 56px; }
+
+.game-switch-menu[hidden], .game-stage[hidden] { display: none; }

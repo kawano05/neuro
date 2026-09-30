@@ -612,7 +612,7 @@ export function createRhythmGame(gameId) {
           <strong>おとが ならせません</strong>
           <p>${why} 合図が音なので、続けても測定になりません。</p>
           <p class="game-unavailable-hint">
-            右上の「おわる」で もどれます。${
+            もういちど スイッチを おすか、右上の「おわる」で もどれます。${
               stopped ? "直したあと、もう一度えらんでください。" : "音の出る端末で もう一度おためしください。"
             }
           </p>

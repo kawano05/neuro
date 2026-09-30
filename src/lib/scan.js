@@ -69,6 +69,11 @@ export function createScanEngine(ctx) {
       stop(true);
       return;
     }
+    if (state.currentView === "game" && ctx.gameHost?.isSwitchMenuOpen?.()) {
+      scanTargets = [...document.querySelectorAll("#gameSwitchMenu [data-scan]")];
+      if (scanIndex >= scanTargets.length) scanIndex = 0;
+      return;
+    }
     const activeView = document.querySelector(".view.is-active");
     scanTargets = [
       ...document.querySelectorAll(".tabbar [data-scan]"),
@@ -147,7 +152,7 @@ export function createScanEngine(ctx) {
     // gameHost.launch() の scan.stop(true) が一次防御、これは二次防御。
     // start は「走査対象なし・全画面が入力」（detailed-design.md §2.1）のため、
     // タブバー等が誤って走査され続ける事故を防ぐ。
-    if (state.currentView === "game" || state.currentView === "start") return;
+    if ((state.currentView === "game" && !ctx.gameHost?.isSwitchMenuOpen?.()) || state.currentView === "start") return;
     stop(false);
     refresh();
     scanIndex = scanTargets.length ? Math.max(0, scanIndex) : -1;
@@ -183,7 +188,7 @@ export function createScanEngine(ctx) {
     }
     // ゲーム中・スタート画面中は絶対に走査しない（不変条件、
     // detailed-design.md §8.4の二重防御をstartにも拡張、§2.1）。
-    if (state.currentView === "game" || state.currentView === "start") return;
+    if ((state.currentView === "game" && !ctx.gameHost?.isSwitchMenuOpen?.()) || state.currentView === "start") return;
     window.setTimeout(() => {
       refresh();
       if (state.settings.autoScan) start();
