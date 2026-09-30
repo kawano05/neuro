@@ -147,6 +147,14 @@ function drawParticle(g, p) {
     g.restore();
     return;
   }
+  if (p.shape === "bubble") {
+    g.beginPath();
+    g.arc(p.x, p.y, s * 0.5, 0, TAU);
+    g.lineWidth = Math.max(1.5, s * 0.14);
+    g.strokeStyle = p.color;
+    g.stroke();
+    return;
+  }
   if (p.shape === "dot") {
     g.beginPath();
     g.arc(p.x, p.y, s * 0.5, 0, TAU);
@@ -240,7 +248,39 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, width, height);
     particles = particles.filter((p) => stepParticle(p, dt));
-    for (const p of particles) drawParticle(g, p);
+    // 同じ演出の枠は1コマに1度だけ測る。弾む窓や巻き上がる魚にも枠を合わせ、
+    // 粒を大きくしても、次の主役や文字の札へ描画が漏れないようにする。
+    const regions = new Map();
+    for (const p of particles) {
+      if (!p.clip) { drawParticle(g, p); continue; }
+      if (!regions.has(p.clip)) {
+        const { element, scale = 1, exclude = [], follow = false, x, y } = p.clip;
+        const rect = element.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        regions.set(p.clip, {
+          left: cx - rect.width * scale / 2, top: cy - rect.height * scale / 2,
+          width: rect.width * scale, height: rect.height * scale,
+          dx: follow ? cx - x : 0, dy: follow ? cy - y : 0,
+          excluded: exclude.map(el => el.getBoundingClientRect()),
+        });
+      }
+      const region = regions.get(p.clip);
+      g.save();
+      g.beginPath();
+      g.rect(region.left, region.top, region.width, region.height);
+      g.clip();
+      if (region.excluded.length) {
+        g.beginPath();
+        g.rect(region.left, region.top, region.width, region.height);
+        // 札の縁にもかからない余白。偶奇規則で札の四角をくり抜く。
+        for (const r of region.excluded) g.rect(r.left - 4, r.top - 4, r.width + 8, r.height + 8);
+        g.clip("evenodd");
+      }
+      g.translate(region.dx, region.dy);
+      drawParticle(g, p);
+      g.restore();
+    }
     g.globalAlpha = 1;
     if (particles.length) {
       rafId = doc.defaultView.requestAnimationFrame(frame);
@@ -300,11 +340,11 @@ export function createFxEngine({ getLevel = () => "normal", doc = typeof documen
       emit([spawnRing(options)]);
     },
     /** やわらかい光。回数・明るさ・消える速さは安全の上限の中へ。 */
-    glow({ x, y, radius = 140, color = "#FFFFFF", alpha = 0.4, lifeMs = 420, delay = 0 } = {}) {
+    glow({ x, y, radius = 140, color = "#FFFFFF", alpha = 0.4, lifeMs = 420, delay = 0, clip = null } = {}) {
       const s = scale();
       if (!s.glow || !brightLimiter.allowAt(doc.defaultView.performance.now() + Math.max(0, delay) * 1000)) return;
       const safe = clampGlow({ alpha: alpha * s.glow, lifeMs });
-      emit([spawnGlow({ x, y, radius, color, alpha: safe.alpha, life: safe.lifeMs / 1000, delay })]);
+      emit([spawnGlow({ x, y, radius, color, alpha: safe.alpha, life: safe.lifeMs / 1000, delay, clip })]);
     },
     /** 上から降る紙吹雪。 */
     confettiRain({ count = 110, colors } = {}) {

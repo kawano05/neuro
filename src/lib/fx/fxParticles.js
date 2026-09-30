@@ -98,6 +98,9 @@ export function spawnBurst({
   twinkle = 0,
   delay = 0,
   random = Math.random,
+  clip = null,
+  originRadius = [0, 0],
+  velocityScale = [1, 1],
 }) {
   const particles = [];
   const n = Math.max(0, Math.floor(count));
@@ -112,10 +115,10 @@ export function spawnBurst({
     const s = pick(size, random);
     particles.push(
       makeParticle({
-        x,
-        y,
-        vx: Math.cos(theta) * v,
-        vy: Math.sin(theta) * v,
+        x: x + Math.cos(theta) * originRadius[0],
+        y: y + Math.sin(theta) * originRadius[1],
+        vx: Math.cos(theta) * v * velocityScale[0],
+        vy: Math.sin(theta) * v * velocityScale[1],
         gravity: shape === "confetti" ? gravity * 0.45 : gravity,
         drag: shape === "confetti" ? drag * 1.3 : drag,
         rot: random() * TAU,
@@ -132,6 +135,7 @@ export function spawnBurst({
         phase: random() * TAU,
         twinkle,
         delay: typeof delay === "number" ? delay : pick(delay, random),
+        clip,
       })
     );
   }
@@ -175,13 +179,13 @@ export function spawnConfettiRain({ width, height, count, colors, random = Math.
 }
 
 /** 広がる輪（押した場所の手応え・はじけた瞬間）。 */
-export function spawnRing({ x, y, color = "#FFFFFF", r0 = 12, r1 = 90, width = 6, life = 0.45, delay = 0 }) {
-  return makeParticle({ x, y, color, shape: "ring", r0, r1, width, life, delay });
+export function spawnRing({ x, y, color = "#FFFFFF", r0 = 12, r1 = 90, width = 6, life = 0.45, delay = 0, clip = null }) {
+  return makeParticle({ x, y, color, shape: "ring", r0, r1, width, life, delay, clip });
 }
 
 /** やわらかい光（放射状のぼかし）。明るさと消える速さは fxSafety の上限の中で渡すこと。 */
-export function spawnGlow({ x, y, radius = 120, color = "#FFFFFF", alpha = 0.4, life = 0.4, delay = 0 }) {
-  return makeParticle({ x, y, color, shape: "glow", size: radius, alpha, life, delay });
+export function spawnGlow({ x, y, radius = 120, color = "#FFFFFF", alpha = 0.4, life = 0.4, delay = 0, clip = null }) {
+  return makeParticle({ x, y, color, shape: "glow", size: radius, alpha, life, delay, clip });
 }
 
 /**

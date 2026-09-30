@@ -193,26 +193,28 @@ export function createFxPresets({ engine, motion }) {
       if (!reelEl) return;
       const windowEl = reelEl.querySelector(".slot-reel-window") || reelEl;
       const { x, y, rect } = engine.pointOf(windowEl);
-      const radius = Math.max(0, Math.min(rect.width, rect.height) / 2 - 8);
-      if (!radius) return;
+      const short = Math.min(rect.width, rect.height);
+      if (!short) return;
       const e = escalation(Math.min(Math.max(0, streak - 1), 4));
-      const reach = radius * (0.52 + 0.12 * (e - 1));
-      engine.ring({ x, y, color: "#FFFFFF", r0: radius * 0.2, r1: radius * (0.62 + 0.1 * (e - 1)), width: 3, life: 0.42 });
+      const clip = { element: windowEl };
+      // 3コマの窓では中央の1コマを囲む。星は窓全体を使い、四角の端で切る。
+      const cell = Math.min(rect.width, rect.height / 3);
+      engine.ring({ x, y, color: "#FFFFFF", r0: cell * 0.3, r1: cell * (0.55 + 0.04 * (e - 1)), width: Math.max(3, cell * 0.055), life: 0.65, clip });
       engine.burst({
-        x,
-        y,
-        count: 8 * e,
-        // 初速×最長寿命＋粒の半径が窓の半幅を超えないようにする。
-        speed: [reach * 0.45 / 0.55, reach / 0.55],
-        shapes: ["star", "sparkle"],
-        colors: ["#F6AA00", "#FFFFFF", "#D8F3FF"],
-        size: [Math.min(7, radius * 0.12), Math.min(12, radius * 0.22)],
-        life: [0.35, 0.55],
+        x, y, clip,
+        count: 20 * e,
+        speed: [short * 1.2, short * 2.5],
+        // 細長い窓でも、中央のコマだけでなく上下まで星が広がる。
+        velocityScale: [1, Math.max(1, rect.height / rect.width * 0.75)],
+        shapes: ["star", "star", "sparkle"],
+        colors: ["#F6AA00", "#FFFFFF", "#D8F3FF", "#FF8082"],
+        size: [short * 0.18, short * 0.3],
+        life: [0.75, 0.95],
         gravity: 0,
-        drag: 2.2,
+        drag: 2.8,
         twinkle: 0.15,
       });
-      engine.glow({ x, y, radius: radius * 0.85, color: "#FFFFFF", alpha: 0.18, lifeMs: 420 });
+      engine.glow({ x, y, radius: short * 0.48, color: "#FFFFFF", alpha: 0.18, lifeMs: 420, clip });
       motion.punch(reelEl, { amount: 0.06 });
     },
 
@@ -245,25 +247,31 @@ export function createFxPresets({ engine, motion }) {
       motion.bump(trayEl, { amount: 0.12 });
     },
 
-    /** さかなつり（れんしゅう）: 巻き上がる魚と長さの札を隠さない小さなしぶき。 */
+    /** さかなつり（れんしゅう）: 魚に付いて巻き上がるしぶき。長さの札は避ける。 */
     fishCatch(fishEl, { lengthCm = 20 } = {}) {
       if (!fishEl) return;
       const { x, y, rect } = engine.pointOf(fishEl);
-      const reach = Math.max(0, Math.min(24, Math.min(rect.width, rect.height) * 0.35));
-      if (!reach) return;
+      const short = Math.min(rect.width, rect.height);
+      if (!short) return;
       const power = Math.min(1.4, 0.8 + lengthCm / 80);
+      const scene = fishEl.closest?.(".fishing-scene");
+      const exclude = [...(scene?.querySelectorAll(".fishing-catch, .fishing-status") || [])];
       engine.burst({
         x,
         y,
-        count: 4,
-        speed: [reach * 1.1, reach * 2.3 * power],
+        // 魚が縮んで舟へ移っても、魚の1.5倍の枠と文字の除外を毎コマ保つ。
+        clip: { element: fishEl, scale: 1.5, follow: true, x, y, exclude },
+        count: 10,
+        // 顔の中心を覆う塊ではなく、魚の輪郭のまわりから水が散る。
+        originRadius: [rect.width * 0.3, rect.height * 0.3],
+        speed: [short * 0.2, short * 0.5 * power],
         angle: -Math.PI / 2,
-        spread: Math.PI * 0.65,
-        shapes: ["drop", "drop", "dot"],
+        spread: Math.PI * 1.6,
+        shapes: ["drop", "drop", "bubble"],
         colors: PALETTES.sea,
-        size: [reach * 0.12, reach * 0.22],
-        life: [0.18, 0.24],
-        gravity: reach * 5,
+        size: [short * 0.12, short * 0.22],
+        life: [0.7, 0.9],
+        gravity: short * 1.4,
         drag: 2.6,
       });
     },

@@ -30,6 +30,7 @@ import {
   stepParticle,
 } from "../src/lib/fx/fxParticles.js";
 import { colorsForPress, createFxPresets, PALETTES } from "../src/lib/fx/fxPresets.js";
+import { createFxEngine } from "../src/lib/fx/fxEngine.js";
 
 let passed = 0;
 let failed = 0;
@@ -169,7 +170,7 @@ test("confetti rain starts above the screen and falls in", () => {
   assert.ok(rain.every((p) => p.x >= 0 && p.x <= 1000), "画面の幅の中");
 });
 
-// 粒の全寿命を追い、小さな窓でも次のリールへはみ出さないことを確かめる。
+// 窓を描画の枠に渡し、小さな画面でも大きな星を十分な数だけ残す。
 test("リールの成功演出は窓内に収まり、連続成功で段階が増える", () => {
   for (const width of [32, 60, 120, 240]) {
     const height = width * 1.8;
@@ -187,25 +188,33 @@ test("リールの成功演出は窓内に収まり、連続成功で段階が�
     assert.ok(calls.rings[1].r1 > calls.rings[0].r1);
     assert.equal(calls.bursts[2].count, calls.bursts[3].count);
     for (const burst of calls.bursts) {
+      assert.equal(burst.clip.element, windowEl);
+      assert.ok(burst.count >= 20, "初回から星を十分に出す");
+      assert.ok(burst.size[0] >= width * 0.18, "小さな点に戻さない");
       const particles = spawnBurst({ ...burst, random: seeded(27) });
-      for (const p of particles) {
-        while (stepParticle(p, 1 / 120)) {
-          const edge = sizeOf(p) / 2 + 1;
-          assert.ok(Math.abs(p.x) + edge < width / 2);
-          assert.ok(Math.abs(p.y) + edge < height / 2);
+      for (const at of [0.096, 0.24, 0.48]) {
+        for (const p of particles) {
+          while (p.age < at) stepParticle(p, 1 / 120);
+          assert.equal(p.clip, burst.clip, "描画まで枠を保持する");
         }
+        const visible = particles.filter(p => Math.abs(p.x) < width / 2 && Math.abs(p.y) < height / 2 && alphaOf(p) > 0.4);
+        assert.ok(visible.length >= 6, `${at}秒でも複数の大きな星が窓内に見える`);
+        if (at === 0.24) assert.ok(Math.max(...visible.map(p => Math.abs(p.y))) > width * 0.25, "窓の中心だけに集めない");
       }
-      // 空気抵抗を無視して大きめに見積もった上限でも、窓内に収まる。
-      assert.ok(burst.speed[1] * burst.life[1] + burst.size[1] * 1.15 / 2 + 1 < width / 2);
     }
-    calls.rings.forEach(r => assert.ok(r.r1 + r.width / 2 < width / 2));
-    calls.glows.forEach(g => assert.ok(g.radius < width / 2));
+    calls.rings.forEach(r => {
+      assert.equal(r.clip.element, windowEl);
+      assert.ok(r.r1 >= Math.min(width, height / 3) / 2, "当たった1コマを囲む輪");
+    });
+    calls.glows.forEach(g => assert.equal(g.clip.element, windowEl));
   }
 });
 
-test("釣れたときのしぶきは数粒だけで、魚の近くから広がらない", () => {
+test("釣れたときは見えるしぶきと泡が魚に追従し、札を避ける", () => {
   for (const lengthCm of [10, 30, 80]) {
     const bursts = [];
+    const labels = [{}, {}];
+    const fish = { closest: () => ({ querySelectorAll: () => labels }) };
     const fx = createFxPresets({
       engine: {
         pointOf: () => ({ x: 0, y: 0, rect: { width: 60, height: 40 } }),
@@ -214,14 +223,56 @@ test("釣れたときのしぶきは数粒だけで、魚の近くから広が�
         glow() { assert.fail("魚を隠す光を出している"); },
       }, motion: {},
     });
-    fx.fishCatch({}, { lengthCm });
+    fx.fishCatch(fish, { lengthCm });
     assert.equal(bursts.length, 1);
-    assert.equal(bursts[0].count, 4);
-    assert.deepEqual(bursts[0].shapes, ["drop", "drop", "dot"]);
+    assert.equal(bursts[0].count, 10);
+    assert.deepEqual(bursts[0].shapes, ["drop", "drop", "bubble"]);
     assert.deepEqual(bursts[0].colors, PALETTES.sea);
+    assert.equal(bursts[0].clip.element, fish);
+    assert.equal(bursts[0].clip.scale, 1.5);
+    assert.equal(bursts[0].clip.follow, true);
+    assert.deepEqual(bursts[0].clip.exclude, labels);
+    assert.ok(bursts[0].size[0] >= 4 && bursts[0].size[1] >= 8);
     for (const p of spawnBurst({ ...bursts[0], random: seeded(13) })) {
-      while (stepParticle(p, 1 / 120)) assert.ok(Math.hypot(p.x, p.y) + sizeOf(p) < 20);
+      while (p.age < 0.48) stepParticle(p, 1 / 120);
+      assert.ok(alphaOf(p) > 0.5, "480msでもしぶきが消えない");
+      assert.equal(p.clip, bursts[0].clip);
     }
+  }
+});
+
+test("描画エンジンが窓・魚の枠と文字の除外を適用し、強さと測定の制約を守る", () => {
+  for (const level of ["none", "subtle", "normal", "big"]) {
+    let frame;
+    const clips = [], rects = [], translations = [];
+    const g = new Proxy({}, { get: (_, name) => (...args) => {
+      if (name === "clip") clips.push(args);
+      if (name === "rect") rects.push(args);
+      if (name === "translate") translations.push(args);
+    }, set: () => true });
+    let canvases = 0;
+    const doc = {
+      createElement: () => { canvases++; return { dataset: {}, setAttribute() {}, getContext: () => g }; },
+      body: { append() {} },
+      defaultView: { innerWidth: 800, innerHeight: 600, devicePixelRatio: 1, addEventListener() {}, performance: { now: () => 0 }, requestAnimationFrame: cb => { frame = cb; return 1; } },
+    };
+    const engine = createFxEngine({ getLevel: () => level, doc });
+    const element = { getBoundingClientRect: () => ({ left: 100, top: 200, width: 60, height: 40 }) };
+    const label = { getBoundingClientRect: () => ({ left: 110, top: 180, width: 30, height: 20 }) };
+    const clip = { element, scale: 1.5, follow: true, x: 120, y: 210, exclude: [label] };
+    engine.burst({ x: 120, y: 210, count: 10, shapes: ["drop", "bubble"], clip });
+    assert.equal(engine.count(), Math.round(10 * fxScale(level).particles));
+    if (level === "none") { assert.equal(canvases, 0, "なし・測定はキャンバスも作らない"); continue; }
+    frame(16);
+    assert.ok(rects.some(r => JSON.stringify(r) === JSON.stringify([85, 190, 90, 60])), "魚の1.5倍の範囲");
+    assert.ok(rects.some(r => JSON.stringify(r) === JSON.stringify([106, 176, 38, 28])), "文字の周囲4pxまでくり抜く");
+    assert.ok(clips.some(args => args[0] === "evenodd"));
+    assert.ok(translations.some(t => t[0] === 10 && t[1] === 10), "魚の移動分に追従する");
+    rects.length = 0;
+    engine.ring({ x: 130, y: 220, clip: { element } });
+    frame(32);
+    assert.ok(rects.some(r => JSON.stringify(r) === JSON.stringify([100, 200, 60, 40])), "輪もリールの窓内で切る");
+    assert.equal(resolveFxLevel({ fxLevel: level }, { measurement: true }), "none");
   }
 });
 
