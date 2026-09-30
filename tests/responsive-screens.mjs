@@ -52,6 +52,22 @@ async function patchSettings(page, patch) {
   await page.reload();
 }
 
+/**
+ * 端末の読み上げが「読んでいる／いない」状態を作る。止める（cancel）と「いない」に戻る
+ * のも本物と同じにする。speechSynthesis の無い環境（Windows の WebKit）でも同じ形で置く。
+ */
+async function setDeviceSpeaking(page, speaking) {
+  await page.evaluate((speaking) => {
+    const fake = window.__fakeSpeech || { speaking: false, pending: false, speak() {}, getVoices: () => [] };
+    fake.speaking = speaking;
+    fake.cancel = () => {
+      fake.speaking = false;
+    };
+    window.__fakeSpeech = fake;
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, get: () => fake });
+  }, speaking);
+}
+
 const sessionCount = (page) =>
   page.evaluate((key) => JSON.parse(localStorage.getItem(key)).sessions.length, storageKey);
 
@@ -88,33 +104,26 @@ export async function checkReadyInputSafety(page) {
   await page.locator("#gameStage").click();
   assert(await page.locator(".game-ready").count(), "開いた直後の押下で始まらない");
 
-  // 声が鳴っている（ことにした）あいだの押下は、声を止めるだけ。
+  // 声が鳴っているあいだの押下は、声を止めるだけ。端末の声が「読んでいる」状態を作る
+  // （audio.isSpeaking は speechSynthesis.speaking を見る）。止める（cancel）と、本物と
+  // 同じく「読んでいない」に戻る。
   await page.waitForTimeout(PAST_GUARD_MS);
-  await page.evaluate(() => {
-    const audio = window.__presentationCtx.audio;
-    audio.__realIsSpeaking = audio.__realIsSpeaking || audio.isSpeaking;
-    audio.isSpeaking = () => true;
-  });
+  await setDeviceSpeaking(page, true);
   await page.locator("#gameStage").click();
   assert(await page.locator(".game-ready").count(), "声が鳴っているあいだの押下で始まらない");
   assert.equal(await sessionCount(page), before, "説明の押下は記録しない");
 
   // 声が止まっていれば、ひと押しで始まる。
-  await page.evaluate(() => {
-    const audio = window.__presentationCtx.audio;
-    audio.isSpeaking = () => false;
-  });
+  await setDeviceSpeaking(page, false);
   await page.waitForTimeout(PAST_GUARD_MS);
   await page.locator("#gameStage").click();
   await page.locator(".game-ready").waitFor({ state: "detached" });
   assert(await page.locator(".slot-task").count(), "声が止まっていれば、ひと押しで始まる");
-  await page.evaluate(() => {
-    const audio = window.__presentationCtx.audio;
-    if (audio.__realIsSpeaking) audio.isSpeaking = audio.__realIsSpeaking;
-  });
   await page.locator("#gameExit").click();
 
-  // 走査（自前）と iPad のスイッチコントロール（OS）の両方で、はじめる・おわる に届く。
+  // 自前の走査では、説明の画面に枠を出さず、ひと押しで始まる（「はじめる」と「おわる」を
+  // 交互に回すと、押す時刻がずれただけでホームへ戻ってしまう）。iPad のスイッチコントロール
+  // （OS）には、「はじめる」と「おわる」が本物のボタンとして見える。
   for (const switchControlMode of [false, true]) {
     await patchSettings(page, { speechEnabled: false, autoScan: true, scanInterval: 500, switchControlMode });
     await page.locator("#startStage").click();
@@ -128,14 +137,8 @@ export async function checkReadyInputSafety(page) {
       assert(await exit.isVisible(), "スイッチコントロールから「おわる」が見える");
       await finishReady(page);
     } else {
-      const ring = await page.evaluate(() =>
-        [...document.querySelectorAll("#gameView [data-scan]")]
-          .filter((element) => !element.hidden && element.getBoundingClientRect().width > 0)
-          .map((element) => element.id)
-      );
-      assert.deepEqual(ring.sort(), ["gameExit", "gameReadyStart"], `走査で回るのは はじめる と おわる だけ: ${ring}`);
-      await page.waitForFunction(() => document.querySelector("#gameReadyStart").classList.contains("scan-focus"));
-      await page.waitForTimeout(PAST_GUARD_MS);
+      await page.waitForTimeout(1200);
+      assert.equal(await page.locator("#gameView .scan-focus").count(), 0, "説明の画面では枠を回さない");
       await page.keyboard.press("Space");
     }
     await page.locator(".game-ready").waitFor({ state: "detached" });

@@ -1185,31 +1185,6 @@ body.user-world .game-exit::before {
   color: #ffffff;
 }
 
-/* --- やりかた（レディ画面） -------------------------------------------
-   まだ計測が始まっていない画面なので、色も絵も自由に使える
-   （detailed-design.md §2.4）。選んだタイルと同じ絵を出して、
-   「さっき押した遊び」だと分かるようにする。 */
-body.user-world .game-stage-content.is-ready {
-  background: #0b1a33;
-  background-image: none;
-}
-
-.game-ready-art {
-  display: block;
-  width: min(360px, 62vw);
-  aspect-ratio: 360 / 176;
-  overflow: hidden;
-  border: 3px solid #ffffff;
-  border-radius: 18px;
-  background: var(--tile-thumb, #12305e);
-}
-
-.game-ready-art svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
 /* ---------------------------------------------------------------------
    はじめの遊び「おすと でてくる」（games/colorLegacy.js）
    --------------------------------------------------------------------- */

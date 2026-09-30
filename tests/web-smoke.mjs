@@ -4649,13 +4649,14 @@ async function exposePresentationContext(page) {
     const response = await route.fetch();
     let body = await response.text();
     let exposed = false;
-    body = body.replace(/(\b\w+)\.scan\s*=\s*\w+\(\1\)([,;])/, (source, name, end) => {
+    // 縮めた名前には $ も使われる（\w に入らない）ので、名前は [\w$]+ で拾う。
+    body = body.replace(/([\w$]+)\.scan\s*=\s*[\w$]+\(\1\)([,;])/, (source, name, end) => {
       exposed = true;
       return source + `window.__presentationCtx=${name}${end}`;
     });
     // 世界の絵の関数にも、応答内だけで例外を差し込む。
     const brokenWorld = 'window.__breakWorld?(()=>{throw Error("SMOKE_WORLD_ART")})():';
-    body = body.replace(/return(`\s*\$\{\w+\}\s*<span class="sea-spot")/, (_, template) => `return ${brokenWorld}${template}`);
+    body = body.replace(/return(`\s*\$\{[\w$]+\}\s*<span class="sea-spot")/, (_, template) => `return ${brokenWorld}${template}`);
     body = body.replace('return`<div class="slot-world"', `return ${brokenWorld}\`<div class="slot-world"`);
     assert(exposed, "The response injection must expose the actual app context");
     await route.fulfill({ response, body });
@@ -4740,11 +4741,18 @@ async function checkDecorationMotion(page, project) {
     await page.waitForTimeout(120);
     const balloon = await page.evaluate(() => ({
       animations: document.querySelector("#gameStageContent").getAnimations({ subtree: true }).length,
+      // 落ちたときに、何が動いていたかを書き出す（どの規則が効いていないかを探すため）。
+      running: document.querySelector("#gameStageContent").getAnimations({ subtree: true }).map((animation) => ({
+        name: animation.animationName || animation.transitionProperty || animation.id || animation.constructor.name,
+        target: String(animation.effect?.target?.className?.baseVal ?? animation.effect?.target?.className ?? ""),
+        state: animation.playState,
+      })),
+      motion: { deco: document.body.dataset.decorationMotion, world: document.body.dataset.worldMotion },
       particles: Number(document.querySelector("#fxLayer")?.dataset.emitted || 0),
       mark: getComputedStyle(document.querySelector(".balloon.is-popping .balloon-mark")).opacity,
     }));
     if (reduced || level === "none") {
-      assert(balloon.animations === 0 && balloon.particles === 0, `${level}/${reduced}: balloon decorations must remain still`);
+      assert(balloon.animations === 0 && balloon.particles === 0, `${level}/${reduced}: balloon decorations must remain still: ${JSON.stringify(balloon)}`);
       assert(balloon.mark === "1", "A press must show a static burst shape immediately");
     } else assert(balloon.particles > 0, `${level}: enabled effects must still work`);
     await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-balloon.png` });
@@ -5215,8 +5223,6 @@ async function scanTo(page, selector) {
   assert(false, `Single-switch scan cannot reach ${selector}`);
 }
 
-// 走査だけで説明の画面を抜ける（枠が「はじめる」に来たら押す）。読み上げは切ってあるので
-// ひと押しで始まるはずだが、押下を受けない時間に当たったときのために数回まで試す。
 // 画面の大きさは検査の中で変えるので、エンジンごとに1実寸だけで回す（5実寸で同じ仕事を
 // 5回しない）。
 async function checkResponsiveScreensOncePerEngine(page, project) {
@@ -5224,10 +5230,13 @@ async function checkResponsiveScreensOncePerEngine(page, project) {
   return checkResponsiveScreens(page);
 }
 
+// スイッチのひと押しで説明の画面を抜ける。説明の画面は走査しない（ひと押し＝声を止める／
+// 始める。games/readyScreen.js）。読み上げは切ってあるので、押下を受けない時間
+// （READY_GUARD_MS）を過ぎれば、ひと押しで始まる。
 async function scanReady(page) {
-  for (let attempt = 0; attempt < 4 && (await page.locator(".game-ready").count()); attempt += 1) {
+  for (let attempt = 0; attempt < 3 && (await page.locator(".game-ready").count()); attempt += 1) {
     await page.clock.runFor(500);
-    await scanTo(page, "#gameReadyStart");
+    await page.keyboard.press("Space");
   }
   await page.locator(".game-ready").waitFor({ state: "detached" });
 }

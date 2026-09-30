@@ -157,7 +157,6 @@ export function createReadyScreen(ctx, start) {
     window.clearTimeout(speechTimer);
     pageTimer = speechTimer = null;
     controls.hidden = true;
-    elements.gameExit.removeAttribute("data-scan");
     elements.gameStage.removeAttribute("aria-describedby");
   }
 
@@ -167,8 +166,6 @@ export function createReadyScreen(ctx, start) {
     index = 0;
     controls.hidden = false;
     guard();
-    // 「おわる」も走査の輪に入れる（説明の画面から、スイッチだけで戻れるように）。
-    elements.gameExit.setAttribute("data-scan", "");
     // #gameStageContent は aria-hidden なので、説明の全文を読める経路を別に残す。
     const explanation = elements.gameStageContent.querySelector(".game-ready-steps").cloneNode(true);
     explanation.querySelectorAll("rt").forEach((ruby) => ruby.remove());

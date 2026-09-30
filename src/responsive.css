@@ -22,7 +22,14 @@ body.game-mode.user-world .game-stage-content.is-ready {
 .is-ready[data-ready-world="arm"] { --ready-ground: #d7f4ea; }
 .is-ready[data-ready-world="fish"] { --ready-ground: #d9f3ff; }
 .is-ready[data-ready-world="high"] { --ready-ground: #f6ddf6; }
+/* 遊ぶ前の説明の画面（games/gameHost.js の renderReady と games/readyScreen.js）。
+   以前は styles.css（暗い地）→ theme-hakkiri.css（紺の地）→ ここ（明るい地）の3枚が同じ
+   要素を上書きしていて、前の2枚は見えない規則だった。いまはこの1か所だけで決める。
+   まだ計測が始まっていない画面なので、絵も手順も自由に使える（進行中に同じことを
+   やると拍の視覚キューになり測定が交絡する。basic-design.md §6）。 */
 .game-ready {
+  display: grid;
+  justify-items: center;
   width: min(1280px, 100%);
   height: 100%;
   min-height: 0;
@@ -36,32 +43,82 @@ body.game-mode.user-world .game-stage-content.is-ready {
   gap: clamp(8px, 1.5vh, 18px);
   min-width: 0;
 }
+/* ホームで押したタイルと同じ絵（「さっき押した遊び」だと分かるように）。 */
 .game-ready-art {
+  display: block;
   width: clamp(140px, 32vmin, 360px);
   height: clamp(96px, 20vh, 240px);
+  /* 背の低い横画面（下の max-height）では、高さに合わせて絵の横幅を決める。 */
+  aspect-ratio: 360 / 176;
+  overflow: hidden;
   border: 3px solid #1a1a1a;
   border-radius: 20px;
+  background: var(--tile-thumb, #12305e);
 }
-.game-ready-icon { color: #5a2a80; }
-.game-ready-title { font-size: clamp(24px, 3.4vmin, 44px); line-height: 1.5; }
+.game-ready-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* 絵の無い遊びはアイコン。 */
+.game-ready-icon {
+  display: grid;
+  place-items: center;
+  color: #5a2a80;
+  font-size: clamp(2.6rem, 7vmin, 4rem);
+}
+.game-ready-title {
+  font-size: clamp(24px, 3.4vmin, 44px);
+  font-weight: 800;
+  line-height: 1.5;
+}
+/* 手順は1行1動作。番号を丸で振って、順番があることを形でも示す。 */
 .game-ready-steps {
+  display: grid;
   width: 100%;
   height: 100%;
   min-height: 0;
   align-content: center;
   gap: clamp(10px, 2vh, 24px);
+  margin: 0;
+  padding: 0;
+  counter-reset: game-step;
+  list-style: none;
+  text-align: left;
 }
 .game-ready-steps li {
+  display: flex;
+  align-items: flex-start;
   gap: 12px;
+  counter-increment: game-step;
   font-size: clamp(19px, 2.8vmin, 34px);
+  font-weight: 600;
   line-height: 1.6;
 }
-.game-ready-steps li::before { border-color: #1a1a1a; background: #fff; }
+.game-ready-steps li::before {
+  content: counter(game-step);
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.9em;
+  height: 1.9em;
+  border: 2px solid #1a1a1a;
+  border-radius: 50%;
+  background: #fff;
+  place-items: center;
+  font-size: 0.82em;
+  font-weight: 800;
+}
+/* 手順が1行だけの場合は番号を振らない。 */
+.game-ready-steps li:only-child::before {
+  display: none;
+}
 .game-ready-go {
+  padding: 6px 12px;
+  border-radius: 999px;
   background: #fff;
   color: #1a1a1a;
-  padding: 6px 12px;
   font-size: clamp(16px, 2vmin, 23px);
+  font-weight: 700;
   line-height: 1.5;
 }
 .game-ready-controls {
