@@ -29,7 +29,7 @@ import {
   spawnConfettiRain,
   stepParticle,
 } from "../src/lib/fx/fxParticles.js";
-import { colorsForPress, PALETTES } from "../src/lib/fx/fxPresets.js";
+import { colorsForPress, createFxPresets, PALETTES } from "../src/lib/fx/fxPresets.js";
 
 let passed = 0;
 let failed = 0;
@@ -167,6 +167,40 @@ test("confetti rain starts above the screen and falls in", () => {
   assert.ok(rain.every((p) => p.y < 0), "画面の上から始まる");
   assert.ok(rain.every((p) => p.vy > 0), "下へ落ちる");
   assert.ok(rain.every((p) => p.x >= 0 && p.x <= 1000), "画面の幅の中");
+});
+
+// 粒の全寿命を追い、小さな窓でも次のリールへはみ出さないことを確かめる。
+test("リールの成功演出は窓内に収まり、連続成功で段階が増える", () => {
+  for (const width of [32, 60, 120, 240]) {
+    const height = width * 1.8;
+    const calls = { bursts: [], rings: [], glows: [] };
+    const windowEl = {};
+    const fx = createFxPresets({
+      engine: {
+        pointOf(el) { assert.equal(el, windowEl); return { x: 0, y: 0, rect: { width, height } }; },
+        burst: options => calls.bursts.push(options), ring: options => calls.rings.push(options), glow: options => calls.glows.push(options),
+      },
+      motion: { punch() {} },
+    });
+    for (const streak of [1, 2, 5, 99]) fx.reelHit({ querySelector: () => windowEl }, { streak });
+    assert.ok(calls.bursts[1].count > calls.bursts[0].count);
+    assert.ok(calls.rings[1].r1 > calls.rings[0].r1);
+    assert.equal(calls.bursts[2].count, calls.bursts[3].count);
+    for (const burst of calls.bursts) {
+      const particles = spawnBurst({ ...burst, random: seeded(27) });
+      for (const p of particles) {
+        while (stepParticle(p, 1 / 120)) {
+          const edge = sizeOf(p) / 2 + 1;
+          assert.ok(Math.abs(p.x) + edge < width / 2);
+          assert.ok(Math.abs(p.y) + edge < height / 2);
+        }
+      }
+      // 空気抵抗を無視して大きめに見積もった上限でも、窓内に収まる。
+      assert.ok(burst.speed[1] * burst.life[1] + burst.size[1] * 1.15 / 2 + 1 < width / 2);
+    }
+    calls.rings.forEach(r => assert.ok(r.r1 + r.width / 2 < width / 2));
+    calls.glows.forEach(g => assert.ok(g.radius < width / 2));
+  }
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
