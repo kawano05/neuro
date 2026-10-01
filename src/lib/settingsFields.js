@@ -140,6 +140,23 @@ export function settingsField(key) {
   return field;
 }
 
+/** 遊びごとのまとまりを1つの折り畳み（「遊びごとの難しさ」）にまとめて置く。 */
+export const PLAY_DETAILS = Object.freeze({
+  title: "遊びごとの難しさ",
+  groups: Object.freeze(["slot", "rhythm", "crane", "fishing"]),
+});
+
+/**
+ * 画面での道順（「スイッチのくわしい設定」→「枠を自動で動かす」）。説明書（supporterGuide.js）が使う。
+ * 遊びごとのまとまりは「遊びごとの難しさ」の中にあるので、それも頭に付ける。
+ */
+export function settingPath(key) {
+  const field = settingsField(key);
+  const steps = [settingsGroup(field.group).title, field.label];
+  if (PLAY_DETAILS.groups.includes(field.group)) steps.unshift(PLAY_DETAILS.title);
+  return steps.map((step) => `「${step}」`).join("→");
+}
+
 /** 入力に見せる値（null の範囲はプリセット、古い値は読み替えたもの）。 */
 export function fieldValue(field, settings) {
   return effectiveSettingValue(field.key, settings);

@@ -2,12 +2,12 @@
   // よく使う6項目だけを常設し、目的別の詳細は複数同時に開ける形にする。
   // 開閉は保存状態に影響しない。設計と項目表: docs/settings-simple-2026-09-30.md、
   // 見直し: docs/settings-polish-2026-10-01.md。
-  import { settingsGroup as group } from "../settingsFields.js";
+  import { PLAY_DETAILS, settingsGroup as group } from "../settingsFields.js";
   import SettingsFields from "./SettingsFields.svelte";
   import SettingsGuide from "./SettingsGuide.svelte";
   import SettingsReset from "./SettingsReset.svelte";
 
-  const playGroups = ["slot", "rhythm", "crane", "fishing"].map(group);
+  const playGroups = PLAY_DETAILS.groups.map(group);
 </script>
 
 <section class="view" id="settings" aria-labelledby="settings-title">
@@ -41,7 +41,7 @@
       </div>
     </details>
     <details class="settings-details" id="settingsPlay">
-      <summary>遊びごとの難しさ</summary>
+      <summary>{PLAY_DETAILS.title}</summary>
       <div class="settings-details-body">
         <p class="measure-mode-notice" id="measureModeNotice" hidden>
           そくていの回は、遊びごとの難しさが固定されます。行ごとに、そくていで使う値を出しています。「研究（れんしゅう／そくてい）」で「れんしゅう」にすると調整できます。

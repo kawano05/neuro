@@ -452,21 +452,64 @@ h3 {
   transform: rotate(90deg);
 }
 
-.settings-guide-steps {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding: 4px 20px 18px 44px;
+/* 中身は印刷用の説明書と同じ src/lib/supporterGuide.js の HTML（SettingsGuide.svelte）。 */
+.settings-guide-body {
+  padding: 0 20px 8px;
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
-.settings-guide-steps strong {
-  display: block;
+.settings-guide-body .guide-heading {
+  margin: 16px 0 4px;
+  font-size: clamp(1rem, 2vw, 1.15rem);
+}
+
+.settings-guide-body section:first-child .guide-heading {
+  margin-top: 4px;
+}
+
+.settings-guide-body p {
+  margin: 4px 0;
+}
+
+.settings-guide-body ul,
+.settings-guide-body ol {
+  margin: 4px 0;
+  padding-left: 1.4em;
+}
+
+.settings-guide-body .steps {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-guide-body .step p {
+  margin: 0;
+}
+
+.settings-guide-body .note {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--accent);
+  background: var(--surface);
+}
+
+.settings-guide-body .qa {
+  margin: 0;
+}
+
+.settings-guide-body .qa dt {
+  margin-top: 8px;
+  font-weight: 800;
+}
+
+.settings-guide-body .qa dd {
+  margin: 0 0 0 1.2em;
 }
 
 .settings-guide-print {
   margin: 0;
-  padding: 0 20px 18px 44px;
+  padding: 0 20px 18px;
   font-weight: 700;
 }
 
@@ -478,6 +521,10 @@ body.high-contrast .settings-guide {
   border-color: #000000;
   background: #ffffff;
   color: #000000;
+}
+
+body.high-contrast .settings-guide-body .note {
+  border-left-color: #000000;
 }
 
 /* 音の素材のクレジット（SettingsView.svelte の #soundCredits）。 */

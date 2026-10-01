@@ -105,6 +105,7 @@ const checks = [
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["shows six common settings and preserves values through accessible details", checkSettingsDetails],
   ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
+  ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
   ["keeps all supporter screens out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
   ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
   ["moves between visible feature tabs", checkFeatureTabs],
@@ -2060,6 +2061,53 @@ async function checkSettingsDetails(page) {
   await openSettingsDetails(page, "switch");
   await page.locator("#switchControlMode").click();
   assert(!(await page.locator("#scanInterval").isDisabled()) && await page.locator("#scanIntervalReason").isHidden(), "Ending delegation unlocks the scan speed");
+}
+
+/**
+ * 支援者向けの説明書。設定画面の「はじめての方へ」と、そこから開く印刷用（public/guide.html）が、
+ * 同じ中身（src/lib/supporterGuide.js）で、いまの設定画面の名前と道順を使っていること。
+ * 印刷用だけが消えた4つのタブで説明していた（2026-10-01 に見つかった）。
+ */
+async function checkSupporterGuide(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  const guide = page.locator("#settingsGuide");
+  assert(!(await guide.evaluate((node) => node.open)), "The guide starts folded");
+  await guide.locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
+  assert(await guide.evaluate((node) => node.open), "Enter must open the guide");
+  const appText = await guide.innerText();
+  for (const expected of [
+    "よく使う設定",
+    "「スイッチのくわしい設定」→「枠を自動で動かす」",
+    "既定に戻す",
+    translate("party.atmosphere.big.description", "kanji"),
+  ]) {
+    assert(appText.includes(expected), `The app guide must say: ${expected}`);
+  }
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert(overflow <= 2, `The open guide must stay within the viewport, overflow ${overflow}px`);
+  const appQuestions = await guide.locator(".qa dt").allInnerTexts();
+
+  const link = page.locator("#settingsGuidePrint a");
+  await link.waitFor({ state: "visible" });
+  const printable = await page.context().newPage();
+  try {
+    const response = await printable.goto(new URL(await link.getAttribute("href"), page.url()).href);
+    assert(response?.ok(), `The printable guide must load, got ${response?.status()}`);
+    const printText = await printable.locator("main").innerText();
+    for (const old of ["「スイッチ」→", "「見え方・音」→", "「むずかしさ」", "そくてい（研究）"]) {
+      assert(!printText.includes(old), `The printable guide still points through a removed tab: ${old}`);
+    }
+    assert(printText.includes("「スイッチのくわしい設定」→「枠を自動で動かす」"), "The printable guide uses the current path");
+    assert(printText.includes(translate("party.atmosphere.subtle.description", "kanji")), "The printable guide explains the atmospheres");
+    const printQuestions = (await printable.locator(".qa dt").allInnerTexts()).map((text) => text.replace(/^Q\.\s*/, ""));
+    assert(JSON.stringify(printQuestions) === JSON.stringify(appQuestions), "The app and printable guides must answer the same questions");
+  } finally {
+    await printable.close();
+  }
 }
 
 /**
@@ -4753,7 +4801,8 @@ async function exposePresentationContext(page) {
     const response = await route.fetch();
     let body = await response.text();
     let exposed = false;
-    body = body.replace(/(\b\w+)\.scan\s*=\s*\w+\(\1\)([,;])/, (source, name, end) => {
+    // 縮めた名前には $ が入りうる（$m など。どの名前になるかはバンドルの中身しだい）。
+    body = body.replace(/(?<![\w$])([\w$]+)\.scan\s*=\s*[\w$]+\(\1\)([,;])/, (source, name, end) => {
       exposed = true;
       return source + `window.__presentationCtx=${name}${end}`;
     });
