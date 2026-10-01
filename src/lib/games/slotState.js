@@ -77,6 +77,8 @@ function sanitizeConfig(gameId, rawConfig) {
     fxLevel: FX_LEVELS.has(value.fxLevel) ? value.fxLevel : null,
     // 絵が変わる前後の回を分けられるよう保つ。持たない古い記録は null。
     artVersion: sanitizeArtVersion(value.artVersion),
+    // 端末の「動きを減らす」（真偽）。持たない古い記録と、分からない値は null。
+    reducedMotion: typeof value.reducedMotion === "boolean" ? value.reducedMotion : null,
     // 画面に出した1コマの高さ（px、games/slotFit.js）。そくていの回でも、画面に
     // 入りきらないときは決まった大きさより小さい。無い古い記録は null。
     reelCellPx: nullable(value.reelCellPx, 1, 2_000),

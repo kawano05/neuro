@@ -197,13 +197,14 @@ test("the shown reel cell size survives config -> sanitize -> CSV", () => {
   assert.equal(restored.config.reelCellPx, 62.7);
   assert.equal(restored.trials.at(-1).reelCellPx, 75.3);
   const rows = buildSlotCsvRows([restored]);
-  assert.equal(rows[0].at(-2), "reelCellPx");
-  assert.ok(rows.slice(1, -1).every((row) => row.at(-2) === 62.7));
-  assert.equal(rows.at(-1).at(-2), 75.3);
+  const cellIndex = rows[0].indexOf("reelCellPx");
+  assert.ok(cellIndex >= 0);
+  assert.ok(rows.slice(1, -1).every((row) => row[cellIndex] === 62.7));
+  assert.equal(rows.at(-1)[cellIndex], 75.3);
   // 1回ごとの値を持たない記録は、回の始めの値で埋める。
   const startOnly = makeSession();
   startOnly.config.reelCellPx = 82;
-  assert.ok(buildSlotCsvRows([sanitizeSlotSession(startOnly)]).slice(1).every((row) => row.at(-2) === 82));
+  assert.ok(buildSlotCsvRows([sanitizeSlotSession(startOnly)]).slice(1).every((row) => row[cellIndex] === 82));
   // 無い値・おかしな値は null（分からない）。0 や負の値を大きさとして残さない。
   assert.equal(sanitizeSlotSession(makeSession()).config.reelCellPx, null);
   for (const bogus of [0, -5, Number.NaN, "94", 1e9]) {
@@ -223,21 +224,42 @@ test("slot art version survives config -> reload -> slot CSV and ledger without 
   assert.notEqual(restored.legacyVersion, true);
   assert.equal(restored.trials.length, source.trials.length);
   const rows = buildSlotCsvRows([restored]);
-  assert.equal(rows[0].at(-1), "artVersion");
-  assert.ok(rows.slice(1).every(row => row.at(-1) === SLOT_ART_VERSION));
+  const artIndex = rows[0].indexOf("artVersion");
+  assert.ok(artIndex >= 0);
+  assert.ok(rows.slice(1).every(row => row[artIndex] === SLOT_ART_VERSION));
   const ledger = buildSessionLedgerRows([restored]);
-  assert.equal(ledger[0].at(-1), "artVersion");
-  assert.equal(ledger[1].at(-1), SLOT_ART_VERSION);
+  const ledgerArt = ledger[0].indexOf("artVersion");
+  assert.equal(ledger[1][ledgerArt], SLOT_ART_VERSION);
 
   const old = sanitizeSlotSession(makeSession());
   assert.equal(old.config.artVersion, null);
   assert.notEqual(old.legacyVersion, true);
   assert.equal(buildSlotCsvRows([old]).length, old.trials.length + 1);
-  assert.ok(buildSlotCsvRows([old]).slice(1).every(row => row.at(-1) === ""));
-  assert.equal(buildSessionLedgerRows([old])[1].at(-1), "");
+  assert.ok(buildSlotCsvRows([old]).slice(1).every(row => row[artIndex] === ""));
+  assert.equal(buildSessionLedgerRows([old])[1][ledgerArt], "");
   const invalid = makeSession();
   invalid.config.artVersion = "two";
   assert.equal(sanitizeSlotSession(invalid).config.artVersion, null);
+});
+
+test("the device reduced-motion setting survives config -> reload -> slot CSV and ledger", () => {
+  // 端末の「動きを減らす」（data-integrity.test.mjs のほかの遊びと同じ決まり）。
+  const source = makeSession();
+  source.config.reducedMotion = true;
+  const restored = sanitizeState(JSON.parse(JSON.stringify({ sessions: [source] }))).sessions[0];
+  assert.equal(restored.config.reducedMotion, true);
+  const rows = buildSlotCsvRows([restored]);
+  const index = rows[0].indexOf("reducedMotion");
+  assert.equal(index, rows[0].length - 1, "いちばん後ろの列");
+  assert.ok(rows.slice(1).every((row) => row[index] === true));
+  const ledger = buildSessionLedgerRows([restored]);
+  assert.equal(ledger[1][ledger[0].indexOf("reducedMotion")], true);
+  for (const bogus of [1, "true", null, undefined]) {
+    const session = makeSession();
+    session.config.reducedMotion = bogus;
+    assert.equal(sanitizeSlotSession(session).config.reducedMotion, null, `reducedMotion ${String(bogus)} は null`);
+  }
+  assert.ok(buildSlotCsvRows([sanitizeSlotSession(makeSession())]).slice(1).every((row) => row[index] === ""));
 });
 
 test("artVersion preserves positive integers without clamping or rounding", () => {

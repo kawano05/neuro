@@ -167,7 +167,7 @@ export function initNeuroNodeApp() {
   // 演出（粒・光・弾み）。docs/overall-design-2026-09-28.md。強さは設定と端末の
   // 「動きを減らす」で毎回決まり、そくていの回の遊びでは何も足さない。強さが読めない
   // ときは「なし」（何も足さない側。docs/rules/ud-checklist.md の C2）。
-  ctx.fx = presentation.protect(createFxSystem({ getSettings: () => state.settings }), "fx", { fallbacks: { level: "none" } });
+  ctx.fx = presentation.protect(createFxSystem({ getSettings: () => state.settings }), "fx", { fallbacks: { level: "none", reducedMotion: null } });
   ctx.speak = (...args) => presentation.run("voice.speak", () => audio.speak(...args));
   ctx.voiceFeedback = (...args) => presentation.run("voice.feedback", () => audio.speakOrAnnounce(...args));
   ctx.playTone = audio.playTone;

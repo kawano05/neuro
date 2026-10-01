@@ -963,6 +963,8 @@ export function createRhythmGame(gameId) {
           difficultyMode: resolveDifficultyMode(settings),
           // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
           fxLevel: ctx.fx?.level() ?? null,
+          // 端末の「動きを減らす」。オンだと fxLevel が subtle でも飾りは動かない（記録の列 reducedMotion）。
+          reducedMotion: ctx.fx?.reducedMotion() ?? null,
           // 見え方の版（その回に画面へ出した絵の版。src/lib/artVersion.js）。高い音だけの
           // れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）ので、変わる前後の回を
           // 分けられるようにする。そくていの回はいつでも 1。

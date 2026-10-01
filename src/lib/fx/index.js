@@ -51,6 +51,8 @@ export function createFxSystem({ getSettings, doc = typeof document !== "undefin
     motion,
     /** いま効いている強さ（"none" | "subtle" | "normal" | "big"）。session.config.fxLevel に残す。 */
     level,
+    /** 端末の「動きを減らす」がオンか（分からない環境では null）。session.config.reducedMotion に残す。 */
+    reducedMotion: () => (reducedMotionQuery ? reducedMotionQuery.matches : null),
     policy,
     syncPolicy,
     /** そくていの回の遊びを始める／終える（gameHost）。 */

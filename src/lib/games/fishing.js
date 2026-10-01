@@ -1011,6 +1011,8 @@ export function createFishingGame(gameId) {
         difficultyMode: resolveDifficultyMode(ctx.settings),
         // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
         fxLevel: ctx.fx?.level() ?? null,
+        // 端末の「動きを減らす」。オンだと fxLevel が subtle でも飾りは動かない（記録の列 reducedMotion）。
+        reducedMotion: ctx.fx?.reducedMotion() ?? null,
         // 見え方の版（art/fishingWorldArt.js）。れんしゅうの回の釣り人・魚・長靴の絵が
         // 変わった前後を分けるため。
         artVersion: shownArtVersion(resolveDifficultyMode(ctx.settings), FISHING_ART_VERSION),
