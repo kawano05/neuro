@@ -23,7 +23,7 @@ iPad が中心で、iPhone・PC でも使う。展示会でも見せる。
 | A4 | **操作のしかた。** スイッチ1つ（走査）で利用者の世界の全部に届く。iPad のスイッチコントロールへ任せたときも届く。タップの的は 44x44px 以上。キーボードでも使える。VoiceOver で押せるものの名前が読まれる。飾りは aria-hidden | delegates shell scanning exclusively to iPad Switch Control／keeps every screen free of overflow and undersized targets／keeps native keyboard activation separate from switch input |
 | A5 | **時間の余裕。** はじめの遊びに時間切れはない。時間で進む遊びは、れんしゅうの回で速さ・長さを変えられる。説明の読み上げの途中のひと押しは、声を止めるだけ（始めない） | guards the explanation press… |
 | A6 | **わかりやすさ。** どの遊びも上の帯（のこり・この遊びの設定・おわる）が同じ場所・同じ形。ほめ方と進み方の文法が同じ（`docs/overall-design-2026-09-28.md` §3）。そくてい／れんしゅうが画面で分かる | keeps the result screen free of supporter chrome |
-| A7 | **どの画面でも収まる。** 14 の大きさ（`docs/rules/screen-sizes.md`）で、切れ・はみ出し・重なりがない | keeps the mobile layout inside the viewport／keeps responsive explanations and results… |
+| A7 | **どの画面でも収まる。** 14 の大きさ（`docs/rules/screen-sizes.md`）と、200% に拡大したスマホの横（422×195 相当）で、切れ・はみ出し・重なりがない | keeps the mobile layout inside the viewport／keeps responsive explanations and results…／keeps rhythm visual profiles… |
 
 ## B. フールプルーフ（まちがえられない・まちがえても困らない）
 
@@ -31,7 +31,7 @@ iPad が中心で、iPhone・PC でも使う。展示会でも見せる。
 |---|---|---|
 | B1 | **利用者が迷い込まない。** 支援者の世界への入口はタップだけ。支援者の世界（評価ログ・設定）では走査を動かさない（`src/lib/viewWorld.js` の許可一覧の外側＝支援者の世界） | keeps all supporter screens out of the scan ring／`tests/scan-supporter.test.mjs` |
 | B2 | **押しまちがいに強い。** 続けて押しても2回に数えない。説明の画面のひと押しは課題の入力に数えない。開いた直後の押下（タイルを選んだ押下の跳ね返り）は受けない。設定を開いているあいだの押下は遊びを進めない | keeps the start press from falling through…／guards the explanation press… |
-| B3 | **支援者のまちがいを防ぐ。** そくていの回か れんしゅうの回かが、遊ぶ画面・説明・けっか・設定でひと目で分かる。そくていの回に効く値は変えられない。記録を消す前に、いまの記録と同じ中身を書き出したか確かめる。設定は元に戻せる | blocks deletion when records change after an export／refuses to clear a participant's data before it has been exported |
+| B3 | **支援者のまちがいを防ぐ。** そくていの回か れんしゅうの回かが、遊ぶ画面・説明・けっか・設定でひと目で分かる（札はそくていの回がある遊びにだけ出す。はじめの遊びに出すと取り違える）。そくていの回に効く値は変えられない。記録を消す前に、いまの記録と同じ中身を書き出したか確かめる。設定は元に戻せる | blocks deletion when records change after an export／refuses to clear a participant's data before it has been exported |
 | B4 | **とり違えない記録。** 本番とプレビューで保存が別。参加者ごとに記録が分かれる。書き出したファイル名に参加者と日時 | names downloads with participant and time |
 | B5 | **設定の組み合わせで壊れない。** どの組み合わせでも遊びが始まり、終われる（読み上げ OFF・効果音 OFF・大きい文字・くっきり・英語・雰囲気4つ・動きを減らす・スイッチコントロール）。スイッチだけの人が、エンドレス・音の出ない画面から自分で抜けられる | lets one switch finish both endless games…／lets one switch leave the screen where audio cannot start |
 
@@ -46,6 +46,7 @@ iPad が中心で、iPhone・PC でも使う。展示会でも見せる。
 | C5 | **途中で止まったとき。** 画面が隠れた・別のアプリへ行った → その回を中断として閉じる。予約した音・声・音楽・演出のタイマーが残らない | cancels scheduled sounds and result music when hidden or interrupted |
 | C6 | **強さの上限は仕組みの側で守る。** 光・揺れ・粒の数・音の大きさの上限は、遊びの側から破れない（`src/lib/fx/fxSafety.js`・`src/lib/audio.js`） | `tests/fx.test.mjs`／`tests/effect-gain.test.mjs` |
 | C7 | **古いデータ・知らない値。** 保存の読み込み（sanitize）は、知らない値・壊れた値を安全な既定か「分からない（null）」にする。版の値（artVersion など）は丸めない | `tests/data-integrity.test.mjs`／`tests/slot-session.test.mjs` |
+| C8 | **研究の記録の要は端から端まで確かめる。** 押した時刻と拍の差が、基準を差し引かずに生の値のまま記録される。わざと壊すと落ちる検査であること | records rhythm real offsets without subtracting the baseline |
 
 ## 実機でしか確かめられないもの
 
