@@ -170,7 +170,7 @@ async function inspect(label, { sessions, difficultyMode }) {
       key: "neuronode-prototype-state-v3",
       value: JSON.stringify({
         version: 3,
-        settings: { researcherMode: true, difficultyMode },
+        settings: { difficultyMode },
         evaluation: { participantId: "P001" },
         sessions,
       }),

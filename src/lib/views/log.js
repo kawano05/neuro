@@ -2,7 +2,7 @@
 // views/log.js — 評価ログ画面（操作ログの集計・一覧・CSV書き出し）
 // =====================================================================
 
-import { escapeHtml, escapeCsv, formatTime, exportFileStamp, toLocalIso } from "../utils.js";
+import { escapeHtml, formatTime, toLocalIso } from "../utils.js";
 import { MAX_LOG_ENTRIES } from "../state.js";
 import {
   describeSessionConditions,
@@ -461,16 +461,9 @@ export function initLog(ctx) {
       notifySupporter("書き出すログがありません。利用者が何か操作するとログが増えます。");
       return;
     }
-    const rows = buildLogCsvRows(state.logs, state.evaluation?.participantId);
-    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `neuronode-log-${exportFileStamp(state.evaluation.participantId)}.csv`;
-    link.click();
-    ctx.recordBackup?.mark("logs");
-    URL.revokeObjectURL(url);
+    // 名前・BOM・控えは書き出しの共通の道（dataExport.js の download）。ログには行ごとの
+    // 参加者が無いので、名前の参加者は端末に入っている記録（セッション）から決める。
+    ctx.downloadRecords(buildLogCsvRows(state.logs, state.evaluation?.participantId), "neuronode-log", "logs");
   }
 
   // タブは押すたびに作り直すので、個々のボタンではなく入れ物で受ける。

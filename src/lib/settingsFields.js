@@ -1,86 +1,250 @@
-// 支援者設定の表示と入力型を一か所で定義する。6項目だけを常設し、詳細は目的別に畳む。
-// 保存・既定値・測定の解決規則は state.js / difficultyMode.js のまま。
-// 理由と全項目の対応表: docs/settings-simple-2026-09-30.md。
-import { cranePresets, slotPresets } from './content.js';
-import { ATMOSPHERES } from "./atmosphere.js";
-import { translate } from './i18n.js';
+// =====================================================================
+// settingsFields.js — 支援者の設定画面の並びと、画面の決まり（DOM に触れない）
+//
+// よく使う6項目だけを常設し、くわしい設定は目的別に畳む（docs/settings-simple-2026-09-30.md）。
+// 項目の名前・範囲・値の形は settingDefinitions.js（遊びの中の設定と共有する表）から引く。
+// ここで決めるのは、どのまとまりに置くか・DOM の id・いま変えられるか（とその理由）・
+// 既定に戻すときに何を戻すか。
+// 保存・既定値・そくていの解決は state.js / difficultyMode.js のまま。
+// 見直しの記録: docs/settings-polish-2026-10-01.md。
+// =====================================================================
 
-// 支援者の画面は日本語。雰囲気の名前と説明は舞台と同じ辞書のキーを使う。
-const atmosphereField = {
-  id: "fxLevel", key: "fxLevel", type: "select", label: "遊びの雰囲気",
-  hint: "世界の動きや、押したとき・できたときのお祝いを選びます。",
-  options: Object.values(ATMOSPHERES).map(profile => [profile.level, translate(profile.label, "kanji")]),
-  description: value => translate((Object.hasOwn(ATMOSPHERES, value) ? ATMOSPHERES[value] : ATMOSPHERES.none).description, "kanji"),
+import { isMeasurementMode } from "./difficultyMode.js";
+import { SETTING_DEFINITIONS, describeSettingValue, effectiveSettingValue, protocolText } from "./settingDefinitions.js";
+import { defaultState } from "./state.js";
+
+/**
+ * いま変えられない理由の種類。
+ *
+ * 効かない操作子を黙って置かない（灰色にするだけでは、なぜ触れないのかが分からない）。
+ * 理由は1つの関数（unavailableReason）で決め、行の中に字で出し、読み上げ（aria-describedby）
+ * にも渡す。まとまりの注記だけに書くと、そのまとまりを閉じたまま使う人に届かない
+ * （スイッチコントロール中の「枠が動く速さ」は、理由が閉じた「スイッチのくわしい設定」の中にあった）。
+ */
+const LOCKS = {
+  // そくていの回は MEASUREMENT_PROTOCOL の値で遊ぶ。灰色のつまみには、れんしゅうの値が残って
+  // いるので、実際に使う値を添える（例: つまみは 4.8秒でも、そくていでは 3.2秒）。
+  measured: {
+    active: (settings) => isMeasurementMode(settings),
+    reason: (field) => `そくていの回は固定です（そくていでは ${protocolText(field.key)}）。`,
+    resetReason: "そくていの回は固定なので、戻せません。",
+  },
+  switchControl: {
+    active: (settings) => settings?.switchControlMode === true,
+    reason: () => "iPad のスイッチコントロールを使っているあいだは、アプリの枠を使いません。",
+    resetReason: "iPad のスイッチコントロールを使っているあいだは、戻せません。",
+  },
+  speech: {
+    active: (settings) => settings?.speechEnabled === false,
+    reason: () => "「声で読み上げる」がオフのあいだは使いません。",
+    resetReason: "「声で読み上げる」がオフのあいだは、戻せません。",
+  },
 };
 
-export const SETTINGS_GROUPS = [
-  { id: "common", title: "よく使う設定", fields: [
-    atmosphereField,
-    {"id":"speechEnabled","key":"speechEnabled","type":"checkbox","label":"声で読み上げる","hint":"説明やほめ言葉を声で読みます。"},
-    {"id":"soundEnabled","key":"soundEnabled","type":"checkbox","label":"効果音","hint":"押した音や拍手を鳴らします。遊びの合図は切れません。"},
-    {"id":"scanInterval","key":"scanInterval","type":"range","label":"枠が動く速さ","hint":"次の遊びへ枠が移るまでの時間です。","min":800,"max":3200,"step":100},
-    {"id":"largeText","key":"largeText","type":"checkbox","label":"大きい文字","hint":"画面の文字を大きくします。"},
-    {"id":"hideVisualTasks","key":"hideVisualTasks","type":"checkbox","label":"画面をよく見る遊びを隠す","hint":"リールとアームをホームから隠します。"},
-  ] },
-  { id: "switch", title: "スイッチのくわしい設定", fields: [
-    {"id":"switchControlMode","key":"switchControlMode","type":"checkbox","label":"iPad のスイッチコントロールを使う","hint":"iPad 本体のスイッチコントロールを使うときだけオン。","describedBy":"switchControlModeNotice"},
-    {"id":"autoScan","key":"autoScan","type":"checkbox","label":"枠を自動で動かす","hint":"利用者の画面で、黄色い枠を自動で動かします。"},
-    {"id":"scanFeedback","key":"scanFeedback","type":"select","label":"枠が動いたときの音","hint":"枠が移るたびに音や遊びの名前で知らせます。","options":[["none","なし"],["tick","小さな音"],["speak","名前を読む"]]},
-    {"id":"showScreenSwitch","key":"showScreenSwitch","type":"checkbox","label":"画面に「おす」ボタンを出す","hint":"画面のボタンをスイッチのかわりに使います。"},
-  ] },
-  { id: "senses", title: "見え方・声のくわしい設定", fields: [
-    {"id":"textMode","key":"textMode","type":"select","label":"文字づかい","hint":"遊びの文字を選びます。支援者の画面は日本語です。","options":[["ruby","漢字＋ふりがな"],["en","English"]]},
-    {"id":"highContrast","key":"highContrast","type":"checkbox","label":"くっきり表示","hint":"枠と文字の色の差を強くします。"},
-    {"id":"speechVolume","key":"speechVolume","type":"range","label":"読み上げの声の大きさ","hint":"アプリの声だけの音量です。","min":0.2,"max":1,"step":0.1},
-    {"id":"speechVoice","key":"speechVoice","type":"select","label":"読み上げの声","hint":"アプリに入れた声か、端末の声を選びます。","options":[["app","アプリの声"],["device","端末の声"]]},
-  ] },
-  { id: "slot", title: "リールを止める", fields: [
-    {"id":"slotCycleMs","key":"slotCycleMs","type":"range","label":"リールの速さ","hint":"1周する時間。長いほどゆっくりです。","min":2800,"max":6000,"step":100,"measured":true},
-    {"id":"slotToleranceMs","key":"slotToleranceMs","type":"range","label":"「合った」にする広さ","hint":"目標の前後の広さ。広いほどやさしくなります。","min":60,"max":220,"step":10,"measured":true},
-    {"id":"slotL1Rounds","key":"slotL1Rounds","type":"range","label":"「ひとつ止める」の回数","hint":"1本のリールを止める回数です。","min":3,"max":20,"step":1,"measured":true},
-    {"id":"slotL2Rounds","key":"slotL2Rounds","type":"range","label":"「3つ止める」の回数","hint":"3本を順番に止める回数です。","min":2,"max":12,"step":1,"measured":true},
-  ] },
-  { id: "rhythm", title: "高い音だけ", fields: [
-    {"id":"rhythmBpm","key":"rhythmBpm","type":"select","label":"音の速さ（テンポ）","hint":"1分に鳴る音の数。少ないほどゆっくりです。","options":[["","あそびごとの既定"],["30","30（とてもゆっくり）"],["40","40"],["50","50"],["60","60"],["80","80（はやめ）"]],"nullable":true,"measured":true},
-    {"id":"rhythmTargetBeats","key":"targetBeats","type":"select","label":"1回に鳴る音の数","hint":"1回の遊びで鳴る音の数です。","options":[["","あそびごとの既定"],["5","5"],["10","10"],["20","20"],["30","30"]],"nullable":true,"measured":true},
-    {"id":"visualGuidance","key":"visualGuidance","type":"checkbox","label":"次の音が来る場所を画面に出す","hint":"次の拍を予告します。測定では出ません。","measured":true},
-  ] },
-  { id: "crane", title: "アームでつかむ", fields: [
-    {"id":"craneSweepMs","key":"craneSweepMs","type":"range","label":"アームの速さ","hint":"端から端までの時間。長いほどゆっくりです。","min":800,"max":6000,"step":100,"measured":true},
-    {"id":"craneToleranceR","key":"craneToleranceR","type":"range","label":"つかめる広さ","hint":"ねらいからのずれの許容幅です。","min":4,"max":40,"step":1,"measured":true},
-    {"id":"craneTargetTrials","key":"craneTargetTrials","type":"range","label":"1回にアームを下ろす回数","hint":"1回の遊びでアームを下ろす回数です。","min":3,"max":15,"step":1,"measured":true},
-    {"id":"craneAudioGuidance","key":"craneAudioGuidance","type":"checkbox","label":"ねらいの上で音を鳴らす","hint":"ねらいの上を通ると音が鳴り、耳でも狙えます。","measured":true},
-  ] },
-  { id: "fishing", title: "さかなつり", fields: [
-    {"id":"fishingLimitMs","key":"fishingLimitMs","type":"select","label":"アタリが続く長さ","hint":"魚が逃げるまでの時間です。","options":[["","ふつう（2秒）"],["3000","ながい（3秒）"],["4000","とても ながい（4秒）"],["1400","みじかい（1.4秒）"]],"nullable":true,"measured":true},
-  ] },
-  { id: "research", title: "研究（練習／測定・成立確認）", fields: [
-    {"id":"researcherMode","key":"researcherMode","type":"checkbox","label":"研究者モード","hint":"研究用の表示モードです。"},
-    {"id":"difficultyMode","key":"difficultyMode","type":"select","label":"練習／測定","hint":"測定では速さ・回数・手がかりが固定されます。","options":[["practice","練習（訓練・調整できる）"],["measure","測定（研究・固定）"]]},
-  ] },
+/** 項目ごとの「変えられないとき」。そくていで固定される項目には measured が自動で付く。 */
+const FIELD_LOCKS = {
+  scanInterval: ["switchControl"],
+  autoScan: ["switchControl"],
+  speechVolume: ["speech"],
+  speechVoice: ["speech"],
+};
+
+/**
+ * 画面のまとまり。fields は保存キー（DOM の id が違うものだけ [キー, id]）。
+ *   reset … 既定に戻すボタンの文字。くわしい設定のまとまりごとに置く（よく使う設定と研究には置かない）
+ *   keep  … 既定に戻さない項目と、その理由
+ */
+const GROUPS = [
+  {
+    id: "common",
+    title: "よく使う設定",
+    fields: ["fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"],
+  },
+  {
+    id: "switch",
+    title: "スイッチのくわしい設定",
+    fields: ["switchControlMode", "autoScan", "scanFeedback", "showScreenSwitch"],
+    // iPad 本体の設定と合わせるもの。アプリだけ既定（オフ）に戻すと、iPad 本体の
+    // スイッチコントロールがオンのまま、アプリの黄色い枠も動き出す（枠が2つ出る）。
+    keep: { switchControlMode: "iPad 本体の設定と合わせるため" },
+    reset: "スイッチの設定を既定に戻す",
+  },
+  {
+    id: "senses",
+    title: "見え方・声のくわしい設定",
+    fields: ["textMode", "highContrast", "speechVolume", "speechVoice"],
+    reset: "見え方・声の設定を既定に戻す",
+  },
+  {
+    id: "slot",
+    title: "リールを止める",
+    fields: ["slotCycleMs", "slotToleranceMs", "slotL1Rounds", "slotL2Rounds"],
+    reset: "「リールを止める」を既定に戻す",
+  },
+  {
+    id: "rhythm",
+    title: "高い音だけ",
+    fields: ["rhythmBpm", ["targetBeats", "rhythmTargetBeats"], "visualGuidance"],
+    reset: "「高い音だけ」を既定に戻す",
+  },
+  {
+    id: "crane",
+    title: "アームでつかむ",
+    fields: ["craneSweepMs", "craneToleranceR", "craneTargetTrials", "craneAudioGuidance"],
+    reset: "「アームでつかむ」を既定に戻す",
+  },
+  {
+    id: "fishing",
+    title: "さかなつり",
+    fields: ["fishingLimitMs"],
+    reset: "「さかなつり」を既定に戻す",
+  },
+  {
+    id: "research",
+    title: "研究（れんしゅう／そくてい）",
+    fields: ["difficultyMode"],
+  },
 ];
 
-export const SETTINGS_FIELDS = SETTINGS_GROUPS.flatMap(group => group.fields);
-
-export function formatSeconds(ms) {
-  return `${Number((ms / 1000).toFixed(2))}秒`;
+function buildField(entry, group) {
+  const [key, id] = Array.isArray(entry) ? entry : [entry, entry];
+  const definition = SETTING_DEFINITIONS[key];
+  if (!definition) throw new Error(`settingsFields: ${key} は settingDefinitions.js に無い`);
+  return Object.freeze({
+    ...definition,
+    key,
+    id,
+    group: group.id,
+    locks: [...(definition.measured ? ["measured"] : []), ...(FIELD_LOCKS[key] || [])],
+    keepReason: group.keep?.[key] || "",
+  });
 }
 
-const fallbacks = {
- craneSweepMs: cranePresets.sweepMs, craneToleranceR: cranePresets.toleranceR, craneTargetTrials: cranePresets.targetTrials,
- slotCycleMs: slotPresets['slot-l1'].cycleMs, slotToleranceMs: slotPresets['slot-l1'].toleranceMs,
- slotL1Rounds: slotPresets['slot-l1'].rounds, slotL2Rounds: slotPresets['slot-l2'].rounds,
-};
+export const SETTINGS_GROUPS = Object.freeze(
+  GROUPS.map((group) =>
+    Object.freeze({ ...group, fields: Object.freeze(group.fields.map((entry) => buildField(entry, group))) })
+  )
+);
+
+export const SETTINGS_FIELDS = Object.freeze(SETTINGS_GROUPS.flatMap((group) => group.fields));
+
+export function settingsGroup(id) {
+  const group = SETTINGS_GROUPS.find((item) => item.id === id);
+  if (!group) throw new Error(`settingsFields: まとまり ${id} は無い`);
+  return group;
+}
+
+export function settingsField(key) {
+  const field = SETTINGS_FIELDS.find((item) => item.key === key);
+  if (!field) throw new Error(`settingsFields: 項目 ${key} は無い`);
+  return field;
+}
+
+/** 遊びごとのまとまりを1つの折り畳み（「遊びごとの難しさ」）にまとめて置く。 */
+export const PLAY_DETAILS = Object.freeze({
+  title: "遊びごとの難しさ",
+  groups: Object.freeze(["slot", "rhythm", "crane", "fishing"]),
+});
+
+/**
+ * 画面での道順（「スイッチのくわしい設定」→「枠を自動で動かす」）。説明書（supporterGuide.js）が使う。
+ * 遊びごとのまとまりは「遊びごとの難しさ」の中にあるので、それも頭に付ける。
+ */
+export function settingPath(key) {
+  const field = settingsField(key);
+  const steps = [settingsGroup(field.group).title, field.label];
+  if (PLAY_DETAILS.groups.includes(field.group)) steps.unshift(PLAY_DETAILS.title);
+  return steps.map((step) => `「${step}」`).join("→");
+}
+
+/** 入力に見せる値（null の範囲はプリセット、古い値は読み替えたもの）。 */
 export function fieldValue(field, settings) {
- const value = settings[field.key];
- return field.type === 'range' ? value ?? fallbacks[field.key] : value;
+  return effectiveSettingValue(field.key, settings);
 }
+
+/** 画面の数字と、スライダーの読み上げ（aria-valuetext）の文。同じものを使う。 */
 export function formatFieldValue(field, value) {
- if (field.id === 'speechVolume') return `${Math.round(value * 100)}%`;
- return field.id.endsWith('Ms') || field.id === 'scanInterval' ? formatSeconds(value) : String(value);
+  return describeSettingValue(field.key, value);
 }
+
 export function readFieldValue(field, control) {
- if (field.type === 'checkbox') return control.checked;
- if (field.nullable) return control.value === '' ? null : Number(control.value);
- return field.type === 'range' ? Number(control.value) : control.value;
+  if (field.type === "checkbox") return control.checked;
+  if (field.nullable) return control.value === "" ? null : Number(control.value);
+  return field.type === "range" ? Number(control.value) : control.value;
+}
+
+function activeLocks(field, settings) {
+  return field.locks.filter((kind) => LOCKS[kind].active(settings));
+}
+
+/** いま変えられない理由（行に出す文）。変えられるなら ""。 */
+export function unavailableReason(field, settings) {
+  const [kind] = activeLocks(field, settings);
+  return kind ? LOCKS[kind].reason(field) : "";
+}
+
+/** 行の読み上げに渡す説明の id（名前の下の1文・選んだものの説明・注記・変えられない理由）。 */
+export function describedByIds(field, settings) {
+  return [
+    `${field.id}Hint`,
+    ...(field.description ? [`${field.id}Description`] : []),
+    ...(field.key === "switchControlMode" && settings?.switchControlMode === true ? ["switchControlModeNotice"] : []),
+    ...(unavailableReason(field, settings) ? [`${field.id}Reason`] : []),
+  ].join(" ");
+}
+
+/** state.js の既定値（保存の既定）。画面で「既定」と言うのはこれ。 */
+function defaultFieldValue(field) {
+  return defaultState.settings[field.key];
+}
+
+/**
+ * まとまりを既定に戻すと何が変わるか（確かめ表 B3「設定を変えたら元に戻せる」）。
+ *
+ * 戻さないもの: いま変えられない項目（そくていで固定・スイッチコントロール中など。触れない
+ * ものを裏で書き換えない）と、keep の項目。どちらも理由を添えて返す（押した人に「何を
+ * 戻して、何を残したか」を知らせるため）。
+ *
+ * @returns {{changes: Array<{field, from, to}>, kept: Array<{field, reason}>, blockedReason: string}}
+ *   blockedReason … 戻せる項目が1つも無いときの理由（ボタンを使えなくし、この文を出す）
+ */
+export function resetPlan(group, settings) {
+  const changes = [];
+  const kept = [];
+  let resettable = 0;
+  group.fields.forEach((field) => {
+    const reason = field.keepReason || unavailableReason(field, settings);
+    if (reason) {
+      kept.push({ field, reason });
+      return;
+    }
+    resettable += 1;
+    const to = defaultFieldValue(field);
+    const from = settings?.[field.key];
+    if (!Object.is(from, to)) changes.push({ field, from, to });
+  });
+  let blockedReason = "";
+  if (resettable === 0) {
+    const [kind] = group.fields.flatMap((field) => activeLocks(field, settings));
+    blockedReason = kind ? LOCKS[kind].resetReason : "戻せる項目がありません。";
+  }
+  return { changes, kept, blockedReason };
+}
+
+/** 既定に戻したあとの知らせ（画面にも読み上げにも同じ文）。 */
+export function describeReset(group, plan) {
+  if (plan.blockedReason) return plan.blockedReason;
+  // 残した理由ごとにまとめる（「そくていの回は固定です」を項目の数だけ繰り返さない）。
+  const byReason = new Map();
+  plan.kept.forEach(({ field, reason }) => {
+    byReason.set(reason, [...(byReason.get(reason) || []), field.label]);
+  });
+  const kept = [...byReason]
+    .map(([reason, labels]) => `変えていないもの: ${labels.join("、")}（${reason.replace(/。$/, "")}）。`)
+    .join("");
+  if (!plan.changes.length) return `「${group.title}」は、もう既定のままです。${kept}`;
+  const changed = plan.changes
+    .map(({ field, from, to }) => `${field.label}（${formatFieldValue(field, from)} → ${formatFieldValue(field, to)}）`)
+    .join("、");
+  return `「${group.title}」を既定に戻しました: ${changed}。${kept}`;
 }

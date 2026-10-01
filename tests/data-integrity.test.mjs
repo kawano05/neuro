@@ -13,12 +13,16 @@ import {
   sanitizeState,
   summarizeRhythmTrials,
 } from "../src/lib/state.js";
-import { escapeCsv, formatTime, exportFileStamp, localFileStamp, toLocalIso } from "../src/lib/utils.js";
+import { escapeCsv, formatTime, exportFileStamp, toLocalIso } from "../src/lib/utils.js";
 import {
   buildSessionLedgerRows,
   buildSlotCsvRows,
   buildRhythmCsvRows,
   buildTaskCsvRows,
+  exportFileName,
+  exportParticipantLabel,
+  nextParticipantAfterHandOver,
+  recordedParticipants,
   SESSION_LEDGER_HEADERS,
 } from "../src/lib/dataExport.js";
 import { buildLogCsvRows } from "../src/lib/views/log.js";
@@ -1569,7 +1573,8 @@ test("the filename date follows the device clock, like the contents do", () => {
     new Date("2026-01-01T15:30:00.000Z"),
   ];
   for (const sample of samples) {
-    assert.equal(localFileStamp(sample), toLocalIso(sample.toISOString()).slice(0, 10));
+    const stamp = exportFileStamp("P001", sample);
+    assert.equal(stamp.slice("P001-".length, "P001-".length + 10), toLocalIso(sample.toISOString()).slice(0, 10));
   }
 });
 
@@ -2224,6 +2229,40 @@ test("backup receipts match record contents and require every relevant CSV", () 
   assert.equal(backup.canClear("logs"), false);
   backup.mark("raw"); backup.reset();
   assert.equal(backup.canClear(), false);
+});
+
+test("export names come from the participants in the exported records, not the input field", () => {
+  const at = new Date("2026-10-01T06:30:00Z");
+  const of = (...ids) => ids.map((participantId) => ({ participantId }));
+  assert.deepEqual(recordedParticipants(of("P001", "P001", "", "P002")), ["P001", "", "P002"]);
+  assert.equal(exportParticipantLabel(of("P001", "P001")), "P001", "1人ならそのID");
+  assert.equal(exportParticipantLabel(of("P001", "P002")), "multi", "2人以上なら multi");
+  assert.equal(exportParticipantLabel(of("P001", "")), "multi", "IDなしの回が混ざっても multi");
+  assert.equal(exportParticipantLabel([]), "", "記録が無いものは no-id（exportFileStamp が付ける）");
+  assert.match(exportFileName("neuronode-slot", of("P:01"), "csv", at), /^neuronode-slot-P_01-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/);
+  assert.match(exportFileName("neuronode-raw", of("A", "B"), "json", at), /^neuronode-raw-multi-/);
+  assert.match(exportFileName("neuronode-log", [], "csv", at), /^neuronode-log-no-id-/);
+});
+
+test("typing the next participant after an export does not block clearing the same records", () => {
+  const state = cloneDefaultState();
+  state.sessions = [{ taskType: "rt", participantId: "P001", trials: [] }];
+  state.logs = [{ label: "a" }];
+  state.evaluation.participantId = "P001";
+  const backup = createRecordBackup(state);
+  backup.mark("raw");
+  state.evaluation.participantId = "P002";
+  assert.equal(backup.canClear(), true, "欄の参加者IDは記録そのものではない");
+  assert.equal(backup.participantAtExport(), "P001");
+  state.evaluation.observerNotes = "あとから書いたメモ";
+  assert.equal(backup.canClear(), false, "評価の値（記録）が変われば、また書き出す");
+
+  // 切り替えのあと欄に残すID: 書き出したあとに入れた次の人のIDだけ。
+  assert.equal(nextParticipantAfterHandOver("P002", state.sessions, "P001"), "P002");
+  assert.equal(nextParticipantAfterHandOver("P001", state.sessions, "P001"), "", "前の人のIDは残さない");
+  assert.equal(nextParticipantAfterHandOver("P001", state.sessions, "P009"), "", "消す記録の参加者のIDも残さない");
+  assert.equal(nextParticipantAfterHandOver("P003", [], "P003"), "", "書き出したときのIDは残さない");
+  assert.equal(nextParticipantAfterHandOver("", state.sessions, null), "");
 });
 
 for (const { name, fn } of tests) {

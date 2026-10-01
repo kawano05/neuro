@@ -11,6 +11,8 @@ import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLe
 import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
 import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS } from "../src/lib/games/partyStage.js";
 import { PARTY_JAR_CAPACITY, PARTY_STARS } from "../src/lib/party.js";
+import { SETTINGS_FIELDS } from "../src/lib/settingsFields.js";
+import { defaultState } from "../src/lib/state.js";
 import { checkResponsiveScreens, checkReadyInputSafety, finishReady } from "./responsive-screens.mjs";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
@@ -102,13 +104,15 @@ const checks = [
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["shows six common settings and preserves values through accessible details", checkSettingsDetails],
+  ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
+  ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
   ["keeps all supporter screens out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
   ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
   ["moves between visible feature tabs", checkFeatureTabs],
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
   ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
-  ["keeps researcher-mode tabs (evaluation/settings) working after toggling it on", checkResearcherModeTabsNoRegression],
+  ["keeps researcher data on the one log screen, with no dead researcher-mode switch", checkResearcherDataOnOneScreen],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps every screen free of overflow and undersized targets", checkLayoutInvariants],
@@ -126,6 +130,7 @@ const checks = [
   ["lets one switch leave the screen where audio cannot start", checkSwitchUnavailableExit],
   ["blocks deletion when records change after an export", checkBackupRevision],
   ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
+  ["hands the device to the next participant after an export, keeping the newly typed ID", checkHandOverAfterExport],
 ];
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。
@@ -1981,10 +1986,17 @@ async function checkSettingsDetails(page) {
   for (const name of ["switch", "senses", "play", "research", "credits"]) await openSettingsDetails(page, name);
   const unnamed = await page.locator("#settings input, #settings select").evaluateAll(nodes => nodes.filter(node => !node.labels?.length || ![...node.labels].some(label => label.textContent.trim())).map(node => node.id));
   assert(unnamed.length === 0, "Every control must have a readable label: " + unnamed.join(", "));
-  assert(await page.locator("#settings input, #settings select").count() === 28, "All 28 settings must remain reachable");
+  assert(await page.locator("#settings input, #settings select").count() === SETTINGS_FIELDS.length, `All ${SETTINGS_FIELDS.length} settings must remain reachable`);
+  assert(await page.locator("#researcherMode").count() === 0, "The dead researcher-mode switch must stay off the screen");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert(overflow <= 2, `Expanded settings must stay within the viewport, overflow ${overflow}px`);
+  // 回の名前は「れんしゅう」「そくてい」にそろえる。押すタイミングの基準（キャリブレーション）は
+  // 別の言葉で呼ぶ（同じ言葉で別のものを指すと取り違える）。
+  const settingsText = await page.locator("#settings").innerText();
+  assert(!/練習|測定/.test(settingsText), "The settings screen must name the two runs れんしゅう／そくてい only");
+  assert(!(await page.locator("#startCalibration").innerText()).includes("そくてい"), "The calibration button must not reuse the run name");
   await page.locator("#fxLevel").selectOption("subtle");
+  assert((await page.locator("#liveRegion").textContent()).includes("遊びの雰囲気"), "The announcement must use the setting's own name");
   await page.locator("#speechEnabled").uncheck();
   await page.locator("#soundEnabled").uncheck();
   await page.locator("#largeText").uncheck();
@@ -2002,14 +2014,26 @@ async function checkSettingsDetails(page) {
   await page.locator("#craneAudioGuidance").check();
   const changed = await savedSettings();
   assert(changed.targetBeats === 10 && changed.craneSweepMs === 3200 && changed.fishingLimitMs === 3000, "Typed values and the targetBeats alias must save correctly");
+  // VoiceOver はつまみの値を aria-valuetext で読む。画面の文（「2.2秒」）と同じで、生の値（2200）ではない。
+  for (const [id, text] of [["scanInterval", "2.2秒"], ["slotCycleMs", "4.8秒"], ["craneSweepMs", "3.2秒"]]) {
+    assert(await page.locator("#" + id).getAttribute("aria-valuetext") === text, `${id} must read as ${text}`);
+    assert(await page.locator(`#${id}Value`).textContent() === text, `${id} must show ${text}`);
+  }
   await page.locator("#difficultyMode").selectOption("measure");
   await page.locator("#settingsResearch > summary").click();
-  assert((await page.locator("#settingsModeStatus").textContent()).includes("測定の回"), "Measurement status must remain visible with research collapsed");
+  assert((await page.locator("#settingsModeStatus").textContent()).includes("そくていの回"), "Measurement status must remain visible with research collapsed");
   assert(await page.locator("#slotCycleMs").isDisabled(), "Measured settings must remain locked");
+  // 灰色のつまみには れんしゅうの値（4.8秒）が残る。そくていで実際に使う値を同じ行に添える。
+  await page.locator("#slotCycleMsReason").waitFor({ state: "visible" });
+  assert((await page.locator("#slotCycleMsReason").textContent()).includes("そくていでは 3.2秒"), "A locked row must show the protocol value");
+  assert((await page.locator("#slotCycleMs").getAttribute("aria-describedby")).includes("slotCycleMsReason"), "The reason must be read with the control");
+  assert(!(await page.locator("#scanInterval").isDisabled()), "Settings that are not measured stay usable while measuring");
   await openSettingsDetails(page, "research");
   await page.locator("#readinessCheck").waitFor({ state: "visible" });
   await page.locator("#difficultyMode").selectOption("practice");
   assert(!(await page.locator("#slotCycleMs").isDisabled()), "Practice must unlock adjustments");
+  assert(await page.locator("#slotCycleMsReason").isHidden(), "The reason must go away with the lock");
+  assert(!(await page.locator("#slotCycleMs").getAttribute("aria-describedby")).includes("Reason"), "A usable control must not read a stale reason");
   assert(JSON.stringify(await savedSettings()) === JSON.stringify(changed), "Measurement mode must preserve the saved practice values");
   await page.reload();
   await waitForClass(page, "#startView", "is-active");
@@ -2023,6 +2047,161 @@ async function checkSettingsDetails(page) {
   for (const [id, expected] of [["fxLevel", "subtle"], ["scanInterval", "2200"]]) assert(await page.locator("#" + id).inputValue() === expected, "Restored UI value for " + id);
   assert(await page.locator("#settings details[open]").count() === 0, "Reload must collapse details without resetting values");
   assert(await page.locator("#supporterEditToggle").count() === 0, "The obsolete editing lock must be gone");
+
+  // iPad のスイッチコントロールを使うと「枠が動く速さ」（よく使う設定）が使えなくなる。
+  // 理由は閉じた「スイッチのくわしい設定」の中ではなく、その行に出る。
+  await openSettingsDetails(page, "switch");
+  await page.locator("#switchControlMode").click();
+  await page.locator("#settingsSwitch > summary").click();
+  assert(await page.locator("#scanInterval").isDisabled(), "Scan speed is locked while iPad Switch Control scans");
+  await page.locator("#scanIntervalReason").waitFor({ state: "visible" });
+  assert((await page.locator("#scanIntervalReason").textContent()).includes("スイッチコントロール"), "The scan speed row must say why");
+  assert((await page.locator("#scanInterval").getAttribute("aria-describedby")).includes("scanIntervalReason"), "VoiceOver must read the reason");
+  await openSettingsDetails(page, "senses");
+  await page.locator("#speechVolumeReason").waitFor({ state: "visible" });
+  await openSettingsDetails(page, "switch");
+  await page.locator("#switchControlMode").click();
+  assert(!(await page.locator("#scanInterval").isDisabled()) && await page.locator("#scanIntervalReason").isHidden(), "Ending delegation unlocks the scan speed");
+}
+
+/**
+ * 支援者向けの説明書。設定画面の「はじめての方へ」と、そこから開く印刷用（public/guide.html）が、
+ * 同じ中身（src/lib/supporterGuide.js）で、いまの設定画面の名前と道順を使っていること。
+ * 印刷用だけが消えた4つのタブで説明していた（2026-10-01 に見つかった）。
+ */
+async function checkSupporterGuide(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  const guide = page.locator("#settingsGuide");
+  assert(!(await guide.evaluate((node) => node.open)), "The guide starts folded");
+  await guide.locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
+  assert(await guide.evaluate((node) => node.open), "Enter must open the guide");
+  const appText = await guide.innerText();
+  for (const expected of [
+    "よく使う設定",
+    "「スイッチのくわしい設定」→「枠を自動で動かす」",
+    "既定に戻す",
+    translate("party.atmosphere.big.description", "kanji"),
+  ]) {
+    assert(appText.includes(expected), `The app guide must say: ${expected}`);
+  }
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert(overflow <= 2, `The open guide must stay within the viewport, overflow ${overflow}px`);
+  const appQuestions = await guide.locator(".qa dt").allInnerTexts();
+
+  const link = page.locator("#settingsGuidePrint a");
+  await link.waitFor({ state: "visible" });
+  const printable = await page.context().newPage();
+  try {
+    const response = await printable.goto(new URL(await link.getAttribute("href"), page.url()).href);
+    assert(response?.ok(), `The printable guide must load, got ${response?.status()}`);
+    const printText = await printable.locator("main").innerText();
+    for (const old of ["「スイッチ」→", "「見え方・音」→", "「むずかしさ」", "そくてい（研究）"]) {
+      assert(!printText.includes(old), `The printable guide still points through a removed tab: ${old}`);
+    }
+    assert(printText.includes("「スイッチのくわしい設定」→「枠を自動で動かす」"), "The printable guide uses the current path");
+    assert(printText.includes(translate("party.atmosphere.subtle.description", "kanji")), "The printable guide explains the atmospheres");
+    const printQuestions = (await printable.locator(".qa dt").allInnerTexts()).map((text) => text.replace(/^Q\.\s*/, ""));
+    assert(JSON.stringify(printQuestions) === JSON.stringify(appQuestions), "The app and printable guides must answer the same questions");
+  } finally {
+    await printable.close();
+  }
+}
+
+/**
+ * くわしい設定のまとまりごとの「既定に戻す」（確かめ表 B3）。
+ *
+ * 既定は state.js の既定値。キーボードだけで届いて押せること、押したら何を戻したかが
+ * ボタンのすぐ下と読み上げに出ること、そくていの回に固定される項目は戻さないこと、
+ * iPad 本体に合わせる「スイッチコントロールを使う」は戻さないことを見る。
+ */
+async function checkSettingsReset(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  const savedSettings = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key)).settings, storageKey);
+  const setRange = (id, value) =>
+    page.locator("#" + id).evaluate((node, next) => {
+      node.value = next;
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+    }, value);
+
+  // リール: 変えてから、最後の項目から Tab で「既定に戻す」へ届き、Enter で戻す。
+  await openSettingsDetails(page, "play");
+  await setRange("slotCycleMs", "4800");
+  await setRange("slotToleranceMs", "100");
+  await page.locator("#slotL2Rounds").focus();
+  await page.keyboard.press("Tab");
+  assert(await page.locator("#slotReset").evaluate((node) => document.activeElement === node), "Tab must reach the reset button of the group");
+  await page.keyboard.press("Enter");
+  let saved = await savedSettings();
+  assert(saved.slotCycleMs === defaultState.settings.slotCycleMs && saved.slotToleranceMs === defaultState.settings.slotToleranceMs, "Reset must restore the state.js defaults");
+  assert(await page.locator("#slotCycleMs").inputValue() === String(defaultState.settings.slotCycleMs), "The slider must show the restored value");
+  const status = page.locator("#slotResetStatus");
+  await status.waitFor({ state: "visible" });
+  assert((await status.textContent()).includes("リールの速さ（4.8秒 → 3.2秒）"), "The supporter must see what was reset");
+  assert((await page.locator("#liveRegion").textContent()).includes("既定に戻しました"), "The reset must be announced");
+  await page.keyboard.press("Space");
+  assert((await status.textContent()).includes("もう既定のまま"), "Pressing again must say nothing changed, not stay silent");
+  // 同じまとまりを手で変えたら、古い知らせは消す。
+  await setRange("slotL1Rounds", "10");
+  assert(await status.isHidden(), "A stale reset message must go away after a manual change");
+
+  // そくていの回: 固定される項目は戻さない。ボタンは押せず、理由をすぐ下に出す。
+  await setRange("craneSweepMs", "3200");
+  await openSettingsDetails(page, "research");
+  await page.locator("#difficultyMode").selectOption("measure");
+  assert(await page.locator("#craneReset").isDisabled(), "Reset of a measured group must be locked in a measured run");
+  assert((await page.locator("#craneResetStatus").textContent()).includes("そくていの回は固定"), "The locked reset must say why");
+  assert((await savedSettings()).craneSweepMs === 3200, "A measured run must keep the practice value");
+  await page.locator("#difficultyMode").selectOption("practice");
+  await page.locator("#craneReset").click();
+  assert((await savedSettings()).craneSweepMs === null, "Practice reset returns to the game default (null)");
+
+  // スイッチ: iPad 本体に合わせるものは戻さない。
+  await openSettingsDetails(page, "switch");
+  await page.locator("#scanFeedback").selectOption("speak");
+  await page.locator("#showScreenSwitch").check();
+  await page.locator("#showScreenSwitch").focus();
+  await page.keyboard.press("Tab");
+  assert(await page.locator("#switchReset").evaluate((node) => document.activeElement === node), "Tab must reach the switch reset button");
+  await page.keyboard.press("Space");
+  saved = await savedSettings();
+  assert(saved.scanFeedback === "none" && saved.showScreenSwitch === false && saved.switchControlMode === false, "Switch reset restores the app-side switch settings");
+  assert(!(await page.evaluate(() => document.body.classList.contains("screen-switch-on"))), "Reset must reach the screen, not only the saved value");
+
+  // 見え方: 文字づかいを戻すと、ホームの文言も戻る。
+  await openSettingsDetails(page, "senses");
+  await page.locator("#textMode").selectOption("en");
+  await page.locator("#sensesReset").click();
+  assert((await savedSettings()).textMode === "ruby", "Senses reset restores the text mode");
+  assert(await page.evaluate(() => document.documentElement.classList.contains("text-ruby")), "The restored text mode must reach the page");
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert(overflow <= 2, `Reset buttons and messages must stay within the viewport, overflow ${overflow}px`);
+
+  // キーボード（Tab）だけで、開いたまとまりの使える項目と「既定に戻す」の全部に届く。
+  for (const name of ["switch", "senses", "play", "research"]) await openSettingsDetails(page, name);
+  const reachable = await page.locator("#settings").evaluate((root) =>
+    [...root.querySelectorAll("input, select, button")]
+      .filter((node) => node.id && !node.disabled && node.getClientRects().length > 0)
+      .map((node) => node.id)
+  );
+  await page.locator("#settingsGuide > summary").focus();
+  const visited = new Set();
+  for (let index = 0; index < 150; index += 1) {
+    await page.keyboard.press("Tab");
+    const id = await page.evaluate(() => (document.activeElement?.closest("#settings") ? document.activeElement.id : null));
+    if (id === null) break;
+    if (id) visited.add(id);
+  }
+  const missed = reachable.filter((id) => !visited.has(id));
+  assert(missed.length === 0, `Tab must reach every usable setting and reset button: ${missed.join(", ")}`);
+  assert(reachable.filter((id) => id.endsWith("Reset")).length === 6, "All six reset buttons must be reachable in practice");
 }
 
 /**
@@ -4021,12 +4200,8 @@ async function checkEmptyExportIsExplained(page) {
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await openSettingsDetails(page, "research");
-  await page.locator("#researcherMode").click();
-  await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
-
-    await page.locator('.tab[data-view="log"]').click();
-    await waitForClass(page, "#log", "is-active");
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
 
   // まだ1回も遊んでいないので走査課題データは0件。
   const message = page.locator("#supporterMessage");
@@ -4043,7 +4218,7 @@ async function checkEmptyExportIsExplained(page) {
   );
 }
 
-async function checkResearcherModeTabsNoRegression(page) {
+async function checkResearcherDataOnOneScreen(page) {
   // The tabbar is hidden on the start screen (body.start-mode, design pass);
   // go through home first.
   await page.locator("#startStage").click();
@@ -4052,14 +4227,12 @@ async function checkResearcherModeTabsNoRegression(page) {
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
 
-  // 支援者の世界では、研究者モードを入れても走査は再開しない。
-
-  // researcherMode は設定の面（そくてい）の出し分けに使う。効果測定・操作訓練・
-  // 研究の3タブは 2026-08-29 に削除したので、ここで確かめるのは「支援者の
-  // データ画面が評価ログ1枚にまとまっていること」。
+  // 研究者モードは、押しても何も変わらない操作子になっていたので画面から外した
+  // （2026-10-01。効果測定・操作訓練・研究の3タブは 2026-08-29 に消えていた）。
+  // 効かない操作子を黙って置かない。保存のキーは残す（state.js）。
   await openSettingsDetails(page, "research");
-  await page.locator("#researcherMode").click();
-  await page.waitForFunction(() => document.body.classList.contains("researcher-mode"));
+  assert((await page.locator("#researcherMode").count()) === 0, "The dead researcher-mode switch must be gone");
+  assert(!(await page.evaluate(() => document.body.classList.contains("researcher-mode"))), "Nothing may add the dead researcher-mode class");
 
   await page.locator('.tab[data-view="log"]').click();
   await waitForClass(page, "#log", "is-active");
@@ -4090,11 +4263,11 @@ async function checkResearcherModeTabsNoRegression(page) {
     `Expected three shell tabs (home / log / settings), got ${tabs.length}: ${tabs.join(" ")}`
   );
 
-  // 設定そのものは、researcherMode を入れたあとも動く。
+  // 評価ログから設定へ戻っても、研究の欄は使える（走査は止まったまま）。
   await page.locator('.tab[data-view="settings"]').click();
   await waitForClass(page, "#settings", "is-active");
   await openSettingsDetails(page, "research");
-  await page.locator("#researcherMode").waitFor({ state: "visible" });
+  await page.locator("#difficultyMode").waitFor({ state: "visible" });
   await assertSupporterScanStopped(page, "settings");
   // ホームに出す遊びは、常設の「よく使う設定」で調整する。
   await openSettingsDetails(page, "switch");
@@ -4385,14 +4558,13 @@ async function checkLayoutInvariants(page) {
     }
   });
 
-  // 支援者の世界。研究者モードを開けて、列の多い画面まで含めて見る。
+  // 支援者の世界。くわしい設定を開けて、列の多い画面まで含めて見る。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await inspect("settings (locked)");
+  await inspect("settings (collapsed)");
 
   await openSettingsDetails(page, "research");
-  await page.locator("#researcherMode").click();
-  await inspect("settings (unlocked)");
+  await inspect("settings (research open)");
 
   // 支援者が見る面は評価ログと設定の2つだけになった（2026-08-29）。
   // 評価ログは列の多い画面（書き出し9個・推移のタブ・セッション一覧）なので、
@@ -4649,8 +4821,8 @@ async function exposePresentationContext(page) {
     const response = await route.fetch();
     let body = await response.text();
     let exposed = false;
-    // 縮めた名前には $ も使われる（\w に入らない）ので、名前は [\w$]+ で拾う。
-    body = body.replace(/([\w$]+)\.scan\s*=\s*[\w$]+\(\1\)([,;])/, (source, name, end) => {
+    // 縮めた名前には $ が入りうる（$m など。どの名前になるかはバンドルの中身しだい）。
+    body = body.replace(/(?<![\w$])([\w$]+)\.scan\s*=\s*[\w$]+\(\1\)([,;])/, (source, name, end) => {
       exposed = true;
       return source + `window.__presentationCtx=${name}${end}`;
     });
@@ -5200,15 +5372,74 @@ async function checkDoubleVoiceFailure(page) {
   await page.waitForFunction(text => document.querySelector("#liveRegion").textContent.includes(text), t("howto.slot-l1.1"));
 }
 
+/** 1人ぶんの記録（中断した回1つ）を端末に入れて読み込み直す。書き出しの名前と切り替えの検査用。 */
+async function seedOneParticipantSession(page, participantId) {
+  await page.evaluate(({ key, participantId }) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    state.sessions = [{
+      sessionId: `smoke-${participantId}`,
+      taskType: "rt",
+      gameId: "fishing",
+      participantId,
+      startedAtIso: "2026-10-01T00:00:00.000Z",
+      aborted: true,
+      finished: false,
+      trials: [],
+    }];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, { key: storageKey, participantId });
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+}
+
 async function checkExportFileName(page) {
+  // 名前の参加者は、書き出す記録に入っている参加者。欄に次の人のIDを入れてあっても、
+  // 中身が前の人の記録なら前の人の名前で出す（以前は欄の値で、中身と食い違った）。
+  await seedOneParticipantSession(page, "P:01/test");
   await page.locator("#startStage").click();
   await openSupporterLog(page);
-  await page.locator("#participantId").fill("P:01/test");
+  await page.locator("#participantId").fill("P02");
+  for (const [selector, pattern] of [
+    ["#exportRawJson", /^neuronode-raw-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.json$/],
+    ["#exportRtCsv", /^neuronode-rt-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/],
+    ["#exportSessionLedgerCsv", /^neuronode-sessions-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/],
+  ]) {
+    const download = page.waitForEvent("download");
+    await page.locator(selector).click();
+    const file = await download;
+    assert(pattern.test(file.suggestedFilename()), `Participant and time must come from the records: ${file.suggestedFilename()}`);
+  }
+}
+
+/**
+ * 書き出したあとに次の人のIDを入れてから「参加者を切り替える」を押しても、拒まれない
+ * （記録そのものは書き出したものと同じ）。入れた次の人のIDは消さずに残す。
+ */
+async function checkHandOverAfterExport(page) {
+  await seedOneParticipantSession(page, "P001");
+  await page.locator("#startStage").click();
+  await openSupporterLog(page);
+  await page.locator("#participantId").fill("P001");
   const download = page.waitForEvent("download");
   await page.locator("#exportRawJson").click();
-  const file = await download;
-  assert(/^neuronode-raw-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.json$/.test(file.suggestedFilename()),
-    `Participant and time missing: ${file.suggestedFilename()}`);
+  await download;
+  await page.locator("#participantId").fill("P002");
+  let dialogs = 0;
+  page.on("dialog", (dialog) => {
+    dialogs += 1;
+    return dialog.accept();
+  });
+  await page.locator("#handOverParticipant").click();
+  await page.waitForTimeout(200);
+  assert(dialogs === 1, "Typing the next ID after an export must not block the hand-over");
+  const after = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return { sessions: (state.sessions || []).length, participantId: state.evaluation?.participantId };
+  }, storageKey);
+  assert(after.sessions === 0, `The exported records must be cleared: ${JSON.stringify(after)}`);
+  assert(after.participantId === "P002", `The next participant typed after the export must stay: ${JSON.stringify(after)}`);
+  assert(await page.locator("#participantId").inputValue() === "P002", "The field must keep the next ID");
+  assert((await page.locator("#supporterMessage").textContent()).includes("P002"), "The supporter must see who is next");
 }
 
 // スイッチ1つの利用者と同じ手順で、目的のものまで枠を送って選ぶ。
