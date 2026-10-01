@@ -30,7 +30,8 @@
 // 判定: 中身の違う場面が1つでもあれば exit 1。中身が同じで画素だけ違う場面は、知らせるだけ。
 //
 // 上の帯の「のこり」の札（#gameProgress）は、遊びの面の外にある支援者のための札で、2026-09-30 から
-// 「そくてい／れんしゅう」の名前を出している（とり違えを防ぐため。docs/rules/ud-checklist.md の B3）。
+// そくていの回に「そくてい」の名前を出している（とり違えを防ぐため。docs/rules/ud-checklist.md の B3。
+// 2026-10-01 から れんしゅうの回には出さない）。
 // ここの違いは別に数えて知らせ、判定には入れない。
 //
 // 以前は、この比べ方が作業ごとに5つの使い捨ての道具に分かれ、リポジトリに残っていたのは Python の要る1つだけ
@@ -40,6 +41,7 @@
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { findAvailablePort, waitForServer, stopServer, openTile } from "../tests/helpers.mjs";
 
 const args = parseArgs(process.argv.slice(2));
@@ -128,7 +130,16 @@ async function openFixedPage(browser, port, [width, height]) {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(`http://127.0.0.1:${port}/`);
+  // 読み込みは3回まで試す（同じ PC でほかの重い検査が通信の口を使い切ると、一時的に失敗する）。
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await page.goto(`http://127.0.0.1:${port}/`);
+      break;
+    } catch (error) {
+      if (attempt >= 3) throw error;
+      await delay(1000 * attempt);
+    }
+  }
   await page.locator("#startStage").waitFor();
   await page.evaluate(() => document.fonts.ready);
   await page.clock.install({ time: new Date("2026-09-30T00:00:00Z") });
@@ -183,12 +194,30 @@ function styleDifferences(before, after) {
   return before.styles.filter((entry, index) => entry !== after.styles[index]).slice(0, 5).map((entry) => entry.split("=")[0]);
 }
 
-/** 1つのビルドで、遊び × 大きさ × 場面を撮る。 */
+/**
+ * 1つのビルドで、遊び × 大きさ × 場面を撮る。撮れなかった場面は null を入れておく（前後の両方で
+ * 撮れなくても、結果から消えずに「撮れていない」として数える）。
+ */
 async function captureBuild(browser, port, label) {
   const shots = new Map();
   for (const game of GAMES) {
     for (const size of SIZES) {
-      const { context, page, errors } = await openFixedPage(browser, port, size);
+      const name = `${game}-${size[0]}x${size[1]}`;
+      const missed = (verb, error) => {
+        console.warn(`${label} ${name}: ${verb}（${error.message.split(/\r?\n/)[0]}）`);
+        for (const moment of MOMENTS) {
+          if (!shots.has(`${name}-${moment}ms`)) shots.set(`${name}-${moment}ms`, null);
+        }
+      };
+      let opened;
+      try {
+        opened = await openFixedPage(browser, port, size);
+      } catch (error) {
+        // 開けなかった場面も、ほかの場面は撮り続ける。
+        missed("開けなかった", error);
+        continue;
+      }
+      const { context, page, errors } = opened;
       try {
         const tick = (ms) => page.clock.runFor(ms);
         const open = (id) => openTile(page, id, {
@@ -210,7 +239,6 @@ async function captureBuild(browser, port, label) {
         }
         await page.locator(".game-ready").waitFor({ timeout: 5000 });
         await tick(600);
-        const name = `${game}-${size[0]}x${size[1]}`;
         await page.keyboard.press("Space");
         await tick(32);
         let elapsed = 0;
@@ -221,9 +249,8 @@ async function captureBuild(browser, port, label) {
         }
         if (errors.length) console.warn(`${label} ${name}: ページのエラー`, errors);
       } catch (error) {
-        // 1つの場面で失敗しても、ほかの場面は撮り続ける（撮れなかった場面は「撮れていない」として数える）。
-        const reason = error.message.split(/\r?\n/)[0];
-        console.warn(`${label} ${game}-${size[0]}x${size[1]}: 撮れなかった（${reason}）`);
+        // 1つの場面で失敗しても、ほかの場面は撮り続ける。
+        missed("撮れなかった", error);
       } finally {
         await context.close();
       }
