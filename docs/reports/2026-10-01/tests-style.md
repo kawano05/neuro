@@ -1,5 +1,8 @@
 # 検査の共通化・書式整理の報告
 
+> この報告は、その日の作業の記録（あとから書き換えない）。今の決まりは `docs/rules/` を見る。
+> 中の `test-results/` のログ・画像は、そのとき作業した PC にだけある（git の外）。
+
 作業場所: D:/Code/neuro-wt/tests-style。ブランチ: design/tests-style。2026-10-01。
 指示書 brief-tests-style.md に従い、src/、保存形式・sanitize・CSV、測定条件は変更していない。
 検査の削除・条件緩和・skip の追加はない。報告書以外のログ・画像は成果物として test-results/ に保存する。

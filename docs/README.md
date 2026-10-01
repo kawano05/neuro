@@ -45,5 +45,8 @@
 | 2026-09-30 | `reports/2026-09-30/ud-fix1.md` / `ud2-fixes.md` | UD の点検で見つけた問題の直し（第1陣・第2陣） |
 | 2026-09-30 | `reports/2026-09-30/ud-switch-exit.md` | スイッチ1つでエンドレスを抜ける道 |
 | 2026-10-01 | `reports/2026-10-01/settings-polish.md` | 支援者の設定の見直し（使えない理由・既定に戻す・研究者モードを外す・説明書を1か所に） |
+| 2026-10-01 | `reports/2026-10-01/capture-screens.md` | 画面の撮影の道具を今のアプリと 14 の大きさに合わせた（GPT） |
+| 2026-10-01 | `reports/2026-10-01/tests-style.md` | 検査の下ごしらえを `tests/helpers.mjs` にまとめ、書き方を整えた（GPT） |
+| 2026-10-01 | `reports/2026-10-01/css-sweep.md` | 使われていない CSS と見えない重ね書きを片づけた（GPT） |
 
 報告の中の `test-results/` や `output/` へのリンクは、そのとき作業した PC にだけある（git の外）。
