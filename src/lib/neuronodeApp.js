@@ -192,6 +192,9 @@ export function initNeuroNodeApp() {
   /** 画面の切り替え。visibleViews にない画面は start へフォールバックする。 */
   ctx.switchView = function switchView(viewName) {
     const nextView = visibleViews.has(viewName) ? viewName : "start";
+    // 支援者の世界へ入るときは、利用者の世界で出た粒を消す（「はじめる」の粒が設定画面の上に
+    // 残っていた。粒の層は画面全体を覆う固定の層なので、画面を替えても自然には消えない）。
+    if (isSupporterView(nextView) && !isSupporterView(state.currentView)) ctx.fx.clear();
     state.currentView = nextView;
     ctx.save();
     ctx.renderAll();

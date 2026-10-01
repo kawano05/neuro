@@ -2281,6 +2281,9 @@ async function checkSupporterMenuStaysOutOfTheScanRing(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
+  // 「はじめる」の粒が、支援者の画面の上に残らない（粒の層は画面全体を覆う固定の層）。
+  const particlesLeft = await page.evaluate(() => document.querySelector("#fxLayer")?.dataset.active === "true");
+  assert(!particlesLeft, "Particles from the user world must be cleared when the supporter world opens");
   await assertSupporterScanStopped(page, "settings");
   await assertHomeScanResumed(page);
   await page.locator("#homeSupporterMenu").click();
