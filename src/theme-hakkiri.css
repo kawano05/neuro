@@ -3227,8 +3227,8 @@ body.result-mode.user-world #resultHome::before {
   background: #ffffff;
 }
 
-/* 高い音だけ: 飾り（両脇のスピーカー・上のランプ・「ゲーム」の札）を外し、
-   紫と黄色の明るい台にする。音符と判定の丸はそのまま。 */
+/* リズムの遊び（れんしゅうの回）: 飾り（両脇のスピーカー・上のランプ・「ゲーム」の札）を外す。
+   高い音だけの色と絵は world-gonogo.css（夕方の丘の音楽会）。 */
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-speaker-bank,
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-cabinet-lamps,
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-profile-panel {
@@ -3241,27 +3241,6 @@ body.result-mode.user-world #resultHome::before {
 
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-console {
   grid-template-columns: auto minmax(0, 1fr);
-}
-
-.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"] {
-  --rhythm-panel: #5a2a80;
-  --rhythm-panel-deep: #3b1757;
-  --rhythm-accent: #ffc83d;
-  --rhythm-accent-strong: #f6aa00;
-}
-
-.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"] .rhythm-world {
-  background: linear-gradient(180deg, #f6ddf6 0%, #e7b8ea 100%);
-}
-
-.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"] .rhythm-grid-floor {
-  display: none;
-}
-
-.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"] .rhythm-cabinet {
-  border-color: #1a1a1a;
-  background: linear-gradient(160deg, #990099, #5a1a6e);
-  box-shadow: 0 10px 0 #4a0f5c;
 }
 
 /* アームでつかむ: 明るい床（地）と、茶色の台（ホームのタイルと同じ色）。
