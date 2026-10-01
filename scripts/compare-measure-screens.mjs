@@ -38,8 +38,7 @@
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
-import { setTimeout as delay } from "node:timers/promises";
+import { findAvailablePort, waitForServer, stopServer, openTile } from "../tests/helpers.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.before || !args.after) {
@@ -77,28 +76,6 @@ function parseArgs(list) {
     else parsed[name] = list[(i += 1)];
   }
   return parsed;
-}
-
-async function freePort() {
-  const socket = createServer();
-  await new Promise((resolve) => socket.listen(0, "127.0.0.1", resolve));
-  const { port } = socket.address();
-  await new Promise((resolve) => socket.close(resolve));
-  return port;
-}
-
-async function waitForServer(port, root) {
-  const expected = (await readFile(`${root}/index.html`, "utf8")).match(/assets\/[^" ]+\.js/)?.[0];
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    try {
-      const served = await (await fetch(`http://127.0.0.1:${port}/`)).text();
-      if (served.match(/assets\/[^" ]+\.js/)?.[0] === expected) return;
-    } catch {
-      // まだ立ち上がっていない。
-    }
-    await delay(100);
-  }
-  throw new Error(`配信が立ち上がらない: ${root}`);
 }
 
 /** 同じ条件のページを作る（乱数・時計・音の時計・保存を固定）。 */
@@ -194,21 +171,13 @@ async function captureBuild(browser, port, label) {
       const { context, page, errors } = await openFixedPage(browser, port, size);
       try {
         const tick = (ms) => page.clock.runFor(ms);
-        const open = async (id) => {
-          for (let attempt = 0; attempt < 8; attempt += 1) {
-            const tile = page.locator(`[data-tile-id="${id}"]`);
-            if (await tile.count()) {
-              await tile.first().evaluate((element) => element.click());
-              await tick(550);
-              return;
-            }
-            const pager = page.locator(".game-tile.scan-pager");
-            if (!(await pager.count())) break;
-            await pager.first().evaluate((element) => element.click());
-            await tick(300);
-          }
-          throw new Error(`見つからない遊び: ${id}`);
-        };
+        const open = (id) => openTile(page, id, {
+          attempts: 8,
+          first: true,
+          stopWithoutPager: true,
+          afterOpen: () => tick(550),
+          afterPage: () => tick(300)
+        });
         await page.keyboard.press("Space");
         await tick(550);
         if (game === "calibration") {
@@ -290,7 +259,7 @@ async function countRgbDiff(page, before, after) {
   );
 }
 
-const ports = [await freePort(), await freePort()];
+const ports = [await findAvailablePort(), await findAvailablePort()];
 const servers = [args.before, args.after].map((root, index) =>
   spawn(process.execPath, ["scripts/serve-dist.mjs", root, String(ports[index])], { windowsHide: true, stdio: "ignore" })
 );
@@ -298,8 +267,15 @@ const browser = await chromium.launch({
   args: ["--autoplay-policy=no-user-gesture-required", "--disable-gpu", "--disable-threaded-animation", "--disable-threaded-scrolling"],
 });
 try {
-  await waitForServer(ports[0], args.before);
-  await waitForServer(ports[1], args.after);
+  for (const [index, root] of [args.before, args.after].entries()) {
+    const expected = (await readFile(`${root}/index.html`, "utf8")).match(/assets\/[^" ]+\.js/)?.[0];
+    await waitForServer(`http://127.0.0.1:${ports[index]}/`, {
+      attempts: 100,
+      intervalMs: 100,
+      accept: async (response) => (await response.text()).match(/assets\/[^" ]+\.js/)?.[0] === expected,
+      timeoutMessage: `配信が立ち上がらない: ${root}`
+    });
+  }
   const before = await captureBuild(browser, ports[0], "前");
   const after = await captureBuild(browser, ports[1], "後");
   const comparePage = await browser.newPage();
@@ -334,5 +310,5 @@ try {
   process.exitCode = changedContent.length ? 1 : 0;
 } finally {
   await browser.close();
-  servers.forEach((server) => server.kill());
+  await Promise.all(servers.map((server) => stopServer(server)));
 }
