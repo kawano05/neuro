@@ -3842,7 +3842,10 @@ async function checkEndlessEndsOnFailure(page) {
 
   // 1試行で結果画面へ抜けること。回数で終わるゲームなら5回続くので、
   // ここで結果が出れば「失敗で終わった」ことの証拠になる。
-  await waitForClass(page, "#resultView", "is-active");
+  // けっかへ移るまでに、おいわいの待ち（雰囲気「にぎやか」で 1.6 秒。atmosphere.js の
+  // finaleWaitMs）とアームの終わりの動きが入る。ほかの重い検査と並んだとき 5 秒を越えて
+  // 落ちたので、ここは 15 秒まで待つ。終わり方の判定は下の assert が見る（緩めていない）。
+  await waitForClass(page, "#resultView", "is-active", { timeout: 15_000 });
 
   const session = await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || "{}");
@@ -5619,12 +5622,12 @@ async function waitForCount(page, selector, expected) {
   );
 }
 
-async function waitForClass(page, selector, className) {
+async function waitForClass(page, selector, className, { timeout = 5_000 } = {}) {
   await page.waitForFunction(
     ({ selector: target, className: expectedClass }) =>
       document.querySelector(target)?.classList.contains(expectedClass),
     { selector, className },
-    { timeout: 5_000 }
+    { timeout }
   );
 }
 
