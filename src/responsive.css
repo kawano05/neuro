@@ -72,7 +72,7 @@ body.game-mode.user-world .game-stage-content.is-ready {
   font-size: clamp(2.6rem, 7vmin, 4rem);
 }
 .game-ready-title {
-  font-size: clamp(24px, 3.4vmin, 44px);
+  font-size: clamp(24px, 4.4vmin, 50px);
   font-weight: 800;
   line-height: 1.5;
 }
@@ -159,24 +159,26 @@ body.game-mode.user-world .game-stage-content.is-ready {
   font-size: 18px;
 }
 #gameReadyStart {
-  min-width: 180px;
-  min-height: 56px;
-  padding: 8px 24px;
+  min-width: clamp(180px, 26vmin, 300px);
+  min-height: clamp(56px, 8vmin, 76px);
+  padding: 8px 28px;
   border: 3px solid #1a1a1a;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #005aff;
   color: #fff;
-  font-size: clamp(20px, 2.5vmin, 30px);
+  font-size: clamp(20px, 3.2vmin, 34px);
 }
 #gameReadyPage:empty { display: none; }
 body.large-text .game-ready-steps li { font-size: clamp(25px, 3.6vmin, 42px); }
 body.large-text .game-ready-go { font-size: clamp(20px, 2.5vmin, 28px); }
 @media (min-aspect-ratio: 5/4) {
   .game-ready { grid-template-columns: minmax(0, 30%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 12px 4vw; }
-  .game-ready-info { grid-row: 1 / -1; }
+  /* 左の段いっぱいに広げる（真ん中寄せのままだと中身の幅に縮み、絵が小さくなっていた）。 */
+  .game-ready-info { grid-row: 1 / -1; justify-self: stretch; }
   .game-ready-art { --ready-art-max-h: clamp(80px, 26vh, 300px); width: min(100%, calc(var(--ready-art-max-h) * 360 / 176)); }
   .game-ready-steps { grid-column: 2; }
-  .game-ready-go { grid-column: 2; }
+  /* 押し方の札は「始める」と同じ真ん中に（右の段に寄せると、下の「始める」とずれて見えた）。 */
+  .game-ready-go { grid-column: 1 / -1; justify-self: center; }
 }
 @media (max-height: 500px) {
   body.game-mode.user-world .game-stage-content.is-ready { padding: 64px 20px 74px; }
@@ -242,11 +244,12 @@ body.result-mode.user-world #resultView > .action-row {
   flex-wrap: nowrap;
   gap: clamp(12px, 2vw, 24px);
 }
+/* ボタンの高さと字は、前の版（theme-hakkiri.css の 84px・1.75rem）と同じくらいを保つ。 */
 body.result-mode.user-world #resultView .action-row button {
   width: min(460px, 50%);
-  min-height: clamp(56px, 9vh, 108px);
+  min-height: clamp(56px, 10.5vh, 108px);
   padding: 6px 10px;
-  font-size: clamp(20px, 3vmin, 36px);
+  font-size: clamp(20px, 3.6vmin, 36px);
 }
 body.result-mode.user-world #resultView .hk-result { gap: clamp(8px, 1.5vh, 18px); }
 body.result-mode.user-world #resultView .hk-stars { font-size: clamp(38px, 8vmin, 86px); }
