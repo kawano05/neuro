@@ -171,7 +171,10 @@ async function settledShot(page) {
         .filter((name) => !name.startsWith("--") && !sizeDerived.has(name))
         .map((name) => `${name}:${computed.getPropertyValue(name)}`);
       const name = `${element.tagName.toLowerCase()}.${String(element.className?.baseVal ?? element.className).trim().replace(/\s+/g, ".")}`;
-      const attributes = element.getAttributeNames().map((attribute) => `${attribute}=${element.getAttribute(attribute)}`);
+      // 属性の中の配信元（前後で別のポートから配信する）は除く。
+      const attributes = element
+        .getAttributeNames()
+        .map((attribute) => `${attribute}=${element.getAttribute(attribute).replaceAll(location.origin, "")}`);
       const ownText = [...element.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.data);
       return `${name}=${hash([...values, ...attributes, ...ownText].join(";"))}`;
     });

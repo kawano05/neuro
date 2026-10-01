@@ -446,23 +446,29 @@ export function createFxPresets({ engine, motion }) {
       const titleAt = itemsStart + items.length * 110 + 80;
       if (title) motion.stamp(title, { delayMs: titleAt });
       // 星が2つ以上（または点の無い遊びの「できた」）なら、小さな紙吹雪も。
+      // 一言の左右から、内側の上へ向けて出す（クラッカーの形）。一言の真ん中から出すと、
+      // はじけた瞬間の粒がけっかの主役（一言と星）を覆い、おおさわぎでは字が読めなかった
+      // （2026-10-01、14 の大きさの撮影で見つけた。飾りは主役より目立たせない）。
       if (engine.scale().finale === "full" && (lit.length >= 2 || container.querySelector(".completion-result"))) {
         presentation.later(titleAt + 200, () => {
           if (!container.isConnected) return;
-          const p = engine.pointOf(title || container);
-          engine.burst({
-            x: p.x,
-            y: p.y,
-            count: 44,
-            speed: [460, 900],
-            angle: -Math.PI / 2,
-            spread: Math.PI * 1.1,
-            shapes: ["confetti", "confetti", "star"],
-            colors: PALETTES.rainbow,
-            size: [15, 26],
-            life: [1, 1.6],
-            gravity: 520,
-            drag: 1.7,
+          const { x, y, rect } = engine.pointOf(title || container);
+          const half = rect ? rect.width / 2 + 36 : 160;
+          [-1, 1].forEach((side) => {
+            engine.burst({
+              x: x + side * half,
+              y: rect ? rect.bottom : y,
+              count: 22,
+              speed: [460, 900],
+              angle: -Math.PI / 2 - side * 0.35,
+              spread: Math.PI * 0.45,
+              shapes: ["confetti", "confetti", "star"],
+              colors: PALETTES.rainbow,
+              size: [15, 26],
+              life: [1, 1.6],
+              gravity: 520,
+              drag: 1.7,
+            });
           });
         });
       }
