@@ -50,11 +50,6 @@ export const SLOT_CSV_HEADERS = Object.freeze([
   "reelCellPx",
   // 判定の版を変えずに、絵が変わる前後の回を解析で分けられるようにする。
   "artVersion",
-  // 端末の「動きを減らす」（prefers-reduced-motion）。オンだと、記録の fxLevel が subtle でも
-  // 粒・弾み・世界の動きは出ない（fx/fxSafety.js の resolveDecorationPolicy）。fxLevel の意味は
-  // 変えずに、見えたものを後から分けられるよう別の列に残す。いちばん後ろに足す（列位置を動かさない）。
-  // この列より前の記録と、分からないときは空欄。
-  "reducedMotion",
 ]);
 
 export function buildSlotCsvRows(sessions) {
@@ -103,7 +98,6 @@ export function buildSlotCsvRows(sessions) {
           config.fxLevel ?? "",
           trial.reelCellPx ?? config.reelCellPx ?? "",
           config.artVersion ?? "",
-          config.reducedMotion ?? "",
         ]);
       });
     });

@@ -4,9 +4,11 @@
    いつ止めるかは fx/index.js の syncPolicy が body に付ける2つの印だけで決める
    （段の中身は src/lib/atmosphere.js の表、判定は fx/fxSafety.js の resolveDecorationPolicy）:
      data-world-motion="off"      … 世界のゆっくりした動き（海の光・泡・海藻、雲、ふうせんの浮遊）
-                                    なし・すっきり・動きを減らす・そくていの回
+                                    なし・すっきり・そくていの回
      data-decoration-motion="off" … 押したもの・おいわいの弾みと出入りの動き
-                                    なし・動きを減らす・そくていの回
+                                    なし・そくていの回
+   端末の「動きを減らす」（prefers-reduced-motion）は見ない（2026-10-01、ユーザーの判断。
+   fx/fxSafety.js の resolveFxLevel）。演出の量は支援者の設定「遊びの雰囲気」だけで決める。
    課題の動き（リールの帯・アーム・魚・音符）と、そくていの回の画面には触れない。
    いちばん最後に読む（src/main.js）ので、ほかの CSS の動きより後から効く。
 
@@ -29,22 +31,6 @@ body[data-world-motion="off"] .module-fishing.is-practice .fishing-cloud {
 
 body[data-world-motion="off"] :is(.pop-sea, .module-fishing.is-practice .fishing-sea) .sea-bubbles {
   display: none;
-}
-
-/* 予備: 描画の判定（JS）が動かなかったときも、端末の「動きを減らす」では止める。 */
-@media (prefers-reduced-motion: reduce) {
-  :is(.pop-sea, .module-fishing.is-practice .fishing-sea) *,
-  .module-fishing.is-practice :is(.fishing-cloud, .fishing-otter-eyes) {
-    animation: none !important;
-  }
-
-  .module-fishing.is-practice .fishing-cloud {
-    translate: var(--rest) 0;
-  }
-
-  :is(.pop-sea, .module-fishing.is-practice .fishing-sea) .sea-bubbles {
-    display: none;
-  }
 }
 
 /* --- 押したもの・おいわいの動き ------------------------------------------ */

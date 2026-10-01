@@ -47,17 +47,18 @@ export const MAX_GLOW_ALPHA = 0.55;
 /**
  * いま使う段。
  * @param {object} settings state.settings（fxLevel）
- * @param {{reducedMotion?: boolean, measurement?: boolean}} [context]
- *   reducedMotion … 端末の「動きを減らす」。入っていれば「すっきり」より強くしない
- *                  （動きそのものは resolveDecorationPolicy が止める）
- *   measurement   … そくていの回。何も足さない（docs/overall-design §5）
+ * @param {{measurement?: boolean}} [context]
+ *   measurement … そくていの回。何も足さない（docs/overall-design §5）
+ *
+ * 端末の「動きを減らす」（prefers-reduced-motion）は見ない（2026-10-01、ユーザーの判断）。
+ * 演出の量は支援者の設定「遊びの雰囲気」だけで決める。揺れや光が苦手な利用者には、支援者が
+ * 「なし」か「すっきり」を選ぶ。以前は端末の設定で弱め（9/28）、さらに全部止めていた（9/30）。
+ * Windows の「アニメーション効果」がオフの PC などでは、遊んでも何も起きないように見えた。
  */
-export function resolveFxLevel(settings, { reducedMotion = false, measurement = false } = {}) {
+export function resolveFxLevel(settings, { measurement = false } = {}) {
   if (measurement) return "none";
   // 保存の sanitize は既定の normal に戻す。実行中の未知値は装飾を足さない。
-  const chosen = FX_LEVELS.includes(settings?.fxLevel) ? settings.fxLevel : "none";
-  if (reducedMotion && (chosen === "normal" || chosen === "big")) return "subtle";
-  return chosen;
+  return FX_LEVELS.includes(settings?.fxLevel) ? settings.fxLevel : "none";
 }
 
 /** 実行時の係数（未知値は none。保存の既定値とは別）。 */
@@ -66,45 +67,19 @@ export function fxScale(level) {
 }
 
 /**
- * 「動きを減らす」のときの係数。段の量はそのまま（すっきり まで。resolveFxLevel）で、
- * still を立てる: 粒はその場で現れて消え、輪は広がらず、星やハンコはフェードで出る
- * （fxEngine.js・fxMotion.js）。弾み・揺れ・カメラの寄り・花火は出さない。
- * 粒の大きさは縮めない（動かない粒は目に留まりにくい。押した手応えはこれしか無い）。
- */
-function stillScale(level) {
-  return Object.freeze({
-    ...fxScale(level),
-    particleSize: 1,
-    still: true,
-    motion: false,
-    shake: false,
-    camera: false,
-    fireworks: false,
-  });
-}
-
-/**
  * 装飾の動きの唯一の判定。課題に必要な移動と、記録する強さとは分ける。
- *   motion      … 弾み・粒の飛び散り・ハンコなど、動く演出を出すか
- *   still       … 端末の「動きを減らす」: 動く演出の代わりに、移動しない演出（その場で
- *                 ふわっと出て消える粒・止まった輪・フェード）を出す。演出を消すのではなく
- *                 置き換える（Apple の Reduce Motion・WCAG 2.3.3 の考え方）。2026-09-30 の
- *                 直しでは何も出さなくしていて、Windows の「アニメーション効果」がオフの PC
- *                 では、遊んでも何も起きないように見えた（2026-10-01、ユーザーの指摘）
- *   worldMotion … 世界のゆっくりした動き（海の光・泡・雲）
+ *   motion      … 弾み・粒・ハンコなど、押したもの・おいわいの演出を出すか（表の pressMotion）
+ *   worldMotion … 世界のゆっくりした動き（海の光・泡・雲。表の worldMotion）
  * そくていの回は、どちらも出さない（何も足さない）。
  */
 export function resolveDecorationPolicy(settings, context = {}) {
   const level = resolveFxLevel(settings, context);
-  const decorates = !context.measurement && ATMOSPHERES[level].pressMotion;
-  const motion = decorates && !context.reducedMotion;
-  const still = decorates && Boolean(context.reducedMotion);
+  const motion = !context.measurement && ATMOSPHERES[level].pressMotion;
   return {
     level,
     motion,
-    still,
     worldMotion: motion && ATMOSPHERES[level].worldMotion,
-    scale: motion ? fxScale(level) : still ? stillScale(level) : fxScale("none"),
+    scale: fxScale(motion ? level : "none"),
   };
 }
 

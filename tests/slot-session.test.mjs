@@ -242,26 +242,6 @@ test("slot art version survives config -> reload -> slot CSV and ledger without 
   assert.equal(sanitizeSlotSession(invalid).config.artVersion, null);
 });
 
-test("the device reduced-motion setting survives config -> reload -> slot CSV and ledger", () => {
-  // 端末の「動きを減らす」（data-integrity.test.mjs のほかの遊びと同じ決まり）。
-  const source = makeSession();
-  source.config.reducedMotion = true;
-  const restored = sanitizeState(JSON.parse(JSON.stringify({ sessions: [source] }))).sessions[0];
-  assert.equal(restored.config.reducedMotion, true);
-  const rows = buildSlotCsvRows([restored]);
-  const index = rows[0].indexOf("reducedMotion");
-  assert.equal(index, rows[0].length - 1, "いちばん後ろの列");
-  assert.ok(rows.slice(1).every((row) => row[index] === true));
-  const ledger = buildSessionLedgerRows([restored]);
-  assert.equal(ledger[1][ledger[0].indexOf("reducedMotion")], true);
-  for (const bogus of [1, "true", null, undefined]) {
-    const session = makeSession();
-    session.config.reducedMotion = bogus;
-    assert.equal(sanitizeSlotSession(session).config.reducedMotion, null, `reducedMotion ${String(bogus)} は null`);
-  }
-  assert.ok(buildSlotCsvRows([sanitizeSlotSession(makeSession())]).slice(1).every((row) => row[index] === ""));
-});
-
 test("artVersion preserves positive integers without clamping or rounding", () => {
   for (const value of [-1, 0, 1.8, "2", NaN, Infinity, null, undefined, 1, 1001]) {
     const session = makeSession();

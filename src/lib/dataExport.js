@@ -110,11 +110,6 @@ export const SESSION_LEDGER_HEADERS = Object.freeze([
   // 見え方の版（config.artVersion。その回に画面へ出した絵の版、src/lib/artVersion.js）。
   // fxLevel の後ろに足す。版を持たない課題と、この列より前の記録は空欄。
   "artVersion",
-  // 端末の「動きを減らす」（prefers-reduced-motion）。オンだと、記録の fxLevel が subtle でも
-  // 粒・弾み・世界の動きは出ない（fx/fxSafety.js の resolveDecorationPolicy）。fxLevel の意味は
-  // 変えずに、見えたものを後から分けられるよう別の列に残す。いちばん後ろに足す（列位置を動かさない）。
-  // この列より前の記録と、分からないときは空欄。
-  "reducedMotion",
 ]);
 
 function deviceColumns(session) {
@@ -195,11 +190,6 @@ export function buildRhythmCsvRows(sessions) {
       // れんしゅうの回は絵を作り直したので、変わる前後の回を分ける。そくていの回はいつでも 1。
       // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
       "artVersion",
-      // 端末の「動きを減らす」（prefers-reduced-motion）。オンだと、記録の fxLevel が subtle でも
-      // 粒・弾み・世界の動きは出ない（fx/fxSafety.js の resolveDecorationPolicy）。fxLevel の意味は
-      // 変えずに、見えたものを後から分けられるよう別の列に残す。いちばん後ろに足す（列位置を動かさない）。
-      // この列より前の記録と、分からないときは空欄。
-      "reducedMotion",
     ],
   ];
   sessions.forEach((session) => {
@@ -230,7 +220,6 @@ export function buildRhythmCsvRows(sessions) {
         config.measurementReadiness ?? "n/a",
         config.fxLevel ?? "",
         config.artVersion ?? "",
-        config.reducedMotion ?? "",
       ]);
     });
   });
@@ -269,7 +258,6 @@ export function buildSessionLedgerRows(sessions) {
       JSON.stringify(session.summary ?? {}),
       session.config?.fxLevel ?? "",
       session.config?.artVersion ?? "",
-      session.config?.reducedMotion ?? "",
     ]);
   });
   return rows;
@@ -319,11 +307,6 @@ export function buildTaskCsvRows(sessions, taskType) {
         // 見え方の版（config.artVersion）。れんしゅうの回の絵が変わった前後を分ける。
         // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
         "artVersion",
-        // 端末の「動きを減らす」（prefers-reduced-motion）。オンだと、記録の fxLevel が subtle でも
-        // 粒・弾み・世界の動きは出ない（fx/fxSafety.js の resolveDecorationPolicy）。fxLevel の意味は
-        // 変えずに、見えたものを後から分けられるよう別の列に残す。いちばん後ろに足す（列位置を動かさない）。
-        // この列より前の記録と、分からないときは空欄。
-        "reducedMotion",
       ],
     ];
     sessions
@@ -359,7 +342,6 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.endReason ?? "",
             session.config?.fxLevel ?? "",
             session.config?.artVersion ?? "",
-            session.config?.reducedMotion ?? "",
           ]);
         });
       });
@@ -396,11 +378,6 @@ export function buildTaskCsvRows(sessions, taskType) {
         // 見え方の版（config.artVersion）。れんしゅうの回の絵が変わった前後を分ける。
         // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
         "artVersion",
-        // 端末の「動きを減らす」（prefers-reduced-motion）。オンだと、記録の fxLevel が subtle でも
-        // 粒・弾み・世界の動きは出ない（fx/fxSafety.js の resolveDecorationPolicy）。fxLevel の意味は
-        // 変えずに、見えたものを後から分けられるよう別の列に残す。いちばん後ろに足す（列位置を動かさない）。
-        // この列より前の記録と、分からないときは空欄。
-        "reducedMotion",
       ],
     ];
     sessions
@@ -431,7 +408,6 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.endReason ?? "",
             session.config?.fxLevel ?? "",
             session.config?.artVersion ?? "",
-            session.config?.reducedMotion ?? "",
           ]);
         });
       });

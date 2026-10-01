@@ -547,12 +547,6 @@ body.high-contrast .settings-guide-body .note {
   display: block;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .settings-guide > summary::before {
-    transition: none;
-  }
-}
-
 .settings-mode-notice {
   grid-column: 1 / -1;
   margin: 0;
@@ -1379,13 +1373,6 @@ body.high-contrast .rhythm-offset-track {
 body.high-contrast .rhythm-offset-center {
   width: 4px;
   background: #ffffff;
-}
-
-/* 動きを減らす設定では、着地のはずみを消す。位置と大きさの情報は残る。 */
-@media (prefers-reduced-motion: reduce) {
-  .rhythm-offset-mark.is-latest {
-    animation: none;
-  }
 }
 
 /* =====================================================================
@@ -2474,32 +2461,6 @@ body.high-contrast .rhythm-profile-dot {
 }
 
 /* 動きを止めても、ノート位置・判定文字・点灯・盾の状態は消さない。 */
-@media (prefers-reduced-motion: reduce) {
-  .rhythm-aurora,
-  .rhythm-cabinet-lamps i,
-  .rhythm-cabinet-lamps::after,
-  .rhythm-note,
-  .rhythm-combo,
-  .rhythm-shield,
-  .rhythm-main-display .rhythm-pulse::after {
-    animation: none !important;
-    transition: none !important;
-  }
-
-  .rhythm-aurora {
-    translate: none;
-  }
-
-  .rhythm-combo:not(:empty) {
-    opacity: 1;
-    translate: 0 0;
-  }
-
-  [data-rhythm-theme=gonogo] .rhythm-shield.is-active {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-  }
-}
 
 /* 390pxスマホ縦／約507pxのiPad Split View。基底の最小幅
    104 + 260 + 136px では、overflow:hiddenの内側で右のモード表示が切れる。
@@ -3195,21 +3156,6 @@ body.high-contrast .rhythm-profile-dot {
   }
 }
 
-/* 動きを減らす設定では環境の動きを止める。課題に必要な情報は
-   ひとつも入っていないので、止めても遊べる（それがこの層の設計条件）。 */
-@media (prefers-reduced-motion: reduce) {
-  .fishing-shaft,
-  .fishing-far,
-  .fishing-bubble,
-  .fishing-weed {
-    animation: none;
-  }
-
-  .fishing-bubble {
-    opacity: 0.5;
-  }
-}
-
 body.high-contrast .fishing-deep {
   /* 高コントラストでは、環境の絵が課題の対象と competing しないよう消す。 */
   display: none;
@@ -3443,7 +3389,7 @@ body.high-contrast .fishing-deep {
    許容円が画面上では横に潰れた楕円になっていた。
 
    位置は crane.js が rAF で更新する。CSS 側の transition は最小限に
-   しておく（prefers-reduced-motion で無効化されても遊べるように）。
+   しておく（遷移に頼ると、遷移が効かない環境で位置がずれる）。
    ===================================================================== */
 .game-stage-content.module-crane {
   padding: 0;
@@ -4188,12 +4134,6 @@ body.high-contrast .summary-best.is-new {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .crane-collected-item {
-    animation: none;
   }
 }
 
@@ -5084,17 +5024,6 @@ input[type="checkbox"]:checked::before {
   border: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.001ms !important;
-  }
-}
-
 @media (max-width: 980px) {
   .card-grid,
   .letter-grid {
@@ -5921,15 +5850,6 @@ body.high-contrast .slot-symbol {
     height: clamp(46px, 15vw, 58px);
     border-width: 4px;
     font-size: clamp(1.7rem, 8vw, 2.25rem);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .slot-reel,
-  .slot-symbol,
-  .slot-result-symbols {
-    transition: none !important;
-    animation: none !important;
   }
 }
 

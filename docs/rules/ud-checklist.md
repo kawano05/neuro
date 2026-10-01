@@ -17,9 +17,9 @@ iPad が中心で、iPhone・PC でも使う。展示会でも見せる。
 
 | | 決まり | 守っている検査・仕組み |
 |---|---|---|
-| A1 | **2つ以上の感覚で伝える。** 合図・結果・進みぐあいは、目（形と動き）と耳（効果音・声）の両方で分かる。色だけで区別しない（形・文字・位置も変える）。ただし課題が「わざと片方だけ」のもの（高い音だけ＝音、リール＝見る）は、課題の定義を変えない。動きを止めても、合図は最後の姿で見せる（`src/decoration-motion.css`） | stops decorative motion…／speaks with the app's own natural voice…／announces the explanation after both voices fail… |
+| A1 | **2つ以上の感覚で伝える。** 合図・結果・進みぐあいは、目（形と動き）と耳（効果音・声）の両方で分かる。色だけで区別しない（形・文字・位置も変える）。ただし課題が「わざと片方だけ」のもの（高い音だけ＝音、リール＝見る）は、課題の定義を変えない。動きを止めても、合図は最後の姿で見せる（`src/decoration-motion.css`） | follows the atmosphere for decorative motion…／speaks with the app's own natural voice…／announces the explanation after both voices fail… |
 | A2 | **見やすさ。** 字と地のコントラストは 4.5:1 以上（大きい字・部品は 3:1）。走査の枠（黄色 #FFC83D）はどの地でもはっきり見える。「大きい文字」「くっきり表示」「文字づかい（漢字＋ふりがな／英語）」が、どの画面でも効いて崩れない | keeps the iPad home readable with large text and high contrast／keeps responsive explanations and results… |
-| A3 | **動きと光への配慮。** 端末の「動きを減らす」で止まる。雰囲気「なし」で粒も背景の動きもない。光と花火は1秒に3回まで。広い面の明滅・色がぐるぐる変わる地・集中線はない | stops decorative motion…／adds effects within the safety rules…／`tests/fx.test.mjs` |
+| A3 | **動きと光への配慮。** 強さは支援者の設定「遊びの雰囲気」で選ぶ（端末の「動きを減らす」は見ない。2026-10-01、ユーザーの判断）。雰囲気「なし」で粒も背景の動きもなく、「すっきり」で揺れ・寄り・背景の動きがない。光と花火は1秒に3回まで。広い面の明滅・色がぐるぐる変わる地・集中線はない | follows the atmosphere for decorative motion…／adds effects within the safety rules…／`tests/fx.test.mjs` |
 | A4 | **操作のしかた。** スイッチ1つ（走査）で利用者の世界の全部に届く。iPad のスイッチコントロールへ任せたときも届く。タップの的は 44x44px 以上。キーボードでも使える。VoiceOver で押せるものの名前が読まれる。飾りは aria-hidden | delegates shell scanning exclusively to iPad Switch Control／keeps every screen free of overflow and undersized targets／keeps native keyboard activation separate from switch input |
 | A5 | **時間の余裕。** はじめの遊びに時間切れはない。時間で進む遊びは、れんしゅうの回で速さ・長さを変えられる。説明の読み上げの途中のひと押しは、声を止めるだけ（始めない） | guards the explanation press… |
 | A6 | **わかりやすさ。** どの遊びも上の帯（のこり・この遊びの設定・おわる）が同じ場所・同じ形。ほめ方と進み方の文法が同じ（`docs/overall-design-2026-09-28.md` §3）。そくてい／れんしゅうが画面で分かる | keeps the result screen free of supporter chrome |
@@ -33,7 +33,7 @@ iPad が中心で、iPhone・PC でも使う。展示会でも見せる。
 | B2 | **押しまちがいに強い。** 続けて押しても2回に数えない。説明の画面のひと押しは課題の入力に数えない。開いた直後の押下（タイルを選んだ押下の跳ね返り）は受けない。設定を開いているあいだの押下は遊びを進めない | keeps the start press from falling through…／guards the explanation press… |
 | B3 | **支援者のまちがいを防ぐ。** そくていの回か れんしゅうの回かが、遊ぶ画面・説明・けっか・設定でひと目で分かる（札はそくていの回がある遊びにだけ出す。はじめの遊びに出すと取り違える）。そくていの回に効く値は変えられない。記録を消す前に、いまの記録と同じ中身を書き出したか確かめる。設定は元に戻せる | blocks deletion when records change after an export／refuses to clear a participant's data before it has been exported |
 | B4 | **とり違えない記録。** 本番とプレビューで保存が別。参加者ごとに記録が分かれる。書き出したファイル名に参加者と日時 | names downloads with participant and time |
-| B5 | **設定の組み合わせで壊れない。** どの組み合わせでも遊びが始まり、終われる（読み上げ OFF・効果音 OFF・大きい文字・くっきり・英語・雰囲気4つ・動きを減らす・スイッチコントロール）。スイッチだけの人が、エンドレス・音の出ない画面から自分で抜けられる | lets one switch finish both endless games…／lets one switch leave the screen where audio cannot start |
+| B5 | **設定の組み合わせで壊れない。** どの組み合わせでも遊びが始まり、終われる（読み上げ OFF・効果音 OFF・大きい文字・くっきり・英語・雰囲気4つ・スイッチコントロール）。スイッチだけの人が、エンドレス・音の出ない画面から自分で抜けられる | lets one switch finish both endless games…／lets one switch leave the screen where audio cannot start |
 
 ## C. フェイルセーフ（壊れても安全な側に倒れる）
 

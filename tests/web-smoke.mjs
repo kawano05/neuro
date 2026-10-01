@@ -87,7 +87,7 @@ const projects = [
 const checks = [
   ["explains every atmosphere from the shared Japanese descriptions", checkAtmosphereDescriptions],
   ["isolates presentation faults and completes recorded beginner and timing runs", checkPresentationFaults],
-  ["stops decorative motion for all four atmospheres and reduced motion", checkDecorationMotion],
+  ["follows the atmosphere for decorative motion and ignores the device's reduce-motion setting", checkDecorationMotion],
   ["cancels scheduled sounds and result music when hidden or interrupted", checkPresentationCleanup],
   ["loads the main learning app", checkMainApp],
   ["keeps the start press from falling through into a home activity", checkStartInputGuard],
@@ -5258,25 +5258,15 @@ async function checkDecorationMotion(page, project) {
       await openActivity(page, t("tile.balloon.title"));
       await page.locator("#gameStage").dispatchEvent("click");
       await page.waitForTimeout(120);
-      // 数えるのは「いま動いているもの」だけ。端末の「動きを減らす」では、全体の規則
-      // （styles.css の transition-duration: 0.001ms）で色の変化が一瞬で終わる遷移になり、
-      // WebKit は終わったその遷移をしばらく getAnimations に残す。止まっているので数えない
-      // （さかなつりの世界の検査と同じ数え方）。
+      // 数えるのは「いま動いているもの」だけ（終わった遷移は止まっているので数えない。
+      // さかなつりの世界の検査と同じ数え方）。
       const balloon = await page.evaluate(() => {
         const moving = document
           .querySelector("#gameStageContent")
           .getAnimations({ subtree: true })
           .filter((animation) => animation.playState === "running");
-        // 動きとして数えるのは、透明度だけではない動き（位置・大きさ・向きを変えるもの）。
-        // 「動きを減らす」では、星などはフェード（透明度だけ）で出る。
-        const movesShape = (animation) =>
-          (animation.effect?.getKeyframes?.() || []).some((frame) =>
-            Object.keys(frame).some((key) => !["offset", "computedOffset", "easing", "composite", "opacity"].includes(key))
-          ) || Boolean(animation.animationName || animation.transitionProperty);
-        const shaping = moving.filter(movesShape);
         return {
           animations: moving.length,
-          shaping: shaping.length,
           // 落ちたときに、何が動いていたかを書き出す（どの規則が効いていないかを探すため）。
           running: moving.map((animation) => ({
             name: animation.animationName || animation.transitionProperty || animation.id || animation.constructor.name,
@@ -5287,21 +5277,16 @@ async function checkDecorationMotion(page, project) {
           mark: getComputedStyle(document.querySelector(".balloon.is-popping .balloon-mark")).opacity
         };
       });
+      // 端末の「動きを減らす」は見ない（2026-10-01、ユーザーの判断。fx/fxSafety.js）。
+      // どちらでも、決めるのは支援者の設定「遊びの雰囲気」だけ。
       if (level === "none") {
         assert(
           balloon.animations === 0 && balloon.particles === 0,
           `${level}/${reduced}: balloon decorations must remain still: ${JSON.stringify(balloon)}`
         );
         assert(balloon.mark === "1", "A press must show a static burst shape immediately");
-      } else if (reduced) {
-        // 端末の「動きを減らす」: 演出は消さずに、移動しない形（その場で現れて消える粒・
-        // フェード）に置き換える。2026-09-30 の直しでは全部消していて、Windows の
-        // 「アニメーション効果」がオフの PC では遊んでも何も起きないように見えた。
-        assert(balloon.shaping === 0, `${level}/reduce: nothing may move or bounce: ${JSON.stringify(balloon)}`);
-        assert(balloon.particles > 0, `${level}/reduce: the press must still answer with still sparkles`);
-        assert(balloon.mark === "1", "A press must show a static burst shape immediately");
       } else {
-        assert(balloon.particles > 0, `${level}: enabled effects must still work`);
+        assert(balloon.particles > 0, `${level}/${reduced}: enabled effects must work whatever the device says`);
       }
       await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-balloon.png` });
       await page.locator("#gameExit").click();
@@ -5339,10 +5324,10 @@ async function checkDecorationMotion(page, project) {
         `${level}/${reduced}: the fishing world must be on screen before counting: ${JSON.stringify(world)}`
       );
       assert(
-        world.names.length > 0 === (!reduced && ["normal", "big"].includes(level)),
+        world.names.length > 0 === ["normal", "big"].includes(level),
         `${level}/${reduced}: the fishing world must follow the shared policy: ${JSON.stringify(world)}`
       );
-      if (reduced || ["none", "subtle"].includes(level)) {
+      if (["none", "subtle"].includes(level)) {
         assert(world.running === 0, "A quiet world has no running CSS animations");
       }
       await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-fishing.png` });

@@ -136,14 +136,13 @@ export function rhythmSkin(gameId, artVersion) {
  * @param {{
  *   gameId:string,
  *   visualGuidance:boolean,
- *   reduceMotion:boolean,
  *   measurement:boolean,
  *   exactToleranceMs:number,
  *   t:(key:string, vars?:object)=>string,
  * }} options
  */
 export function createRhythmVisuals(options) {
-  const { gameId, visualGuidance, reduceMotion, measurement, exactToleranceMs, t } = options;
+  const { gameId, visualGuidance, measurement, exactToleranceMs, t } = options;
   const profile = rhythmVisualProfile(gameId, visualGuidance);
   const artVersion = rhythmArtVersion(gameId, measurement);
   const skin = rhythmSkin(gameId, artVersion);
@@ -286,10 +285,7 @@ export function createRhythmVisuals(options) {
       const visible = timeUntilMs <= leadMs && timeUntilMs >= -480;
       node.hidden = !visible;
       if (!visible) return;
-      let ratio = noteTravelRatio(timeUntilMs, leadMs);
-      if (reduceMotion) {
-        ratio = ratio < 0.34 ? 0.18 : ratio < 0.67 ? 0.5 : 0.82;
-      }
+      const ratio = noteTravelRatio(timeUntilMs, leadMs);
       node.style.setProperty("--note-progress", ratio.toFixed(4));
       node.style.top = `${(5 + ratio * 79).toFixed(2)}%`;
       node.style.opacity = String(Math.min(1, 0.35 + ratio * 0.9));

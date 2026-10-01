@@ -522,9 +522,6 @@ export function createRhythmGame(gameId) {
     // 1回だけ確定させ、セッションの途中では変えない——途中で切り替わると、
     // その回の記録がどちらの条件だったのか言えなくなる。
     let visualGuidance = false;
-    // 動きを減らす設定。パルス円は rAF が毎フレーム transform を書くので、
-    // CSS の @media prefers-reduced-motion では止まらない。
-    let reduceMotion = false;
 
     // セッション文脈（mount() で1回だけ確定する。detailed-design.md §6.3）。
     let plan = null;
@@ -611,7 +608,6 @@ export function createRhythmGame(gameId) {
       rhythmVisuals = createRhythmVisuals({
         gameId,
         visualGuidance,
-        reduceMotion,
         measurement: gameId === "calibration" || resolveDifficultyMode(settings) === "measure",
         exactToleranceMs: EXACT_TOLERANCE_MS,
         t,
@@ -695,9 +691,8 @@ export function createRhythmGame(gameId) {
     function updatePulseVisual(nowAudioAbsMs) {
       if (!pulseEl || !plan) return;
       // 計器盤は予告のない測定面なので、音の前後を含めて円を動かさない。
-      // 動きを減らす設定も同じ静止表示にする。CSS の @media だけでは、rAF が
-      // 毎フレーム書く transform を止められないためJS側で固定する。
-      if (reduceMotion || visualPresentation === "instrument") {
+      // （端末の「動きを減らす」は見ない。2026-10-01、fx/fxSafety.js の resolveFxLevel）
+      if (visualPresentation === "instrument") {
         pulseEl.style.transform = "scale(0.93)";
         return;
       }
@@ -873,9 +868,6 @@ export function createRhythmGame(gameId) {
       // 版面（通常練習のノートレーンか、予告のない計器盤か）が
       // visualGuidance で変わるので、描くより先に確定させる。
       visualGuidance = resolveVisualGuidance(gameId, settings);
-      reduceMotion =
-        typeof window.matchMedia === "function" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       params = resolveParams(gameId, settings);
       effectiveWindowMs = computeEffectiveWindowMs(params.mode, params.bpm, settings.judgmentWindowMs);
@@ -963,8 +955,6 @@ export function createRhythmGame(gameId) {
           difficultyMode: resolveDifficultyMode(settings),
           // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
           fxLevel: ctx.fx?.level() ?? null,
-          // 端末の「動きを減らす」。オンだと fxLevel が subtle でも飾りは動かない（記録の列 reducedMotion）。
-          reducedMotion: ctx.fx?.reducedMotion() ?? null,
           // 見え方の版（その回に画面へ出した絵の版。src/lib/artVersion.js）。高い音だけの
           // れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）ので、変わる前後の回を
           // 分けられるようにする。そくていの回はいつでも 1。

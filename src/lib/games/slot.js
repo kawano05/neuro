@@ -542,8 +542,6 @@ export function createSlotGame(gameId) {
           difficultyMode: config.difficultyMode,
           // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
           fxLevel: ctx.fx?.level() ?? null,
-          // 端末の「動きを減らす」。オンだと fxLevel が subtle でも飾りは動かない（記録の列 reducedMotion）。
-          reducedMotion: ctx.fx?.reducedMotion() ?? null,
           artVersion: shownArtVersion(config.difficultyMode, SLOT_ART_VERSION),
           textMode: config.textMode,
           measurementReadiness: config.measurementReadiness,

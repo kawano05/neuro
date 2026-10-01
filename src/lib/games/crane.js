@@ -304,7 +304,7 @@ export function endlessSweepMs(baseSweepMs, trialIndex) {
   );
 }
 
-function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = null, reducedMotion = null) {
+function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = null) {
   // そくていの回は protocol 固定・アシスト無し・通過音無し、
   // れんしゅうの回は支援者の設定 → 既定の順（src/lib/difficultyMode.js）。
   // どちらの回だったかも config に残して、CSVと評価ログに出す。
@@ -321,8 +321,6 @@ function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = nul
     difficultyMode: resolveDifficultyMode(settings),
     // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
     fxLevel,
-    // 端末の「動きを減らす」。オンだと fxLevel が subtle でも飾りは動かない（記録の列 reducedMotion）。
-    reducedMotion,
     // 見え方の版（art/craneWorldArt.js）。れんしゅうの回の景品やアームの絵が変わった
     // 前後を分けるため。
     artVersion: shownArtVersion(resolveDifficultyMode(settings), CRANE_ART_VERSION),
@@ -353,13 +351,7 @@ export function createCraneGame(ctx) {
   // ルビは乗らない**。いまの景品名はすべてかな・カタカナなので問題ないが、
   // 漢字の名前を足すと静かにルビだけ落ちる。その線は
   // tests/i18n.test.mjs の「景品名に漢字を使わない」で縛ってある。
-  const config = resolveCraneConfig(
-    ctx.settings,
-    ctx.readiness,
-    ctx.endless,
-    ctx.fx?.level() ?? null,
-    ctx.fx?.reducedMotion() ?? null
-  );
+  const config = resolveCraneConfig(ctx.settings, ctx.readiness, ctx.endless, ctx.fx?.level() ?? null);
   // れんしゅうの回だけ、おもちゃ屋さんの世界（src/lib/art/craneWorldArt.js）の絵を使う。
   // そくていの回は、刺激の見え方も測定の条件なので、いまの PNG のまま動かさない。
   const practice = config.difficultyMode !== "measure";

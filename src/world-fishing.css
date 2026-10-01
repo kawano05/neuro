@@ -389,16 +389,6 @@ body.high-contrast .module-fishing.is-practice .fishing-line::after {
   display: none;
 }
 
-/* --- 動きを減らす設定（止めても遊べる。動きには課題の情報は入っていない） ------- */
-
-/* 海と空の動きを止める決まり（なし・すっきり・動きを減らす）は src/decoration-motion.css の1か所。
-   アタリと魚の課題の動きは、どの段でも残す。 */
-@media (prefers-reduced-motion: reduce) {
-  .module-fishing.is-practice :is(.fishing-dusk-sky, .fishing-dusk) {
-    transition: none;
-  }
-}
-
 /* Split Viewでも得点を上の操作帯から離す。測定には適用しない。 */
 @media (max-aspect-ratio: 1/1) {
   body.game-mode.user-world .module-fishing.is-practice .fishing-score { top: 78px; left: 4%; transform: none; }

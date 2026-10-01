@@ -26,7 +26,6 @@ import { presentation } from "../presentation.js";
 import {
   alphaOf,
   ringRadiusOf,
-  settleInPlace,
   sizeOf,
   spawnBurst,
   spawnConfettiRain,
@@ -351,15 +350,12 @@ export function createFxEngine({ getLevel = () => "normal", getScale = () => fxS
         : Array.isArray(originalSize)
           ? originalSize.map((value) => value * factor)
           : originalSize * factor;
-      const particles = spawnBurst({ ...options, size, count: Math.round((options.count || 0) * s.particles) });
-      // 端末の「動きを減らす」: 飛び散る代わりに、はじけ先にその場で現れて消える。
-      emit(s.still ? settleInPlace(particles) : particles);
+      emit(spawnBurst({ ...options, size, count: Math.round((options.count || 0) * s.particles) }));
     },
-    /** 広がる輪。粒を出さない強さ（なし）では出さない。「動きを減らす」では広がらない輪。 */
+    /** 広がる輪。粒を出さない強さ（なし）では出さない。 */
     ring(options) {
-      const s = scale();
-      if (!s.particles) return;
-      emit([{ ...spawnRing(options), still: Boolean(s.still) }]);
+      if (!scale().particles) return;
+      emit([spawnRing(options)]);
     },
     /** やわらかい光。回数・明るさ・消える速さは安全の上限の中へ。 */
     glow({ x, y, radius = 140, color = "#FFFFFF", alpha = 0.4, lifeMs = 420, delay = 0, clip = null } = {}) {
@@ -371,8 +367,7 @@ export function createFxEngine({ getLevel = () => "normal", getScale = () => fxS
     /** 上から降る紙吹雪。 */
     confettiRain({ count = 110, colors } = {}) {
       const s = scale();
-      // 降ってくる動きそのものが演出なので、「動きを減らす」では出さない（段も すっきり まで）。
-      if (s.finale !== "full" || s.still) return;
+      if (s.finale !== "full") return;
       if (!ensureCanvas()) return;
       emit(spawnConfettiRain({ width, height, count: Math.round(count * s.particles), colors }));
     },

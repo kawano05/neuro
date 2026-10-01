@@ -3,8 +3,7 @@
 //
 // docs/overall-design-2026-09-28.md §5・§6。段は毎回その場で決める:
 //   - 支援者の設定「遊びの雰囲気」（settings.fxLevel。段の中身は src/lib/atmosphere.js）
-//   - 端末の「動きを減らす」（prefers-reduced-motion）→ 動く演出を、移動しない演出に置き換える
-//     （粒はその場で現れて消える・輪は広がらない・星はフェード。弾み・揺れ・世界の動きは止める）
+//   - 端末の「動きを減らす」（prefers-reduced-motion）は見ない（2026-10-01。fxSafety.js の resolveFxLevel）
 //   - そくていの回の遊び → 何も足さない（gameHost が setMeasurement で知らせる）
 // =====================================================================
 
@@ -20,12 +19,7 @@ export { FX_LEVELS, resolveFxLevel } from "./fxSafety.js";
  */
 export function createFxSystem({ getSettings, doc = typeof document !== "undefined" ? document : null }) {
   let measurement = false;
-  const reducedMotionQuery = doc?.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)") || null;
-  const policy = () =>
-    resolveDecorationPolicy(getSettings(), {
-      reducedMotion: Boolean(reducedMotionQuery?.matches),
-      measurement,
-    });
+  const policy = () => resolveDecorationPolicy(getSettings(), { measurement });
   const level = () => policy().level;
   const engine = createFxEngine({ getLevel: level, getScale: () => policy().scale, doc });
   const motion = createMotion(() => policy().scale);
@@ -44,7 +38,6 @@ export function createFxSystem({ getSettings, doc = typeof document !== "undefin
     }
     return current;
   };
-  reducedMotionQuery?.addEventListener?.("change", syncPolicy);
   syncPolicy();
   return {
     ...presets,
@@ -52,8 +45,6 @@ export function createFxSystem({ getSettings, doc = typeof document !== "undefin
     motion,
     /** いま効いている強さ（"none" | "subtle" | "normal" | "big"）。session.config.fxLevel に残す。 */
     level,
-    /** 端末の「動きを減らす」がオンか（分からない環境では null）。session.config.reducedMotion に残す。 */
-    reducedMotion: () => (reducedMotionQuery ? reducedMotionQuery.matches : null),
     policy,
     syncPolicy,
     /** そくていの回の遊びを始める／終える（gameHost）。 */

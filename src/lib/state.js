@@ -718,8 +718,6 @@ function sanitizeRhythmSession(session, taskType) {
     // れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）。落とすと再読み込みで消え、
     // 絵が変わる前後の回を分けられない。この列を持たない古い記録は null（分からない）。
     artVersion: sanitizeArtVersion(config.artVersion),
-    // 端末の「動きを減らす」（真偽）。持たない古い記録と、分からない値は null。
-    reducedMotion: typeof config.reducedMotion === "boolean" ? config.reducedMotion : null,
     // どの表記で回したか。手順の説明が読めるかは成績に効きうる。
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
@@ -933,8 +931,6 @@ function sanitizeScanSession(session) {
     // 見え方の版（art/craneWorldArt.js・art/fishingWorldArt.js）。落とすと再読み込みで
     // 消え、絵が変わる前後の回を分けられない。持たない古い記録は null（分からない）。
     artVersion: sanitizeArtVersion(config.artVersion),
-    // 端末の「動きを減らす」（真偽）。持たない古い記録と、分からない値は null。
-    reducedMotion: typeof config.reducedMotion === "boolean" ? config.reducedMotion : null,
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
     textMode: enumOr(config.textMode, TEXT_MODES, "kana"),
@@ -1098,8 +1094,6 @@ function sanitizeReactionSession(session) {
     // 見え方の版（art/craneWorldArt.js・art/fishingWorldArt.js）。落とすと再読み込みで
     // 消え、絵が変わる前後の回を分けられない。持たない古い記録は null（分からない）。
     artVersion: sanitizeArtVersion(config.artVersion),
-    // 端末の「動きを減らす」（真偽）。持たない古い記録と、分からない値は null。
-    reducedMotion: typeof config.reducedMotion === "boolean" ? config.reducedMotion : null,
     // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
     measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
   };

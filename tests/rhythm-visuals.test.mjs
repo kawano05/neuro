@@ -115,7 +115,6 @@ function mountedMarkup(gameId, measurement, visualGuidance) {
   const visuals = createRhythmVisuals({
     gameId,
     visualGuidance,
-    reduceMotion: false,
     measurement,
     exactToleranceMs: 30,
     t: (key) => `[${key}]`,

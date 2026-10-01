@@ -41,8 +41,11 @@
 ## 守る線
 
 - **そくていの回は何も変えない。** 段は none として扱い、舞台も属性も音も足さない。
-- **端末の「動きを減らす」**: 段は すっきり より強くならず、粒・弾み・世界の動きは止める（`resolveDecorationPolicy`）。
-  **動きを止めても、合図と結果は最後の姿で見せる**（さかなつりの「！」など。`src/decoration-motion.css`）。
+- **端末の「動きを減らす」（iPad の視差効果を減らす・Windows のアニメーション効果オフ）は見ない**（2026-10-01、
+  ユーザーの判断）。演出の量は「遊びの雰囲気」だけで決める。揺れや光が苦手な利用者には、支援者が「なし」か
+  「すっきり」を選ぶ。以前は端末の設定で弱め（9/28）、全部止めていた（9/30）。Windows のアニメーション効果が
+  オフの PC では、遊んでも何も起きないように見えた。
+- **動きを止める段（なし・そくていの回）でも、合図と結果は最後の姿で見せる**（さかなつりの「！」など。`src/decoration-motion.css`）。
 - **分からない値は none**（動いている最中）。保存の既定（にぎやか）へ戻すのは `state.js` の sanitize。
 - 光と花火は1秒に3回まで（`fx/fxSafety.js` の回数制限）。黄色 #FFC83D は走査の枠だけ。
 - おおさわぎの たまるもの（びんの星・服・その日のびん）は研究の記録（`session.summary`・CSV）に入れない。雰囲気そのものは
@@ -51,7 +54,7 @@
 ## 確かめ方
 
 - 単体: `tests/party.test.mjs`（表の欄・型ごとの上限・びんの星）、`tests/fx.test.mjs`（係数が表から来る・安全の上限）。
-- 画面: `tests/web-smoke.mjs` の「stops decorative motion for all four atmospheres…」「plays the shared party atmosphere…」
+- 画面: `tests/web-smoke.mjs` の「follows the atmosphere for decorative motion…」「plays the shared party atmosphere…」
   「keeps the timing party still before cues…」「isolates presentation faults…」。
 
 ## 経緯

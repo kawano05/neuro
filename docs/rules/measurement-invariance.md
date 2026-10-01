@@ -37,8 +37,11 @@
 3. CSV に列として出す。**既にある列の位置は動かさず、いちばん後ろに足す**
 
 今ある条件の例: `difficultyMode`・`visualGuidance`・`craneAudioGuidance`・`textMode`・`device`・`fxLevel`・
-`artVersion`（その回に画面へ出した絵の版。そくていの回はいつも 1。`src/lib/artVersion.js`）・
-`reducedMotion`（端末の「動きを減らす」。オンだと fxLevel が subtle でも飾りは動かない。分からないときは null）。
+`artVersion`（その回に画面へ出した絵の版。そくていの回はいつも 1。`src/lib/artVersion.js`）。
+
+端末の「動きを減らす」（prefers-reduced-motion）は、アプリのどこでも見ない（2026-10-01）。それまでは、端末が
+「動きを減らす」のとき、そくていの回でもリールの帯の遷移・リズムの目盛りのはずみ・CSS の動きの長さが変わって
+いた（端末ごとに見え方が違う、記録されない条件だった）。いまは、どの端末でも同じ見え方になる。
 
 検査は CSV の列を**見出しの名前で**引く（`tests/data-integrity.test.mjs` の columnOf）。後ろから何番目かで引くと、
 列を足すたびに検査が全部ずれる。並び（位置を動かさないこと）は、それぞれの CSV の並びを固定する検査が見る。

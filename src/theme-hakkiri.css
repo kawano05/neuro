@@ -1891,16 +1891,6 @@ body.user-world .game-exit::before {
 .party-result.is-added .party-result-reward { font-size: 1rem; }
 .party-result.is-added .party-mini-jar { width: 26px; }
 
-/* 海の動きを止めるのは src/decoration-motion.css（動きを減らすの予備も そこ）。 */
-@media (prefers-reduced-motion: reduce) {
-  .party-otter-svg .o-all,
-  .party-fan.is-on,
-  .party-bunting.is-on,
-  .party-parade-item {
-    animation: none;
-  }
-}
-
 /* ---------------------------------------------------------------------
    はじめの遊び「ふうせん わり」（games/balloon.js）
    --------------------------------------------------------------------- */
@@ -3255,60 +3245,6 @@ body.result-mode.user-world #resultHome::before {
   font-size: 12px;
   font-weight: 700;
   pointer-events: none;
-}
-
-/* ---------------------------------------------------------------------
-   動きを減らす設定
-   --------------------------------------------------------------------- */
-
-@media (prefers-reduced-motion: reduce) {
-  .pop-figure,
-  .pop-figure.is-gone {
-    animation: none;
-  }
-
-  body.user-world .start-stage-label {
-    animation: none;
-  }
-
-  /* 「！」は動かさずに出すだけにする（出ること自体が手がかりなので消さない）。 */
-  .fishing-scene.is-bite .fishing-bite-mark {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-
-  /* ボールを打つ遊び: ボールは動かす（遊びそのもの）。バットは振りを一瞬で、
-     はなびと言葉のはずみは出さない。 */
-  .bb-bat,
-  .bb-bat.is-swinging {
-    transition: none;
-  }
-
-  .bb-word[data-word] {
-    animation: none;
-  }
-
-  /* 「ぴったり！」は動かさずに出す（星は演出エンジンが「動きを減らす」を見て減らす）。 */
-  .slot-cheer-word,
-  .slot-cheer-streak {
-    animation: none;
-  }
-
-  /* ふうせんは浮かばせず、割れたら動かずに消える。ぬりえは色がすぐ変わる。 */
-  .balloon,
-  .balloon.is-popping .balloon-svg,
-  .module-coloring.is-complete .coloring-card {
-    animation: none;
-  }
-
-  .balloon.is-popped .balloon-mark {
-    animation: none;
-  }
-
-  .coloring-art .cl-part {
-    transition: none;
-  }
 }
 
 /* 横向きスマホでは、作品とびんを縦に積むと操作ボタンを押し出す。
