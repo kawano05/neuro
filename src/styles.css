@@ -602,6 +602,12 @@ body.supporter-menu-mode .switch-dock { display: none; }
 }
 #settings .setting-reason[hidden] { display: none; }
 body.high-contrast #settings .setting-reason { border-left-color: #000000; background: #ffffff; color: #000000; }
+/* くわしい設定のまとまりごとの「既定に戻す」（SettingsReset.svelte）。項目の下に左から置き、
+   押したあとの知らせをすぐ下に出す。 */
+#settings .settings-reset { display: grid; gap: 8px; justify-items: start; margin: 12px 0 4px; }
+#settings .settings-reset-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; max-width: 100%; text-align: left; }
+#settings .settings-reset-status { margin: 0; color: var(--ink); line-height: 1.6; overflow-wrap: anywhere; }
+#settings .settings-reset-status[hidden] { display: none; }
 @media (max-width: 700px) {
   #settings .settings-grid { grid-template-columns: minmax(0, 1fr); }
   .settings-details-body { padding: 12px; }

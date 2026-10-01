@@ -10,10 +10,13 @@
 
 import {
   SETTINGS_FIELDS,
+  SETTINGS_GROUPS,
+  describeReset,
   describedByIds,
   fieldValue,
   formatFieldValue,
   readFieldValue,
+  resetPlan,
   unavailableReason,
 } from "../settingsFields.js";
 import { isMeasurementMode } from "../difficultyMode.js";
@@ -124,6 +127,7 @@ export function initSettings(ctx) {
     elements.measureModeNotice.hidden = !measuring;
     renderReadiness(measuring);
     updateModeStatus(measuring);
+    renderResets();
   }
 
   // 研究欄を畳んでも、前の回から残ったそくていの回を見落とさない。
@@ -199,13 +203,75 @@ export function initSettings(ctx) {
     root.classList.toggle("text-ruby", resolveTextMode(state.settings) === "ruby");
   }
 
-  // 読み上げの声を替えたら、その声で一言読む（支援者が聞いて選べるように）。
-  elements.speechVoice?.addEventListener("change", () => {
-    state.settings.speechVoice = elements.speechVoice.value === "device" ? "device" : "app";
-    save();
-    audio.prefetchVoice?.();
-    audio.speak(ctx.t("color.voice.cheer"));
-  });
+  /**
+   * 値を変えたあとに、設定画面の外へ伝えること（項目ごと）。手で変えたときも「既定に戻す」でも
+   * 同じ道を通す（戻したのにホームの文字づかいが変わらない、を作らない）。
+   */
+  const AFTER_CHANGE = {
+    // 利用者の世界の文言が全部変わる。表記は定数として持てない——描画のたびに引き直す。
+    textMode: () => ctx.views.home.render(),
+    // ホームに出す遊びが変わる。走査の輪はホームへ戻ったときに作り直される。
+    hideVisualTasks: () => ctx.views.home.render(),
+    speechEnabled: () => {
+      if (!state.settings.speechEnabled) audio.stopSpeech();
+    },
+    speechVoice: () => audio.prefetchVoice?.(),
+    fxLevel: () => ctx.fx.syncPolicy(),
+  };
+
+  function afterChange(keys) {
+    applyClasses();
+    keys.forEach((key) => AFTER_CHANGE[key]?.());
+    applyAvailability();
+  }
+
+  /** 手で変えたときだけの返事（「既定に戻す」はまとめて1つの文で知らせる）。 */
+  const FEEDBACK = {
+    scanFeedback: () => announce("枠が動いたときの音を変えました"),
+    textMode: () => announce("文字づかいを変えました"),
+    // 読み上げの声を替えたら、その声で一言読む（支援者が聞いて選べるように）。
+    speechVoice: () => audio.speak(ctx.t("color.voice.cheer")),
+    fxLevel: () => {
+      // 画面の名前は「遊びの雰囲気」。読み上げだけ古い名前（演出の強さ）だった。
+      announce(`遊びの雰囲気を「${formatFieldValue(fieldOf("fxLevel"), state.settings.fxLevel)}」にしました`);
+      // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
+      ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });
+      ctx.fx?.engine.burst({
+        ...ctx.fx.engine.pointOf(elements.fxLevel),
+        count: 12,
+        shapes: ["sparkle", "star"],
+        colors: ["#FFC83D", "#4DC4FF", "#FFFFFF"],
+        gravity: 120,
+      });
+    },
+  };
+
+  function fieldOf(key) {
+    return fields.find((field) => field.key === key);
+  }
+
+  // 1つの項目の値を、入力から保存へ。iPad のスイッチコントロールと、れんしゅう／そくていの
+  // 切り替えは、ほかの項目も一緒に変わるので下で別に扱う。
+  const SEPARATELY_HANDLED = new Set(["switchControlMode", "difficultyMode"]);
+  fields
+    .filter((field) => !SEPARATELY_HANDLED.has(field.key))
+    .forEach((field) => {
+      field.control.addEventListener(field.type === "range" ? "input" : "change", () => {
+        // 使えない項目は変えない（操作子は使えなくしてあるが、保存の側でも守る。
+        // たとえばスイッチコントロール中に枠を自動で動かすと、枠が2つ出る）。
+        if (unavailableReason(field, state.settings)) {
+          render();
+          return;
+        }
+        state.settings[field.key] = readFieldValue(field, field.control);
+        showRangeValue(field, state.settings[field.key]);
+        if (field.description) field.descriptionOutput.textContent = field.description(state.settings[field.key]);
+        save();
+        forgetReset(field.group);
+        afterChange([field.key]);
+        FEEDBACK[field.key]?.();
+      });
+    });
 
   elements.switchControlMode.addEventListener("change", () => {
     const delegated = elements.switchControlMode.checked;
@@ -218,8 +284,9 @@ export function initSettings(ctx) {
       audio.stopSpeech();
     }
     save();
+    forgetReset("switch");
     render();
-    applyClasses();
+    afterChange(["switchControlMode", "autoScan", "speechEnabled"]);
     // 枠の状態の表示（「iPad で操作中」）を直す。走査そのものは支援者の画面では動かない。
     scan.stop(true);
     announce(
@@ -229,39 +296,10 @@ export function initSettings(ctx) {
     );
   });
 
-  fields.filter(field => field.nullable || field.type === "range").forEach(field => {
-    field.control.addEventListener(field.type === "range" ? "input" : "change", () => {
-      if (field.id === "scanInterval" && state.settings.switchControlMode) return;
-      state.settings[field.key] = readFieldValue(field, field.control);
-      showRangeValue(field, state.settings[field.key]);
-      save();
-    });
-  });
-
-  fields.filter(field => field.type === "checkbox" && field.id !== "switchControlMode").forEach(({ key, control: element }) => {
-    element.addEventListener("change", () => {
-      state.settings[key] = element.checked;
-      save();
-      applyClasses();
-      if (key === "autoScan" && state.settings.switchControlMode) {
-        // 二重走査を保存状態としても許さない（操作子は使えなくしてあるが、ここでも守る）。
-        state.settings.autoScan = false;
-        element.checked = false;
-        save();
-      }
-      if (key === "speechEnabled") {
-        if (!element.checked) audio.stopSpeech();
-        applyAvailability();
-      }
-      // ホームに出す遊びが変わる。走査の輪はホームへ戻ったときに作り直される。
-      if (key === "hideVisualTasks") ctx.views.home.render();
-    });
-  });
-
   elements.difficultyMode.addEventListener("change", () => {
     state.settings.difficultyMode = elements.difficultyMode.value;
     save();
-    applyAvailability();
+    afterChange(["difficultyMode"]);
     announce(
       isMeasurementMode(state.settings)
         ? "そくていの回にしました。むずかしさは固定されます"
@@ -274,38 +312,48 @@ export function initSettings(ctx) {
     });
   });
 
-  elements.scanFeedback?.addEventListener("change", () => {
-    state.settings.scanFeedback = elements.scanFeedback.value;
-    save();
-    announce("枠が動いたときの音を変えました");
-  });
+  /**
+   * くわしい設定のまとまりごとの「既定に戻す」（確かめ表 B3）。
+   *
+   * 既定は state.js の既定値。いま変えられない項目（そくていで固定・スイッチコントロール中）と
+   * iPad 本体に合わせる項目は戻さない（settingsFields.js の resetPlan）。押したら、何を戻して
+   * 何を残したかをボタンのすぐ下に字で出し、同じ文を読み上げる。その知らせは、同じまとまりの
+   * 項目を手で変えたら消す（古い知らせが今の値と食い違わないように）。
+   */
+  const resets = SETTINGS_GROUPS.filter((group) => group.reset).map((group) => ({
+    group,
+    button: elements[`${group.id}Reset`],
+    status: elements[`${group.id}ResetStatus`],
+    message: "",
+  }));
 
-  elements.fxLevel?.addEventListener("change", () => {
-    state.settings.fxLevel = elements.fxLevel.value;
-    save();
-    const field = fields.find(item => item.id === "fxLevel");
-    field.descriptionOutput.textContent = field.description(state.settings.fxLevel);
-    ctx.fx.syncPolicy();
-    // 画面の名前は「遊びの雰囲気」。読み上げだけ古い名前（演出の強さ）だった。
-    announce(`遊びの雰囲気を「${elements.fxLevel.selectedOptions[0]?.textContent ?? ""}」にしました`);
-    // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
-    ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });
-    ctx.fx?.engine.burst({
-      ...ctx.fx.engine.pointOf(elements.fxLevel),
-      count: 12,
-      shapes: ["sparkle", "star"],
-      colors: ["#FFC83D", "#4DC4FF", "#FFFFFF"],
-      gravity: 120,
+  function renderResets() {
+    resets.forEach((entry) => {
+      const { blockedReason } = resetPlan(entry.group, state.settings);
+      entry.button.disabled = Boolean(blockedReason);
+      const text = blockedReason || entry.message;
+      entry.status.textContent = text;
+      entry.status.hidden = !text;
     });
-  });
+  }
 
-  elements.textMode.addEventListener("change", () => {
-    state.settings.textMode = elements.textMode.value;
-    save();
-    // 利用者の世界の文言が全部変わるので、ホームを描き直す。
-    // 表記は定数として持てない——描画のたびに引き直す必要がある。
-    ctx.views.home.render();
-    announce("文字づかいを変えました");
+  function forgetReset(groupId) {
+    const entry = resets.find((item) => item.group.id === groupId);
+    if (entry) entry.message = "";
+  }
+
+  resets.forEach((entry) => {
+    entry.button.addEventListener("click", () => {
+      const plan = resetPlan(entry.group, state.settings);
+      plan.changes.forEach(({ field, to }) => {
+        state.settings[field.key] = to;
+      });
+      if (plan.changes.length) save();
+      entry.message = describeReset(entry.group, plan);
+      render();
+      afterChange(plan.changes.map(({ field }) => field.key));
+      announce(entry.message);
+    });
   });
 
   elements.startCalibration.addEventListener("click", () => {

@@ -3,13 +3,15 @@
 //
 // よく使う6項目だけを常設し、くわしい設定は目的別に畳む（docs/settings-simple-2026-09-30.md）。
 // 項目の名前・範囲・値の形は settingDefinitions.js（遊びの中の設定と共有する表）から引く。
-// ここで決めるのは、どのまとまりに置くか・DOM の id・いま変えられるか（とその理由）。
+// ここで決めるのは、どのまとまりに置くか・DOM の id・いま変えられるか（とその理由）・
+// 既定に戻すときに何を戻すか。
 // 保存・既定値・そくていの解決は state.js / difficultyMode.js のまま。
 // 見直しの記録: docs/settings-polish-2026-10-01.md。
 // =====================================================================
 
 import { isMeasurementMode } from "./difficultyMode.js";
 import { SETTING_DEFINITIONS, describeSettingValue, effectiveSettingValue, protocolText } from "./settingDefinitions.js";
+import { defaultState } from "./state.js";
 
 /**
  * いま変えられない理由の種類。
@@ -25,14 +27,17 @@ const LOCKS = {
   measured: {
     active: (settings) => isMeasurementMode(settings),
     reason: (field) => `そくていの回は固定です（そくていでは ${protocolText(field.key)}）。`,
+    resetReason: "そくていの回は固定なので、戻せません。",
   },
   switchControl: {
     active: (settings) => settings?.switchControlMode === true,
     reason: () => "iPad のスイッチコントロールを使っているあいだは、アプリの枠を使いません。",
+    resetReason: "iPad のスイッチコントロールを使っているあいだは、戻せません。",
   },
   speech: {
     active: (settings) => settings?.speechEnabled === false,
     reason: () => "「声で読み上げる」がオフのあいだは使いません。",
+    resetReason: "「声で読み上げる」がオフのあいだは、戻せません。",
   },
 };
 
@@ -44,7 +49,11 @@ const FIELD_LOCKS = {
   speechVoice: ["speech"],
 };
 
-/** 画面のまとまり。fields は保存キー（DOM の id が違うものだけ [キー, id]）。 */
+/**
+ * 画面のまとまり。fields は保存キー（DOM の id が違うものだけ [キー, id]）。
+ *   reset … 既定に戻すボタンの文字。くわしい設定のまとまりごとに置く（よく使う設定と研究には置かない）
+ *   keep  … 既定に戻さない項目と、その理由
+ */
 const GROUPS = [
   {
     id: "common",
@@ -55,31 +64,40 @@ const GROUPS = [
     id: "switch",
     title: "スイッチのくわしい設定",
     fields: ["switchControlMode", "autoScan", "scanFeedback", "showScreenSwitch"],
+    // iPad 本体の設定と合わせるもの。アプリだけ既定（オフ）に戻すと、iPad 本体の
+    // スイッチコントロールがオンのまま、アプリの黄色い枠も動き出す（枠が2つ出る）。
+    keep: { switchControlMode: "iPad 本体の設定と合わせるため" },
+    reset: "スイッチの設定を既定に戻す",
   },
   {
     id: "senses",
     title: "見え方・声のくわしい設定",
     fields: ["textMode", "highContrast", "speechVolume", "speechVoice"],
+    reset: "見え方・声の設定を既定に戻す",
   },
   {
     id: "slot",
     title: "リールを止める",
     fields: ["slotCycleMs", "slotToleranceMs", "slotL1Rounds", "slotL2Rounds"],
+    reset: "「リールを止める」を既定に戻す",
   },
   {
     id: "rhythm",
     title: "高い音だけ",
     fields: ["rhythmBpm", ["targetBeats", "rhythmTargetBeats"], "visualGuidance"],
+    reset: "「高い音だけ」を既定に戻す",
   },
   {
     id: "crane",
     title: "アームでつかむ",
     fields: ["craneSweepMs", "craneToleranceR", "craneTargetTrials", "craneAudioGuidance"],
+    reset: "「アームでつかむ」を既定に戻す",
   },
   {
     id: "fishing",
     title: "さかなつり",
     fields: ["fishingLimitMs"],
+    reset: "「さかなつり」を既定に戻す",
   },
   {
     id: "research",
@@ -98,6 +116,7 @@ function buildField(entry, group) {
     id,
     group: group.id,
     locks: [...(definition.measured ? ["measured"] : []), ...(FIELD_LOCKS[key] || [])],
+    keepReason: group.keep?.[key] || "",
   });
 }
 
@@ -155,4 +174,60 @@ export function describedByIds(field, settings) {
     ...(field.key === "switchControlMode" && settings?.switchControlMode === true ? ["switchControlModeNotice"] : []),
     ...(unavailableReason(field, settings) ? [`${field.id}Reason`] : []),
   ].join(" ");
+}
+
+/** state.js の既定値（保存の既定）。画面で「既定」と言うのはこれ。 */
+export function defaultFieldValue(field) {
+  return defaultState.settings[field.key];
+}
+
+/**
+ * まとまりを既定に戻すと何が変わるか（確かめ表 B3「設定を変えたら元に戻せる」）。
+ *
+ * 戻さないもの: いま変えられない項目（そくていで固定・スイッチコントロール中など。触れない
+ * ものを裏で書き換えない）と、keep の項目。どちらも理由を添えて返す（押した人に「何を
+ * 戻して、何を残したか」を知らせるため）。
+ *
+ * @returns {{changes: Array<{field, from, to}>, kept: Array<{field, reason}>, blockedReason: string}}
+ *   blockedReason … 戻せる項目が1つも無いときの理由（ボタンを使えなくし、この文を出す）
+ */
+export function resetPlan(group, settings) {
+  const changes = [];
+  const kept = [];
+  let resettable = 0;
+  group.fields.forEach((field) => {
+    const reason = field.keepReason || unavailableReason(field, settings);
+    if (reason) {
+      kept.push({ field, reason });
+      return;
+    }
+    resettable += 1;
+    const to = defaultFieldValue(field);
+    const from = settings?.[field.key];
+    if (!Object.is(from, to)) changes.push({ field, from, to });
+  });
+  let blockedReason = "";
+  if (resettable === 0) {
+    const [kind] = group.fields.flatMap((field) => activeLocks(field, settings));
+    blockedReason = kind ? LOCKS[kind].resetReason : "戻せる項目がありません。";
+  }
+  return { changes, kept, blockedReason };
+}
+
+/** 既定に戻したあとの知らせ（画面にも読み上げにも同じ文）。 */
+export function describeReset(group, plan) {
+  if (plan.blockedReason) return plan.blockedReason;
+  // 残した理由ごとにまとめる（「そくていの回は固定です」を項目の数だけ繰り返さない）。
+  const byReason = new Map();
+  plan.kept.forEach(({ field, reason }) => {
+    byReason.set(reason, [...(byReason.get(reason) || []), field.label]);
+  });
+  const kept = [...byReason]
+    .map(([reason, labels]) => `変えていないもの: ${labels.join("、")}（${reason.replace(/。$/, "")}）。`)
+    .join("");
+  if (!plan.changes.length) return `「${group.title}」は、もう既定のままです。${kept}`;
+  const changed = plan.changes
+    .map(({ field, from, to }) => `${field.label}（${formatFieldValue(field, from)} → ${formatFieldValue(field, to)}）`)
+    .join("、");
+  return `「${group.title}」を既定に戻しました: ${changed}。${kept}`;
 }

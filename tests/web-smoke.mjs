@@ -12,6 +12,7 @@ import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
 import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS } from "../src/lib/games/partyStage.js";
 import { PARTY_JAR_CAPACITY, PARTY_STARS } from "../src/lib/party.js";
 import { SETTINGS_FIELDS } from "../src/lib/settingsFields.js";
+import { defaultState } from "../src/lib/state.js";
 import { checkResponsiveScreens, checkReadyInputSafety, finishReady } from "./responsive-screens.mjs";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
@@ -103,6 +104,7 @@ const checks = [
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["shows six common settings and preserves values through accessible details", checkSettingsDetails],
+  ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
   ["keeps all supporter screens out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
   ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
   ["moves between visible feature tabs", checkFeatureTabs],
@@ -2058,6 +2060,80 @@ async function checkSettingsDetails(page) {
   await openSettingsDetails(page, "switch");
   await page.locator("#switchControlMode").click();
   assert(!(await page.locator("#scanInterval").isDisabled()) && await page.locator("#scanIntervalReason").isHidden(), "Ending delegation unlocks the scan speed");
+}
+
+/**
+ * くわしい設定のまとまりごとの「既定に戻す」（確かめ表 B3）。
+ *
+ * 既定は state.js の既定値。キーボードだけで届いて押せること、押したら何を戻したかが
+ * ボタンのすぐ下と読み上げに出ること、そくていの回に固定される項目は戻さないこと、
+ * iPad 本体に合わせる「スイッチコントロールを使う」は戻さないことを見る。
+ */
+async function checkSettingsReset(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  const savedSettings = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key)).settings, storageKey);
+  const setRange = (id, value) =>
+    page.locator("#" + id).evaluate((node, next) => {
+      node.value = next;
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+    }, value);
+
+  // リール: 変えてから、最後の項目から Tab で「既定に戻す」へ届き、Enter で戻す。
+  await openSettingsDetails(page, "play");
+  await setRange("slotCycleMs", "4800");
+  await setRange("slotToleranceMs", "100");
+  await page.locator("#slotL2Rounds").focus();
+  await page.keyboard.press("Tab");
+  assert(await page.locator("#slotReset").evaluate((node) => document.activeElement === node), "Tab must reach the reset button of the group");
+  await page.keyboard.press("Enter");
+  let saved = await savedSettings();
+  assert(saved.slotCycleMs === defaultState.settings.slotCycleMs && saved.slotToleranceMs === defaultState.settings.slotToleranceMs, "Reset must restore the state.js defaults");
+  assert(await page.locator("#slotCycleMs").inputValue() === String(defaultState.settings.slotCycleMs), "The slider must show the restored value");
+  const status = page.locator("#slotResetStatus");
+  await status.waitFor({ state: "visible" });
+  assert((await status.textContent()).includes("リールの速さ（4.8秒 → 3.2秒）"), "The supporter must see what was reset");
+  assert((await page.locator("#liveRegion").textContent()).includes("既定に戻しました"), "The reset must be announced");
+  await page.keyboard.press("Space");
+  assert((await status.textContent()).includes("もう既定のまま"), "Pressing again must say nothing changed, not stay silent");
+  // 同じまとまりを手で変えたら、古い知らせは消す。
+  await setRange("slotL1Rounds", "10");
+  assert(await status.isHidden(), "A stale reset message must go away after a manual change");
+
+  // そくていの回: 固定される項目は戻さない。ボタンは押せず、理由をすぐ下に出す。
+  await setRange("craneSweepMs", "3200");
+  await openSettingsDetails(page, "research");
+  await page.locator("#difficultyMode").selectOption("measure");
+  assert(await page.locator("#craneReset").isDisabled(), "Reset of a measured group must be locked in a measured run");
+  assert((await page.locator("#craneResetStatus").textContent()).includes("そくていの回は固定"), "The locked reset must say why");
+  assert((await savedSettings()).craneSweepMs === 3200, "A measured run must keep the practice value");
+  await page.locator("#difficultyMode").selectOption("practice");
+  await page.locator("#craneReset").click();
+  assert((await savedSettings()).craneSweepMs === null, "Practice reset returns to the game default (null)");
+
+  // スイッチ: iPad 本体に合わせるものは戻さない。
+  await openSettingsDetails(page, "switch");
+  await page.locator("#scanFeedback").selectOption("speak");
+  await page.locator("#showScreenSwitch").check();
+  await page.locator("#showScreenSwitch").focus();
+  await page.keyboard.press("Tab");
+  assert(await page.locator("#switchReset").evaluate((node) => document.activeElement === node), "Tab must reach the switch reset button");
+  await page.keyboard.press("Space");
+  saved = await savedSettings();
+  assert(saved.scanFeedback === "none" && saved.showScreenSwitch === false && saved.switchControlMode === false, "Switch reset restores the app-side switch settings");
+  assert(!(await page.evaluate(() => document.body.classList.contains("screen-switch-on"))), "Reset must reach the screen, not only the saved value");
+
+  // 見え方: 文字づかいを戻すと、ホームの文言も戻る。
+  await openSettingsDetails(page, "senses");
+  await page.locator("#textMode").selectOption("en");
+  await page.locator("#sensesReset").click();
+  assert((await savedSettings()).textMode === "ruby", "Senses reset restores the text mode");
+  assert(await page.evaluate(() => document.documentElement.classList.contains("text-ruby")), "The restored text mode must reach the page");
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert(overflow <= 2, `Reset buttons and messages must stay within the viewport, overflow ${overflow}px`);
 }
 
 /**

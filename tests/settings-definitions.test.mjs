@@ -15,10 +15,13 @@ import { SETTING_DEFINITIONS, inGameSettingKeys, protocolText } from "../src/lib
 import {
   SETTINGS_FIELDS,
   SETTINGS_GROUPS,
+  describeReset,
   describedByIds,
   fieldValue,
   formatFieldValue,
+  resetPlan,
   settingsField,
+  settingsGroup,
   unavailableReason,
 } from "../src/lib/settingsFields.js";
 import { defaultState, sanitizeState } from "../src/lib/state.js";
@@ -178,6 +181,58 @@ test("a control that cannot be changed says why in its own row, from one functio
   });
   assert.equal(unavailableReason(settingsField("slotCycleMs"), measuring), "そくていの回は固定です（そくていでは 3.2秒）。");
   assert.equal(describedByIds(settingsField("fxLevel"), practice), "fxLevelHint fxLevelDescription");
+});
+
+test("each detailed group can go back to the state.js defaults, except what cannot change now", () => {
+  const withReset = SETTINGS_GROUPS.filter((group) => group.reset).map((group) => group.id);
+  assert.deepEqual(withReset, ["switch", "senses", "slot", "rhythm", "crane", "fishing"], "くわしい設定のまとまりごと");
+
+  const slot = settingsGroup("slot");
+  const changed = { ...defaultState.settings, slotCycleMs: 4800, slotToleranceMs: 100 };
+  const plan = resetPlan(slot, changed);
+  assert.equal(plan.blockedReason, "");
+  assert.deepEqual(
+    plan.changes.map(({ field, from, to }) => [field.key, from, to]),
+    [
+      ["slotCycleMs", 4800, defaultState.settings.slotCycleMs],
+      ["slotToleranceMs", 100, defaultState.settings.slotToleranceMs],
+    ]
+  );
+  assert.equal(
+    describeReset(slot, plan),
+    "「リールを止める」を既定に戻しました: リールの速さ（4.8秒 → 3.2秒）、「合った」にする広さ（0.1秒 → 0.22秒）。"
+  );
+  assert.equal(describeReset(slot, resetPlan(slot, defaultState.settings)), "「リールを止める」は、もう既定のままです。");
+
+  // null（あそびごとの既定）へ戻すものは null へ。値の文はプリセットで読む。
+  const crane = settingsGroup("crane");
+  const cranePlan = resetPlan(crane, { ...defaultState.settings, craneSweepMs: 3200, craneAudioGuidance: true });
+  assert.deepEqual(cranePlan.changes.map(({ field, to }) => [field.key, to]), [["craneSweepMs", null], ["craneAudioGuidance", false]]);
+  assert.match(describeReset(crane, cranePlan), /アームの速さ（3\.2秒 → 2\.2秒）/);
+
+  // そくていの回: 固定される項目は戻さない。全部固定のまとまりは押せず、理由を出す。
+  const measuring = { ...changed, difficultyMode: "measure" };
+  ["slot", "rhythm", "crane", "fishing"].forEach((id) => {
+    const measuredPlan = resetPlan(settingsGroup(id), measuring);
+    assert.equal(measuredPlan.changes.length, 0, `${id} はそくていで戻さない`);
+    assert.equal(measuredPlan.blockedReason, "そくていの回は固定なので、戻せません。");
+  });
+  assert.equal(resetPlan(settingsGroup("senses"), measuring).blockedReason, "", "固定されないまとまりは、そくていでも戻せる");
+
+  // スイッチ: iPad 本体に合わせる項目は戻さない。スイッチコントロール中は枠の自動も戻さない（枠が2つ出る）。
+  const switchGroup = settingsGroup("switch");
+  const delegated = { ...defaultState.settings, switchControlMode: true, autoScan: false, scanFeedback: "speak", showScreenSwitch: true };
+  const switchPlan = resetPlan(switchGroup, delegated);
+  assert.deepEqual(switchPlan.changes.map(({ field }) => field.key), ["scanFeedback", "showScreenSwitch"]);
+  assert.deepEqual(switchPlan.kept.map(({ field }) => field.key), ["switchControlMode", "autoScan"]);
+  const message = describeReset(switchGroup, switchPlan);
+  assert.match(message, /枠が動いたときの音（名前を読む → なし）/);
+  assert.match(message, /変えていないもの: iPad のスイッチコントロールを使う（iPad 本体の設定と合わせるため）/);
+  assert.match(message, /変えていないもの: 枠を自動で動かす（iPad のスイッチコントロールを使っているあいだは/);
+
+  // 読み上げがオフのあいだは、声の大きさと声を戻さない（戻しても効かない）。
+  const sensesPlan = resetPlan(settingsGroup("senses"), { ...defaultState.settings, speechEnabled: false, highContrast: true, speechVolume: 0.4 });
+  assert.deepEqual(sensesPlan.changes.map(({ field }) => field.key), ["highContrast"]);
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

@@ -8,7 +8,7 @@
 // document.querySelector を併用している。
 // =====================================================================
 
-import { SETTINGS_FIELDS } from "./settingsFields.js";
+import { SETTINGS_FIELDS, SETTINGS_GROUPS } from "./settingsFields.js";
 
 export function collectElements() {
   return {
@@ -22,7 +22,15 @@ export function collectElements() {
         [`${field.id}Reason`, document.getElementById(`${field.id}Reason`)],
       ])
     ),
+    // くわしい設定のまとまりごとの「既定に戻す」と、その知らせ（SettingsReset.svelte）。
+    ...Object.fromEntries(
+      SETTINGS_GROUPS.filter((group) => group.reset).flatMap((group) => [
+        [`${group.id}Reset`, document.getElementById(`${group.id}Reset`)],
+        [`${group.id}ResetStatus`, document.getElementById(`${group.id}ResetStatus`)],
+      ])
+    ),
     // 設定画面の常設部分（SettingsView.svelte / SettingsGuide.svelte）。
+    settingsView: document.querySelector("#settings"),
     settingsModeStatus: document.querySelector("#settingsModeStatus"),
     settingsGuidePrint: document.querySelector("#settingsGuidePrint"),
     soundCreditsList: document.querySelector("#soundCreditsList"),

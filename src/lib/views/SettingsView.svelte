@@ -5,6 +5,7 @@
   import { settingsGroup as group } from "../settingsFields.js";
   import SettingsFields from "./SettingsFields.svelte";
   import SettingsGuide from "./SettingsGuide.svelte";
+  import SettingsReset from "./SettingsReset.svelte";
 
   const playGroups = ["slot", "rhythm", "crane", "fishing"].map(group);
 </script>
@@ -27,6 +28,7 @@
           iPad 本体の「設定」→「アクセシビリティ」→「スイッチコントロール」もオンにしてください。
           アプリの枠と読み上げはいったん止まります。声は上の「声で読み上げる」で戻せます。
         </p>
+        <SettingsReset group={group("switch")} />
       </div>
     </details>
     <details class="settings-details" id="settingsSenses">
@@ -35,6 +37,7 @@
         <SettingsFields group={group("senses")} />
         <p class="settings-group-note">アプリの声はネットが無くても使えます。端末の声は iPad の読み上げ設定で選びます。</p>
         <p class="settings-group-note">刺激に弱い人は、遊びの雰囲気を「すっきり」か「なし」に。光の点滅はどの雰囲気も1秒に3回までです。</p>
+        <SettingsReset group={group("senses")} />
       </div>
     </details>
     <details class="settings-details" id="settingsPlay">
@@ -46,6 +49,7 @@
         {#each playGroups as playGroup (playGroup.id)}
           <h3 class="settings-group-title">{playGroup.title}</h3>
           <SettingsFields group={playGroup} />
+          <SettingsReset group={playGroup} />
         {/each}
       </div>
     </details>
