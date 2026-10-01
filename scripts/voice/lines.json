@@ -1326,6 +1326,12 @@
    ]
   },
   {
+   "text": "おわる？",
+   "from": [
+    "game.switchMenuTitle"
+   ]
+  },
+  {
    "text": "か",
    "from": [
     "letters.option"
@@ -1670,6 +1676,12 @@
    "text": "もういちど読む",
    "from": [
     "learn.again"
+   ]
+  },
+  {
+   "text": "もういちど遊ぶ？",
+   "from": [
+    "game.switchMenuTitle"
    ]
   },
   {
@@ -3531,6 +3543,12 @@
    "text": "Pick a letter.",
    "from": [
     "tile.letters.title (ready)"
+   ]
+  },
+  {
+   "text": "Play again or finish?",
+   "from": [
+    "game.switchMenuTitle"
    ]
   },
   {
