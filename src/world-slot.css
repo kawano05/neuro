@@ -13,6 +13,7 @@
 .slot-stage.is-practice {
   isolation: isolate;
   background: linear-gradient(180deg, #8ED8F7 0%, #DDF5FF 62%, #EEF8E9 100%);
+  color: #1a1a1a;
 }
 
 .slot-stage.is-practice .slot-world {
@@ -51,8 +52,9 @@
 .slot-task[data-difficulty-mode="practice"] .slot-world-symbol svg { display: block; width: 100%; height: 100%; overflow: visible; }
 
 .slot-stage.is-practice .slot-reel {
+  border: 4px solid #493578;
   background: linear-gradient(180deg, #A996DF 0%, #8069C3 18%, #6F5BB8 88%, #59439D 100%);
-  border-color: #493578;
+  color: #ffffff;
   box-shadow: inset 0 5px 0 #D7CAF4, inset 0 -5px 0 #493578, 0 5px 0 #493578;
 }
 

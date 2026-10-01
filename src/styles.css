@@ -693,7 +693,7 @@ body.high-contrast #settings .settings-reset-status { border-left-color: #000000
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .readiness-item {
@@ -1374,10 +1374,6 @@ body.high-contrast .rhythm-pulse::before {
 body.high-contrast .rhythm-offset-track {
   border: 3px solid #ffffff;
   background: rgba(0, 0, 0, 0.4);
-}
-
-body.high-contrast .rhythm-offset-mark {
-  border: 3px solid #ffffff;
 }
 
 body.high-contrast .rhythm-offset-center {
@@ -3542,8 +3538,8 @@ body.high-contrast .fishing-deep {
 }
 
 .crane-tray-label {
-  color: rgba(255, 255, 255, 0.66);
-  font-size: clamp(0.75rem, 1.6vw, 0.95rem);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: clamp(0.9rem, 1.8vw, 1.05rem);
   font-weight: 700;
   letter-spacing: 0.08em;
 }
@@ -4776,11 +4772,6 @@ body.game-mode .app-shell {
   line-height: 1.55;
 }
 
-.readiness-list {
-  display: grid;
-  gap: 10px;
-}
-
 .field-row {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
@@ -5563,10 +5554,6 @@ input[type="checkbox"]:checked::before {
     border: 0;
     background: none;
     padding: 6px 0 0;
-  }
-
-  .crane-stage {
-    max-height: 74vh;
   }
 }
 
