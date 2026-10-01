@@ -16,6 +16,8 @@ import "./world-slot.css";
 import "./world-crane.css";
 // さかなつり（押すと 出てくる とつながる海）。
 import "./world-fishing.css";
+// 高い音だけ（夕方の丘の音楽会）。
+import "./world-gonogo.css";
 // 説明・けっか・れんしゅうの割り付けを、画面の大きさに合わせる。
 import "./responsive.css";
 // 装飾の動きを止める決まり（雰囲気・動きを減らす・そくてい）。どの動きより

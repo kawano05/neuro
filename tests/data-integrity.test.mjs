@@ -53,6 +53,8 @@ import { POP_ANIMALS } from "../src/lib/art/hakkiriArt.js";
 import { SLOT_ENGINE_VERSION } from "../src/lib/games/slotJudge.js";
 import { CRANE_ART_VERSION } from "../src/lib/art/craneWorldArt.js";
 import { FISHING_ART_VERSION } from "../src/lib/art/fishingWorldArt.js";
+import { GONOGO_ART_VERSION } from "../src/lib/art/gonogoWorldArt.js";
+import { rhythmArtVersion } from "../src/lib/games/rhythmVisuals.js";
 
 class MemoryStorage {
   constructor() {
@@ -1976,8 +1978,8 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
   // 途中に挿すと、列位置で読んでいる解析側が黙って壊れる。
   // 既存18列 ＋ visualGuidance ＋ difficultyMode ＋ 端末7列 ＋ readiness。
   // 端末列は 2026-08-29 に deviceInputMethod を末尾へ足して7つになった。
-  // ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
-  assert.equal(rows[0].length, 20 + 7 + 2);
+  // ＋ fxLevel（演出の強さ。2026-09-28）＋ artVersion（見え方の版。2026-10-01、いちばん後ろ）。
+  assert.equal(rows[0].length, 20 + 7 + 3);
   assert.equal(rows[0][16], "judgment");
   assert.equal(rows[0][17], "excluded");
   assert.equal(rows[0][18], "visualGuidance");
@@ -1991,12 +1993,14 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
 
   // 末尾に成立確認の状態（src/lib/readinessCheck.js）。この列が無いと、
   // 成績の低い回について「そもそも課題が成立していたのか」を後から分けられない。
-  assert.equal(rows[0].at(-2), "measurementReadiness");
-  assert.equal(rows[0].at(-1), "fxLevel");
+  assert.equal(rows[0].at(-3), "measurementReadiness");
+  assert.equal(rows[0].at(-2), "fxLevel");
+  assert.equal(rows[0].at(-1), "artVersion");
   // 列を持たない古い記録は n/a。met と復元してしまうと、確認を経た回と
   // 区別できなくなる。
-  assert.equal(rows[1].at(-2), "n/a");
-  assert.equal(rows[1].at(-1), "");
+  assert.equal(rows[1].at(-3), "n/a");
+  assert.equal(rows[1].at(-2), "");
+  assert.equal(rows[1].at(-1), "", "見え方の版を持たない古い記録は空欄");
 });
 
 test("the rhythm CSV carries the readiness state of a measurement run", () => {
@@ -2026,7 +2030,8 @@ test("the rhythm CSV carries the readiness state of a measurement run", () => {
   ]);
   // 成立確認を通さずに測った回。測定は止めない代わりに、必ずそう書き出す
   // ——保存されているだけで書き出されない値は、実質「記録していない」のと同じ。
-  assert.equal(rows[1].at(-2), "overridden");
+  assert.equal(rows[0].at(-3), "measurementReadiness");
+  assert.equal(rows[1].at(-3), "overridden");
 });
 
 test("the effect level survives config -> sanitize -> CSV for every timing game", () => {
@@ -2164,6 +2169,92 @@ test("the art version survives config -> sanitize -> CSV for the arm and fishing
     ledger.slice(1).map((row) => row.at(-1)),
     [CRANE_ART_VERSION, FISHING_ART_VERSION, ""]
   );
+});
+
+test("the rhythm art version is the art that was shown and survives config -> sanitize -> CSV", () => {
+  // 高い音だけの れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）。記録するのは
+  // 「その回に見せた絵の版」（src/lib/artVersion.js）: そくていの回はいつでも 1、
+  // 作り直していないリズムの遊び（リズム練習・続けて・キャリブレーション）も 1。
+  assert.equal(rhythmArtVersion("gonogo", false), GONOGO_ART_VERSION);
+  assert.equal(rhythmArtVersion("gonogo", true), ORIGINAL_ART_VERSION);
+  assert.equal(rhythmArtVersion("gonogo", false), shownArtVersion("practice", GONOGO_ART_VERSION));
+  assert.equal(rhythmArtVersion("gonogo", true), shownArtVersion("measure", GONOGO_ART_VERSION));
+  for (const gameId of ["rhythm-l1", "rhythm-l2", "calibration"]) {
+    assert.equal(rhythmArtVersion(gameId, false), ORIGINAL_ART_VERSION, `${gameId}: 絵は元のまま`);
+    assert.equal(rhythmArtVersion(gameId, true), ORIGINAL_ART_VERSION, `${gameId}: そくていは元の絵`);
+  }
+
+  const base = {
+    taskType: "gonogo",
+    gameId: "gonogo",
+    participantId: "P001",
+    startedAtIso: "2026-10-01T00:00:00.000Z",
+    aborted: false,
+    finished: false,
+    device: {},
+    trials: [
+      {
+        index: 0,
+        beatIndex: 0,
+        beatKind: "go",
+        scheduledMs: 3600,
+        inputMs: 3650,
+        rawOffsetMs: 50,
+        appliedBaselineMs: 0,
+        judgment: "hit",
+        excluded: false,
+      },
+    ],
+  };
+  const gonogoConfig = {
+    ...RHYTHM_CONFIG,
+    mode: "gonogo",
+    countInBeats: 3,
+    targetBeats: 1,
+    goRatio: 0.6,
+    seedSequence: ["go"],
+  };
+  const sanitized = sanitizeState({
+    sessions: [
+      {
+        ...base,
+        sessionId: "art-gonogo-practice",
+        config: { ...gonogoConfig, difficultyMode: "practice", artVersion: GONOGO_ART_VERSION },
+      },
+      {
+        ...base,
+        sessionId: "art-gonogo-measure",
+        config: { ...gonogoConfig, difficultyMode: "measure", artVersion: ORIGINAL_ART_VERSION },
+      },
+      { ...base, sessionId: "art-gonogo-old", config: { ...gonogoConfig } },
+    ],
+  });
+  const byId = (id) => sanitized.sessions.find((session) => session.sessionId === id);
+  // 1. sanitize: 再読み込みで消えない。持たない古い記録は null（分からない）。
+  assert.equal(byId("art-gonogo-practice").config.artVersion, GONOGO_ART_VERSION);
+  assert.equal(byId("art-gonogo-measure").config.artVersion, ORIGINAL_ART_VERSION);
+  assert.equal(byId("art-gonogo-old").config.artVersion, null);
+  for (const value of [-1, 0, 1.8, "2", NaN, Infinity, null, undefined, 1, 2, 1001]) {
+    const restored = sanitizeState({
+      sessions: [{ ...base, sessionId: "art-v", config: { ...gonogoConfig, artVersion: value } }],
+    }).sessions[0];
+    assert.equal(
+      restored.config.artVersion,
+      Number.isInteger(value) && value >= 1 ? value : null,
+      `artVersion ${String(value)}: 1以上の整数だけを丸めずに残す`
+    );
+  }
+
+  // 2. リズムの CSV: いちばん後ろの列（ほかの列の位置を動かさない）。
+  const rows = buildRhythmCsvRows([byId("art-gonogo-practice"), byId("art-gonogo-measure"), byId("art-gonogo-old")]);
+  assert.equal(rows[0].at(-1), "artVersion");
+  assert.equal(rows[0].at(-2), "fxLevel");
+  assert.deepEqual(rows.slice(1).map((row) => row.at(-1)), [GONOGO_ART_VERSION, ORIGINAL_ART_VERSION, ""]);
+
+  // 3. 台帳: どの課題も同じ列。
+  const ledger = buildSessionLedgerRows([byId("art-gonogo-practice"), byId("art-gonogo-measure"), byId("art-gonogo-old")]);
+  assert.equal(ledger[0].at(-1), "artVersion");
+  assert.deepEqual(ledger.slice(1).map((row) => row.at(-1)), [GONOGO_ART_VERSION, ORIGINAL_ART_VERSION, ""]);
 });
 
 test("the phrase board has English for every phrase and group", () => {

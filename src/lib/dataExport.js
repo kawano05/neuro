@@ -107,8 +107,8 @@ export const SESSION_LEDGER_HEADERS = Object.freeze([
   // 演出の強さ（src/lib/fx/）。configJson の中にもあるが、層別にすぐ使えるよう列にも出す。
   // 末尾に足す（列位置を動かさない）。演出エンジンより前の記録は空欄。
   "fxLevel",
-  // 見え方の版（アームとさかなつり。config.artVersion）。fxLevel の後ろに足す。
-  // ほかの課題と、この列より前の記録は空欄。
+  // 見え方の版（config.artVersion。その回に画面へ出した絵の版、src/lib/artVersion.js）。
+  // fxLevel の後ろに足す。版を持たない課題と、この列より前の記録は空欄。
   "artVersion",
 ]);
 
@@ -186,6 +186,10 @@ export function buildRhythmCsvRows(sessions) {
       // 当たったときの星や紙吹雪が成績に効きうる。末尾に足す（列位置を動かさない）。
       // 演出エンジンより前の記録は空欄。
       "fxLevel",
+      // 見え方の版（その回に画面へ出した絵の版。src/lib/artVersion.js）。高い音だけの
+      // れんしゅうの回は絵を作り直したので、変わる前後の回を分ける。そくていの回はいつでも 1。
+      // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
+      "artVersion",
     ],
   ];
   sessions.forEach((session) => {
@@ -215,6 +219,7 @@ export function buildRhythmCsvRows(sessions) {
         ...deviceColumns(session),
         config.measurementReadiness ?? "n/a",
         config.fxLevel ?? "",
+        config.artVersion ?? "",
       ]);
     });
   });

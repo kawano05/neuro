@@ -511,6 +511,9 @@ export function createRhythmGame(gameId) {
     let offsetMeanEl = null;
     let rhythmVisuals = null;
     let visualPresentation = "instrument";
+    // その回に画面へ出した絵の版（rhythmVisuals.js の rhythmArtVersion）。版面と同じく
+    // mount() で1回だけ決め、記録に残す。
+    let artVersion = null;
     let rafId = null;
     let destroyed = false;
     let hitFlashTimer = null;
@@ -622,6 +625,7 @@ export function createRhythmGame(gameId) {
       offsetTrackEl = mounted.offsetTrackEl;
       offsetMeanEl = mounted.offsetMeanEl;
       visualPresentation = rhythmVisuals.profile;
+      artVersion = rhythmVisuals.artVersion;
     }
 
     /** 目盛りの上の位置（0=左端＝いちばん早い, 1=右端＝いちばん遅い）。 */
@@ -718,6 +722,17 @@ export function createRhythmGame(gameId) {
       setProgress(t("progress.remainingCount", { n: remainingBeats.length }));
     }
 
+    /**
+     * 押したときの返り（演出の粒・おおさわぎの仲間）を出す場所。手がかりを出す回は判定の帯。
+     * 出さない回（計器盤）は帯が隠れていて箱が (0,0) なので、粒が画面の左上に出ていた。
+     * そのときは押すところの円（太鼓）から出す。そくていの回は演出が何もしないので変わらない。
+     */
+    function feedbackSource() {
+      const hitLine = stageEl?.querySelector(".rhythm-hit-line");
+      if (hitLine && hitLine.getBoundingClientRect().width > 0) return hitLine;
+      return pulseEl || stageEl?.querySelector(".rhythm-judgment");
+    }
+
     /** 1件の trial 行をセッションへ追加し、gameHost へ永続化を依頼する。 */
     function recordTrial(row) {
       session.trials.push({ index: session.trials.length, ...row });
@@ -725,7 +740,7 @@ export function createRhythmGame(gameId) {
       logTrial(session);
       if (row.beatIndex !== null) ctx.party?.react({
         success: row.judgment === "hit" || row.judgment === "correctRejection",
-        source: stageEl?.querySelector(".rhythm-hit-line") || stageEl?.querySelector(".rhythm-judgment"),
+        source: feedbackSource(),
         total: plan.judgedBeats.length,
       });
     }
@@ -846,7 +861,7 @@ export function createRhythmGame(gameId) {
       });
       // 合った音符がはじける（れんしゅうの回だけ。そくていの回は演出エンジンが何もしない）。
       if (result.judgment === "hit") {
-        ctx.fx?.noteHit(stageEl?.querySelector(".rhythm-hit-line") || stageEl?.querySelector(".rhythm-judgment"));
+        ctx.fx?.noteHit(feedbackSource());
       }
       playFeedback(result.judgment);
       updateProgressText();
@@ -948,6 +963,10 @@ export function createRhythmGame(gameId) {
           difficultyMode: resolveDifficultyMode(settings),
           // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
           fxLevel: ctx.fx?.level() ?? null,
+          // 見え方の版（その回に画面へ出した絵の版。src/lib/artVersion.js）。高い音だけの
+          // れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）ので、変わる前後の回を
+          // 分けられるようにする。そくていの回はいつでも 1。
+          artVersion,
           // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
           // 通っていない状態でも測定は止めない代わりに、どちらだったかを必ず
           // 残す。成績が低かった回について「規則を理解していなかったのでは」を

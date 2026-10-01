@@ -5,7 +5,24 @@
 // judgedBeats を「通常練習では流れる1レーン」「測定では予告なしの計器盤」へ
 // 描き分ける。見た目を本格的なゲームへ引き上げても、研究用の rawOffsetMs を
 // 書き換えない境界をファイル単位で明確にする。
+//
+// 絵（skin）は2通り。高い音だけの れんしゅうの回は音楽会の世界（art/gonogoWorldArt.js、
+// 見え方の版 2）、それ以外（そくていの回・ほかのリズムの遊び）は今までの絵（版 1）。
+// どちらも同じ骨組み（同じ class・同じ並び）に中身の絵を差すだけなので、玉・太鼓・
+// 判定の位置と大きさ、時刻は変わらない。今までの絵の組み立ては、1文字も変えない
+// （そくていの回の画面を1pxも変えないため）。
 // =====================================================================
+
+import { ORIGINAL_ART_VERSION, shownArtVersion } from "../artVersion.js";
+import {
+  GONOGO_ART_VERSION,
+  gonogoIconSvg,
+  gonogoNoteSvg,
+  gonogoPadSvg,
+  gonogoSceneryHtml,
+  gonogoShieldSvg,
+  gonogoStageHtml,
+} from "../art/gonogoWorldArt.js";
 
 export const RHYTHM_NOTE_LEAD_MIN_MS = 1800;
 export const RHYTHM_NOTE_LEAD_MAX_MS = 3200;
@@ -65,6 +82,57 @@ function noteIcon(gameId, kind) {
 }
 
 /**
+ * れんしゅうの回の絵の版（遊びごと）。作り直したのは高い音だけ。リズム練習・続けては
+ * 利用者の導線に出していない（registry.js）ので、今までの絵のまま。
+ */
+const PRACTICE_ART_VERSIONS = Object.freeze({ gonogo: GONOGO_ART_VERSION });
+
+/**
+ * その回に画面へ出す絵の版（session.config.artVersion に残す。src/lib/artVersion.js）。
+ * measurement は予告のない測定の版面を出す回（そくていの回と、キャリブレーション）。
+ * キャリブレーションは支援者の設定が れんしゅう でも元の絵なので、どちらでも 1 になる。
+ */
+export function rhythmArtVersion(gameId, measurement) {
+  return shownArtVersion(
+    measurement ? "measure" : "practice",
+    PRACTICE_ART_VERSIONS[gameId] ?? ORIGINAL_ART_VERSION
+  );
+}
+
+/** 今までの絵（版 1）。組み立てた文字列が、この版を足す前と1文字も変わらないこと。 */
+function originalSkin(gameId) {
+  return {
+    world: false,
+    iconHtml: `<i class="${THEME_ICONS[gameId] || "fa-solid fa-music"}"></i>`,
+    shieldHtml: `<i class="fa-solid fa-shield"></i>`,
+    sceneryHtml: "",
+    stageHtml: "",
+    padHtml: "",
+    noteHtml: (kind) => `<i class="${noteIcon(gameId, kind)}"></i>`,
+  };
+}
+
+/** 高い音だけ・れんしゅうの回の音楽会（版 2）。 */
+function gonogoWorldSkin() {
+  return {
+    world: true,
+    iconHtml: gonogoIconSvg(),
+    shieldHtml: gonogoShieldSvg(),
+    sceneryHtml: gonogoSceneryHtml(),
+    stageHtml: gonogoStageHtml(),
+    padHtml: gonogoPadSvg(),
+    noteHtml: (kind) => gonogoNoteSvg(kind),
+  };
+}
+
+/** 版から絵を選ぶ。知らない組み合わせは今までの絵（そくていと同じ見え方）へ倒す。 */
+export function rhythmSkin(gameId, artVersion) {
+  return gameId === "gonogo" && artVersion === GONOGO_ART_VERSION
+    ? gonogoWorldSkin()
+    : originalSkin(gameId);
+}
+
+/**
  * @param {{
  *   gameId:string,
  *   visualGuidance:boolean,
@@ -77,6 +145,8 @@ function noteIcon(gameId, kind) {
 export function createRhythmVisuals(options) {
   const { gameId, visualGuidance, reduceMotion, measurement, exactToleranceMs, t } = options;
   const profile = rhythmVisualProfile(gameId, visualGuidance);
+  const artVersion = rhythmArtVersion(gameId, measurement);
+  const skin = rhythmSkin(gameId, artVersion);
   let stageEl = null;
   let pulseEl = null;
   let noteLayerEl = null;
@@ -117,14 +187,16 @@ export function createRhythmVisuals(options) {
     // れんしゅうの回だけの見た目（明るい色・飾りを減らす。theme-hakkiri.css）。
     // そくていの回（measurement）は今までの見た目のまま。
     stageEl.dataset.rhythmMode = measurement ? "measure" : "practice";
-    const icon = THEME_ICONS[gameId] || "fa-solid fa-music";
+    // れんしゅうの回の印（ほかのタイミングの遊びと同じ .is-practice）。高い音だけの世界の
+    // CSS（world-gonogo.css）は、この印の下にだけ書く。
+    stageEl.classList.toggle("is-practice", !measurement);
     stageEl.innerHTML = `
-      <div class="rhythm-world" aria-hidden="true">
+      <div class="rhythm-world" aria-hidden="true">${skin.sceneryHtml}
         <div class="rhythm-aurora"></div>
         <div class="rhythm-grid-floor"></div>
         <div class="rhythm-cabinet">
           <div class="rhythm-cabinet-header">
-            <span class="rhythm-cabinet-icon"><i class="${icon}"></i></span>
+            <span class="rhythm-cabinet-icon">${skin.iconHtml}</span>
             <strong class="rhythm-cabinet-title">${titleHtml}</strong>
             <span class="rhythm-cabinet-lamps">
               <i></i><i></i><i></i><i></i>
@@ -132,7 +204,7 @@ export function createRhythmVisuals(options) {
           </div>
           <div class="rhythm-playfield">
             ${speakerMarkup("left")}
-            <div class="rhythm-main-display">
+            <div class="rhythm-main-display">${skin.stageHtml}
               <div class="rhythm-note-lane">
                 <span class="rhythm-lane-rail is-left"></span>
                 <span class="rhythm-lane-rail is-right"></span>
@@ -145,12 +217,12 @@ export function createRhythmVisuals(options) {
                 <span class="rhythm-dial-crosshair is-horizontal"></span>
                 <span class="rhythm-dial-crosshair is-vertical"></span>
               </div>
-              <div class="rhythm-pulse"></div>
+              <div class="rhythm-pulse">${skin.padHtml}</div>
               <div class="rhythm-judgment">
                 <strong></strong>
                 <span class="rhythm-combo"></span>
               </div>
-              <div class="rhythm-shield"><i class="fa-solid fa-shield"></i></div>
+              <div class="rhythm-shield">${skin.shieldHtml}</div>
             </div>
             ${speakerMarkup("right")}
           </div>
@@ -195,7 +267,7 @@ export function createRhythmVisuals(options) {
       const node = document.createElement("span");
       node.className = `rhythm-note is-${beat.kind === "nogo" ? "nogo" : "go"}`;
       node.dataset.beatIndex = String(beat.index);
-      node.innerHTML = `<i class="${noteIcon(gameId, beat.kind)}"></i>`;
+      node.innerHTML = skin.noteHtml(beat.kind);
       node.hidden = true;
       noteLayerEl.append(node);
       noteNodes.set(beat.index, { node, beat });
@@ -320,7 +392,7 @@ export function createRhythmVisuals(options) {
     feedbackTimer = null;
     noteNodes.clear();
     if (stageEl) {
-      stageEl.classList.remove("module-rhythm");
+      stageEl.classList.remove("module-rhythm", "is-practice");
       delete stageEl.dataset.rhythmTheme;
       delete stageEl.dataset.rhythmProfile;
       delete stageEl.dataset.rhythmMode;
@@ -338,5 +410,5 @@ export function createRhythmVisuals(options) {
     instrumentPhaseEl = null;
   }
 
-  return { mount, setBeats, tick, showJudgment, destroy, profile };
+  return { mount, setBeats, tick, showJudgment, destroy, profile, artVersion };
 }

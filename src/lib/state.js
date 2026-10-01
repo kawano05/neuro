@@ -714,6 +714,10 @@ function sanitizeRhythmSession(session, taskType) {
     // 成績に効きうるので、実際に効いていた強さを残す。この列を持たない古い記録は
     // 演出エンジンが無かった頃のもので、null（分からない）のまま。
     fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
+    // 見え方の版（その回に画面へ出した絵の版。src/lib/artVersion.js）。高い音だけの
+    // れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）。落とすと再読み込みで消え、
+    // 絵が変わる前後の回を分けられない。この列を持たない古い記録は null（分からない）。
+    artVersion: sanitizeArtVersion(config.artVersion),
     // どの表記で回したか。手順の説明が読めるかは成績に効きうる。
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
