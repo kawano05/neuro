@@ -7481,6 +7481,15 @@ ruby {
   /* 古い WebKit は接頭辞つきしか見ない。iOS 実機の版が読めない以上、
      両方書いておく（外れるとふりがなが本文の下に回る）。 */
   -webkit-ruby-position: before;
+  /* ふりがなが漢字より長いとき（目標[もくひょう]）、既定（space-around）は漢字を割り付けて
+     「目　標」と2語に見せる。熟語はまとめて真ん中に置く。 */
+  ruby-align: center;
+}
+
+/* 遊ぶ面の中は前のまま（そくていの回の画面を1画素も変えない。docs/rules/measurement-invariance.md）。
+   遊ぶ前の説明（.is-ready）は遊ぶ面の外の扱い。 */
+#gameStageContent:not(.is-ready) ruby {
+  ruby-align: space-around;
 }
 
 rt {
@@ -7520,6 +7529,13 @@ html.text-ruby :is(
   .summary-tile,
   .spread-legend
 ) {
+  line-height: 2;
+}
+
+/* 遊ぶ前の説明の画面のボタンと札、抜けるときの問い（どれも遊ぶ面の外）。上の一覧に ID を
+   混ぜると :is() の詳細度が一覧の全部で ID の強さになり、そくていの画面の札の行間まで
+   変わりうるので、別の規則にする。 */
+html.text-ruby :is(.session-mode, .game-ready-controls button, .game-switch-menu > *) {
   line-height: 2;
 }
 

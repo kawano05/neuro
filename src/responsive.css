@@ -43,12 +43,16 @@ body.game-mode.user-world .game-stage-content.is-ready {
   gap: clamp(8px, 1.5vh, 18px);
   min-width: 0;
 }
-/* ホームで押したタイルと同じ絵（「さっき押した遊び」だと分かるように）。 */
+/* ホームで押したタイルと同じ絵（「さっき押した遊び」だと分かるように）。
+   絵は横長（360:176。art/hakkiriArt.js の SCENE_ART）。箱もこの比のまま、幅の上限と高さの上限の
+   きびしい方に合わせる（--ready-art-max-h × 360/176 が、高さから決まる幅）。以前は幅と高さを
+   両方決めていて aspect-ratio が効かず、縦長の画面（iPhone 縦・iPad 縦）では箱が縦長になり、
+   絵の左右が切れていた（2026-10-01、14 の大きさの撮影で見つけた）。 */
 .game-ready-art {
+  --ready-art-max-h: clamp(96px, 22vh, 240px);
   display: block;
-  width: clamp(140px, 32vmin, 360px);
-  height: clamp(96px, 20vh, 240px);
-  /* 背の低い横画面（下の max-height）では、高さに合わせて絵の横幅を決める。 */
+  width: min(100%, clamp(220px, 46vmin, 420px), calc(var(--ready-art-max-h) * 360 / 176));
+  height: auto;
   aspect-ratio: 360 / 176;
   overflow: hidden;
   border: 3px solid #1a1a1a;
@@ -170,7 +174,7 @@ body.large-text .game-ready-go { font-size: clamp(20px, 2.5vmin, 28px); }
 @media (min-aspect-ratio: 5/4) {
   .game-ready { grid-template-columns: minmax(0, 30%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 12px 4vw; }
   .game-ready-info { grid-row: 1 / -1; }
-  .game-ready-art { width: 100%; height: clamp(80px, 26vh, 300px); }
+  .game-ready-art { --ready-art-max-h: clamp(80px, 26vh, 300px); width: min(100%, calc(var(--ready-art-max-h) * 360 / 176)); }
   .game-ready-steps { grid-column: 2; }
   .game-ready-go { grid-column: 2; }
 }
@@ -178,7 +182,7 @@ body.large-text .game-ready-go { font-size: clamp(20px, 2.5vmin, 28px); }
   body.game-mode.user-world .game-stage-content.is-ready { padding: 64px 20px 74px; }
   .game-ready { gap: 6px 24px; }
   .game-ready-info { gap: 5px; }
-  .game-ready-art { height: 80px; }
+  .game-ready-art { --ready-art-max-h: 80px; }
   .game-ready-title { font-size: 21px; line-height: 1.5; }
   .game-ready-steps { gap: 8px; }
   .game-ready-steps li { line-height: 1.5; }

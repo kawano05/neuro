@@ -903,8 +903,19 @@ body.game-mode .game-actions .game-exit {
   font-weight: 900;
 }
 
-/* 暗いボタンの上では、ふりがなの既定の色（--muted）が沈んで読めない。 */
-.game-settings rt {
+/* 色の濃いボタン・札の上では、ふりがなの既定の色（--muted、灰色）が沈んで読めない。
+   字と同じ色を少し薄くして使う。濃い地の部品を足したら、ここに足す（以前はこの規則が
+   3か所に分かれていて、説明の画面の「始める」とけっかの「もういちど」が漏れていた）。 */
+:is(
+  .game-settings,
+  #gameReadyStart,
+  #gameSwitchAgain,
+  body.user-world #resultRetry,
+  body.user-world #nextMatching,
+  body.user-world #nextLetter,
+  body.user-world #repeatPhrase,
+  body.user-world .category-button.is-active
+) rt {
   color: inherit;
   opacity: 0.85;
 }
@@ -2066,11 +2077,6 @@ body.user-world :is(#nextMatching, #nextLetter, #repeatPhrase) {
   box-shadow: none;
 }
 
-body.user-world :is(#nextMatching, #nextLetter, #repeatPhrase) rt {
-  color: inherit;
-  opacity: 0.85;
-}
-
 /* 問い・伝えたいことばの札 */
 body.user-world :is(#matching, #letters) .question-board,
 body.user-world #voca .message-board {
@@ -2156,11 +2162,6 @@ body.user-world .category-button.is-active {
   border-color: var(--hk-blue);
   background: var(--hk-blue);
   color: #ffffff;
-}
-
-body.user-world .category-button.is-active rt {
-  color: inherit;
-  opacity: 0.85;
 }
 
 @media (max-width: 699px) {
