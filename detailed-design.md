@@ -240,6 +240,7 @@ iPad実機のSwitch Control、実際の視距離、疲労、図形弁別性の�
 3. リファクタリングノート既知課題 P1「operation / evaluation / research への
    導線がない」をここで解消する: content.js の visibleViews に3画面を追加し、
    タブは設定画面の「研究者モード」トグルで出し分ける（既定 OFF）。
+   （その後、3画面は評価ログに統合し、研究者モードのトグルも 2026-10-01 に画面から外した。）
 4. 保存データ移行（§9.5）を loadState() に組み込む。
 5. `npm run build` と tests/web-smoke.mjs を通す。**このコミットまでは
    挙動保存のリファクタリングとし、ゲーム関連の新規コードを混ぜない**
@@ -1423,8 +1424,8 @@ judge.js を対象に最低限以下を検証:
    cued では W = W₀ のまま）
 8. 入力 dedupe（150ms 以内の連続イベントが1入力に潰れること）
 
-package.json の `test:unit` は judge / pointing / reaction / data-integrity を
-順に実行し、`test` は `test:unit && test:web` とする。
+package.json の `test:unit` は `tests/*.test.mjs` を全部、1つずつ実行する（`tests/run-unit.mjs`。
+並べ忘れた検査が黙って回らないように、フォルダから集める）。`test` は `test:unit && test:web` とする。
 
 追加の `pointing.test.mjs` は三角波の折り返しと grip/slip/miss 境界、
 `reaction.test.mjs` は hit/timeout/falseStart/commission/correctRejection と

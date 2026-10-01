@@ -138,6 +138,11 @@ src/lib/fx/
                    trail, reelHit, craneGrip, craneWin, fishCatch, noteHit, finale, revealResult）。
                    §3 の文法とエスカレーションはここ
   index.js       … まとめ役（createFxSystem）。強さ＝設定・端末の「動きを減らす」・そくていの回
+src/lib/atmosphere.js … 遊びの雰囲気（なし・すっきり・にぎやか・おおさわぎ）の中身の表（ただ1つ。
+                        2026-10-01〜）。fxSafety の係数・舞台・ホスト・けっかは、段の名前で分岐せず表を読む
+                        （docs/rules/atmosphere.md）
+src/lib/presentation.js … 演出だけを閉じ込める境目。演出の例外で遊びと記録を止めない
+src/lib/games/partyStage.js … ラッコ・キラキラびん・おいわいの舞台（ホストが遊びごとに1つだけ作る）
 src/lib/games/beginnerKit.js
   createBeginnerFlow … はじめの遊びの流れ（押す → 音 → 進み → 5回目 → フィナーレ → けっか）と、
                        ファンファーレ・おいわいの時刻表。3つの遊びは「押したら何が起きるか」だけを書く
