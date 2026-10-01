@@ -7,6 +7,7 @@
 
 import assert from "node:assert/strict";
 import { storageKey } from "../src/lib/content.js";
+import { finishReady, openTile, patchSettings } from "./helpers.mjs";
 import { READY_GUARD_MS } from "../src/lib/games/readyScreen.js";
 
 // 押下を受けない時間（READY_GUARD_MS）を越えるのに待つ長さ。
@@ -20,37 +21,6 @@ const VIEWPORTS = [
   [1366, 650],
   [1920, 1080],
 ];
-
-/**
- * 説明の画面を抜けて課題を始める（ほかの検査の下ごしらえ）。
- *
- * 「はじめる」を押す。声が鳴っていれば1回目は声を止めるだけなので、始まるまで
- * 繰り返す（3回までで必ず始まる）。時計を入れた検査は virtualClock を true にする
- * ——入れていないページで page.clock を動かすと、時刻が巻き戻る。
- */
-export async function finishReady(page, { virtualClock = false } = {}) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (!(await page.locator(".game-ready").count())) break;
-    if (virtualClock) await page.clock.runFor(PAST_GUARD_MS);
-    else await page.waitForTimeout(PAST_GUARD_MS);
-    if (!(await page.locator(".game-ready").count())) break;
-    await page.locator("#gameReadyStart").evaluate((button) => button.click());
-  }
-  await page.locator(".game-ready").waitFor({ state: "detached" });
-}
-
-/** 設定を書き換えて読み込み直す。 */
-async function patchSettings(page, patch) {
-  await page.evaluate(
-    ({ key, patch }) => {
-      const state = JSON.parse(localStorage.getItem(key));
-      Object.assign(state.settings, patch);
-      localStorage.setItem(key, JSON.stringify(state));
-    },
-    { key: storageKey, patch }
-  );
-  await page.reload();
-}
 
 /**
  * 端末の読み上げが「読んでいる／いない」状態を作る。止める（cancel）と「いない」に戻る
@@ -70,19 +40,6 @@ async function setDeviceSpeaking(page, speaking) {
 
 const sessionCount = (page) =>
   page.evaluate((key) => JSON.parse(localStorage.getItem(key)).sessions.length, storageKey);
-
-/** ホームのタイルを開く（ページに分かれた画面では「つぎ」で送る）。 */
-async function openTile(page, id) {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const tile = page.locator(`[data-tile-id="${id}"]`);
-    if (await tile.count()) {
-      await tile.evaluate((element) => element.click());
-      return;
-    }
-    await page.locator(".game-tile.scan-pager").evaluate((element) => element.click());
-  }
-  throw new Error(`見つからない遊び: ${id}`);
-}
 
 /**
  * 説明の画面の押し方（点検 U15 と、押す回数の両立）。
