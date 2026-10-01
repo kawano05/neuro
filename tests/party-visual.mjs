@@ -8,6 +8,8 @@ import { findAvailablePort, waitForServer, stopServer } from "./helpers.mjs";
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import assert from "node:assert/strict";
+import { storageKey } from "../src/lib/content.js";
+import { READY_GUARD_MS } from "../src/lib/games/readyScreen.js";
 const output = "test-results/party-matrix";
 mkdirSync(output, { recursive: true });
 await build({
@@ -79,16 +81,18 @@ try {
         }
         const context = await browser.newContext({ viewport });
         await context.addInitScript(
-          ({ level }) => {
+          ({ level, key }) => {
             Math.random = () => 0.314159;
+            // 保存のキーはアプリから引く（直書きしていた v3 は、もう読まれない古いキーだった）。
             localStorage.setItem(
-              "neuronode-prototype-state-v3",
+              key,
               JSON.stringify({
+                version: 4,
                 settings: { fxLevel: level, autoScan: false, speechEnabled: false, soundEnabled: false }
               })
             );
           },
-          { level }
+          { level, key: storageKey }
         );
         const page = await context.newPage();
         const errors = [];
@@ -107,12 +111,18 @@ try {
             };
             app.audio.scheduler.canSound = () => true;
             app.gameHost.launch(game.replace("-endless", ""), { endless: game.endsWith("-endless") });
-            if (document.querySelector(".game-ready")) {
-              app.gameHost.dispatchInput(performance.now(), "test");
-            }
           },
           { game }
         );
+        // 説明の画面は、開いてから READY_GUARD_MS のあいだ押下を受けない（タイルを選んだ押下の
+        // 跳ね返り。games/readyScreen.js）。それを越えてから始める。以前はすぐ押していて、
+        // 説明の画面のまま止まっていた（はじめの遊びの野球で .bb-word を待ち続けた）。
+        await page.clock.runFor(READY_GUARD_MS + 50);
+        await page.evaluate(() => {
+          if (document.querySelector(".game-ready")) {
+            window.__partyCtx.gameHost.dispatchInput(performance.now(), "test");
+          }
+        });
         await page.clock.runFor(100);
         const prefix = `${output}/${size}-${level}-${game}`;
         await page.screenshot({ path: `${prefix}-during.png` });
