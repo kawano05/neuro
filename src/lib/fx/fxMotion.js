@@ -30,10 +30,20 @@ function animate(el, keyframes, options) {
 }
 
 /**
- * @param {() => {motion: boolean, shake: boolean, camera: boolean}} getScale いまの強さの係数
+ * 端末の「動きを減らす」のときの出方: 動かずに、ふわっと現れる（大きさ・向き・位置は変えない）。
+ * 星・ハンコ・ポンと出るものは、出てくること自体が「できた」の知らせなので、消さずにこの形にする。
+ */
+function fadeIn(el, delayMs) {
+  return animate(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 280, delay: delayMs, easing: "ease-out", fill: "backwards" });
+}
+
+/**
+ * @param {() => {motion: boolean, still?: boolean, shake: boolean, camera: boolean}} getScale いまの強さの係数
+ *   motion … 動く演出を出す。still … 「動きを減らす」: 出てくるものはフェードで、弾み・揺れは出さない
  */
 export function createMotion(getScale) {
   const on = () => Boolean(getScale().motion);
+  const still = () => Boolean(getScale().still);
   return {
     /** 押したものが、つぶれて弾む（① 手応え）。power は 1〜2.4（だんだん盛り上がる）。 */
     squash(el, { power = 1, delayMs = 0 } = {}) {
@@ -54,6 +64,7 @@ export function createMotion(getScale) {
     },
     /** ポンと出る（小さく回りながら出て、行き過ぎて戻る）。 */
     popIn(el, { delayMs = 0, from = 0.2 } = {}) {
+      if (still()) return fadeIn(el, delayMs);
       if (!on()) return null;
       return animate(
         el,
@@ -105,6 +116,7 @@ export function createMotion(getScale) {
     },
     /** ハンコ（大きく出て、押しつけられて止まる）。 */
     stamp(el, { delayMs = 0 } = {}) {
+      if (still()) return fadeIn(el, delayMs);
       if (!on()) return null;
       return animate(
         el,
@@ -119,6 +131,7 @@ export function createMotion(getScale) {
     },
     /** 飛び込む（星: 大きく回りながら来て、弾んで止まる）。 */
     slamIn(el, { delayMs = 0 } = {}) {
+      if (still()) return fadeIn(el, delayMs);
       if (!on()) return null;
       return animate(
         el,

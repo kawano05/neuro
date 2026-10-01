@@ -24,12 +24,16 @@ import {
 } from "../src/lib/fx/fxSafety.js";
 import {
   alphaOf,
+  ringRadiusOf,
+  settleInPlace,
   sizeOf,
   spawnBurst,
   spawnConfettiRain,
+  spawnRing,
   stepParticle,
 } from "../src/lib/fx/fxParticles.js";
 import { colorsForPress, createFxPresets, PALETTES } from "../src/lib/fx/fxPresets.js";
+import { createMotion } from "../src/lib/fx/fxMotion.js";
 import { createFxEngine } from "../src/lib/fx/fxEngine.js";
 
 let passed = 0;
@@ -88,10 +92,66 @@ test("decorative motion is separate from the recorded level and task motion", ()
       assert.equal(policy.level, resolveFxLevel({ fxLevel }, { reducedMotion }));
       assert.equal(policy.motion, !reducedMotion && fxLevel !== "none");
       assert.equal(policy.worldMotion, !reducedMotion && ["normal", "big"].includes(fxLevel));
-      if (reducedMotion || fxLevel === "none") assert.equal(policy.scale, fxScale("none"));
-      assert.equal(resolveDecorationPolicy({ fxLevel }, { reducedMotion, measurement: true }).motion, false);
+      // 「動きを減らす」は演出を消さずに、移動しない演出へ置き換える（なし の段は何も出さない）。
+      assert.equal(policy.still, reducedMotion && fxLevel !== "none");
+      if (fxLevel === "none") assert.equal(policy.scale, fxScale("none"));
+      if (policy.still) {
+        assert.ok(policy.scale.particles > 0, `${fxLevel}: 動きを減らしても、粒は（動かずに）出す`);
+        assert.equal(policy.scale.still, true);
+        assert.equal(policy.scale.motion, false, "弾みは出さない");
+        assert.equal(policy.scale.shake, false, "揺らさない");
+        assert.equal(policy.scale.camera, false, "寄らない");
+        assert.equal(policy.scale.fireworks, false, "花火は上げない");
+        assert.ok(policy.scale.particles <= fxScale("subtle").particles, "量は すっきり まで");
+      }
+      const measured = resolveDecorationPolicy({ fxLevel }, { reducedMotion, measurement: true });
+      assert.equal(measured.motion, false, "そくていの回は動く演出を出さない");
+      assert.equal(measured.still, false, "そくていの回は動かない演出も出さない");
+      assert.equal(measured.scale, fxScale("none"));
     }
   }
+});
+
+test("with reduce motion, particles appear where the burst would land and never move", () => {
+  const burst = spawnBurst({ x: 200, y: 200, count: 24, speed: [300, 600], random: () => 0.5 });
+  const still = settleInPlace(burst);
+  assert.equal(still.length, burst.length);
+  still.forEach((p) => {
+    assert.equal(p.still, true);
+    assert.ok(Math.hypot(p.x - 200, p.y - 200) > 0, "はじけ先へ散らばる（1点に重ならない）");
+    assert.ok(Math.hypot(p.x - 200, p.y - 200) <= 140 + 1e-9, "遠くへ散らばりすぎない");
+    const before = { x: p.x, y: p.y, rot: p.rot, size: sizeOf(p) };
+    for (let i = 0; i < 20; i += 1) stepParticle(p, 0.03);
+    assert.deepEqual({ x: p.x, y: p.y, rot: p.rot, size: sizeOf(p) }, before, "位置・向き・大きさは変わらない");
+  });
+  const p = still[0];
+  p.age = 0;
+  assert.equal(alphaOf(p), 0, "ふわっと現れる（いきなり出ない）");
+  p.age = p.life * 0.4;
+  assert.equal(alphaOf(p), p.alpha);
+  const ring = { ...spawnRing({ x: 0, y: 0, r0: 10, r1: 90 }), still: true };
+  const radius = ringRadiusOf(ring);
+  ring.age = ring.life * 0.9;
+  assert.equal(ringRadiusOf(ring), radius, "輪は広がらない");
+});
+
+test("with reduce motion, stars and stamps fade in instead of flying in, and nothing bounces", () => {
+  const calls = [];
+  const element = { animate: (keyframes, options) => calls.push({ keyframes, options }) || {} };
+  const motion = createMotion(() => ({ motion: false, still: true, shake: false, camera: false }));
+  motion.popIn(element);
+  motion.slamIn(element);
+  motion.stamp(element);
+  assert.equal(calls.length, 3, "出てくるものは出す");
+  calls.forEach(({ keyframes }) =>
+    keyframes.forEach((frame) => assert.deepEqual(Object.keys(frame), ["opacity"], "透明度だけ（動かない・大きさも変えない）"))
+  );
+  assert.equal(motion.squash(element), null, "つぶれて弾まない");
+  assert.equal(motion.hop(element), null, "跳ねない");
+  assert.equal(motion.bump(element), null);
+  assert.equal(motion.jiggle(element), null);
+  assert.equal(motion.shake(element), null);
+  assert.equal(calls.length, 3);
 });
 
 test("shakes and glows stay inside the safety limits", () => {

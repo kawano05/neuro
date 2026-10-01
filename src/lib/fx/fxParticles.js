@@ -60,8 +60,46 @@ export function makeParticle(fields) {
     twinkle: 0,
     // 出るまでの待ち（花火を順に上げるなど）
     delay: 0,
+    // 動かない粒（端末の「動きを減らす」）。その場で現れて消える。大きさも変えない。
+    still: false,
     ...fields,
   };
+}
+
+/** 動かない粒が置かれる、はじけ先の距離の上限（px）。遠くに散らばりすぎないように。 */
+const STILL_REACH_PX = 140;
+
+/**
+ * 粒を「その場で現れて消える」形にする（端末の「動きを減らす」）。
+ * はじけたら止まるはずの場所（初速 ÷ 空気抵抗。重力の分は数えない）に置き、速さ・重力・
+ * 回転・ゆれ・裏返り・瞬きを外す。同じ演出が、動かない絵として同じ広がりで見える。
+ * @param {object[]} particles spawnBurst などで作った粒
+ */
+export function settleInPlace(particles) {
+  return particles.map((p) => {
+    const drag = p.drag > 0 ? p.drag : 2.6;
+    let dx = p.vx / drag;
+    let dy = p.vy / drag;
+    const reach = Math.hypot(dx, dy);
+    if (reach > STILL_REACH_PX) {
+      dx *= STILL_REACH_PX / reach;
+      dy *= STILL_REACH_PX / reach;
+    }
+    return {
+      ...p,
+      x: p.x + dx,
+      y: p.y + dy,
+      vx: 0,
+      vy: 0,
+      gravity: 0,
+      drag: 0,
+      spin: 0,
+      wobble: 0,
+      flipSpeed: 0,
+      twinkle: 0,
+      still: true,
+    };
+  });
 }
 
 /**
@@ -217,10 +255,11 @@ export function progressOf(p) {
   return p.life > 0 ? Math.min(Math.max(p.age / p.life, 0), 1) : 1;
 }
 
-/** 透明度: 最後の 40% で消える。光は始めに少しふくらんでから消える。 */
+/** 透明度: 最後の 40% で消える。光は始めに少しふくらんでから消える。動かない粒は、ふわっと現れる。 */
 export function alphaOf(p) {
   const t = progressOf(p);
   if (p.shape === "glow") return p.alpha * (t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8);
+  if (p.still) return p.alpha * (t < 0.25 ? t / 0.25 : t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4);
   if (p.shape === "ring") return p.alpha * (1 - t) * (1 - t);
   return p.alpha * (t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4);
 }
@@ -230,6 +269,8 @@ export function alphaOf(p) {
  * しか見えない）。きらきらは瞬く。
  */
 export function sizeOf(p) {
+  // 動かない粒は大きさも変えない（ふくらむ・しぼむも動きに見える）。
+  if (p.still) return Math.max(0, p.size);
   const t = progressOf(p);
   let s = p.size + (p.sizeEnd - p.size) * t * t;
   if (p.twinkle) s *= 1 + Math.sin(p.age * 18 + p.phase) * p.twinkle;
@@ -238,8 +279,9 @@ export function sizeOf(p) {
   return Math.max(0, s);
 }
 
-/** 輪の半径（ease-out で広がる）。 */
+/** 輪の半径（ease-out で広がる）。動かない輪は広がらず、途中の大きさのまま現れて消える。 */
 export function ringRadiusOf(p) {
+  if (p.still) return p.r0 + (p.r1 - p.r0) * 0.6;
   const t = progressOf(p);
   const eased = 1 - Math.pow(1 - t, 3);
   return p.r0 + (p.r1 - p.r0) * eased;

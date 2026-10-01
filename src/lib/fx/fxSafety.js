@@ -66,17 +66,45 @@ export function fxScale(level) {
 }
 
 /**
+ * 「動きを減らす」のときの係数。段の量はそのまま（すっきり まで。resolveFxLevel）で、
+ * still を立てる: 粒はその場で現れて消え、輪は広がらず、星やハンコはフェードで出る
+ * （fxEngine.js・fxMotion.js）。弾み・揺れ・カメラの寄り・花火は出さない。
+ * 粒の大きさは縮めない（動かない粒は目に留まりにくい。押した手応えはこれしか無い）。
+ */
+function stillScale(level) {
+  return Object.freeze({
+    ...fxScale(level),
+    particleSize: 1,
+    still: true,
+    motion: false,
+    shake: false,
+    camera: false,
+    fireworks: false,
+  });
+}
+
+/**
  * 装飾の動きの唯一の判定。課題に必要な移動と、記録する強さとは分ける。
- * 端末の「動きを減らす」とそくていの回では、粒も弾みも世界の動きも出さない。
+ *   motion      … 弾み・粒の飛び散り・ハンコなど、動く演出を出すか
+ *   still       … 端末の「動きを減らす」: 動く演出の代わりに、移動しない演出（その場で
+ *                 ふわっと出て消える粒・止まった輪・フェード）を出す。演出を消すのではなく
+ *                 置き換える（Apple の Reduce Motion・WCAG 2.3.3 の考え方）。2026-09-30 の
+ *                 直しでは何も出さなくしていて、Windows の「アニメーション効果」がオフの PC
+ *                 では、遊んでも何も起きないように見えた（2026-10-01、ユーザーの指摘）
+ *   worldMotion … 世界のゆっくりした動き（海の光・泡・雲）
+ * そくていの回は、どちらも出さない（何も足さない）。
  */
 export function resolveDecorationPolicy(settings, context = {}) {
   const level = resolveFxLevel(settings, context);
-  const motion = !context.reducedMotion && !context.measurement && ATMOSPHERES[level].pressMotion;
+  const decorates = !context.measurement && ATMOSPHERES[level].pressMotion;
+  const motion = decorates && !context.reducedMotion;
+  const still = decorates && Boolean(context.reducedMotion);
   return {
     level,
     motion,
+    still,
     worldMotion: motion && ATMOSPHERES[level].worldMotion,
-    scale: fxScale(motion ? level : "none"),
+    scale: motion ? fxScale(level) : still ? stillScale(level) : fxScale("none"),
   };
 }
 

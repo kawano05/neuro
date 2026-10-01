@@ -5267,8 +5267,16 @@ async function checkDecorationMotion(page, project) {
           .querySelector("#gameStageContent")
           .getAnimations({ subtree: true })
           .filter((animation) => animation.playState === "running");
+        // 動きとして数えるのは、透明度だけではない動き（位置・大きさ・向きを変えるもの）。
+        // 「動きを減らす」では、星などはフェード（透明度だけ）で出る。
+        const movesShape = (animation) =>
+          (animation.effect?.getKeyframes?.() || []).some((frame) =>
+            Object.keys(frame).some((key) => !["offset", "computedOffset", "easing", "composite", "opacity"].includes(key))
+          ) || Boolean(animation.animationName || animation.transitionProperty);
+        const shaping = moving.filter(movesShape);
         return {
           animations: moving.length,
+          shaping: shaping.length,
           // 落ちたときに、何が動いていたかを書き出す（どの規則が効いていないかを探すため）。
           running: moving.map((animation) => ({
             name: animation.animationName || animation.transitionProperty || animation.id || animation.constructor.name,
@@ -5279,11 +5287,18 @@ async function checkDecorationMotion(page, project) {
           mark: getComputedStyle(document.querySelector(".balloon.is-popping .balloon-mark")).opacity
         };
       });
-      if (reduced || level === "none") {
+      if (level === "none") {
         assert(
           balloon.animations === 0 && balloon.particles === 0,
           `${level}/${reduced}: balloon decorations must remain still: ${JSON.stringify(balloon)}`
         );
+        assert(balloon.mark === "1", "A press must show a static burst shape immediately");
+      } else if (reduced) {
+        // 端末の「動きを減らす」: 演出は消さずに、移動しない形（その場で現れて消える粒・
+        // フェード）に置き換える。2026-09-30 の直しでは全部消していて、Windows の
+        // 「アニメーション効果」がオフの PC では遊んでも何も起きないように見えた。
+        assert(balloon.shaping === 0, `${level}/reduce: nothing may move or bounce: ${JSON.stringify(balloon)}`);
+        assert(balloon.particles > 0, `${level}/reduce: the press must still answer with still sparkles`);
         assert(balloon.mark === "1", "A press must show a static burst shape immediately");
       } else {
         assert(balloon.particles > 0, `${level}: enabled effects must still work`);
