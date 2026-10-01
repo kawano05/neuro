@@ -13,6 +13,7 @@
     "build": "vite build && node scripts/generate-sw.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "check": "npm run build",
+    "screens": "npm run build && node scripts/capture-screens.mjs artifacts/screens",
     "test": "npm run test:unit && npm run test:web",
     "test:unit": "node tests/run-unit.mjs",
     "test:web": "npm run build && node tests/web-smoke.mjs && node tests/pwa-update-race.mjs",
