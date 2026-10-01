@@ -614,8 +614,10 @@ export function createRhythmGame(gameId) {
         exactToleranceMs: EXACT_TOLERANCE_MS,
         t,
       });
+      // そくていの回の台の題は、前の字のまま（遊びの名前を変えても、刺激の見え方は1pxも変えない）。
+      const measuredTitle = gameId === "gonogo" && resolveDifficultyMode(settings) === "measure";
       const mounted = rhythmVisuals.mount(stageEl, {
-        titleHtml: tHtml(`tile.${gameId}.title`),
+        titleHtml: tHtml(measuredTitle ? "stage.gonogo.measureTitle" : `tile.${gameId}.title`),
         instructionHtml: tHtml(STAGE_LABEL_KEYS[gameId] || STAGE_LABEL_KEYS.default),
         offsetMarkup: renderOffsetScale(),
       });

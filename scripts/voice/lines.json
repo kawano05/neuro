@@ -278,12 +278,6 @@
    ]
   },
   {
-   "text": "1回の入力で1本だけ止まります。",
-   "from": [
-    "howto.slot-l2.3"
-   ]
-  },
-  {
    "text": "1回ぴったり！",
    "from": [
     "slot.voice.finish"
@@ -297,9 +291,10 @@
    ]
   },
   {
-   "text": "1回押すと、1本だけ止まります。",
+   "text": "1回押すと、1列だけ止まります。",
    "from": [
-    "howto.slot-l1.3"
+    "howto.slot-l1.3",
+    "howto.slot-l2.3"
    ]
   },
   {
@@ -1350,6 +1345,18 @@
    ]
   },
   {
+   "text": "くるくる止める",
+   "from": [
+    "tile.slot-corner.title"
+   ]
+  },
+  {
+   "text": "くるくる止める。",
+   "from": [
+    "tile.slot-corner.title (ready)"
+   ]
+  },
+  {
    "text": "くるよ",
    "from": [
     "baseball.word.ready"
@@ -1422,13 +1429,13 @@
    ]
   },
   {
-   "text": "ずっと止める",
+   "text": "ずっとつかむ",
    "from": [
     "tile.crane-endless.title"
    ]
   },
   {
-   "text": "ずっと止める。",
+   "text": "ずっとつかむ。",
    "from": [
     "tile.crane-endless.title (ready)"
    ]
@@ -1560,6 +1567,18 @@
    "text": "に",
    "from": [
     "letters.option"
+   ]
+  },
+  {
+   "text": "ぬいぐるみをつかむ",
+   "from": [
+    "tile.crane.title"
+   ]
+  },
+  {
+   "text": "ぬいぐるみをつかむ。",
+   "from": [
+    "tile.crane.title (ready)"
    ]
   },
   {
@@ -1753,18 +1772,6 @@
    ]
   },
   {
-   "text": "アタリで釣る",
-   "from": [
-    "tile.fishing.title"
-   ]
-  },
-  {
-   "text": "アタリで釣る。",
-   "from": [
-    "tile.fishing.title (ready)"
-   ]
-  },
-  {
    "text": "アームが下りて、つかめたら景品口へ運びます。",
    "from": [
     "howto.crane.3"
@@ -1786,18 +1793,6 @@
    "text": "アームでつかむ。",
    "from": [
     "tile.crane-corner.title (ready)"
-   ]
-  },
-  {
-   "text": "アームを止める",
-   "from": [
-    "tile.crane.title"
-   ]
-  },
-  {
-   "text": "アームを止める。",
-   "from": [
-    "tile.crane.title (ready)"
    ]
   },
   {
@@ -2028,18 +2023,6 @@
    ]
   },
   {
-   "text": "リールを止める",
-   "from": [
-    "tile.slot-corner.title"
-   ]
-  },
-  {
-   "text": "リールを止める。",
-   "from": [
-    "tile.slot-corner.title (ready)"
-   ]
-  },
-  {
    "text": "上の目標の絵を見ます。",
    "from": [
     "howto.slot-l1.1",
@@ -2149,7 +2132,7 @@
    ]
   },
   {
-   "text": "左のリールから順番に止めます。",
+   "text": "左の列から順番に止めます。",
    "from": [
     "howto.slot-l2.2"
    ]
@@ -2320,13 +2303,25 @@
    ]
   },
   {
-   "text": "高い音だけ",
+   "text": "音で釣る",
+   "from": [
+    "tile.fishing.title"
+   ]
+  },
+  {
+   "text": "音で釣る。",
+   "from": [
+    "tile.fishing.title (ready)"
+   ]
+  },
+  {
+   "text": "高い音だけ押す",
    "from": [
     "tile.gonogo.title"
    ]
   },
   {
-   "text": "高い音だけ。",
+   "text": "高い音だけ押す。",
    "from": [
     "tile.gonogo.title (ready)"
    ]
@@ -3105,13 +3100,13 @@
    ]
   },
   {
-   "text": "Catch on the bite",
+   "text": "Catch on the sound",
    "from": [
     "tile.fishing.title"
    ]
   },
   {
-   "text": "Catch on the bite.",
+   "text": "Catch on the sound.",
    "from": [
     "tile.fishing.title (ready)"
    ]
@@ -3161,21 +3156,15 @@
    ]
   },
   {
-   "text": "Each press stops one reel.",
+   "text": "Each press stops just one column.",
+   "from": [
+    "howto.slot-l2.3"
+   ]
+  },
+  {
+   "text": "Each press stops one column.",
    "from": [
     "howto.slot-l1.3"
-   ]
-  },
-  {
-   "text": "Endless claw",
-   "from": [
-    "tile.crane-endless.title"
-   ]
-  },
-  {
-   "text": "Endless claw.",
-   "from": [
-    "tile.crane-endless.title (ready)"
    ]
   },
   {
@@ -3188,6 +3177,18 @@
    "text": "Endless fishing.",
    "from": [
     "tile.fishing-endless.title (ready)"
+   ]
+  },
+  {
+   "text": "Endless grabbing",
+   "from": [
+    "tile.crane-endless.title"
+   ]
+  },
+  {
+   "text": "Endless grabbing.",
+   "from": [
+    "tile.crane-endless.title (ready)"
    ]
   },
   {
@@ -3239,6 +3240,18 @@
    ]
   },
   {
+   "text": "Grab a plush toy",
+   "from": [
+    "tile.crane.title"
+   ]
+  },
+  {
+   "text": "Grab a plush toy.",
+   "from": [
+    "tile.crane.title (ready)"
+   ]
+  },
+  {
    "text": "Half a jar!",
    "from": [
     "party.voice.half"
@@ -3260,18 +3273,6 @@
    "text": "Here it comes...",
    "from": [
     "baseball.word.ready"
-   ]
-  },
-  {
-   "text": "High notes only",
-   "from": [
-    "tile.gonogo.title"
-   ]
-  },
-  {
-   "text": "High notes only.",
-   "from": [
-    "tile.gonogo.title (ready)"
    ]
   },
   {
@@ -3509,12 +3510,6 @@
    ]
   },
   {
-   "text": "One input stops exactly one reel.",
-   "from": [
-    "howto.slot-l2.3"
-   ]
-  },
-  {
    "text": "One miss ends the run.",
    "from": [
     "howto.endless.crane",
@@ -3615,6 +3610,18 @@
    "text": "Press as soon as you hear the bite.",
    "from": [
     "howto.fishing.2"
+   ]
+  },
+  {
+   "text": "Press on high notes",
+   "from": [
+    "tile.gonogo.title"
+   ]
+  },
+  {
+   "text": "Press on high notes.",
+   "from": [
+    "tile.gonogo.title (ready)"
    ]
   },
   {
@@ -3848,6 +3855,18 @@
    ]
   },
   {
+   "text": "Spin and stop",
+   "from": [
+    "tile.slot-corner.title"
+   ]
+  },
+  {
+   "text": "Spin and stop.",
+   "from": [
+    "tile.slot-corner.title (ready)"
+   ]
+  },
+  {
    "text": "Start",
    "from": [
     "start.begin"
@@ -3860,55 +3879,31 @@
    ]
   },
   {
-   "text": "Stop one reel",
+   "text": "Stop one",
    "from": [
     "tile.slot-l1.title"
    ]
   },
   {
-   "text": "Stop one reel.",
+   "text": "Stop one.",
    "from": [
     "tile.slot-l1.title (ready)"
    ]
   },
   {
-   "text": "Stop the claw",
-   "from": [
-    "tile.crane.title"
-   ]
-  },
-  {
-   "text": "Stop the claw.",
-   "from": [
-    "tile.crane.title (ready)"
-   ]
-  },
-  {
-   "text": "Stop the reels",
-   "from": [
-    "tile.slot-corner.title"
-   ]
-  },
-  {
-   "text": "Stop the reels from left to right.",
+   "text": "Stop the columns from left to right.",
    "from": [
     "howto.slot-l2.2"
    ]
   },
   {
-   "text": "Stop the reels.",
-   "from": [
-    "tile.slot-corner.title (ready)"
-   ]
-  },
-  {
-   "text": "Stop three reels",
+   "text": "Stop three",
    "from": [
     "tile.slot-l2.title"
    ]
   },
   {
-   "text": "Stop three reels.",
+   "text": "Stop three.",
    "from": [
     "tile.slot-l2.title (ready)"
    ]

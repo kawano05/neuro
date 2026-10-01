@@ -77,21 +77,21 @@ const GROUPS = [
   },
   {
     id: "slot",
-    title: "リールを止める",
+    title: "くるくる 止める",
     fields: ["slotCycleMs", "slotToleranceMs", "slotL1Rounds", "slotL2Rounds"],
-    reset: "「リールを止める」を既定に戻す",
+    reset: "「くるくる 止める」を既定に戻す",
   },
   {
     id: "rhythm",
-    title: "高い音だけ",
+    title: "高い音だけ 押す",
     fields: ["rhythmBpm", ["targetBeats", "rhythmTargetBeats"], "visualGuidance"],
-    reset: "「高い音だけ」を既定に戻す",
+    reset: "「高い音だけ 押す」を既定に戻す",
   },
   {
     id: "crane",
-    title: "アームでつかむ",
+    title: "アームで つかむ",
     fields: ["craneSweepMs", "craneToleranceR", "craneTargetTrials", "craneAudioGuidance"],
-    reset: "「アームでつかむ」を既定に戻す",
+    reset: "「アームで つかむ」を既定に戻す",
   },
   {
     id: "fishing",

@@ -164,11 +164,14 @@ const IN_GAME_CHOICES = {
 function artGroup(gameId) {
   return {
     key: `practiceArts.${ART_FAMILIES[gameId]}`,
-    label: "絵",
+    label: "絵の かんじ",
     measured: true,
+    // 版の新旧ではなく、見た目で言う（2026-10-02、「前の絵、新しい絵じゃなくて適切な表現で」）。
+    //   world   … 顔のある絵と、まわりの けしき（ゆうえんち・おもちゃ屋・海・音楽会）
+    //   classic … 形の はっきりした絵（記号の形・色の地）。そくていの回と同じ組み立て
     options: [
-      ["world", "新しい絵（まわりの世界つき）"],
-      ["classic", "前の絵"],
+      ["world", "えほんみたい（けしき つき）"],
+      ["classic", "シンプル（形が はっきり）"],
     ],
   };
 }

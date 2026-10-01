@@ -1276,7 +1276,7 @@ async function checkEffectsFollowSafetyRules(page) {
   await setSettings({ fxLevel: "big", difficultyMode: "measure" });
   await toHome();
   await openActivity(page, "さかなつり");
-  await openActivity(page, "アタリで釣る");
+  await openActivity(page, t("tile.fishing.title"));
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
@@ -2357,7 +2357,7 @@ async function checkSettingsReset(page) {
   const status = page.locator("#slotResetStatus");
   await status.waitFor({ state: "visible" });
   assert(
-    (await status.textContent()).includes("リールの速さ（4.8秒 → 3.2秒）"),
+    (await status.textContent()).includes("絵が回る速さ（4.8秒 → 3.2秒）"),
     "The supporter must see what was reset"
   );
   assert((await page.locator("#liveRegion").textContent()).includes("既定に戻しました"), "The reset must be announced");
@@ -2778,7 +2778,7 @@ async function checkPracticeArtChoice(page, project) {
   const before = await lookOf();
   assert(before.practice && before.world && before.worldNodes > 0, `The new pictures are the default: ${JSON.stringify(before)}`);
 
-  // この遊びの設定 → 絵 → 前の絵 → この設定で はじめる
+  // この遊びの設定 → 絵の かんじ → シンプル → この設定で はじめる
   await page.locator("#gameSettings").click();
   await page.locator('.gs-option[data-gs-key="practiceArts.slot"][data-gs-value=\'"classic"\']').click();
   await page.locator('[data-gs-action="apply"]').click();
@@ -3804,7 +3804,7 @@ async function checkFishingGameFlow(page) {
   // fishing（純粋な単純反応時間）と fishing-gonogo（抑制つき）に分けたのは、
   // taskType "rt" なのに No-Go 刺激が混ざっていた食い違いを解くため。
   await openActivity(page, "さかなつり");
-  await openActivity(page, "アタリで釣る");
+  await openActivity(page, t("tile.fishing.title"));
   await waitForClass(page, "#gameView", "is-active");
   // さかなつりも content.js の gameHowTo を持つようになったので、レディ画面を
   // ひと押しで抜けてからでないとセッションが始まらない。
@@ -3905,8 +3905,8 @@ async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
 async function checkEndlessEndsOnFailure(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
-  await openActivity(page, "ずっと止める");
+  await openActivity(page, t("tile.crane-corner.title"));
+  await openActivity(page, t("tile.crane-endless.title"));
   await waitForClass(page, "#gameView", "is-active");
 
   // レディ画面の文言が、エンドレスの約束（終わり方）に差し替わっていること。
@@ -3966,8 +3966,8 @@ async function checkEndlessEndsOnFailure(page) {
 async function checkCraneGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
-  await openActivity(page, "アームを止める");
+  await openActivity(page, t("tile.crane-corner.title"));
+  await openActivity(page, t("tile.crane.title"));
   await waitForClass(page, "#gameView", "is-active");
   // crane も content.js の gameHowTo を持つようになったので、レディ画面を
   // ひと押しで抜けてからでないとセッションが始まらない。
@@ -4052,8 +4052,8 @@ async function checkResultScreenStaysInTheUserWorld(page) {
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "アームで つかむ");
-  await openActivity(page, "アームを止める");
+  await openActivity(page, t("tile.crane-corner.title"));
+  await openActivity(page, t("tile.crane.title"));
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
@@ -4200,8 +4200,8 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
     await page.reload();
     await page.locator("#startStage").click();
     await waitForClass(page, "#homeView", "is-active");
-    await openActivity(page, "アームで つかむ");
-    await openActivity(page, "アームを止める");
+    await openActivity(page, t("tile.crane-corner.title"));
+    await openActivity(page, t("tile.crane.title"));
     await page.locator(".game-ready").waitFor({ state: "visible" });
     // タイルを押した直後のこの押下は、入力ファネルの多重発火除去
     // （SWITCH_INPUT_DEDUPE_MS = 150ms）に飲まれることがある。飲まれると
@@ -4356,7 +4356,7 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
 
   for (const [corner, task] of [
     [null, t("tile.gonogo.title")],
-    ["さかなつり", "アタリで釣る"]
+    ["さかなつり", t("tile.fishing.title")]
   ]) {
     await page.locator("#startStage").click();
     await waitForClass(page, "#homeView", "is-active");
@@ -4674,7 +4674,7 @@ async function checkResearcherDataOnOneScreen(page) {
   // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
   const lobbyTitles = await collectActivityTitles(page);
   assert(
-    !lobbyTitles.includes("アームで つかむ"),
+    !lobbyTitles.includes(t("tile.crane-corner.title")),
     `Visual-task setting must remove the claw corner from the lobby (saw: ${lobbyTitles.join(", ")})`
   );
   assert(

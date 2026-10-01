@@ -295,7 +295,10 @@ const STRINGS = {
     kana: "おとに あわせて つづけて おそう",
     en: "Keep pressing with every beat",
   },
-  "tile.gonogo.title": { ruby: "高[たか]い音[おと]だけ", kanji: "高い音だけ", kana: "たかいおとだけ", en: "High notes only" },
+  // 遊びの名前は「何をする遊びか」が名前だけで分かるように（2026-10-02、「ゲーム名をわかりやすく」）。
+  // そくていの回の遊ぶ画面に出る題（台の上の字）は、刺激の見え方なので前の字のまま（stage.gonogo.measureTitle）。
+  "tile.gonogo.title": { ruby: "高[たか]い音[おと]だけ 押[お]す", kanji: "高い音だけ 押す", kana: "たかい おとだけ おす", en: "Press on high notes" },
+  "stage.gonogo.measureTitle": { ruby: "高[たか]い音[おと]だけ", kanji: "高い音だけ", kana: "たかいおとだけ", en: "High notes only" },
   "tile.gonogo.desc": { ruby: "高[たか]い音[おと]のときだけ押[お]す",
     kanji: "高い音のときだけ押す",
     kana: "たかいおとのとき だけ おそう",
@@ -309,13 +312,13 @@ const STRINGS = {
     kana: "ボールが きたら おして うとう",
     en: "Press when the ball comes, and hit it",
   },
-  "tile.crane.title": { ruby: "アームを止[と]める", kanji: "アームを止める", kana: "アームを とめる", en: "Stop the claw" },
-  "tile.crane.desc": { ruby: "画面[がめん]を見[み]てアームを止[と]めよう",
-    kanji: "画面を見てアームを止めよう",
-    kana: "がめんを みて アームを とめよう",
-    en: "Watch the screen and stop the claw",
+  "tile.crane.title": { ruby: "ぬいぐるみを つかむ", kanji: "ぬいぐるみを つかむ", kana: "ぬいぐるみを つかむ", en: "Grab a plush toy" },
+  "tile.crane.desc": { ruby: "ぬいぐるみの 上[うえ]で アームを 止[と]めよう",
+    kanji: "ぬいぐるみの 上で アームを 止めよう",
+    kana: "ぬいぐるみの うえで アームを とめよう",
+    en: "Stop the claw above a plush toy",
   },
-  "tile.fishing.title": { ruby: "アタリで釣[つ]る", kanji: "アタリで釣る", kana: "アタリで つる", en: "Catch on the bite" },
+  "tile.fishing.title": { ruby: "音[おと]で 釣[つ]る", kanji: "音で 釣る", kana: "おとで つる", en: "Catch on the sound" },
   "tile.fishing.desc": { ruby: "音[おと]が鳴[な]ったらすぐ押[お]そう",
     kanji: "音が鳴ったらすぐ押そう",
     kana: "おとが なったら すぐ おそう",
@@ -343,9 +346,13 @@ const STRINGS = {
     kana: "3つの おとの あそびから えらぼう",
     en: "Three sound activities",
   },
-  // コーナー名は中の課題名（「アームを止める」）と別にする。同じ名前だと、
+  // コーナー名は中の課題名（「ぬいぐるみを つかむ」）と別にする。同じ名前だと、
   // 選んだ先に同じ名前が出て、入ったのか押し損ねたのかが分からない。
-  // ゲームセンターの語（UFOキャッチャー等）は既定表示しない方針なので中立に。
+  // ゲームセンターの語（UFOキャッチャーは他社の商標。クレーンゲームも景品の遊びに見える）は
+  // 使わない。App Store の年齢区分で「ギャンブルを模した表現」に数えられないように（§3.10）。
+  // ホームの小さなタイルで1行に収まる長さにする（2行になると、背の低い画面でホームが
+  // ページ送りの一覧に切り替わった。「ぬいぐるみ キャッチ」で試して戻した。2026-10-02）。
+  // アームの遊びの看板（そくていの回の遊ぶ画面にも出る）もこの文。
   "tile.crane-corner.title": {
     ruby: "アームで つかむ",
     kanji: "アームで つかむ",
@@ -362,10 +369,10 @@ const STRINGS = {
   // ——何が難しくなるか（範囲・時間）は遊べば分かるが、終わらないことと
   // 難しくなることは、選ぶ前に分かっている必要がある。
   "tile.crane-endless.title": {
-    ruby: "ずっと止[と]める",
-    kanji: "ずっと止める",
-    kana: "ずっと とめる",
-    en: "Endless claw",
+    ruby: "ずっと つかむ",
+    kanji: "ずっと つかむ",
+    kana: "ずっと つかむ",
+    en: "Endless grabbing",
   },
   "tile.crane-endless.desc": {
     ruby: "続[つづ]けるほど 難[むずか]しくなる",
@@ -1160,19 +1167,24 @@ const STRINGS = {
 
 
   // --- slot-v1: スロット型逐次停止課題 ---
-  "tile.slot-l1.title": { ruby: "ひとつ 止[と]める", kanji: "ひとつ 止める", kana: "ひとつ とめる", en: "Stop one reel" },
+  // 「リール」は分かりにくいと言われた（2026-10-02）。「スロット」は使わない: リールの絵柄を止める遊びを
+  // スロットと呼ぶと、App Store の年齢区分で「ギャンブルを模した表現」に数えられうる（docs/design-renewal §3.10）。
+  // くるくる回る絵を、ちょうどの所で止める遊び、と名前で分かるようにした。ホームの小さなタイルで
+  // 1行に収まる長さ（「くるくる ストップ」は2行になり、背の低い画面でホームがページ送りになった）。
+  // 中の2つは前のまま（「ひとつ 止める」「3つ 止める」）。
+  "tile.slot-l1.title": { ruby: "ひとつ 止[と]める", kanji: "ひとつ 止める", kana: "ひとつ とめる", en: "Stop one" },
   "tile.slot-l1.desc": { ruby: "同[おな]じ絵[え]が真[ま]ん中[なか]に来[き]たら押[お]そう", kanji: "同じ絵が真ん中に来たら押そう", kana: "おなじ えが まんなかに きたら おそう", en: "Press when the matching shape reaches the centre" },
-  "tile.slot-l2.title": { ruby: "3つ 止[と]める", kanji: "3つ 止める", kana: "3つ とめる", en: "Stop three reels" },
-  "tile.slot-l2.desc": { ruby: "3つのリールを左[ひだり]から順番[じゅんばん]に止[と]めよう", kanji: "3つのリールを左から順番に止めよう", kana: "3つの リールを ひだりから じゅんばんに とめよう", en: "Stop three reels from left to right" },
-  "tile.slot-corner.title": { ruby: "リールを 止[と]める", kanji: "リールを 止める", kana: "リールを とめる", en: "Stop the reels" },
+  "tile.slot-l2.title": { ruby: "3つ 止[と]める", kanji: "3つ 止める", kana: "3つ とめる", en: "Stop three" },
+  "tile.slot-l2.desc": { ruby: "3つの 絵[え]の 列[れつ]を 左[ひだり]から 順番[じゅんばん]に 止[と]めよう", kanji: "3つの 絵の 列を 左から 順番に 止めよう", kana: "3つの えの れつを ひだりから じゅんばんに とめよう", en: "Stop three columns of pictures from left to right" },
+  "tile.slot-corner.title": { ruby: "くるくる 止[と]める", kanji: "くるくる 止める", kana: "くるくる とめる", en: "Spin and stop" },
   "tile.slot-corner.desc": { ruby: "動[うご]く絵[え]を真[ま]ん中[なか]で止[と]めよう", kanji: "動く絵を真ん中で止めよう", kana: "うごく えを まんなかで とめよう", en: "Stop moving shapes at the centre" },
 
   "howto.slot-l1.1": { ruby: "上[うえ]の目標[もくひょう]の絵[え]を見[み]ます。", kanji: "上の目標の絵を見ます。", kana: "うえの もくひょうの えを みます。", en: "Look at the target shape above." },
   "howto.slot-l1.2": { ruby: "同[おな]じ絵[え]が太[ふと]い線[せん]の間[あいだ]に来[き]たら押[お]します。", kanji: "同じ絵が太い線の間に来たら押します。", kana: "おなじ えが ふとい せんの あいだに きたら おします。", en: "Press when the same shape is between the thick lines." },
-  "howto.slot-l1.3": { ruby: "1回[かい]押[お]すと、1本[ぽん]だけ止[と]まります。", kanji: "1回押すと、1本だけ止まります。", kana: "1かい おすと、1ぽんだけ とまります。", en: "Each press stops one reel." },
+  "howto.slot-l1.3": { ruby: "1回[かい]押[お]すと、1列[れつ]だけ止[と]まります。", kanji: "1回押すと、1列だけ止まります。", kana: "1かい おすと、1れつだけ とまります。", en: "Each press stops one column." },
   "howto.slot-l2.1": { ruby: "上[うえ]の目標[もくひょう]の絵[え]を見[み]ます。", kanji: "上の目標の絵を見ます。", kana: "うえの もくひょうの えを みます。", en: "Look at the target shape above." },
-  "howto.slot-l2.2": { ruby: "左[ひだり]のリールから順番[じゅんばん]に止[と]めます。", kanji: "左のリールから順番に止めます。", kana: "ひだりの リールから じゅんばんに とめます。", en: "Stop the reels from left to right." },
-  "howto.slot-l2.3": { ruby: "1回[かい]の入力[にゅうりょく]で1本[ぽん]だけ止[と]まります。", kanji: "1回の入力で1本だけ止まります。", kana: "1かいの にゅうりょくで 1ぽんだけ とまります。", en: "One input stops exactly one reel." },
+  "howto.slot-l2.2": { ruby: "左[ひだり]の列[れつ]から順番[じゅんばん]に止[と]めます。", kanji: "左の列から順番に止めます。", kana: "ひだりの れつから じゅんばんに とめます。", en: "Stop the columns from left to right." },
+  "howto.slot-l2.3": { ruby: "1回[かい]押[お]すと、1列[れつ]だけ止[と]まります。", kanji: "1回押すと、1列だけ止まります。", kana: "1かい おすと、1れつだけ とまります。", en: "Each press stops just one column." },
 
   "slot.target": { ruby: "目標[もくひょう]", kanji: "目標", kana: "もくひょう", en: "Target" },
   "slot.symbol.circle": { ruby: "丸[まる]", kanji: "丸", kana: "まる", en: "circle" },
@@ -1220,9 +1232,9 @@ const STRINGS = {
   "result.slot.extras": { ruby: "受付外[うけつけがい]の入力[にゅうりょく]", kanji: "受付外の入力", kana: "うけつけがいの にゅうりょく", en: "Extra inputs" },
   "result.slot.lastRound": { ruby: "最後[さいご]に止[と]まった絵[え]", kanji: "最後に止まった絵", kana: "さいごに とまった え", en: "Shapes stopped in the last round" },
 
-  "corner.slot.eyebrow": { ruby: "Reel stop", kanji: "Reel stop", kana: "Reel stop", en: "Reel stop" },
-  "corner.slot.title": { ruby: "リールを 止[と]める", kanji: "リールを 止める", kana: "リールを とめる", en: "Stop the reels" },
-  "corner.slot.guide": { ruby: "止[と]める本数[ほんすう]を選[えら]びます", kanji: "止める本数を選びます", kana: "とめる ほんすうを えらびます", en: "Choose how many reels to stop" },
+  "corner.slot.eyebrow": { ruby: "Spin & stop", kanji: "Spin & stop", kana: "Spin & stop", en: "Spin & stop" },
+  "corner.slot.title": { ruby: "くるくる 止[と]める", kanji: "くるくる 止める", kana: "くるくる とめる", en: "Spin and stop" },
+  "corner.slot.guide": { ruby: "いくつ 止[と]めるかを 選[えら]びます", kanji: "いくつ 止めるかを 選びます", kana: "いくつ とめるかを えらびます", en: "Choose how many to stop" },
 };
 
 /** 設定値から表記モードを決める。知らない値は既定へ倒す。 */

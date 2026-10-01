@@ -71,7 +71,7 @@ export const SETTING_DEFINITIONS = Object.freeze({
   hideVisualTasks: {
     type: "checkbox",
     label: "画面をよく見る遊びを隠す",
-    hint: "リールとアームをホームから隠します。",
+    hint: "「くるくる 止める」と「アームで つかむ」をホームから隠します。",
     format: "onOff",
   },
 
@@ -132,8 +132,8 @@ export const SETTING_DEFINITIONS = Object.freeze({
 
   slotCycleMs: {
     type: "range",
-    label: "リールの速さ",
-    hint: "1周する時間。長いほどゆっくりです。",
+    label: "絵が回る速さ",
+    hint: "絵が1周する時間。長いほどゆっくりです。",
     min: 2800,
     max: 6000,
     step: 100,
@@ -159,7 +159,7 @@ export const SETTING_DEFINITIONS = Object.freeze({
   slotL1Rounds: {
     type: "range",
     label: "「ひとつ止める」の回数",
-    hint: "1本のリールを止める回数です。",
+    hint: "1列の絵を止める回数です。",
     min: 3,
     max: 20,
     step: 1,

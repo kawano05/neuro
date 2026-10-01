@@ -200,9 +200,9 @@ test("each detailed group can go back to the state.js defaults, except what cann
   );
   assert.equal(
     describeReset(slot, plan),
-    "「リールを止める」を既定に戻しました: リールの速さ（4.8秒 → 3.2秒）、「合った」にする広さ（0.1秒 → 0.22秒）。"
+    "「くるくる 止める」を既定に戻しました: 絵が回る速さ（4.8秒 → 3.2秒）、「合った」にする広さ（0.1秒 → 0.22秒）。"
   );
-  assert.equal(describeReset(slot, resetPlan(slot, defaultState.settings)), "「リールを止める」は、もう既定のままです。");
+  assert.equal(describeReset(slot, resetPlan(slot, defaultState.settings)), "「くるくる 止める」は、もう既定のままです。");
 
   // null（あそびごとの既定）へ戻すものは null へ。値の文はプリセットで読む。
   const crane = settingsGroup("crane");

@@ -73,9 +73,9 @@ export const gameTiles = [
   // あいだの一段。これも測定の課題ではない（games/baseball.js）。
   { id: "baseball", taskType: null, resultType: "completion", title: "ボールを うつ", description: "ボールが きたら おして うとう", order: 4, enabled: true, iconClass: "fa-solid fa-baseball-bat-ball" },
   { id: "slot-l1", taskType: "slot", title: "ひとつ とめる", description: "おなじ えが まんなかに きたら おそう", order: 5, enabled: true, visualRequired: true, iconClass: "fa-solid fa-circle-stop" },
-  { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの リールを じゅんばんに とめよう", order: 6, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
-  { id: "gonogo", taskType: "gonogo", title: "たかいおとだけ", description: "たかいおとのとき だけ おそう", order: 7, enabled: true, iconClass: "fa-solid fa-bell" },
-  { id: "crane", taskType: "scan", title: "アームを とめる", description: "がめんを みて アームを とめよう", order: 8, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
+  { id: "slot-l2", taskType: "slot", title: "3つ とめる", description: "3つの えの れつを じゅんばんに とめよう", order: 6, enabled: true, visualRequired: true, iconClass: "fa-solid fa-bars-staggered" },
+  { id: "gonogo", taskType: "gonogo", title: "たかい おとだけ おす", description: "たかいおとのとき だけ おそう", order: 7, enabled: true, iconClass: "fa-solid fa-bell" },
+  { id: "crane", taskType: "scan", title: "ぬいぐるみを つかむ", description: "ぬいぐるみの うえで アームを とめよう", order: 8, enabled: true, visualRequired: true, iconClass: "fa-solid fa-hand" },
   // さかなつりは2種類ある。どちらも反応時間を測るが、測っているものが違う:
   //   fishing        … 純粋な単純反応時間。アタリ音は1種類だけで、迷う要素がない
   //   fishing-gonogo … そこに No-Go（長靴の低音）を混ぜた抑制つきの反応時間
@@ -83,7 +83,7 @@ export const gameTiles = [
   // （単純反応時間）なのに実体は Go/No-Go 課題という食い違いがあり、
   // 「この課題で何を測ったか」を書けなかった。ロビーでは「さかなつり」の
   // コーナー（fishingCornerTile）にまとめ、二階層目でどちらかを選ぶ。
-  { id: "fishing", taskType: "rt", title: "アタリで つる", description: "おとが なったら すぐ おそう", order: 9, enabled: true, iconClass: "fa-solid fa-fish" },
+  { id: "fishing", taskType: "rt", title: "おとで つる", description: "おとが なったら すぐ おそう", order: 9, enabled: true, iconClass: "fa-solid fa-fish" },
   { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 10, enabled: true, iconClass: "fa-solid fa-fish-fins" },
   { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 11, enabled: true, iconClass: "fa-solid fa-stopwatch" },
 ];
@@ -91,7 +91,7 @@ export const gameTiles = [
 /** 視覚タイミング課題2種をまとめる二階層目への入口。 */
 export const slotCornerTile = {
   id: "slot-corner",
-  title: "リールを とめる",
+  title: "くるくる とめる",
   description: "ひとつ または 3つの えを とめよう",
   iconClass: "fa-solid fa-circle-stop",
 };
@@ -119,7 +119,7 @@ export const endlessTiles = [
   {
     id: "crane-endless",
     gameId: "crane",
-    title: "ずっと とめる",
+    title: "ずっと つかむ",
     description: "つづけるほど むずかしくなる",
     iconClass: "fa-solid fa-infinity",
     visualRequired: true,
