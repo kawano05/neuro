@@ -1,15 +1,12 @@
 // =====================================================================
 // games/readyScreen.js — 遊ぶ前の説明の画面（レディ画面）の押し方
 //
-// スイッチ1つで遊ぶ人にとって、押す回数はそのまま負担になる。一方で、説明を
-// 聞いている途中のひと押しで課題が始まると、何をする遊びか分からないまま合図が
-// 来る（点検 U15）。両方を満たすために、ひと押しの意味を「いま声が鳴っているか」
-// で決める:
-//   - 読み上げが鳴っているあいだ … 声を止めるだけ（始めない）
-//   - 声が止まっている（読み終えた・読み上げ OFF・止めた） … ひと押しで始まる
-// 読み上げが終わるまで待てば1回、途中で押しても2回で始まる。以前（GPT の直し、
-// 2026-09-30）は読み上げ ON なら必ず「説明を終わる → 始める」の2回で、短い画面では
-// さらに「次の説明」を手順の数だけ押す必要があった（アームでスマホ横なら5回）。
+// ひと押しで始まる。説明の声が鳴っていても止めて始める（声は beginSession が止める）。
+// スイッチ1つで遊ぶ人にとって、押す回数はそのまま負担になる。
+// 以前は「声が鳴っているあいだのひと押しは声を止めるだけ」にしていた（点検 U15、
+// 2026-09-30）が、ユーザーの判断で「押したらすぐ始まる」にした（2026-10-01）。
+// それより前（GPT の直し）は、読み上げ ON なら必ず「説明を終わる → 始める」の2回で、
+// 短い画面ではさらに「次の説明」を手順の数だけ押す必要があった。
 //
 // 短い画面で説明が入りきらないときは、1手順ずつ見せて一定の間隔で次へ送る。
 // ページ送りは始める条件にしない（スイッチの人に「次へ」を押させないため。説明は
@@ -24,8 +21,6 @@
 export const READY_GUARD_MS = 450;
 /** 説明を1手順ずつ見せるとき、次の手順へ送る間隔。 */
 export const READY_PAGE_MS = 5000;
-/** 声が鳴っているかを見直す間隔（ボタンと案内の文を、ひと押しの意味に合わせる）。 */
-const SPEECH_POLL_MS = 250;
 
 export function createReadyScreen(ctx, start) {
   const { elements, scan } = ctx;
@@ -41,10 +36,8 @@ export function createReadyScreen(ctx, start) {
   let items = [];
   let index = 0;
   let paged = false;
-  let speaking = false;
   let guardUntil = 0;
   let pageTimer = null;
-  let speechTimer = null;
 
   const isOpen = () => !controls.hidden;
   const guard = () => {
@@ -61,9 +54,7 @@ export function createReadyScreen(ctx, start) {
     forwardButton.hidden = !paged;
     setLabel(previousButton, "ready.previous");
     setLabel(forwardButton, "ready.next");
-    setLabel(startButton, speaking ? "ready.stopVoice" : "ready.start");
-    const instruction = elements.gameStageContent.querySelector(".game-ready-instruction");
-    if (instruction) instruction.innerHTML = ctx.tHtml(speaking ? "ready.stopHint" : "ready.go");
+    setLabel(startButton, "ready.start");
   }
 
   function setLabel(button, key) {
@@ -101,34 +92,13 @@ export function createReadyScreen(ctx, start) {
     }, READY_PAGE_MS);
   }
 
-  /** 声が鳴り終わったら、ボタンと案内を「始める」に戻す。 */
-  function watchSpeech() {
-    window.clearTimeout(speechTimer);
-    speechTimer = null;
-    if (!isOpen()) return;
-    const now = Boolean(ctx.audio.isSpeaking?.());
-    if (now !== speaking) {
-      speaking = now;
-      render();
-    }
-    if (speaking) speechTimer = window.setTimeout(watchSpeech, SPEECH_POLL_MS);
-  }
-
   /**
    * スイッチのひと押し（走査で「はじめる」を選んだとき・走査なしで画面を押したとき）。
-   * 声が鳴っていれば止めるだけ、止まっていれば始める。
+   * すぐ始める（説明の声は、始める処理が止める）。
    */
   function press() {
     if (!isOpen() || performance.now() < guardUntil) return;
     guard();
-    if (ctx.audio.isSpeaking?.()) {
-      ctx.audio.stopSpeech();
-      speaking = false;
-      render();
-      // 声で言い直すと、また「声が鳴っている」になって始められない。文字の知らせだけにする。
-      ctx.announce(ctx.t("ready.stopped"));
-      return;
-    }
     start();
   }
 
@@ -154,8 +124,7 @@ export function createReadyScreen(ctx, start) {
     observer?.disconnect();
     observer = null;
     window.clearTimeout(pageTimer);
-    window.clearTimeout(speechTimer);
-    pageTimer = speechTimer = null;
+    pageTimer = null;
     controls.hidden = true;
     elements.gameStage.removeAttribute("aria-describedby");
   }
@@ -176,9 +145,7 @@ export function createReadyScreen(ctx, start) {
     document.fonts?.ready.then(() => {
       if (isOpen()) fit();
     });
-    speaking = Boolean(ctx.audio.isSpeaking?.());
     fit();
-    watchSpeech();
     scan.restartIfNeeded();
   }
 

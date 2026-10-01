@@ -2721,24 +2721,18 @@ async function checkIpadSwitchControlMode(page, project) {
  * 記録されたあと、Esc 中断が partial session として失われず残ることを確認する。
  */
 /**
- * 支援者の設定「タイミングの遊びの絵」（settings.practiceArt。src/lib/artVersion.js）。
- * 「前の絵」の れんしゅうの回は、新しい絵の印（.has-world-art）も世界の絵も付けずに、前の版の
- * れんしゅうの見た目（.is-practice）で遊び、見せた絵の版 1 を記録に残す。「新しい絵」に戻すと
- * 世界が出る。そくていの回は どちらでも前の絵（compare-measure-screens.mjs が画素で見る）。
+ * れんしゅうの回の絵は、遊びの中の「この遊びの設定」の「絵」で選ぶ（settings.practiceArts。
+ * src/lib/artVersion.js）。「前の絵」を選ぶと、その回は はじめからやり直して、新しい絵の印
+ * （.has-world-art）も世界の絵も付けずに、前の版の れんしゅうの見た目（.is-practice）で遊び、
+ * 見せた絵の版 1 を記録に残す。選んだ絵は保存され、同じ絵の遊び（3つ止める）にも効く。
+ * そくていの回は どちらでも前の絵（compare-measure-screens.mjs が画素で見る）。
  */
 async function checkPracticeArtChoice(page, project) {
   if (project.name !== "chromium-desktop") {
     return SKIPPED;
   }
-  for (const practiceArt of ["classic", "world"]) {
-    await patchSettings(page, { practiceArt, difficultyMode: "practice", autoScan: false, speechEnabled: false });
-    await page.locator("#startStage").click();
-    await waitForClass(page, "#homeView", "is-active");
-    await openActivity(page, t("tile.slot-corner.title"));
-    await openActivity(page, t("tile.slot-l1.title"));
-    await finishReady(page);
-    await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
-    const look = await page.evaluate(() => {
+  const lookOf = () =>
+    page.evaluate(() => {
       const stage = document.querySelector("#gameStageContent");
       return {
         practice: stage.classList.contains("is-practice"),
@@ -2746,25 +2740,46 @@ async function checkPracticeArtChoice(page, project) {
         worldNodes: document.querySelectorAll(".slot-world, .slot-world-symbol").length,
       };
     });
-    assert(look.practice, `${practiceArt}: the practice run keeps its practice look`);
-    if (practiceArt === "classic") {
-      assert(!look.world && look.worldNodes === 0, `The old pictures must not draw the new world: ${JSON.stringify(look)}`);
-    } else {
-      assert(look.world && look.worldNodes > 0, `The new pictures must draw the world: ${JSON.stringify(look)}`);
-    }
-    await page.locator("#gameStage").dispatchEvent("click");
-    await page.waitForTimeout(200);
-    await page.keyboard.press("Escape");
-    await waitForClass(page, "#homeView", "is-active");
-    const artVersion = await page.evaluate(
-      (key) => JSON.parse(localStorage.getItem(key)).sessions.filter((item) => item.gameId === "slot-l1").at(-1)?.config?.artVersion,
-      storageKey
-    );
-    assert(
-      practiceArt === "classic" ? artVersion === 1 : artVersion > 1,
-      `${practiceArt}: the record keeps the version of the pictures that were shown, got ${artVersion}`
-    );
-  }
+  await patchSettings(page, { difficultyMode: "practice", autoScan: false, speechEnabled: false });
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, t("tile.slot-corner.title"));
+  await openActivity(page, t("tile.slot-l1.title"));
+  await finishReady(page);
+  await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
+  const before = await lookOf();
+  assert(before.practice && before.world && before.worldNodes > 0, `The new pictures are the default: ${JSON.stringify(before)}`);
+
+  // この遊びの設定 → 絵 → 前の絵 → この設定で はじめる
+  await page.locator("#gameSettings").click();
+  await page.locator('.gs-option[data-gs-key="practiceArts.slot"][data-gs-value=\'"classic"\']').click();
+  await page.locator('[data-gs-action="apply"]').click();
+  await finishReady(page);
+  await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
+  const classic = await lookOf();
+  assert(classic.practice, "The practice run keeps its practice look");
+  assert(!classic.world && classic.worldNodes === 0, `The old pictures must not draw the new world: ${JSON.stringify(classic)}`);
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).settings.practiceArts, storageKey);
+  assert(saved.slot === "classic", "The chosen pictures are saved for the reel games");
+  assert(saved.crane === "world", "Other games keep their own pictures");
+
+  await page.locator("#gameStage").dispatchEvent("click");
+  await page.waitForTimeout(200);
+  await page.keyboard.press("Escape");
+  await waitForClass(page, "#homeView", "is-active");
+  const artVersion = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)).sessions.filter((item) => item.gameId === "slot-l1").at(-1)?.config?.artVersion,
+    storageKey
+  );
+  assert(artVersion === 1, `The record keeps the version of the pictures that were shown, got ${artVersion}`);
+
+  // 同じリールの絵を使う「3つ止める」も前の絵になる。
+  await openActivity(page, t("tile.slot-corner.title"));
+  await openActivity(page, t("tile.slot-l2.title"));
+  await finishReady(page);
+  await page.locator(".slot-task[data-game-id='slot-l2']").waitFor({ state: "visible" });
+  const sibling = await lookOf();
+  assert(!sibling.world, "The other reel game shares the chosen pictures");
 }
 
 async function checkSlotL1GameFlow(page) {
@@ -2788,10 +2803,10 @@ async function checkSlotL1GameFlow(page) {
   await finishReady(page);
   await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
   assert((await page.locator(".slot-reel").count()) === 1, "slot-l1 must render exactly one reel");
-  // タイミングの遊びは、上の帯に回の種類（れんしゅう／そくてい）を出す（支援者の取り違えを防ぐ）。
+  // れんしゅうの回には、回の種類の札を出さない（2026-10-01、ユーザーの判断）。
   assert(
-    (await page.locator("#gameProgress .game-progress-mode").textContent())?.trim() === t("session.practiceShort"),
-    "A timing game must show its measure/practice label in the top bar"
+    (await page.locator("#gameProgress .game-progress-mode, #gameStageContent .session-mode").count()) === 0,
+    "A practice run must not show a practice label"
   );
 
   // 6つの絵の一覧は、そくていの回にだけ出す（れんしゅうでは「リールの周りの
@@ -2971,6 +2986,11 @@ async function checkMeasuredReelsStayOnScreen(page) {
     await page.locator("#gameStage").click();
     await finishReady(page);
     await page.locator(".slot-task[data-difficulty-mode='measure']").waitFor({ state: "visible" });
+    // そくていの回は、上の帯に「そくてい」と出す（支援者が ふだんの回と取り違えないように）。
+    assert(
+      (await page.locator("#gameProgress .game-progress-mode").textContent())?.trim() === t("session.measureShort"),
+      "A measured run must say so in the top bar"
+    );
     await page.waitForTimeout(150);
     const seen = await page.evaluate((key) => {
       const stage = document.querySelector("#gameStageContent");

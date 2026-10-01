@@ -117,7 +117,10 @@ async function openFixedPage(browser, port, [width, height]) {
           speechEnabled: false,
           autoScan: false,
           // れんしゅうの回は、粒や仲間が出ない段で比べる（どの瞬間に撮っても同じになるように）。
-          ...(mode === "practice" ? { practiceArt, fxLevel: "none" } : {}),
+          // 絵は遊びの種類ごと（settings.practiceArts。src/lib/artVersion.js）。全部を同じ絵にする。
+          ...(mode === "practice"
+            ? { practiceArts: { slot: practiceArt, crane: practiceArt, fishing: practiceArt, gonogo: practiceArt }, fxLevel: "none" }
+            : {}),
         },
       })
     );

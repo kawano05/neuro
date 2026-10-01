@@ -91,7 +91,7 @@ const PRACTICE_ART_VERSIONS = Object.freeze({ gonogo: GONOGO_ART_VERSION });
  * その回に画面へ出す絵の版（session.config.artVersion に残す。src/lib/artVersion.js）。
  * measurement は予告のない測定の版面を出す回（そくていの回と、キャリブレーション）。
  * キャリブレーションは支援者の設定が れんしゅう でも元の絵なので、どちらでも 1 になる。
- * practiceArt は支援者の設定「タイミングの遊びの絵」（前の絵なら 1）。
+ * practiceArt は遊びの中の「この遊びの設定」の「絵」（前の絵なら 1）。
  */
 export function rhythmArtVersion(gameId, measurement, practiceArt) {
   return shownArtVersion(

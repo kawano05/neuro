@@ -42,10 +42,10 @@ const sessionCount = (page) =>
   page.evaluate((key) => JSON.parse(localStorage.getItem(key)).sessions.length, storageKey);
 
 /**
- * 説明の画面の押し方（点検 U15 と、押す回数の両立）。
+ * 説明の画面の押し方。
  * - 開いた直後の押下（タイルを選んだ押下の跳ね返り）では始まらない
- * - 声が鳴っているあいだの押下は声を止めるだけで、記録も作らない
- * - 声が止まっていれば、ひと押しで始まる
+ * - それを過ぎたら、ひと押しですぐ始まる。説明の声が鳴っていても止めて始める
+ *   （2026-10-01、ユーザーの判断。以前は声を止めるだけの押下を挟んでいた）
  * - 走査では「はじめる」と「おわる」だけを回り、スイッチコントロールにも両方が見える
  * - 始まったら走査は止まる
  */
@@ -61,21 +61,20 @@ export async function checkReadyInputSafety(page) {
   await page.locator("#gameStage").click();
   assert(await page.locator(".game-ready").count(), "開いた直後の押下で始まらない");
 
-  // 声が鳴っているあいだの押下は、声を止めるだけ。端末の声が「読んでいる」状態を作る
-  // （audio.isSpeaking は speechSynthesis.speaking を見る）。止める（cancel）と、本物と
-  // 同じく「読んでいない」に戻る。
+  assert.equal(await sessionCount(page), before, "跳ね返りの押下は記録しない");
+
+  // 説明の声が鳴っていても、ひと押しですぐ始まり、声は止まる。端末の声が「読んでいる」
+  // 状態を作る。止める（cancel）と、本物と同じく「読んでいない」に戻る。
   await page.waitForTimeout(PAST_GUARD_MS);
   await setDeviceSpeaking(page, true);
   await page.locator("#gameStage").click();
-  assert(await page.locator(".game-ready").count(), "声が鳴っているあいだの押下で始まらない");
-  assert.equal(await sessionCount(page), before, "説明の押下は記録しない");
-
-  // 声が止まっていれば、ひと押しで始まる。
-  await setDeviceSpeaking(page, false);
-  await page.waitForTimeout(PAST_GUARD_MS);
-  await page.locator("#gameStage").click();
   await page.locator(".game-ready").waitFor({ state: "detached" });
-  assert(await page.locator(".slot-task").count(), "声が止まっていれば、ひと押しで始まる");
+  assert(await page.locator(".slot-task").count(), "声が鳴っていても、ひと押しで始まる");
+  assert.equal(
+    await page.evaluate(() => window.__fakeSpeech.speaking),
+    false,
+    "始めるときに説明の声を止める"
+  );
   await page.locator("#gameExit").click();
 
   // 自前の走査では、説明の画面に枠を出さず、ひと押しで始まる（「はじめる」と「おわる」を

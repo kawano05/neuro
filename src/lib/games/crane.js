@@ -62,7 +62,7 @@ import {
   craneRoomHtml,
   craneWorldHtml,
 } from "../art/craneWorldArt.js";
-import { showsWorldArt, shownArtVersion } from "../artVersion.js";
+import { practiceArtFor, showsWorldArt, shownArtVersion } from "../artVersion.js";
 
 const FEEDBACK_GAIN = 0.05;
 const MISS_GAIN = 0.018;
@@ -323,7 +323,7 @@ function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = nul
     fxLevel,
     // 見え方の版（art/craneWorldArt.js）。れんしゅうの回の景品やアームの絵が変わった
     // 前後を分けるため。
-    artVersion: shownArtVersion(resolveDifficultyMode(settings), CRANE_ART_VERSION, settings.practiceArt),
+    artVersion: shownArtVersion(resolveDifficultyMode(settings), CRANE_ART_VERSION, practiceArtFor(settings, "crane")),
     // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
     // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
     measurementReadiness: readiness || "n/a",
@@ -355,9 +355,9 @@ export function createCraneGame(ctx) {
   // れんしゅうの回か（前の版からの、明るい色の台。theme-hakkiri.css）。
   const practice = config.difficultyMode !== "measure";
   // 新しい絵（おもちゃ屋さんの世界。src/lib/art/craneWorldArt.js・world-crane.css）を出すか。
-  // れんしゅうの回だけで、支援者の設定「タイミングの遊びの絵」で前の絵も選べる（artVersion.js）。
+  // れんしゅうの回だけで、遊びの中の「この遊びの設定」で前の絵も選べる（artVersion.js）。
   // そくていの回は、刺激の見え方も測定の条件なので、いつも前の PNG のまま動かさない。
-  const worldArt = showsWorldArt(config.difficultyMode, ctx.settings.practiceArt);
+  const worldArt = showsWorldArt(config.difficultyMode, practiceArtFor(ctx.settings, "crane"));
   let stageEl = null;
   let sceneEl = null;
   let statusEl = null;

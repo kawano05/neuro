@@ -81,7 +81,8 @@ test("in-game settings use the same keys, names, measured flags and ranges", () 
   const seen = new Map();
   Object.entries(GAME_SETTINGS).forEach(([gameId, { groups }]) => {
     groups
-      .filter((group) => !group.key.startsWith("playPrefs."))
+      // 遊びの中だけの設定（はじめの遊びの playPrefs、れんしゅうの回の絵 practiceArts）は表に無い。
+      .filter((group) => !group.key.startsWith("playPrefs.") && !group.key.startsWith("practiceArts."))
       .forEach((group) => {
         const definition = SETTING_DEFINITIONS[group.key];
         assert.ok(definition, `${gameId} の ${group.key} が共有の定義にある`);

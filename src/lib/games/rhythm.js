@@ -52,6 +52,7 @@ import {
   computeBeatIntervalMs,
   generateGoNoGoSequence,
 } from "./judge.js";
+import { practiceArtFor } from "../artVersion.js";
 import { createRhythmVisuals } from "./rhythmVisuals.js";
 import { renderAudioUnavailable } from "./unavailableScreen.js";
 
@@ -608,7 +609,7 @@ export function createRhythmGame(gameId) {
       rhythmVisuals = createRhythmVisuals({
         gameId,
         visualGuidance,
-        practiceArt: settings.practiceArt,
+        practiceArt: practiceArtFor(settings, gameId),
         measurement: gameId === "calibration" || resolveDifficultyMode(settings) === "measure",
         exactToleranceMs: EXACT_TOLERANCE_MS,
         t,

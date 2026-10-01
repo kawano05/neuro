@@ -39,7 +39,7 @@ import { FISHING_ART_VERSION, fishingBoatSvg, fishingCatchSvg, fishingSeaHtml, f
 import { generateGoNoGoSequence } from "./judge.js";
 import { generateForeperiods, judgeReaction } from "./reaction.js";
 import { renderAudioUnavailable } from "./unavailableScreen.js";
-import { showsWorldArt, shownArtVersion } from "../artVersion.js";
+import { practiceArtFor, showsWorldArt, shownArtVersion } from "../artVersion.js";
 
 // 素材の URL。`import boat from "...png"` ではなく new URL(...) を使う。
 // 前者だと Vite は解決できるが、素の Node が .png を読めずに落ちる
@@ -271,10 +271,10 @@ export function createFishingGame(gameId) {
   // れんしゅうの回か。
   const practice = resolveDifficultyMode(ctx.settings) !== "measure";
   // 新しい絵（押すと 出てくる とつながる海と、ラッコの舟・色つきの魚。src/world-fishing.css、
-  // art/fishingWorldArt.js）を出すか。れんしゅうの回だけで、支援者の設定「タイミングの遊びの絵」で
+  // art/fishingWorldArt.js）を出すか。れんしゅうの回だけで、遊びの中の「この遊びの設定」で
   // 前の絵も選べる（artVersion.js）。動くもの・合図の位置・大きさ・時刻は変えず、描いてある絵だけを
   // 替える。そくていの回は、いまの絵（PNG）のまま1pxも変えない。
-  const worldArt = showsWorldArt(resolveDifficultyMode(ctx.settings), ctx.settings.practiceArt);
+  const worldArt = showsWorldArt(resolveDifficultyMode(ctx.settings), practiceArtFor(ctx.settings, gameId));
   // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
   // 返すので、測る回の長さは protocol のまま動かない。
   config.endless = resolveEndlessMode(ctx.settings, ctx.endless);
@@ -1017,7 +1017,7 @@ export function createFishingGame(gameId) {
         fxLevel: ctx.fx?.level() ?? null,
         // 見え方の版（art/fishingWorldArt.js）。れんしゅうの回の釣り人・魚・長靴の絵が
         // 変わった前後を分けるため。
-        artVersion: shownArtVersion(resolveDifficultyMode(ctx.settings), FISHING_ART_VERSION, ctx.settings.practiceArt),
+        artVersion: shownArtVersion(resolveDifficultyMode(ctx.settings), FISHING_ART_VERSION, practiceArtFor(ctx.settings, gameId)),
         // 成立確認の状態（met / overridden / n/a）。他の課題と同じ意味。
         measurementReadiness: ctx.readiness || "n/a",
       },

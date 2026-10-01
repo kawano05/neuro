@@ -1074,9 +1074,6 @@ const STRINGS = {
   "ready.next": { ruby: "次[つぎ]の説明[せつめい]", kanji: "次の説明", kana: "つぎの せつめい", en: "Next step" },
   "ready.previous": { ruby: "前[まえ]の説明[せつめい]", kanji: "前の説明", kana: "まえの せつめい", en: "Previous step" },
   "ready.start": { ruby: "始[はじ]める", kanji: "始める", kana: "はじめる", en: "Start" },
-  "ready.stopVoice": { ruby: "声[こえ]を止[と]める", kanji: "声を止める", kana: "こえを とめる", en: "Stop voice" },
-  "ready.stopHint": { ruby: "押[お]すと声[こえ]が止[と]まります", kanji: "押すと声が止まります", kana: "おすと こえが とまります", en: "Press to stop the voice" },
-  "ready.stopped": { ruby: "声[こえ]を止[と]めました。押[お]すと始[はじ]まります", kanji: "声を止めました。押すと始まります", kana: "こえを とめました。おすと はじまります", en: "Voice stopped. Press to start" },
   "ready.endlessExit": {
     ruby: "おわりたいときは {n}秒[びょう] 押[お]さずに 待[ま]って、選[えら]んでね",
     kanji: "おわりたいときは {n}秒 押さずに 待って、選んでね",

@@ -72,7 +72,7 @@ const GROUPS = [
   {
     id: "senses",
     title: "見え方・声のくわしい設定",
-    fields: ["textMode", "highContrast", "speechVolume", "speechVoice", "practiceArt"],
+    fields: ["textMode", "highContrast", "speechVolume", "speechVoice"],
     reset: "見え方・声の設定を既定に戻す",
   },
   {

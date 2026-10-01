@@ -29,6 +29,7 @@
 // =====================================================================
 
 import { isMeasurementMode } from "../difficultyMode.js";
+import { ART_FAMILIES } from "../artVersion.js";
 import { SETTING_DEFINITIONS } from "../settingDefinitions.js";
 import { PLAY_BACKGROUNDS_BY_GAME, PLAY_SOUNDS_BY_GAME } from "../state.js";
 
@@ -155,16 +156,36 @@ const IN_GAME_CHOICES = {
   ],
 };
 
-/** タイミングの遊び1つに出す項目（表の inGame にその遊びがあるもの。表の順）。 */
+/**
+ * れんしゅうの回の絵（artVersion.js）。同じ絵を使う遊び（ひとつ止める・3つ止める など）は
+ * 一緒に変わる。そくていの回は いつも前の絵なので、そくていでは変えられない（measured）。
+ * 遊びの中だけの設定なので、支援者の設定画面（settingDefinitions.js）には置かない。
+ */
+function artGroup(gameId) {
+  return {
+    key: `practiceArts.${ART_FAMILIES[gameId]}`,
+    label: "絵",
+    measured: true,
+    options: [
+      ["world", "新しい絵（まわりの世界つき）"],
+      ["classic", "前の絵"],
+    ],
+  };
+}
+
+/** タイミングの遊び1つに出す項目（表の inGame にその遊びがあるもの。表の順）と、絵。 */
 function timingGroups(gameId) {
-  return Object.entries(SETTING_DEFINITIONS)
-    .filter(([, definition]) => definition.inGame?.includes(gameId))
-    .map(([key, definition]) => ({
-      key,
-      label: definition.label,
-      measured: definition.measured === true,
-      options: IN_GAME_CHOICES[key],
-    }));
+  return [
+    ...Object.entries(SETTING_DEFINITIONS)
+      .filter(([, definition]) => definition.inGame?.includes(gameId))
+      .map(([key, definition]) => ({
+        key,
+        label: definition.label,
+        measured: definition.measured === true,
+        options: IN_GAME_CHOICES[key],
+      })),
+    artGroup(gameId),
+  ];
 }
 
 /** 遊びごとの設定。ここに無い遊びにはボタンを出さない。 */

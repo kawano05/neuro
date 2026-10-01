@@ -123,11 +123,12 @@ export function createGameHost(ctx) {
   const modeKey = () => activeGameId === "calibration" || isMeasurementMode(state.settings) ? "session.measure" : "session.practice";
   const modeText = () => ctx.t(`${modeKey()}Short`);
   /**
-   * 回の種類（そくてい／れんしゅう）の札を出す遊びか。そくていの回があるのはタイミングの遊び
-   * （taskType を持つもの。基準をとる回も）だけ。はじめの遊びに「れんしゅう」と出すと、設定を
-   * そくていにしたとき「そくてい」と出て、測っていない遊びを測ったと取り違える（UD の B3）。
+   * 回の種類の札（「そくてい」「そくていの回」）を出すか。出すのは、そくていの回（と基準をとる回）の
+   * タイミングの遊びだけ。支援者が測る回を ふだんの回と取り違えないため（UD の B3）。
+   * れんしゅうの回には出さない（2026-10-01、ユーザーの判断「れんしゅうの回の表記いらない」）。
+   * はじめの遊びには そくていの回が無いので出さない（出すと、測っていない遊びを測ったと取り違える）。
    */
-  const showsSessionMode = (module) => Boolean(module?.taskType);
+  const showsSessionMode = (module) => Boolean(module?.taskType) && modeKey() === "session.measure";
 
   /**
    * 段階を変える（phase を書き換えるのはここだけ）。「この遊びの設定」のボタンを出すかは

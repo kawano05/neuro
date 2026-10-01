@@ -22,7 +22,7 @@ import { slotSymbolHtml, slotSymbolStripUrl } from "./slotArt.js";
 import { SLOT_ART_VERSION, slotPracticeSymbolHtml, slotWorldHtml } from "../art/slotWorldArt.js";
 import { presentation } from "../presentation.js";
 import { atmosphereFor } from "../atmosphere.js";
-import { showsWorldArt, shownArtVersion } from "../artVersion.js";
+import { practiceArtFor, showsWorldArt, shownArtVersion } from "../artVersion.js";
 import { fitMeasuredReels, reelCellPx } from "./slotFit.js";
 
 const INPUT_GUARD_MS = 300;
@@ -484,8 +484,8 @@ export function createSlotGame(gameId) {
       // れんしゅうの回だけの見た目（前の版からの、明るい色の台。theme-hakkiri.css）。
       stageEl.classList.toggle("is-practice", config.difficultyMode !== "measure");
       // 新しい絵（ゆうえんちの世界。art/slotWorldArt.js・world-slot.css）を出すか。支援者の設定
-      // 「タイミングの遊びの絵」で前の絵も選べる（artVersion.js）。そくていの回はいつも前の絵。
-      worldArt = showsWorldArt(config.difficultyMode, settings.practiceArt);
+      // 遊びの中の「この遊びの設定」で前の絵も選べる（artVersion.js）。そくていの回はいつも前の絵。
+      worldArt = showsWorldArt(config.difficultyMode, practiceArtFor(settings, gameId));
       stageEl.classList.toggle("has-world-art", worldArt);
       stageEl.innerHTML = `
         <section class="slot-task" data-game-id="${gameId}" data-difficulty-mode="${config.difficultyMode}">
@@ -548,7 +548,7 @@ export function createSlotGame(gameId) {
           difficultyMode: config.difficultyMode,
           // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
           fxLevel: ctx.fx?.level() ?? null,
-          artVersion: shownArtVersion(config.difficultyMode, SLOT_ART_VERSION, settings.practiceArt),
+          artVersion: shownArtVersion(config.difficultyMode, SLOT_ART_VERSION, practiceArtFor(settings, gameId)),
           textMode: config.textMode,
           measurementReadiness: config.measurementReadiness,
           visualGuidance: false,
