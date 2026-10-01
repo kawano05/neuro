@@ -44,9 +44,9 @@ export function outfitClasses(outfits) {
   return ["hat", "bow", "crown"].filter((id) => have.has(id)).map((id) => `has-${id}`).join(" ");
 }
 
-// --- キラキラびん（押すたびに星がたまる。数ではなく目で見て分かるように） ---
+// --- キラキラびん（押すたびに中身がたまる。数ではなく目で見て分かるように） ---
 
-/** びんの中の星の置き場（下の段から。びんの絵の中の %）。15個でいっぱい。 */
+/** びんの中身の置き場（下の段から。びんの絵の中の %）。15個でいっぱい。 */
 const JAR_ROWS = [
   [126, [30, 50, 70, 90]],
   [106, [40, 60, 80]],
@@ -74,17 +74,7 @@ export function jarSvg() {
   </svg>`;
 }
 
-/** びんの中の星（先頭から count 個）。 */
-export function jarStarsHtml(count) {
-  return JAR_SLOTS.slice(0, count)
-    .map((slot, index) => `<span class="party-star" style="left:${slot.left.toFixed(2)}%;top:${slot.top.toFixed(2)}%">${starSvg(STAR_COLORS[index % STAR_COLORS.length])}</span>`)
-    .join("");
-}
-
-/** 星の入ったびん1つ（けっかの「きょうの びん」の並び）。 */
-export function miniJarHtml() {
-  return `<span class="party-mini-jar">${jarSvg()}<span class="party-jar-stars">${jarStarsHtml(15)}</span></span>`;
-}
+// びんの中身（遊びごとに星・ふうせん・魚…）は art/partyThemeArt.js の jarItemsHtml。
 
 /** 観客の魚（左向き。viewBox 120x80）。 */
 export function fishSvg(color) {

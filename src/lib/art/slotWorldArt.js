@@ -20,6 +20,12 @@ const SYMBOL_BODIES = Object.freeze({
   flower: `<path d="M37 22 C32 0 67 0 63 22 C82 6 101 33 81 44 C105 50 94 82 73 73 C75 99 40 105 38 79 C18 96 0 70 20 57 C-3 43 11 16 37 22Z" fill="#D65DB1"/><path d="M17 40 Q17 29 28 30 M49 13 Q56 11 58 19" fill="none" stroke="#FFE4F6" stroke-width="5"/><circle cx="50" cy="51" r="18" fill="#F6AA00" stroke-width="4"/><circle cx="44" cy="48" r="3" fill="#10222E" stroke="none"/><circle cx="57" cy="48" r="3" fill="#10222E" stroke="none"/><circle cx="45" cy="47" r="1" fill="#FFF" stroke="none"/><circle cx="58" cy="47" r="1" fill="#FFF" stroke="none"/><path d="M44 57 Q50 63 57 57" fill="none" stroke="#10222E" stroke-width="2.5"/>`,
 });
 
+/** 絵がら1つの <svg>（おおさわぎのびん・パレードの飾り。art/partyThemeArt.js）。 */
+export function slotSymbolSvg(symbolId) {
+  const id = Object.hasOwn(SYMBOL_BODIES, symbolId) ? symbolId : "circle";
+  return `<svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g stroke="#1A1A1A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">${SYMBOL_BODIES[id]}</g></svg>`;
+}
+
 /** 目標の名前は既存の札で伝え、SVG自体は読み上げと走査に加えない。 */
 export function slotPracticeSymbolHtml(symbolId, { label = "", decorative = true } = {}) {
   const id = Object.hasOwn(SYMBOL_BODIES, symbolId) ? symbolId : "circle";

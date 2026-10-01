@@ -128,8 +128,8 @@
 ```
 src/lib/fx/
   fxSafety.js    … 強さの段階・係数、明るい光の回数制限、揺れと光の上限（純粋関数、tests/fx.test.mjs）
-  fxParticles.js … 粒の物理（重力・空気抵抗・回転・ひらひら）と形（星・きらきら・紙吹雪・しぶき・火花・輪・光）
-                   （純粋関数、tests/fx.test.mjs）
+  fxParticles.js … 粒の物理（重力・空気抵抗・回転・ひらひら）と形（星・きらきら・紙吹雪・しぶき・火花・輪・光、
+                   遊びの形として紙テープ・ふうせん・ボール・魚・絵の具・音符）（純粋関数、tests/fx.test.mjs）
   fxEngine.js    … 画面いっぱいのキャンバス1枚（#fxLayer）。粒を描く。動くものが無ければ
                    requestAnimationFrame を止める。画素の密度は 1.5 まで、光は作り置きの絵
   fxMotion.js    … DOM の動き（つぶれて弾む・ポン・びくっ・揺れ・寄り・ハンコ・飛び込み・跳ねる）。
@@ -141,8 +141,11 @@ src/lib/fx/
 src/lib/atmosphere.js … 遊びの雰囲気（なし・すっきり・にぎやか・おおさわぎ）の中身の表（ただ1つ。
                         2026-10-01〜）。fxSafety の係数・舞台・ホスト・けっかは、段の名前で分岐せず表を読む
                         （docs/rules/atmosphere.md）
+src/lib/partyThemes.js … 遊びごとのお祝いの型（粒の形と色・びんの中身・観客・行進・見せ場・札。2026-10-01〜）。
+                        段の表が「どれだけ」、この表が「何を」。絵は art/partyThemeArt.js
 src/lib/presentation.js … 演出だけを閉じ込める境目。演出の例外で遊びと記録を止めない
-src/lib/games/partyStage.js … ラッコ・キラキラびん・おいわいの舞台（ホストが遊びごとに1つだけ作る）
+src/lib/games/partyStage.js … ラッコ・キラキラびん・おいわいの舞台（ホストが遊びごとに1つだけ作る）。
+                        見せ場（くす玉・額縁・応援団・行進）は遊びごとの型から
 src/lib/games/beginnerKit.js
   createBeginnerFlow … はじめの遊びの流れ（押す → 音 → 進み → 5回目 → フィナーレ → けっか）と、
                        ファンファーレ・おいわいの時刻表。3つの遊びは「押したら何が起きるか」だけを書く

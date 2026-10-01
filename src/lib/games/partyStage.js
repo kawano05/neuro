@@ -4,32 +4,35 @@
 // ゲームの終了時刻と保存はゲーム側が持ち、お祝いの待ちと表示はホストが持つ。
 //
 // 押すたびに、次のものが重なっていく（src/lib/party.js・docs/party-mode-2026-09-29.md）:
-//   なかま   … ラッコが跳ねて、手をたたいて、回る。5回目は大きくなって真ん中へ
+//   なかま   … ラッコが跳ねて、手をたたいて、回る
 //   音楽     … 楽器が1つずつ重なり、最後の1回で音が上がって速くなる（partyMusic.js）
-//   キラキラびん … 出てきた動物から星が飛んで、びんにたまる（1→3→7→11→15）。
-//                はんぶん・いっぱいでお祝い。5回目はふたが飛んで星があふれる
-//   観客     … 2回目から魚が集まって跳ねる。3回目で旗、5回目はパレードと花火
+//   キラキラびん … 押したものから、その遊びのもの（星・ふうせん・絵の具・ボール・絵がら・景品・
+//                魚・音符）が飛んで、びんにたまる（1→3→7→11→15）。はんぶん・いっぱいでお祝い。
+//                最後はふたが飛んで中身があふれる
+//   観客     … 2回目から集まって跳ねる（海の魚・空の小鳥・クレヨン・応援団）。3回目で旗
+//   見せ場   … 最後は遊びごとに: ラッコが真ん中へ（押すと 出てくる）・くす玉（ふうせん）・
+//                額縁と金の札（ぬりえ）・応援団と ジェット風船（ボール）・パレード（課題）
 //   ごほうび … 遊ぶたびにラッコの服が1つもらえる（けっかで見せる）
+// 遊びごとに何を出すかは src/lib/partyThemes.js の表、絵は art/partyThemeArt.js（2026-10-01、
+// 「全部同じ演出になっている。それぞれのゲームにあった演出に」と言われて分けた）。
 //
 // 押した時刻・記録には触れない（見た目と音だけ）。光の回数・明るさの上限は
 // 演出エンジン（fx）が必ず通す。黄色は走査の枠だけに使うので、ここでは使わない。
 // =====================================================================
 
-import { POP_ANIMALS, artSvg } from "../art/hakkiriArt.js";
 import { presentation } from "../presentation.js";
+import { JAR_SLOTS, PARTY_FANS, buntingSvg, jarSvg, otterSvg, outfitClasses } from "../art/partyArt.js";
 import {
-  JAR_SLOTS,
-  PARTY_FANS,
-  STAR_COLORS,
-  buntingSvg,
-  fishSvg,
-  jarStarsHtml,
-  jarSvg,
+  crowdSvg,
+  jarItemHtml,
+  jarItemsHtml,
+  kusudamaHalfSvg,
   miniJarHtml,
-  otterSvg,
-  outfitClasses,
-  starSvg,
-} from "../art/partyArt.js";
+  paradeItems,
+  rosetteSvg,
+  themeItemSvg,
+} from "../art/partyThemeArt.js";
+import { partyThemeFor } from "../partyThemes.js";
 import {
   PARTY_FINAL_KEY_SHIFT,
   PARTY_JAR_CAPACITY,
@@ -44,6 +47,8 @@ import { atmosphereFor } from "../atmosphere.js";
 // 待ち時間の持ち主は atmosphere.js の表。遊びとテストがここから引けるよう、名前だけ渡す。
 export { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS } from "../atmosphere.js";
 
+/** 遊びの画面の上の帯（遊びの名前・この遊びの設定・おわる）の高さの目安。見せ場はこの下に置く。 */
+const TOP_BAR_PX = 72;
 /** 5回目を押してから、フィナーレ（ラッコが大きくなる・ふたが飛ぶ）が始まるまで。 */
 const FINALE_AFTER_MS = 2300;
 /** 星がびんに入りきってから「はんぶん」「いっぱい」を言うまでの、いちばん早い時刻。 */
@@ -132,6 +137,51 @@ function playBell(audio) {
   [1318.51, 1975.53, 2637.02].forEach((f, i) => audio?.playChime?.(f, { delayS: i * 0.06, durationS: 0.9, level: 0.45 }));
 }
 
+/** 応援の三三七拍子（ボールを打つ の見せ場）。 */
+function playCheerClaps(audio, startS) {
+  [0, 1, 2, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14].forEach((beat) =>
+    [0, 0.012, 0.024].forEach((d) =>
+      audio?.playNoise?.({ durationS: 0.03, gain: 0.03, filter: "bandpass", frequency: 1800, q: 1.2, delayS: startS + beat * 0.3 + d })
+    )
+  );
+}
+
+/**
+ * 見せ場の決めの音（ファンファーレのあと）。later は舞台のタイマー（片づけで止まる）。
+ * 押すと 出てくる は元のまま（ファンファーレとベルと拍手）。
+ */
+const FINALE_SOUNDS = {
+  // くす玉が割れる「パカッ」と、上がる音。
+  balloon: (audio, later) =>
+    later(900, () => {
+      audio?.playNoise?.({ durationS: 0.08, gain: 0.05, filter: "bandpass", frequency: 2400, q: 0.9 });
+      audio?.playSweep?.({ fromHz: 600, toHz: 1600, durationS: 0.22, gain: 0.03 });
+    }),
+  // 額縁が付いたときの、きらきらの駆け上がり。
+  coloring: (audio) =>
+    [1046.5, 1318.51, 1567.98, 2093].forEach((f, i) => audio?.playChime?.(f, { delayS: 0.5 + i * 0.07, durationS: 0.6, level: 0.4 })),
+  // 三三七拍子と、ジェット風船の「ピューッ」。
+  baseball: (audio, later) => {
+    playCheerClaps(audio, 0.9);
+    [500, 760].forEach((ms) => later(ms, () => audio?.playSweep?.({ fromHz: 700, toHz: 2200, durationS: 0.7, gain: 0.025 })));
+  },
+  // リールが止まる「ピタッ」を3つ。
+  slot: (audio) =>
+    [1567.98, 1567.98, 2093].forEach((f, i) => audio?.playChime?.(f, { delayS: 0.9 + i * 0.16, durationS: 0.3, level: 0.45 })),
+  // 景品がはねる「ぼよん」。
+  crane: (audio, later) => [900, 1280, 1660].forEach((ms) => later(ms, () => audio?.playBoing?.())),
+  // 魚が跳ねて、水に落ちる「ざぶん」。
+  fishing: (audio, later) =>
+    [900, 1800, 2700].forEach((ms) =>
+      later(ms, () => audio?.playNoise?.({ durationS: 0.28, gain: 0.04, filter: "lowpass", frequency: 1400, sweepTo: 300 }))
+    ),
+  // 高い音へ駆け上がる旋律。
+  gonogo: (audio) =>
+    [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98, 2093].forEach((f, i) =>
+      audio?.playChime?.(f, { delayS: 1 + i * 0.13, durationS: 0.45, level: 0.45 })
+    ),
+};
+
 /** ファンファーレ（音楽に合わせて上げた調で）。 */
 function playFanfare(audio, semitones = 0) {
   const r = Math.pow(2, semitones / 12);
@@ -153,7 +203,8 @@ function playFanfare(audio, semitones = 0) {
  *   遊び終えたときに、その日のびんの数と服を保存する（gameHost）
  * @param {"beginner"|"timing"} [options.kind] 遊びの型（atmosphere.js の atmosphereFor）
  * @param {string} [options.level] 雰囲気の段（既定は fx の今の段）
- * @param {boolean} [options.legacy] 押すと 出てくる（動物の名前と配置を元のまま使う）
+ * @param {string} [options.theme] 遊びの id（お祝いの型。src/lib/partyThemes.js）。押すと 出てくる
+ *   （型 pop）は、動物の名前と配置・ラッコが真ん中へ出る見せ場を元のまま使う
  * @param {boolean} [options.audioCue] 合図が音の課題（高い音だけ・さかなつり）。節目の音を鳴らさない
  */
 export function createPartyStage({
@@ -167,10 +218,13 @@ export function createPartyStage({
   claim = null,
   kind = "beginner",
   level = fx?.level?.() || "none",
-  legacy = false,
+  theme = null,
   audioCue = false,
 }) {
   const profile = atmosphereFor(level, kind, { audioCue });
+  const look = partyThemeFor(theme) ?? partyThemeFor("pop");
+  // 押すと 出てくる の元の配置（動物の名前のハンコ・びんの位置・ラッコが真ん中へ）。
+  const legacy = look.id === "pop";
   const doc = host.ownerDocument;
   const win = doc.defaultView;
   const timers = new Set();
@@ -188,23 +242,28 @@ export function createPartyStage({
   let finishing = false;
   let successes = 0;
   let fullJars = 0;
+  // 課題の予定回数（見せ場の札を選ぶ。半分より少ない回は「大漁！」などと言わない）。
+  let plannedTotal = 5;
+  let endlessRun = false;
 
   const layer = doc.createElement("span");
   layer.className = `party-layer${kind === "timing" ? " is-timing" : ""}${!legacy && kind === "beginner" ? " is-beginner" : ""}`;
+  layer.dataset.theme = look.id;
   layer.setAttribute("aria-hidden", "true");
+  const crowd = profile.crowd && look.crowd ? PARTY_FANS : [];
   layer.innerHTML = `
     ${profile.crowd ? buntingSvg() : ""}
-    <span class="party-fans">${(profile.crowd ? PARTY_FANS : []).map(
-      (fan, index) => `<span class="party-fan" data-i="${index}" style="--fan-i:${index};right:${fan.right}%;bottom:${fan.bottom}%">${fishSvg(fan.color)}</span>`
+    <span class="party-fans">${crowd.map(
+      (fan, index) => `<span class="party-fan" data-i="${index}" style="--fan-i:${index};right:${fan.right}%;bottom:${fan.bottom}%">${crowdSvg(look.crowd, fan.color)}</span>`
     ).join("")}</span>
     <span class="party-otter ${outfitClasses(outfits)}">${otterSvg()}</span>
-    <span class="party-jar" data-stars="0">${jarSvg()}<span class="party-jar-stars"></span></span>
+    <span class="party-jar" data-stars="0">${jarSvg()}<span class="party-jar-items"></span></span>
     <span class="party-callouts"></span>`;
   const q = (sel) => layer.querySelector(sel);
   const otter = q(".party-otter");
   const moves = otterMotion(otter);
   const jar = q(".party-jar");
-  const jarStars = q(".party-jar-stars");
+  const jarItems = q(".party-jar-items");
   const callouts = q(".party-callouts");
 
   // 面を縮めて飾りの席を作らない。空いている角だけを使い、無ければけっかへ回す。
@@ -220,7 +279,7 @@ export function createPartyStage({
       otter.style.left = `${free.x}px`;
       jar.style.left = `${free.x + 78}px`;
       jar.dataset.stars = String(stars);
-      jarStars.innerHTML = jarStarsHtml(stars);
+      jarItems.innerHTML = jarItemsHtml(stars, look.id);
     }
   };
   // まばたきと、盛り上がってからの小さな跳ね（待っているあいだも生きているように）。
@@ -244,10 +303,13 @@ export function createPartyStage({
     return { x: r.left - box.left + r.width / 2, y: r.top - box.top + r.height / 2, w: r.width, h: r.height, left: r.left - box.left, top: r.top - box.top };
   }
 
-  /** ハンコ（名前・はんぶん・いっぱい・おおさわぎ！）。x・y は面の中の px。 */
-  function stamp(html, { x, y, big = false, color = "#005AFF", holdMs = 1300 } = {}) {
+  /**
+   * ハンコ（名前・はんぶん・いっぱい・最後の札）。x・y は面の中の px。
+   * tilt=false は傾けずに置く（ぬりえの額縁の下の札）。
+   */
+  function stamp(html, { x, y, big = false, color = "#005AFF", holdMs = 1300, tilt = true, className = "" } = {}) {
     const el = doc.createElement("span");
-    el.className = `party-stamp${big ? " is-big" : ""}`;
+    el.className = `party-stamp${big ? " is-big" : ""}${className ? ` ${className}` : ""}`;
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.style.setProperty("--stamp-color", color);
@@ -257,12 +319,13 @@ export function createPartyStage({
     const hostWidth = host.getBoundingClientRect().width;
     const half = el.offsetWidth / 2 + 12;
     if (hostWidth > half * 2) el.style.left = `${Math.min(Math.max(x, half), hostWidth - half)}px`;
+    const angle = tilt ? -8 : 0;
     animate(
       el,
       [
-        { opacity: 0, scale: "2.4", rotate: "-16deg" },
-        { opacity: 1, scale: "0.92", rotate: "-8deg", offset: 0.6 },
-        { opacity: 1, scale: "1", rotate: "-8deg" },
+        { opacity: 0, scale: "2.4", rotate: `${angle * 2}deg` },
+        { opacity: 1, scale: "0.92", rotate: `${angle}deg`, offset: 0.6 },
+        { opacity: 1, scale: "1", rotate: `${angle}deg` },
       ],
       { duration: 260, easing: "ease-out", fill: "both" }
     );
@@ -281,8 +344,8 @@ export function createPartyStage({
   }
 
   /**
-   * 出てきた動物から星が飛んで、びんに入る（from 番目から to 番目の手前まで）。
-   * 星は1つずつ少しずつずらして飛ばし、入るたびに音が少しずつ上がる。
+   * 押したものから、その遊びのもの（星・ふうせん・魚…）が飛んで、びんに入る（from 番目から
+   * to 番目の手前まで）。1つずつ少しずつずらして飛ばし、入るたびに音が少しずつ上がる。
    */
   function fillJar(from, to, sourceEl, quiet = false) {
     const box = host.getBoundingClientRect();
@@ -290,15 +353,14 @@ export function createPartyStage({
     const jarBox = jar.getBoundingClientRect();
     for (let i = from; i < to; i += 1) {
       const slot = JAR_SLOTS[i];
-      const color = STAR_COLORS[i % STAR_COLORS.length];
       const delayMs = quiet ? 0 : (i - from) * 110;
       const endX = jarBox.left - box.left + (jarBox.width * slot.left) / 100;
       const endY = jarBox.top - box.top + (jarBox.height * slot.top) / 100;
       const flyer = doc.createElement("span");
-      flyer.className = "party-star-flyer";
+      flyer.className = "party-item-flyer";
       flyer.style.left = `${start.x}px`;
       flyer.style.top = `${start.y}px`;
-      flyer.innerHTML = starSvg(color);
+      flyer.innerHTML = themeItemSvg(look.id, i);
       callouts.append(flyer);
       const dx = endX - start.x;
       const dy = endY - start.y;
@@ -313,15 +375,11 @@ export function createPartyStage({
       );
       const land = () => {
         flyer.remove();
-        if (!jarStars.isConnected) return;
-        const star = doc.createElement("span");
-        star.className = "party-star";
-        star.style.left = `${slot.left.toFixed(2)}%`;
-        star.style.top = `${slot.top.toFixed(2)}%`;
-        star.innerHTML = starSvg(color);
-        jarStars.append(star);
+        if (!jarItems.isConnected) return;
+        jarItems.insertAdjacentHTML("beforeend", jarItemHtml(look.id, i));
+        const item = jarItems.lastElementChild;
         if (!quiet) {
-          animate(star, [{ scale: "1.5" }, { scale: "0.85", offset: 0.6 }, { scale: "1" }], { duration: 260, easing: "ease-out" });
+          animate(item, [{ scale: "1.5" }, { scale: "0.85", offset: 0.6 }, { scale: "1" }], { duration: 260, easing: "ease-out" });
           fx?.motion?.bump(jar, { amount: 0.08 });
         }
       };
@@ -358,17 +416,238 @@ export function createPartyStage({
     return el;
   }
 
+  /**
+   * 最後のパレード（型の parade）。
+   *   march … はねながら横切る（押すと 出てくる は動物と魚。観客の魚は列に加わるので消す）
+   *   rise  … 下から空へ上がる（ふうせん・ジェット風船）
+   *   leap  … 水面から弧を描いて跳ぶ（さかなつり）。跳ぶところと落ちるところで しぶき
+   */
   function parade(delayMs) {
     const row = doc.createElement("span");
-    row.className = "party-parade";
-    row.innerHTML =
-      POP_ANIMALS.map((animal) => `<span class="party-parade-item">${artSvg(animal)}</span>`).join("") +
-      PARTY_FANS.map((fan) => `<span class="party-parade-item is-fish">${fishSvg(fan.color)}</span>`).join("");
+    row.className = `party-parade is-${look.parade}`;
+    row.dataset.theme = look.id;
+    row.innerHTML = paradeItems(look.id)
+      .map((item) => `<span class="party-parade-item${item.fish ? " is-fish" : ""}">${item.html}</span>`)
+      .join("");
     callouts.append(row);
-    layer.querySelectorAll(".party-fan").forEach((el) => animate(el, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, delay: delayMs, fill: "forwards" }));
-    const width = host.getBoundingClientRect().width;
-    const rowWidth = row.getBoundingClientRect().width || width;
-    animate(row, [{ translate: `${-rowWidth}px 0` }, { translate: `${width}px 0` }], { duration: 4600, delay: delayMs, easing: "linear", fill: "both" });
+    const box = host.getBoundingClientRect();
+    const items = [...row.children];
+    if (look.parade === "march") {
+      // 低い画面では、横切る列が遊びの言葉（ぬりえの「できあがり！」）にかかるので出さない。
+      if (look.avoid && box.height < 480) {
+        row.remove();
+        return;
+      }
+      if (legacy) layer.querySelectorAll(".party-fan").forEach((el) => animate(el, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, delay: delayMs, fill: "forwards" }));
+      const rowWidth = row.getBoundingClientRect().width || box.width;
+      animate(row, [{ translate: `${-rowWidth}px 0` }, { translate: `${box.width}px 0` }], { duration: 4600, delay: delayMs, easing: "linear", fill: "both" });
+      return;
+    }
+    if (look.parade === "rise") {
+      // 並びをまぜて、左右ばらばらに上がっていく。ジェット風船は速く、くねりながら。
+      const fast = look.id === "baseball";
+      items.forEach((el, index) => {
+        const order = (index * 5) % items.length;
+        const height = el.getBoundingClientRect().height || 120;
+        const sway = (index % 2 ? 1 : -1) * (fast ? 18 : 40);
+        el.style.left = `${box.width * ((index + 0.5) / items.length)}px`;
+        animate(
+          el,
+          [
+            { translate: "-50% 0", rotate: "0deg" },
+            { translate: `calc(-50% + ${sway}px) ${-(box.height + height) * 0.5}px`, rotate: `${fast ? 12 : 5}deg`, offset: 0.5 },
+            { translate: `-50% ${-(box.height + height * 1.6)}px`, rotate: `${fast ? -12 : -4}deg` },
+          ],
+          { duration: fast ? 1700 : 4200, delay: delayMs + order * (fast ? 110 : 260), easing: fast ? "cubic-bezier(.3,.6,.5,1)" : "ease-in", fill: "both" }
+        );
+      });
+      return;
+    }
+    // leap: 魚が1匹ずつ、弧を描いて跳ぶ。
+    const base = box.height * 0.84;
+    const reach = box.width * 0.34;
+    const peak = box.height * 0.5;
+    const starts = [0.04, 0.3, 0.56, 0.16, 0.42, 0.62];
+    items.forEach((el, index) => {
+      const x0 = box.width * starts[index % starts.length];
+      const wait = delayMs + index * 420;
+      el.style.left = `${x0}px`;
+      el.style.top = `${base}px`;
+      const frames = Array.from({ length: 9 }, (_, step) => {
+        const t = step / 8;
+        return { translate: `${reach * t}px ${-4 * peak * t * (1 - t)}px`, rotate: `${(t - 0.5) * 70}deg`, offset: t };
+      });
+      animate(el, frames, { duration: 1300, delay: wait, easing: "linear", fill: "both" });
+      [0, 1300].forEach((at, end) =>
+        later(wait + at, () => {
+          if (!host.isConnected) return;
+          const now = host.getBoundingClientRect();
+          fx?.engine?.burst?.({
+            x: now.left + x0 + reach * end,
+            y: now.top + base,
+            count: 12,
+            speed: [220, 460],
+            angle: -Math.PI / 2,
+            spread: Math.PI * 0.8,
+            shapes: ["drop", "drop", "bubble"],
+            colors: ["#4DC4FF", "#D8F3FF", "#FFFFFF"],
+            size: [10, 18],
+            life: [0.5, 0.8],
+            gravity: 900,
+            drag: 1.4,
+          });
+        })
+      );
+    });
+  }
+
+  /** ラッコが真ん中へ出て、2倍になる（押すと 出てくる の元の見せ場）。動物は消す。 */
+  function otterTakesCenter(box) {
+    const figure = host.querySelector(".pop-figure");
+    if (figure) animate(figure, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" });
+    const from = pointIn(otter);
+    animate(
+      otter,
+      [
+        { translate: "0 0", scale: "1" },
+        { translate: `${box.width / 2 - from.x}px ${-box.height * 0.05}px`, scale: "2" },
+      ],
+      { duration: 700, easing: "cubic-bezier(.34,1.36,.64,1)", fill: "forwards" }
+    );
+    stamp(tHtml("party.bigParty"), { x: box.width / 2, y: box.height * 0.3, big: true, color: "#D65DB1", holdMs: 0 });
+    return null;
+  }
+
+  /**
+   * 遊びの大事なもの（型の avoid）にかぶらない、いちばん広い横の帯（面の中の px）。上の帯
+   * （遊びの名前・おわる）の下から数える。avoid の無い型は null（決まった位置に置く）。
+   */
+  function freeBand(box) {
+    if (!look.avoid) return null;
+    const blocks = [...host.querySelectorAll(look.avoid)]
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.width && r.height)
+      .map((r) => [r.top - box.top, r.bottom - box.top])
+      .sort((a, b) => a[0] - b[0]);
+    let best = null;
+    let cursor = TOP_BAR_PX;
+    for (const [top, bottom] of [...blocks, [box.height, box.height]]) {
+      if (top - cursor > (best ? best.bottom - best.top : 0)) best = { top: cursor, bottom: top };
+      cursor = Math.max(cursor, bottom);
+    }
+    return best;
+  }
+
+  /** 最後の札（課題で半分より少ないときは、どの遊びでも「おおさわぎ！」）。 */
+  function stampKey() {
+    const earned = kind !== "timing" || (endlessRun ? successes >= 5 : successes * 2 >= plannedTotal);
+    return earned ? look.stamp : "party.bigParty";
+  }
+
+  /**
+   * 札だけの見せ場。札の少し下から、その遊びの粒がはじける。はじめの遊びは、遊びの言葉や
+   * やったことにかぶらない帯の真ん中へ（freeBand）。課題は遊び終えたあとなので、上の方へ。
+   */
+  function stampShow(box, color = "#D65DB1") {
+    const band = freeBand(box);
+    const y = band ? (band.top + band.bottom) / 2 : box.height * 0.3;
+    stamp(tHtml(stampKey()), { x: box.width / 2, y, big: true, color, holdMs: 0 });
+    return { x: box.left + box.width / 2, y: box.top + Math.min(box.height * 0.85, y + box.height * 0.12) };
+  }
+
+  /**
+   * くす玉が下りてきて、割れる。中から紙吹雪・紙テープと「おめでとう！」の幕。割ったふうせんと
+   * 言葉にかぶらないよう、あいた帯に収まる大きさで置く（玉と幕で、玉の約1.6倍の高さ）。
+   */
+  function kusudama(box) {
+    const ball = doc.createElement("span");
+    ball.className = "party-kusudama";
+    const band = freeBand(box);
+    ball.innerHTML = `<span class="kusu-cord"></span><span class="kusu-banner">${tHtml(look.stamp)}</span><span class="kusu-half is-left">${kusudamaHalfSvg()}</span><span class="kusu-half is-right">${kusudamaHalfSvg()}</span>`;
+    callouts.append(ball);
+    if (band) {
+      // ひも（玉の 0.26）・玉の上半分（幕は玉の 0.46 から下がる）・幕の高さが、帯に収まる大きさ。
+      const banner = ball.querySelector(".kusu-banner").offsetHeight || 60;
+      const height = band.bottom - band.top - 16;
+      const size = Math.min(250, Math.max(64, (height - banner) / 0.72));
+      ball.style.width = `${size}px`;
+      ball.style.top = `${band.top + 8 + size * 0.26 + Math.max(0, (height - banner - size * 0.72) / 2)}px`;
+    }
+    animate(ball, [{ translate: "-50% -160%" }, { translate: "-50% 0" }], { duration: 560, easing: "cubic-bezier(.34,1.36,.64,1)", fill: "both" });
+    later(900, () => {
+      const open = { duration: 460, easing: "cubic-bezier(.34,1.5,.64,1)", fill: "forwards" };
+      animate(ball.querySelector(".is-left"), [{ rotate: "0deg" }, { rotate: "64deg" }], open);
+      animate(ball.querySelector(".is-right"), [{ rotate: "0deg" }, { rotate: "-64deg" }], open);
+      animate(ball.querySelector(".kusu-banner"), [{ scale: "1 0" }, { scale: "1 1" }], { duration: 420, delay: 80, easing: "ease-out", fill: "both" });
+      const r = ball.getBoundingClientRect();
+      fx?.partyFinale?.({ theme: look.id, point: { x: r.left + r.width / 2, y: r.top + r.height * 0.5 } });
+    });
+    return null;
+  }
+
+  /**
+   * できた絵に額縁がはまり、金の札と「完成！」の札が付く（ぬりえ）。額縁は絵の札（カード）の白い
+   * ふちの上に重ねる（絵はふちから離して描いてあるので隠れない。外へ広げると、すぐ下の遊びの言葉
+   * 「できあがり！」にかかった）。
+   */
+  function frame(box) {
+    const hero = look.hero ? host.querySelector(look.hero) : null;
+    const target = hero?.getBoundingClientRect();
+    if (!target?.width) return stampShow(box);
+    const pad = Math.round(Math.min(Math.max(Math.min(target.width, target.height) * 0.05, 8), 18));
+    const el = doc.createElement("span");
+    el.className = "party-frame";
+    el.style.setProperty("--frame", `${pad}px`);
+    el.style.left = `${target.left - box.left}px`;
+    el.style.top = `${target.top - box.top}px`;
+    el.style.width = `${target.width}px`;
+    el.style.height = `${target.height}px`;
+    el.innerHTML = `<span class="party-frame-rosette">${rosetteSvg()}</span>`;
+    callouts.append(el);
+    animate(el, [{ opacity: 0, scale: "1.18" }, { opacity: 1, scale: "1" }], { duration: 420, easing: "cubic-bezier(.34,1.36,.64,1)", fill: "both" });
+    fx?.motion?.popIn(el.querySelector(".party-frame-rosette"), { delayMs: 420, from: 0.2 });
+    // 名札は額縁の上の辺に（下には遊びの言葉「できあがり！」がある）。
+    later(260, () =>
+      stamp(tHtml(look.stamp), {
+        x: target.left - box.left + target.width / 2,
+        y: Math.max(TOP_BAR_PX * 0.6, target.top - box.top),
+        color: "#D98700",
+        holdMs: 0,
+        tilt: false,
+        className: "is-plaque",
+      })
+    );
+    return { x: target.left + target.width / 2, y: target.top + target.height / 2 };
+  }
+
+  /** 応援団（観客）が波のように跳ねる。札は「ナイス バッティング！」。 */
+  function cheer(box) {
+    showFans(4);
+    const fans = [...layer.querySelectorAll(".party-fan")];
+    [0, 1, 2, 3].forEach((round) =>
+      fans.forEach((el, index) => fx?.motion?.hop(el, { delayMs: 300 + round * 720 + index * 90, height: 30 }))
+    );
+    return stampShow(box, "#005AFF");
+  }
+
+  /** 見せ場（型の show → 粒をはじかせる場所。null なら見せ場が自分ではじかせる）。 */
+  const SHOWS = { otter: otterTakesCenter, kusudama, frame, cheer, stamp: stampShow };
+
+  /**
+   * ラッコも一緒に喜ぶ。押すと 出てくる 以外は角のまま（遊びの主役にかぶせない。真ん中へ
+   * 出るのは見せ場 otter だけ）。三三七拍子の遊びでは、手拍子の音を重ねない。
+   */
+  function otterCheers() {
+    otter.classList.add("is-cheering");
+    moves.armsUp(1400);
+    later(900, () => {
+      moves.clap(4);
+      if (look.id !== "baseball") playClaps(audio, 4);
+    });
+    later(2400, () => {
+      moves.hop(60, { spin: true });
+      moves.clap(3);
+    });
   }
 
   /** びんが「はんぶん」「いっぱい」になったお祝い（星が入り終わってから。声もそこで）。 */
@@ -382,7 +661,7 @@ export function createPartyStage({
       const position = legacy ? {x:c.x,y:c.top+c.h+36} : {x:box.width*0.25,y:box.height-50};
       stamp(tHtml(text.stamp), { ...position, color: "#D65DB1", holdMs: 1500 });
       playBell(audio);
-      fx?.partyCheer?.(jar);
+      fx?.partyCheer?.(jar, { theme: look.id });
       voiceFeedback(t(text.voice));
     });
   }
@@ -395,6 +674,8 @@ export function createPartyStage({
       pressed = pressIndex + 1;
       const previous = stars;
       if (success) successes += 1;
+      plannedTotal = total;
+      endlessRun = endless;
       const collected = kind === "timing" ? timingStars(successes, total, endless) : { stars: starsAfter(pressIndex), jars: pressIndex >= 4 ? 1 : 0 };
       stars = collected.stars;
       fullJars = collected.jars;
@@ -409,7 +690,7 @@ export function createPartyStage({
         animate(otter.querySelector(".o-jump"), [{translate:"0 0"},{translate:"0 -8px"},{translate:"0 0"}], {duration:220});
         animate(otter.querySelector(".o-arm-l"), [{rotate:"0deg"},{rotate:"-58deg"},{rotate:"0deg"}], {duration:220});
         animate(otter.querySelector(".o-arm-r"), [{rotate:"0deg"},{rotate:"58deg"},{rotate:"0deg"}], {duration:220});
-        if (stars < previous) jarStars.innerHTML = "";
+        if (stars < previous) jarItems.innerHTML = "";
         fillJar(stars < previous ? 0 : previous, stars, source, true);
         if ((previous < 7 && stars >= 7) || (previous < 15 && stars === 15)) {
           const c = pointIn(jar);
@@ -432,7 +713,7 @@ export function createPartyStage({
         bpm: PARTY_TEMPOS[Math.min(pressIndex, 4)],
         keyShift: pressIndex >= 4 ? PARTY_FINAL_KEY_SHIFT : 0,
       });
-      fx?.partyPress?.(figure, { k: pressIndex });
+      fx?.partyPress?.(figure, { k: pressIndex, theme: look.id });
       if (name) later(110, () => {
         const art = figure?.querySelector("svg") || figure;
         if (!art?.isConnected) return;
@@ -488,7 +769,11 @@ export function createPartyStage({
       return name ? t("party.voice.press", { name, praise: t(`party.praise.${pressIndex % 4}`) }) : t(`party.praise.${pressIndex % 4}`);
     },
 
-    /** 5回目（はじめの遊びの onFinale から）。星が入り終わってから大きなお祝いへ。 */
+    /**
+     * 最後（はじめの遊びの5回目・課題の終わり）。びんに入り終わってから、遊びごとの見せ場へ
+     * （型の show）。主役（塗った絵・止めたリール・判定の線）は、子どもの作ったもの・課題の絵
+     * なので消さない。押すと 出てくる だけは元の作りで、動物を消してラッコが真ん中へ出る。
+     */
     finale() {
       if (finishing) return;
       finishing = true;
@@ -498,44 +783,24 @@ export function createPartyStage({
       // 狭い課題画面では、試行後に舞台を開いてから祝う。
       layer.classList.add("is-finale");
       jar.dataset.stars = String(stars);
-      if (kind === "timing") jarStars.innerHTML = jarStarsHtml(stars);
+      if (kind === "timing") jarItems.innerHTML = jarItemsHtml(stars, look.id);
       later(FINALE_AFTER_MS, () => {
         clearStamps();
-        // 押すと 出てくる の動物だけは消して、ラッコを真ん中へ出す（元の作り）。ほかの遊びの
-        // 主役（塗った場所・止めたリール・判定の線）は、子どもの作ったもの・課題の絵なので消さない。
-        const figure = legacy ? host.querySelector(".pop-figure") : null;
-        if (figure) animate(figure, [{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: "forwards" });
-        const from = pointIn(otter);
         const box = host.getBoundingClientRect();
-        animate(
-          otter,
-          [
-            { translate: "0 0", scale: "1" },
-            { translate: `${box.width / 2 - from.x}px ${-box.height * 0.05}px`, scale: "2" },
-          ],
-          { duration: 700, easing: "cubic-bezier(.34,1.36,.64,1)", fill: "forwards" }
-        );
-        otter.classList.add("is-cheering");
-        moves.armsUp(1400);
-        later(900, () => {
-          moves.clap(4);
-          playClaps(audio, 4);
-        });
-        later(2400, () => {
-          moves.hop(60, { spin: true });
-          moves.clap(3);
-        });
-        stamp(tHtml("party.bigParty"), { x: box.width / 2, y: box.height * 0.3, big: true, color: "#D65DB1", holdMs: 0 });
+        otterCheers();
+        const point = (SHOWS[look.show] ?? stampShow)(box);
         playFanfare(audio, PARTY_FINAL_KEY_SHIFT);
+        FINALE_SOUNDS[look.id]?.(audio, later);
         fx?.motion?.shake(host, { px: 5, ms: 260 });
-        fx?.partyFinale?.();
+        // くす玉は割れたときに自分ではじかせる（point が null）。
+        if (look.show !== "kusudama") fx?.partyFinale?.({ theme: look.id, point });
         parade(500);
-        // びんのふたが飛んで、星があふれる。
+        // びんのふたが飛んで、中身があふれる。
         later(700, () => {
           const lid = jar.querySelector(".jar-lid");
           if (stars === PARTY_JAR_CAPACITY) {
             animate(lid, [{ translate: "0 0", rotate: "0deg" }, { translate: "40px -120px", rotate: "40deg", opacity: 0 }], { duration: 700, easing: "ease-out", fill: "forwards" });
-            fx?.partyOverflow?.(jar);
+            fx?.partyOverflow?.(jar, { theme: look.id });
           }
           playBell(audio);
           if (stars === PARTY_JAR_CAPACITY) voiceFeedback(t("party.voice.overflow"));
@@ -553,6 +818,7 @@ export function createPartyStage({
     summary() {
       return {
         level,
+        theme: look.id,
         stars,
         unlocked: outcome?.unlocked ?? null,
         jarsToday: outcome?.jarsToday ?? 0,
@@ -585,9 +851,9 @@ export function todayJarsHtml(count) {
   return `${Array.from({ length: shown }, () => miniJarHtml()).join("")}${more > 0 ? `<span class="party-more-jars">+${more}</span>` : ""}`;
 }
 
-/** けっかの大きなびん（星でいっぱい）。 */
-export function fullJarHtml(count = PARTY_JAR_CAPACITY) {
-  return `<span class="party-result-jar">${jarSvg()}<span class="party-jar-stars">${jarStarsHtml(count)}</span></span>`;
+/** けっかの大きなびん（その遊びのもので いっぱい）。 */
+export function fullJarHtml(count = PARTY_JAR_CAPACITY, theme = "pop") {
+  return `<span class="party-result-jar">${jarSvg()}<span class="party-jar-items">${jarItemsHtml(count, theme)}</span></span>`;
 }
 
 /**
@@ -602,7 +868,7 @@ export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
   const win = root.ownerDocument.defaultView;
   const otter = root.querySelector(".party-result-otter");
   const reward = root.querySelector(".party-result-reward");
-  const jarStars = [...root.querySelectorAll(".party-result-jar .party-star")];
+  const jarStars = [...root.querySelectorAll(".party-result-jar .party-item")];
   // 添える版の作品と評価は通常の revealResult が担当し、二重に動かさない。
   const items = root.classList.contains("is-added") ? [] : [...root.querySelectorAll(".hk-result-item")];
   const today = [...root.querySelectorAll(".party-today .party-mini-jar")];
@@ -634,7 +900,7 @@ export function revealPartyResult(container, { fx, audio, isCurrent = null }) {
   fx?.motion?.slamIn(reward, { delayMs: 2000 });
   presentation.later(2200, () => {
     if (!root.isConnected || !otter) return;
-    fx?.partyReward?.(otter);
+    fx?.partyReward?.(otter, { theme: root.dataset.theme });
   }, win);
   presentation.later(2300, () => { if (root.isConnected) fx?.engine?.fireworks?.({ colors: PARTY_COLORS, bursts: 2 }); }, win);
   // けっかの描き直しでも曲を止める。次の遊びへ移ったあとは、その曲を止めない。

@@ -2,7 +2,10 @@
 // fx/fxParticles.js — 粒の作り方と動き（純粋関数。描くのは fxEngine.js）
 //
 // 形: star（星）/ sparkle（きらきら）/ dot（丸）/ confetti（紙吹雪。ひらひら裏返る）/
-//     streak（火花。速さの向きに尾を引く）/ drop（しぶき）/ ring（広がる輪）/ glow（やわらかい光）
+//     streak（火花。速さの向きに尾を引く）/ drop（しぶき）/ ring（広がる輪）/ glow（やわらかい光）/
+//     heart（ハート）/ bubble（泡）/ ribbon（紙テープ。紙吹雪と同じく、ひらひら落ちる）/
+//     balloon（小さなふうせん。ふわっと上がる）/ ball（野球のボール）/ fish（小さな魚）/
+//     splat（絵の具のしぶき）/ note（音符）。遊びごとの形の組は src/lib/partyThemes.js
 // 単位は px と秒。y は下向きが正（画面と同じ）。
 //
 // 動きの考え方（モーションの決まり。docs/overall-design-2026-09-28.md §3）:
@@ -12,6 +15,11 @@
 // =====================================================================
 
 const TAU = Math.PI * 2;
+
+/** ひらひら裏返りながら、ゆっくり落ちる形（重力を弱め、左右にゆらす）。 */
+const FLUTTER = new Set(["confetti", "ribbon"]);
+/** ふわっと上がる形（重力を逆に、弱く）。 */
+const FLOAT = new Set(["balloon"]);
 
 /** [min, max] か数から、1つの値を引く。 */
 function pick(range, random) {
@@ -113,25 +121,27 @@ export function spawnBurst({
     const v = pick(speed, random);
     const shape = choose(shapes, random);
     const s = pick(size, random);
+    const flutter = FLUTTER.has(shape);
+    const float = FLOAT.has(shape);
     particles.push(
       makeParticle({
         x: x + Math.cos(theta) * originRadius[0],
         y: y + Math.sin(theta) * originRadius[1],
         vx: Math.cos(theta) * v * velocityScale[0],
         vy: Math.sin(theta) * v * velocityScale[1],
-        gravity: shape === "confetti" ? gravity * 0.45 : gravity,
-        drag: shape === "confetti" ? drag * 1.3 : drag,
-        rot: random() * TAU,
-        spin: pick(spin, random),
+        gravity: float ? -Math.min(Math.abs(gravity), 160) * 0.5 : flutter ? gravity * 0.45 : gravity,
+        drag: flutter || float ? drag * 1.3 : drag,
+        rot: float ? 0 : random() * TAU,
+        spin: float ? pick([-0.6, 0.6], random) : pick(spin, random),
         size: s,
-        sizeEnd: shape === "confetti" ? s * 0.85 : s * 0.3,
+        sizeEnd: flutter || float ? s * 0.85 : s * 0.3,
         life: pick(life, random),
         color: choose(colors, random),
         shape,
         flip: random() * TAU,
-        flipSpeed: shape === "confetti" ? pick([6, 14], random) : 0,
-        wobble: shape === "confetti" ? pick([20, 60], random) : 0,
-        wobbleFreq: shape === "confetti" ? pick([3, 7], random) : 0,
+        flipSpeed: flutter ? pick([6, 14], random) : 0,
+        wobble: flutter || float ? pick([20, 60], random) : 0,
+        wobbleFreq: flutter || float ? pick([3, 7], random) : 0,
         phase: random() * TAU,
         twinkle,
         delay: typeof delay === "number" ? delay : pick(delay, random),
@@ -144,9 +154,10 @@ export function spawnBurst({
 
 /**
  * 画面の上から降る紙吹雪。一度に作り、上に積んでおく（落ちてくる順に見える）。
- * @param {{width: number, height: number, count: number, colors: string[], random?: () => number}} options
+ * shapes で遊びの形（紙テープ・絵の具・音符など。src/lib/partyThemes.js の rain）を混ぜる。
+ * @param {{width: number, height: number, count: number, colors: string[], shapes?: string[], random?: () => number}} options
  */
-export function spawnConfettiRain({ width, height, count, colors, random = Math.random }) {
+export function spawnConfettiRain({ width, height, count, colors, shapes = ["confetti", "confetti", "confetti", "star"], random = Math.random }) {
   const particles = [];
   const n = Math.max(0, Math.floor(count));
   for (let i = 0; i < n; i += 1) {
@@ -166,7 +177,7 @@ export function spawnConfettiRain({ width, height, count, colors, random = Math.
         // 画面の下まで届く長さ（上に積んだぶんも含めて）
         life: pick([2.6, 3.6], random),
         color: choose(colors, random),
-        shape: choose(["confetti", "confetti", "confetti", "star"], random),
+        shape: choose(shapes, random),
         flip: random() * TAU,
         flipSpeed: pick([5, 12], random),
         wobble: pick([25, 70], random),
@@ -234,7 +245,7 @@ export function sizeOf(p) {
   let s = p.size + (p.sizeEnd - p.size) * t * t;
   if (p.twinkle) s *= 1 + Math.sin(p.age * 18 + p.phase) * p.twinkle;
   // はじけた瞬間は少し小さく始めて、すぐ大きくなる（ポンと出る感じ）
-  if (t < 0.06 && p.shape !== "confetti") s *= 0.7 + (t / 0.06) * 0.3;
+  if (t < 0.06 && !FLUTTER.has(p.shape)) s *= 0.7 + (t / 0.06) * 0.3;
   return Math.max(0, s);
 }
 

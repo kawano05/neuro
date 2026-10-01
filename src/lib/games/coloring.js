@@ -106,8 +106,8 @@ export function createColoringGame(ctx) {
     progressSpeech: (remaining) => t("coloring.voice.progress", { n: remaining }),
     finishSpeech: () => t("coloring.voice.finish", { name: t(`animal.${picture.id}`) }),
     finishSummary: () => ({ presses: BEGINNER_TARGET_PRESSES, picture: picture.id }),
-    // ⑤ フィナーレ: できあがった絵が跳ねて、星の輪と紙吹雪。
-    onFinale: () => fx?.finale(stageEl, { hero: stageEl?.querySelector(".coloring-card") }),
+    // ⑤ フィナーレ: できあがった絵が跳ねて、絵の具のしぶきと輪（粒は src/lib/partyThemes.js の ぬりえ の型）。
+    onFinale: () => fx?.finale(stageEl, { hero: stageEl?.querySelector(".coloring-card"), theme: GAME_ID }),
   });
 
   function wordKey() {

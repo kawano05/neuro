@@ -4,9 +4,12 @@
 // 遊びの側は「何が起きたか」を名前で呼ぶだけ（ctx.fx.balloonPop(...) など）。
 // 粒の数・速さ・色・揺れは、ここと fxSafety の強さの係数で決まる。
 // だんだん盛り上がる（§3.1）: 回の番号 k で escalation(k) を掛け、色も増やす。
+// おいわい（finale・おおさわぎ）の粒の形と色は、遊びごとの型（src/lib/partyThemes.js）から引く。
+// 型を渡さなければ、これまでの見た目（金の星と虹）。
 // =====================================================================
 
 import { presentation } from "../presentation.js";
+import { partyThemeFor } from "../partyThemes.js";
 import { escalation } from "./fxSafety.js";
 
 /** 色の組（カラーユニバーサルデザイン推奨配色と、はっきりした色の黄・白）。 */
@@ -23,6 +26,11 @@ export const PALETTES = Object.freeze({
 export function colorsForPress(k, base = PALETTES.night) {
   const extra = Math.max(0, Math.min(PALETTES.rainbow.length, Math.floor(k) * 2));
   return [...base, ...PALETTES.rainbow.slice(0, extra)];
+}
+
+/** 回を追うごとに、型の色を2つずつ足していく（はじめは白と1色）。 */
+function growingColors(colors, k) {
+  return ["#FFFFFF", ...colors.slice(0, Math.min(colors.length, 1 + Math.floor(k) * 2))];
 }
 
 /** 要素のまとまり（複数の要素）を囲む四角の真ん中。 */
@@ -286,11 +294,35 @@ export function createFxPresets({ engine, motion }) {
     },
 
     /**
-     * おおさわぎ: 押したら動物がポンと出る（popAppear の代わり）。輪を2つ、ハートと星。
+     * おおさわぎ: 押した回の粒。押すと 出てくる（型 pop）は、動物がポンと出る（popAppear の
+     * 代わり）。輪を2つ、ハートと星。ほかの遊びは、その遊びの型の粒（ふうせんは紙吹雪と
+     * 紙テープ、ぬりえは絵の具、ボールは火花と紙テープ）が、遊びの演出に重ねて出る。
      * 回を追うごとに大きく、色が増える。黄色は使わない。
      */
-    partyPress(figureEl, { k = 0 } = {}) {
+    partyPress(figureEl, { k = 0, theme = "pop" } = {}) {
       if (!figureEl) return;
+      const look = partyThemeFor(theme);
+      if (look && look.id !== "pop") {
+        const { x, y } = engine.pointOf(figureEl.querySelector?.("svg") || figureEl);
+        const e = escalation(k);
+        engine.ring({ x, y, color: "#FFFFFF", r0: 20, r1: 110 + 24 * k, width: 7, life: 0.5 });
+        const [slow, fast] = look.particles.pressSpeed ?? [320, 760];
+        engine.burst({
+          x,
+          y,
+          count: (look.particles.pressCount ?? 20) * e,
+          speed: [slow * Math.sqrt(e), fast * Math.sqrt(e)],
+          shapes: look.particles.shapes,
+          colors: growingColors(look.particles.colors, k),
+          size: [18, 32],
+          life: [0.9, 1.5],
+          gravity: look.particles.gravity,
+          drag: 2.3,
+          twinkle: 0.12,
+        });
+        engine.glow({ x, y, radius: 170 + 30 * k, alpha: 0.24 + 0.04 * k, lifeMs: 460 });
+        return;
+      }
       const art = figureEl.querySelector("svg") || figureEl;
       const { x, y } = engine.pointOf(art);
       const e = escalation(k);
@@ -315,8 +347,9 @@ export function createFxPresets({ engine, motion }) {
     },
 
     /** おおさわぎ: キラキラびんが「はんぶん」「いっぱい」になった（びんの下ではじける）。 */
-    partyCheer(jarEl) {
+    partyCheer(jarEl, { theme = "pop" } = {}) {
       if (!jarEl) return;
+      const look = partyThemeFor(theme);
       const { x, y, rect } = engine.pointOf(jarEl);
       engine.burst({
         x,
@@ -325,8 +358,8 @@ export function createFxPresets({ engine, motion }) {
         speed: [260, 620],
         angle: Math.PI / 2,
         spread: Math.PI * 1.2,
-        shapes: ["star", "heart", "sparkle"],
-        colors: PALETTES.party,
+        shapes: look && look.id !== "pop" ? look.particles.shapes : ["star", "heart", "sparkle"],
+        colors: look && look.id !== "pop" ? look.particles.colors : PALETTES.party,
         size: [14, 26],
         life: [0.7, 1.2],
         gravity: 320,
@@ -334,9 +367,10 @@ export function createFxPresets({ engine, motion }) {
       });
     },
 
-    /** おおさわぎ: 5回目、びんのふたが飛んで星があふれる。 */
-    partyOverflow(jarEl) {
+    /** おおさわぎ: 5回目、びんのふたが飛んで中身（その遊びの粒）があふれる。 */
+    partyOverflow(jarEl, { theme = "pop" } = {}) {
       if (!jarEl) return;
+      const look = partyThemeFor(theme);
       const { x, y, rect } = engine.pointOf(jarEl);
       engine.burst({
         x,
@@ -345,8 +379,8 @@ export function createFxPresets({ engine, motion }) {
         speed: [420, 900],
         angle: -Math.PI / 2,
         spread: Math.PI * 0.9,
-        shapes: ["star", "star", "heart", "sparkle"],
-        colors: PALETTES.party,
+        shapes: look && look.id !== "pop" ? look.particles.shapes : ["star", "star", "heart", "sparkle"],
+        colors: look && look.id !== "pop" ? look.particles.colors : PALETTES.party,
         size: [16, 30],
         life: [1, 1.7],
         gravity: 520,
@@ -354,23 +388,45 @@ export function createFxPresets({ engine, motion }) {
       });
     },
 
-    /** おおさわぎ: 5回目のお祝い（紙吹雪の雨と花火。花火の回数は光の上限の中）。 */
-    partyFinale() {
-      engine.confettiRain({ count: 140, colors: PALETTES.party });
-      engine.fireworks({ colors: PALETTES.party, bursts: 4 });
+    /**
+     * おおさわぎ: 最後のお祝い（その遊びの形の雨と花火。花火の回数は光の上限の中）。
+     * point を渡すと、そこ（見せ場）から型の粒も大きくはじける。
+     */
+    partyFinale({ theme = "pop", point = null } = {}) {
+      const look = partyThemeFor(theme);
+      const colors = look && look.id !== "pop" ? look.particles.colors : PALETTES.party;
+      if (point) {
+        engine.ring({ x: point.x, y: point.y, color: "#FFFFFF", r0: 30, r1: 240, width: 9, life: 0.7 });
+        engine.burst({
+          x: point.x,
+          y: point.y,
+          count: 44,
+          speed: [520, 1050],
+          shapes: look?.particles.finaleShapes ?? look?.particles.shapes ?? ["star", "sparkle"],
+          colors,
+          size: [22, 40],
+          life: [1, 1.7],
+          gravity: look && !look.particles.finaleShapes ? look.particles.gravity : 260,
+          drag: 2,
+          twinkle: 0.15,
+        });
+      }
+      engine.confettiRain({ count: 140, colors, ...(look ? { shapes: look.rain } : {}) });
+      engine.fireworks({ colors, bursts: 4 });
     },
 
-    /** おおさわぎ: けっかで、ラッコが服をもらった。 */
-    partyReward(otterEl) {
+    /** おおさわぎ: けっかで、ラッコが服をもらった（その遊びの粒で）。 */
+    partyReward(otterEl, { theme = "pop" } = {}) {
       if (!otterEl) return;
+      const look = partyThemeFor(theme);
       const { x, y, rect } = engine.pointOf(otterEl);
       engine.burst({
         x,
         y: y - (rect ? rect.height * 0.25 : 0),
         count: 30,
         speed: [260, 640],
-        shapes: ["star", "heart", "sparkle"],
-        colors: PALETTES.party,
+        shapes: look && look.id !== "pop" ? look.particles.shapes : ["star", "heart", "sparkle"],
+        colors: look && look.id !== "pop" ? look.particles.colors : PALETTES.party,
         size: [14, 26],
         life: [0.8, 1.3],
         gravity: 300,
@@ -379,36 +435,50 @@ export function createFxPresets({ engine, motion }) {
     },
 
     /**
-     * ⑤ フィナーレ（5回目・できたとき）。星の大きな輪、紙吹雪の雨、主役が跳ねる。
-     * 強さ「ひかえめ」は星の輪だけ、「なし」は何もしない（fxSafety の finale）。
+     * ⑤ フィナーレ（5回目・できたとき）。大きな輪、粒、紙吹雪の雨、主役が跳ねる。
+     * 強さ「ひかえめ」は小さな輪だけ、「なし」は何もしない（fxSafety の finale）。
+     * theme（遊びの id か型の名前。src/lib/partyThemes.js）を渡すと、粒の形と色がその遊びの
+     * ものになる（ふうせんは紙テープ、ぬりえは絵の具、高い音だけは音符…）。
      */
-    finale(stageEl, { hero = null, palette = PALETTES.rainbow } = {}) {
+    finale(stageEl, { hero = null, palette = PALETTES.rainbow, theme = null } = {}) {
       const s = engine.scale();
       if (s.finale === "none") return;
+      const look = partyThemeFor(theme);
       const { x, y } = engine.pointOf(hero?.querySelector?.("svg") || hero || stageEl);
       if (s.finale === "ring") {
-        engine.ring({x,y,color:"#D8F3FF",r0:20,r1:100,width:4,life:0.5});
-        engine.burst({x,y,count:12,speed:[100,180],shapes:["star"],colors:PALETTES.sea,size:[10,16],life:[0.4,0.6],gravity:0});
+        engine.ring({ x, y, color: look ? look.particles.colors[0] : "#D8F3FF", r0: 20, r1: 100, width: 4, life: 0.5 });
+        engine.burst({
+          x,
+          y,
+          count: 12,
+          speed: [100, 180],
+          shapes: look ? look.particles.finaleShapes ?? look.particles.shapes : ["star"],
+          colors: look ? look.particles.colors : PALETTES.sea,
+          size: [10, 16],
+          life: [0.4, 0.6],
+          gravity: 0,
+        });
         return;
       }
+      const colors = look ? look.particles.colors : palette;
       engine.ring({ x, y, color: "#FFFFFF", r0: 30, r1: 260, width: 10, life: 0.7 });
-      engine.ring({ x, y, color: "#FFC83D", r0: 20, r1: 340, width: 6, life: 0.9, delay: 0.1 });
+      engine.ring({ x, y, color: look ? colors[0] : "#FFC83D", r0: 20, r1: 340, width: 6, life: 0.9, delay: 0.1 });
       engine.burst({
         x,
         y,
         count: 40,
         speed: [620, 1150],
-        shapes: ["star", "star", "sparkle"],
-        colors: [...PALETTES.gold, ...palette],
+        shapes: look ? look.particles.finaleShapes ?? look.particles.shapes : ["star", "star", "sparkle"],
+        colors: look ? colors : [...PALETTES.gold, ...palette],
         size: [26, 46],
         life: [1, 1.7],
-        gravity: 260,
+        gravity: look && !look.particles.finaleShapes ? look.particles.gravity : 260,
         drag: 2,
         twinkle: 0.2,
       });
       engine.glow({ x, y, radius: 300, color: "#FFFFFF", alpha: 0.32, lifeMs: 720 });
-      if (s.finale === "full") engine.confettiRain({ count: 120, colors: palette });
-      engine.fireworks({ colors: palette, bursts: 4 });
+      if (s.finale === "full") engine.confettiRain({ count: 120, colors, ...(look ? { shapes: look.rain } : {}) });
+      engine.fireworks({ colors, bursts: 4 });
       if (stageEl) motion.punch(stageEl, { amount: 0.03 });
       if (hero) motion.hop(hero, { delayMs: 100 });
     },

@@ -1700,8 +1700,8 @@ body.user-world .game-exit::before {
 .party-jar svg,
 .party-result-jar svg,
 .party-mini-jar svg,
-.party-star svg,
-.party-star-flyer svg {
+.party-item svg,
+.party-item-flyer svg {
   display: block;
   width: 100%;
   height: 100%;
@@ -1712,12 +1712,12 @@ body.user-world .game-exit::before {
   transform-origin: 50% 50%;
 }
 
-.party-jar-stars {
+.party-jar-items {
   position: absolute;
   inset: 0;
 }
 
-.party-star {
+.party-item {
   position: absolute;
   width: 17%;
   aspect-ratio: 1;
@@ -1725,7 +1725,7 @@ body.user-world .game-exit::before {
 }
 
 /* 飛んでいる星。translate はアニメーションが使うので、真ん中合わせは margin で。 */
-.party-star-flyer {
+.party-item-flyer {
   position: absolute;
   width: 28px;
   height: 28px;

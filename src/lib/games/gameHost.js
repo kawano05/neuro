@@ -459,7 +459,8 @@ export function createGameHost(ctx) {
             outfits: gameCtx.party.outfits(),
             claim: gameCtx.party.claim,
             kind: module.taskType ? "timing" : "beginner",
-            legacy: module.id === "color-legacy",
+            // 遊びごとのお祝いの型（src/lib/partyThemes.js）。
+            theme: module.id,
             audioCue: AUDIO_CUE_TASKS.has(module.taskType),
           }),
           "party"
@@ -674,7 +675,8 @@ export function createGameHost(ctx) {
       setPhase("finale");
       armExitChoice();
       atmosphere.finale();
-      if (!profile.reward) ctx.fx?.finale(elements.gameStageContent, {});
+      // 粒の形と色は、その遊びのもの（リールは星と紙吹雪、高い音だけは音符…）。
+      if (!profile.reward) ctx.fx?.finale(elements.gameStageContent, { theme: activeGameId });
       finaleTimer = window.setTimeout(() => {
         finaleTimer = null;
         showResult(summary);

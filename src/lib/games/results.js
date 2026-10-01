@@ -392,7 +392,7 @@ function renderCompletionResult(summary, context = {}) {
 export function renderPartyResult(party, primary, context = {}) {
   if (!party) return primary;
   return `
-    <div class="party-result is-added" data-level="${party.level || "big"}" data-stars="${party.stars ?? 15}">
+    <div class="party-result is-added" data-level="${party.level || "big"}" data-theme="${party.theme || "pop"}" data-stars="${party.stars ?? 15}">
       ${primary}
       ${renderPartyCompanions(party, context)}
     </div>
@@ -418,7 +418,7 @@ function renderPartyCompanions(party, context) {
   return `
       <div class="party-result-main">
         <span class="party-result-otter is-cheering ${reward ? outfitClasses(party.outfits) : ""}" aria-hidden="true">${otterSvg()}</span>
-        ${fullJarHtml(stars)}
+        ${fullJarHtml(stars, party.theme)}
         ${side}
       </div>
   `;
@@ -427,7 +427,7 @@ function renderPartyCompanions(party, context) {
 /** 押すと出てくるのおおさわぎは、動物・びん・服の既存の版面を保つ。 */
 function renderLegacyPartyResult(party, items, summaryText, context) {
   return `
-    <div class="hk-result completion-result party-result" data-level="${party.level || "big"}" data-stars="${party.stars ?? 15}">
+    <div class="hk-result completion-result party-result" data-level="${party.level || "big"}" data-theme="${party.theme || "pop"}" data-stars="${party.stars ?? 15}">
       ${renderPartyCompanions(party, context)}
       <div class="hk-result-items" aria-hidden="true">${items}</div>
       <p class="hk-result-summary completion-result-summary">${summaryText}</p>

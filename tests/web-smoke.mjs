@@ -958,7 +958,7 @@ async function checkSharedBeginnerParty(page, project) {
       if (press === 2) {
         await page.waitForTimeout(1200);
         await page.screenshot({ path: `test-results/party-live/${project.name}-${gameId}-third.png` });
-        assert((await page.locator(".party-jar .party-star").count()) === 7, `${gameId}: 3回目ではんぶん`);
+        assert((await page.locator(".party-jar .party-item").count()) === 7, `${gameId}: 3回目ではんぶん`);
         const overlaps = await page.evaluate(() => {
           const visible = (element) => element.getClientRects().length && getComputedStyle(element).opacity !== "0";
           // 割れたふうせんは、非表示のひもを含む箱ではなく実際の印を比べる。
@@ -989,12 +989,40 @@ async function checkSharedBeginnerParty(page, project) {
         assert(overlaps.length === 0, `${gameId}: 仲間・観客・旗・札を主役へ重ねない (${overlaps.join(", ")})`);
       }
     }
+    // 最後の見せ場は遊びごと（src/lib/partyThemes.js）。ふうせんは くす玉、ぬりえは額縁と「完成！」の名札、
+    // ボールは「ナイス バッティング！」。どれも遊びの言葉・割ったふうせんの印・打った数に かぶせない。
+    const show = { balloon: ".party-kusudama", coloring: ".party-frame", baseball: ".party-stamp.is-big" }[gameId];
+    await page.locator(show).waitFor({ state: "attached", timeout: 6000 });
+    await page.waitForTimeout(1600);
+    const finale = await page.evaluate(() => {
+      const box = (element) => element.getBoundingClientRect();
+      const overlap = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      const shows = [...document.querySelectorAll(".party-kusudama, .party-frame, .party-stamp")];
+      const keep = [...document.querySelectorAll(".balloon-word, .balloon.is-popped .balloon-mark, .coloring-word, .bb-word, .bb-slots")];
+      return {
+        // ふりがな（rt）を除いた字。
+        text: shows
+          .map((element) => {
+            const copy = element.cloneNode(true);
+            copy.querySelectorAll("rt").forEach((rt) => rt.remove());
+            return copy.textContent.trim();
+          })
+          .join(" "),
+        overlaps: shows.flatMap((element) =>
+          keep.filter((other) => overlap(box(element), box(other))).map((other) => `${element.className}/${other.className}`)
+        ),
+      };
+    });
+    const stampText = t(`party.stamp.${gameId}`);
+    assert(finale.text.includes(stampText.trim()), `${gameId}: 遊びの札（${stampText}）が出る: ${finale.text}`);
+    assert(!finale.text.includes(t("party.bigParty")), `${gameId}: 押すと 出てくる の「おおさわぎ！」ではない`);
+    assert(finale.overlaps.length === 0, `${gameId}: 見せ場を遊びの言葉・やったことへ重ねない (${finale.overlaps.join(", ")})`);
     await page.waitForFunction(() => document.querySelector("#resultView")?.classList.contains("is-active"), null, {
       timeout: PARTY_FINISH_DELAY_MS + 4000
     });
     const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}"), storageKey);
     assert(saved.party?.outfits?.includes("hat"), `${gameId}: 終了で服をもらえる`);
-    assert((await page.locator(".party-result-jar .party-star").count()) === 15, `${gameId}: 5回でいっぱい`);
+    assert((await page.locator(".party-result-jar .party-item").count()) === 15, `${gameId}: 5回でいっぱい`);
     assert(
       (await page.locator(".party-result .hk-result-title").textContent()).includes("できた"),
       `${gameId}: お祝いにも一言を残す`
@@ -1034,7 +1062,7 @@ async function checkTimingParty(page, project) {
   await finishReady(page);
   await page.waitForTimeout(300);
   const waiting = await page.evaluate(() => ({
-    flyers: document.querySelectorAll(".party-star-flyer").length,
+    flyers: document.querySelectorAll(".party-item-flyer").length,
     moving:
       document
         .querySelector(".party-layer")
@@ -1053,7 +1081,7 @@ async function checkTimingParty(page, project) {
     (row) => row.judgment === "hit" || row.judgment === "correctRejection"
   ).length;
   const expected = Math.floor((successful * 15) / session.trials.length);
-  assert((await page.locator(".party-result-jar .party-star").count()) === expected, "成功したぶんだけ星を入れる");
+  assert((await page.locator(".party-result-jar .party-item").count()) === expected, "成功したぶんだけ星を入れる");
   const ratio = successful / session.trials.length;
   const rating = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
   const praise = ratio >= 0.8 ? "great" : ratio >= 0.5 ? "good" : "tried";
@@ -1090,7 +1118,7 @@ async function checkPartyAtmosphere(page, project) {
   await page.locator("#gameStageContent.module-pop.is-party .party-otter").waitFor({ state: "attached" });
   const snapshot = () =>
     page.evaluate(() => ({
-      stars: document.querySelectorAll(".party-jar .party-star").length,
+      stars: document.querySelectorAll(".party-jar .party-item").length,
       fans: document.querySelectorAll(".party-fan.is-on").length,
       bunting: Boolean(document.querySelector(".party-bunting.is-on")),
       sea: document.querySelector("#gameStageContent")?.classList.contains("is-sea") || false
@@ -1124,7 +1152,7 @@ async function checkPartyAtmosphere(page, project) {
   const result = await page.evaluate(() => {
     const root = document.querySelector("#resultStats .party-result");
     return {
-      stars: root?.querySelectorAll(".party-result-jar .party-star").length || 0,
+      stars: root?.querySelectorAll(".party-result-jar .party-item").length || 0,
       jarsToday: root?.querySelectorAll(".party-today .party-mini-jar").length || 0,
       reward: root?.querySelector(".party-result-reward")?.textContent || "",
       hat: Boolean(root?.querySelector(".party-result-otter.has-hat")),

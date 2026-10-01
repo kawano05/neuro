@@ -245,7 +245,7 @@ export function createBaseballGame(ctx) {
       setWord("baseball.word.done");
       // ⑤ フィナーレ（5本打てた）。
       if (ctx.party?.isBig()) ctx.party.finale();
-      else fx?.finale(boardEl, {});
+      else fx?.finale(boardEl, { theme: "baseball" });
       if (atmosphereFor(fx?.level?.()).quietFinish) audio.playChime(784, { durationS: 0.24 });
       fx?.motion.stamp(wordEl, {});
       schedule(() => {

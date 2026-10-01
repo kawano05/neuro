@@ -296,6 +296,30 @@ test("描画エンジンが窓・魚の枠と文字の除外を適用し、強�
   }
 });
 
+test("遊びの形（紙テープ・ふうせん・ボール・魚・絵の具・音符）が描け、紙テープはひらひら、ふうせんは上がる", () => {
+  const SHAPES = ["ribbon", "balloon", "ball", "fish", "splat", "note"];
+  const [ribbon] = spawnBurst({ x: 0, y: 0, count: 1, shapes: ["ribbon"], gravity: 400, random: seeded(3) });
+  assert.ok(ribbon.flipSpeed > 0 && ribbon.gravity < 400, "紙テープは紙吹雪と同じく、裏返りながらゆっくり落ちる");
+  const [balloon] = spawnBurst({ x: 0, y: 0, count: 1, shapes: ["balloon"], gravity: 400, random: seeded(3) });
+  assert.ok(balloon.gravity < 0, "ふうせんは上がる");
+  let frame;
+  const drawn = [];
+  const g = new Proxy({}, { get: (_, name) => (...args) => { if (name === "fill" || name === "stroke") drawn.push(name); }, set: () => true });
+  const doc = {
+    createElement: () => ({ dataset: {}, setAttribute() {}, getContext: () => g }),
+    body: { append() {} },
+    defaultView: { innerWidth: 800, innerHeight: 600, devicePixelRatio: 1, addEventListener() {}, performance: { now: () => 0 }, requestAnimationFrame: (cb) => { frame = cb; return 1; }, cancelAnimationFrame() {} },
+  };
+  const engine = createFxEngine({ getLevel: () => "big", doc });
+  for (const shape of SHAPES) {
+    drawn.length = 0;
+    engine.clear();
+    engine.burst({ x: 200, y: 200, count: 4, shapes: [shape], size: [20, 24], speed: [10, 20] });
+    frame(16);
+    assert.ok(drawn.length > 0, `${shape} を描く`);
+  }
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);
 console.log("fx tests passed");
