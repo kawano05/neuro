@@ -4739,18 +4739,27 @@ async function checkDecorationMotion(page, project) {
     await openActivity(page, t("tile.balloon.title"));
     await page.locator("#gameStage").dispatchEvent("click");
     await page.waitForTimeout(120);
-    const balloon = await page.evaluate(() => ({
-      animations: document.querySelector("#gameStageContent").getAnimations({ subtree: true }).length,
-      // 落ちたときに、何が動いていたかを書き出す（どの規則が効いていないかを探すため）。
-      running: document.querySelector("#gameStageContent").getAnimations({ subtree: true }).map((animation) => ({
-        name: animation.animationName || animation.transitionProperty || animation.id || animation.constructor.name,
-        target: String(animation.effect?.target?.className?.baseVal ?? animation.effect?.target?.className ?? ""),
-        state: animation.playState,
-      })),
-      motion: { deco: document.body.dataset.decorationMotion, world: document.body.dataset.worldMotion },
-      particles: Number(document.querySelector("#fxLayer")?.dataset.emitted || 0),
-      mark: getComputedStyle(document.querySelector(".balloon.is-popping .balloon-mark")).opacity,
-    }));
+    // 数えるのは「いま動いているもの」だけ。端末の「動きを減らす」では、全体の規則
+    // （styles.css の transition-duration: 0.001ms）で色の変化が一瞬で終わる遷移になり、
+    // WebKit は終わったその遷移をしばらく getAnimations に残す。止まっているので数えない
+    // （さかなつりの世界の検査と同じ数え方）。
+    const balloon = await page.evaluate(() => {
+      const moving = document
+        .querySelector("#gameStageContent")
+        .getAnimations({ subtree: true })
+        .filter((animation) => animation.playState === "running");
+      return {
+        animations: moving.length,
+        // 落ちたときに、何が動いていたかを書き出す（どの規則が効いていないかを探すため）。
+        running: moving.map((animation) => ({
+          name: animation.animationName || animation.transitionProperty || animation.id || animation.constructor.name,
+          target: String(animation.effect?.target?.className?.baseVal ?? animation.effect?.target?.className ?? ""),
+        })),
+        motion: { deco: document.body.dataset.decorationMotion, world: document.body.dataset.worldMotion },
+        particles: Number(document.querySelector("#fxLayer")?.dataset.emitted || 0),
+        mark: getComputedStyle(document.querySelector(".balloon.is-popping .balloon-mark")).opacity,
+      };
+    });
     if (reduced || level === "none") {
       assert(balloon.animations === 0 && balloon.particles === 0, `${level}/${reduced}: balloon decorations must remain still: ${JSON.stringify(balloon)}`);
       assert(balloon.mark === "1", "A press must show a static burst shape immediately");
