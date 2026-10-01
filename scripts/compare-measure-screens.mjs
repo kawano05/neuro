@@ -5,6 +5,8 @@
 //   npx vite build --outDir <後のビルド>     （変更のあとで）
 //   node scripts/compare-measure-screens.mjs --before <前のビルド> --after <後のビルド> [--out <撮った画像の置き場>] [--quick]
 //     [--games slot-l2,crane] [--sizes 820x1180,844x390]   … 違いが出た場面だけを撮り直して確かめるとき
+//     [--mode practice] [--practice-art classic]            … れんしゅうの回を比べるとき（CSS の作り直しで
+//                                                              見た目が変わっていないかを確かめる。既定は measure）
 //
 // 決まり（docs/rules/measurement-invariance.md）: そくていの回（settings.difficultyMode = "measure"）の遊ぶ画面は、
 // 刺激の見え方を含めて1pxも変えない。この道具は、タイミングの遊び7つ × 画面の大きさ（14、--quick なら 5）×
@@ -61,7 +63,10 @@ const SIZES = args.sizes
     ? QUICK_SIZES
     : ALL_SIZES;
 /** そくていの回のあるタイミングの遊び（calibration は いつも そくてい）。 */
-const ALL_GAMES = ["slot-l1", "slot-l2", "crane", "fishing", "fishing-gonogo", "gonogo", "calibration"];
+const MODE = args.mode === "practice" ? "practice" : "measure";
+const PRACTICE_ART = args["practice-art"] || "world";
+// 基準をとる回はいつも そくてい なので、れんしゅうの回を比べるときは外す。
+const ALL_GAMES = ["slot-l1", "slot-l2", "crane", "fishing", "fishing-gonogo", "gonogo", ...(MODE === "measure" ? ["calibration"] : [])];
 const GAMES = args.games ? args.games.split(",") : ALL_GAMES;
 const CORNER = { "slot-l1": "slot-corner", "slot-l2": "slot-corner", crane: "crane-corner", fishing: "fishing-corner", "fishing-gonogo": "fishing-corner" };
 /** 始めてから撮る時刻（ms）。 */
@@ -87,7 +92,7 @@ async function openFixedPage(browser, port, [width, height]) {
     timezoneId: "Asia/Tokyo",
     serviceWorkers: "block",
   });
-  await context.addInitScript((key) => {
+  await context.addInitScript(({ key, mode, practiceArt }) => {
     let seed = 20260930;
     Math.random = () => {
       seed = (seed + 0x6d2b79f5) | 0;
@@ -105,9 +110,18 @@ async function openFixedPage(browser, port, [width, height]) {
     localStorage.clear();
     localStorage.setItem(
       key,
-      JSON.stringify({ version: 4, settings: { difficultyMode: "measure", speechEnabled: false, autoScan: false } })
+      JSON.stringify({
+        version: 4,
+        settings: {
+          difficultyMode: mode,
+          speechEnabled: false,
+          autoScan: false,
+          // れんしゅうの回は、粒や仲間が出ない段で比べる（どの瞬間に撮っても同じになるように）。
+          ...(mode === "practice" ? { practiceArt, fxLevel: "none" } : {}),
+        },
+      })
     );
-  }, STORAGE_KEY);
+  }, { key: STORAGE_KEY, mode: MODE, practiceArt: PRACTICE_ART });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -301,7 +315,7 @@ try {
   const changedContent = results.filter((row) => row.changed === null || row.styleChanges.length);
   const jitter = results.filter((row) => row.changed > 0 && !row.styleChanges.length);
   const bandOnly = results.filter((row) => row.changed === 0 && row.band > 0);
-  console.log(`そくていの回: ${results.length} 場面のうち、遊ぶ画面の中身が違う ${changedContent.length}`);
+  console.log(`${MODE === "measure" ? "そくていの回" : `れんしゅうの回（${PRACTICE_ART}）`}: ${results.length} 場面のうち、遊ぶ画面の中身が違う ${changedContent.length}`);
   changedContent.forEach((row) =>
     console.log(`  ${row.name}: ${row.changed === null ? "大きさが違う・撮れていない" : `${row.changed} 画素。中身の違う要素: ${row.styleChanges.join(", ")}`}`)
   );

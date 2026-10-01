@@ -22,7 +22,7 @@ import { slotSymbolHtml, slotSymbolStripUrl } from "./slotArt.js";
 import { SLOT_ART_VERSION, slotPracticeSymbolHtml, slotWorldHtml } from "../art/slotWorldArt.js";
 import { presentation } from "../presentation.js";
 import { atmosphereFor } from "../atmosphere.js";
-import { shownArtVersion } from "../artVersion.js";
+import { showsWorldArt, shownArtVersion } from "../artVersion.js";
 import { fitMeasuredReels, reelCellPx } from "./slotFit.js";
 
 const INPUT_GUARD_MS = 300;
@@ -79,6 +79,8 @@ export function createSlotGame(gameId) {
     let session = null;
     let config = null;
     let plan = null;
+    // 新しい絵（世界つき）を出す回か（mount で決める）。
+    let worldArt = false;
     let reelViews = [];
     let roundIndex = 0;
     let activeReelIndex = null;
@@ -120,9 +122,9 @@ export function createSlotGame(gameId) {
         .join("");
     }
 
-    // 測定のDOMは既存の関数へそのまま渡し、れんしゅうの刺激だけ替える。
+    // 測定のDOMは既存の関数へそのまま渡し、れんしゅうの新しい絵のときだけ刺激の絵を替える。
     function symbolHtml(symbolId, options) {
-      return config.difficultyMode !== "measure"
+      return worldArt
         ? presentation.run("world.slot.symbol", () => slotPracticeSymbolHtml(symbolId, options), slotSymbolHtml(symbolId, options))
         : slotSymbolHtml(symbolId, options);
     }
@@ -479,8 +481,12 @@ export function createSlotGame(gameId) {
       });
 
       stageEl.classList.add("slot-stage");
-      // れんしゅうの回だけの見た目（明るい色の台。theme-hakkiri.css）。
+      // れんしゅうの回だけの見た目（前の版からの、明るい色の台。theme-hakkiri.css）。
       stageEl.classList.toggle("is-practice", config.difficultyMode !== "measure");
+      // 新しい絵（ゆうえんちの世界。art/slotWorldArt.js・world-slot.css）を出すか。支援者の設定
+      // 「タイミングの遊びの絵」で前の絵も選べる（artVersion.js）。そくていの回はいつも前の絵。
+      worldArt = showsWorldArt(config.difficultyMode, settings.practiceArt);
+      stageEl.classList.toggle("has-world-art", worldArt);
       stageEl.innerHTML = `
         <section class="slot-task" data-game-id="${gameId}" data-difficulty-mode="${config.difficultyMode}">
           <div class="slot-target" data-slot-target></div>
@@ -492,7 +498,7 @@ export function createSlotGame(gameId) {
           </figure>
         </section>
       `;
-      if (config.difficultyMode !== "measure") {
+      if (worldArt) {
         stageEl.insertAdjacentHTML("afterbegin", presentation.run("world.slot", slotWorldHtml, ""));
       }
       reelsEl = stageEl.querySelector("[data-slot-reels]");
@@ -542,7 +548,7 @@ export function createSlotGame(gameId) {
           difficultyMode: config.difficultyMode,
           // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
           fxLevel: ctx.fx?.level() ?? null,
-          artVersion: shownArtVersion(config.difficultyMode, SLOT_ART_VERSION),
+          artVersion: shownArtVersion(config.difficultyMode, SLOT_ART_VERSION, settings.practiceArt),
           textMode: config.textMode,
           measurementReadiness: config.measurementReadiness,
           visualGuidance: false,
@@ -610,7 +616,7 @@ export function createSlotGame(gameId) {
       }
       if (stageEl) {
         stageEl.style.removeProperty("--slot-target-size");
-        stageEl.classList.remove("slot-stage", "is-practice", "is-fitted", "is-whole");
+        stageEl.classList.remove("slot-stage", "is-practice", "has-world-art", "is-fitted", "is-whole");
         stageEl.innerHTML = "";
       }
       reelViews = [];

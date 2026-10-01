@@ -1,22 +1,25 @@
+/* 新しい絵（世界つき）の規則は、すべて .has-world-art の下に書く。この印は、れんしゅうの回で、
+   支援者の設定「タイミングの遊びの絵」が「新しい絵」のときだけ付く（src/lib/artVersion.js）。
+   前の絵を選んだ回と、そくていの回には付かない。 */
 /* れんしゅうの割り付けと絵。そくていのコマ・停止線・札には適用しない。 */
 /* れんしゅうの札は、実際に流れる絵の寸法をslot.jsから受け取る。 */
-.slot-stage.is-practice .slot-task[data-difficulty-mode="practice"] .slot-target .slot-symbol {
+.slot-stage.has-world-art .slot-task[data-difficulty-mode="practice"] .slot-target .slot-symbol {
   width: var(--slot-target-size, 66px);
   height: var(--slot-target-size, 66px);
   flex-shrink: 0;
 }
-.slot-stage.is-practice .slot-cheer-word { margin-top: 8px; }
+.slot-stage.has-world-art .slot-cheer-word { margin-top: 8px; }
 @media (max-aspect-ratio: 1/1) {
-  .slot-task[data-difficulty-mode="practice"] .slot-reels { --slot-min-aspect: 1.05; --slot-max-aspect: 1.4; }
-  .slot-task[data-difficulty-mode="practice"] .slot-reels.is-1-reel { --slot-min-aspect: 1.15; }
+  :where(.slot-stage.has-world-art) .slot-task[data-difficulty-mode="practice"] .slot-reels { --slot-min-aspect: 1.05; --slot-max-aspect: 1.4; }
+  :where(.slot-stage.has-world-art) .slot-task[data-difficulty-mode="practice"] .slot-reels.is-1-reel { --slot-min-aspect: 1.15; }
 }
-.slot-stage.is-practice {
+.slot-stage.has-world-art {
   isolation: isolate;
   background: linear-gradient(180deg, #8ED8F7 0%, #DDF5FF 62%, #EEF8E9 100%);
   color: #1a1a1a;
 }
 
-.slot-stage.is-practice .slot-world {
+.slot-stage.has-world-art .slot-world {
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -24,24 +27,24 @@
   pointer-events: none;
 }
 
-.slot-stage.is-practice .slot-world svg {
+.slot-stage.has-world-art .slot-world svg {
   position: absolute;
   display: block;
   pointer-events: none;
 }
 
-.slot-stage.is-practice .slot-world-landscape { inset: 0; width: 100%; height: 100%; }
-.slot-stage.is-practice .slot-world-cloud { width: clamp(100px, 16vw, 220px); }
-.slot-stage.is-practice .slot-world-cloud-one { top: 12%; left: 4%; }
-.slot-stage.is-practice .slot-world-cloud-two { top: 7%; left: 41%; width: clamp(80px, 12vw, 170px); }
-.slot-stage.is-practice .slot-world-cloud-three { top: 25%; right: 5%; }
+.slot-stage.has-world-art .slot-world-landscape { inset: 0; width: 100%; height: 100%; }
+.slot-stage.has-world-art .slot-world-cloud { width: clamp(100px, 16vw, 220px); }
+.slot-stage.has-world-art .slot-world-cloud-one { top: 12%; left: 4%; }
+.slot-stage.has-world-art .slot-world-cloud-two { top: 7%; left: 41%; width: clamp(80px, 12vw, 170px); }
+.slot-stage.has-world-art .slot-world-cloud-three { top: 25%; right: 5%; }
 /* 目標の札と競わないよう、遠景の小さな静止物にする。 */
-.slot-stage.is-practice .slot-world-wheel { left: 2%; top: 90px; width: min(14vw, 112px); }
-.slot-stage.is-practice .slot-world-tent { right: 2%; bottom: 12%; width: clamp(80px, 12vw, 160px); }
-.slot-stage.is-practice .slot-world-shrubs { bottom: 0; width: 100%; height: 10%; }
+.slot-stage.has-world-art .slot-world-wheel { left: 2%; top: 90px; width: min(14vw, 112px); }
+.slot-stage.has-world-art .slot-world-tent { right: 2%; bottom: 12%; width: clamp(80px, 12vw, 160px); }
+.slot-stage.has-world-art .slot-world-shrubs { bottom: 0; width: 100%; height: 10%; }
 
 /* 絵の外枠をSVGへ移す。0.68コマの外寸と中央配置はそのままにする。 */
-.slot-task[data-difficulty-mode="practice"] .slot-symbol.slot-world-symbol {
+:where(.slot-stage.has-world-art) .slot-task[data-difficulty-mode="practice"] .slot-symbol.slot-world-symbol {
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -49,9 +52,9 @@
   pointer-events: none;
 }
 
-.slot-task[data-difficulty-mode="practice"] .slot-world-symbol svg { display: block; width: 100%; height: 100%; overflow: visible; }
+:where(.slot-stage.has-world-art) .slot-task[data-difficulty-mode="practice"] .slot-world-symbol svg { display: block; width: 100%; height: 100%; overflow: visible; }
 
-.slot-stage.is-practice .slot-reel {
+.slot-stage.has-world-art .slot-reel {
   border: 4px solid #493578;
   background: linear-gradient(180deg, #A996DF 0%, #8069C3 18%, #6F5BB8 88%, #59439D 100%);
   color: #ffffff;
@@ -59,19 +62,19 @@
 }
 
 /* 旧版と同じ明るい紫で、停止済みと待機中を文字に頼らず見分けられるようにする。 */
-.slot-stage.is-practice .slot-reel.is-stopped {
+.slot-stage.has-world-art .slot-reel.is-stopped {
   background: #8A79CC;
 }
 
-.slot-stage.is-practice .slot-reel.is-active {
+.slot-stage.has-world-art .slot-reel.is-active {
   border-color: #493578;
   /* 既存の走査色の枠は残し、電飾には使わない。 */
   box-shadow: 0 0 0 5px #FFC83D, inset 0 5px 0 #D7CAF4, inset 0 -5px 0 #493578, 0 5px 0 #493578;
 }
 
 /* 丸は窓の外の筐体にだけ置き、動く刺激には重ねない。 */
-.slot-stage.is-practice .slot-reel::before,
-.slot-stage.is-practice .slot-reel::after {
+.slot-stage.has-world-art .slot-reel::before,
+.slot-stage.has-world-art .slot-reel::after {
   content: "";
   position: absolute;
   top: 5px;
@@ -81,13 +84,13 @@
   background: #E4DCF5;
   pointer-events: none;
 }
-.slot-stage.is-practice .slot-reel::before { left: 5px; }
-.slot-stage.is-practice .slot-reel::after { right: 5px; }
-.slot-stage.is-practice .slot-reel-number { color: #493578; background: #FFF6EA; box-shadow: 0 2px 0 #493578; }
-.slot-stage.is-practice .slot-reel-badge { background: #493578; box-shadow: 0 2px 0 #493578; }
-.slot-stage.is-practice .slot-reel.is-active .slot-reel-badge { background: #FFC83D; }
-.slot-task[data-difficulty-mode="practice"] .slot-target { border-color: #6F5BB8; background: #FFFDF7; box-shadow: inset 0 4px 0 #FFF, 0 5px 0 #9C8ACB, 0 10px 20px #49357826; }
-.slot-stage.is-practice .slot-status {
+.slot-stage.has-world-art .slot-reel::before { left: 5px; }
+.slot-stage.has-world-art .slot-reel::after { right: 5px; }
+.slot-stage.has-world-art .slot-reel-number { color: #493578; background: #FFF6EA; box-shadow: 0 2px 0 #493578; }
+.slot-stage.has-world-art .slot-reel-badge { background: #493578; box-shadow: 0 2px 0 #493578; }
+.slot-stage.has-world-art .slot-reel.is-active .slot-reel-badge { background: #FFC83D; }
+:where(.slot-stage.has-world-art) .slot-task[data-difficulty-mode="practice"] .slot-target { border-color: #6F5BB8; background: #FFFDF7; box-shadow: inset 0 4px 0 #FFF, 0 5px 0 #9C8ACB, 0 10px 20px #49357826; }
+.slot-stage.has-world-art .slot-status {
   color: #10222E;
   background: #FFF;
   border-radius: 8px;
@@ -98,7 +101,7 @@
 
 @media (min-aspect-ratio: 5/4) {
   /* 背の低い画面でも、案内の下に収まる高さにする。 */
-  .slot-stage.is-practice .slot-world-wheel {
+  .slot-stage.has-world-art .slot-world-wheel {
     left: 16.4%;
     top: auto;
     bottom: 2%;
@@ -109,63 +112,63 @@
 
 /* 縦長では目標札の隣を空け、背の低い横画面ではリールの脇を空ける。 */
 @media (max-aspect-ratio: 1/1) {
-  .slot-stage.is-practice .slot-world .slot-world-wheel { display: none; }
+  .slot-stage.has-world-art .slot-world .slot-world-wheel { display: none; }
 }
 
 @media (max-height: 500px) and (min-aspect-ratio: 5/4) {
-  .slot-stage.is-practice .slot-world .slot-world-tent { display: none; }
+  .slot-stage.has-world-art .slot-world .slot-world-tent { display: none; }
 }
 
 /* --- くっきり表示 ---------------------------------------------------------
    アーム・さかなつりの世界と同じく、世界を隠して白黒と太い線だけにする。台・札・
    止まったリールの色も くっきり表示の決まり（styles.css の body.high-contrast .slot-*）へ戻す。
    以前は空だけ黒くなり、白い雲・淡い丘・紫の台が残って、ちぐはぐな場面になっていた。 */
-body.high-contrast .slot-stage.is-practice {
+body.high-contrast .slot-stage.has-world-art {
   background: #000;
 }
 
-body.high-contrast .slot-stage.is-practice .slot-world,
-body.high-contrast .slot-stage.is-practice .slot-reel::before,
-body.high-contrast .slot-stage.is-practice .slot-reel::after {
+body.high-contrast .slot-stage.has-world-art .slot-world,
+body.high-contrast .slot-stage.has-world-art .slot-reel::before,
+body.high-contrast .slot-stage.has-world-art .slot-reel::after {
   display: none;
 }
 
-body.high-contrast .slot-stage.is-practice .slot-reel,
-body.high-contrast .slot-stage.is-practice .slot-reel.is-stopped {
+body.high-contrast .slot-stage.has-world-art .slot-reel,
+body.high-contrast .slot-stage.has-world-art .slot-reel.is-stopped {
   border-color: #fff;
   background: #000;
   box-shadow: none;
 }
 
 /* 止まったリールは、色の代わりに点線で見分ける。 */
-body.high-contrast .slot-stage.is-practice .slot-reel.is-stopped {
+body.high-contrast .slot-stage.has-world-art .slot-reel.is-stopped {
   border-style: dashed;
 }
 
-body.high-contrast .slot-stage.is-practice .slot-reel.is-active {
+body.high-contrast .slot-stage.has-world-art .slot-reel.is-active {
   border-color: #ffeb3b;
   box-shadow: none;
 }
 
-body.high-contrast .slot-stage.is-practice .slot-reel-number {
+body.high-contrast .slot-stage.has-world-art .slot-reel-number {
   color: #000;
   background: #fff;
   box-shadow: none;
 }
 
-body.high-contrast .slot-stage.is-practice .slot-reel-badge {
+body.high-contrast .slot-stage.has-world-art .slot-reel-badge {
   color: #fff;
   background: #000;
   box-shadow: 0 0 0 2px #fff;
 }
 
-body.high-contrast .slot-task[data-difficulty-mode="practice"] .slot-target {
+body.high-contrast :where(.slot-stage.has-world-art) .slot-task[data-difficulty-mode="practice"] .slot-target {
   border-color: #fff;
   background: #fff;
   box-shadow: none;
 }
 
-body.high-contrast .slot-stage.is-practice .slot-status {
+body.high-contrast .slot-stage.has-world-art .slot-status {
   color: #fff;
   background: #000;
   box-shadow: 0 0 0 3px #fff;

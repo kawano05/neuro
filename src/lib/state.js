@@ -7,7 +7,7 @@
 //   失敗時は console.error と onError コールバック（連続失敗の初回のみ）で通知する。
 // =====================================================================
 
-import { sanitizeArtVersion } from "./artVersion.js";
+import { DEFAULT_PRACTICE_ART, PRACTICE_ARTS, sanitizeArtVersion } from "./artVersion.js";
 import {
   storageKey,
   readinessItems,
@@ -195,6 +195,9 @@ export const defaultState = {
     scanFeedback: "none",
     // 演出の強さ（FX_LEVELS）。
     fxLevel: "normal",
+    // れんしゅうの回の、タイミングの遊びの絵（artVersion.js の PRACTICE_ARTS）。
+    // そくていの回はいつも前の絵。どちらの絵を見せたかは session.config.artVersion に残る。
+    practiceArt: DEFAULT_PRACTICE_ART,
     // はじめの遊びの、遊びごとの見え方と音（ゲームの中の「この遊びの設定」で
     // 変える）。中身と理由は上の DEFAULT_PLAY_PREFS。
     playPrefs: JSON.parse(JSON.stringify(DEFAULT_PLAY_PREFS)),
@@ -1333,6 +1336,7 @@ export function sanitizeState(candidate) {
       scanFeedback: enumOr(settings.scanFeedback, SCAN_FEEDBACKS, fallback.settings.scanFeedback),
       speechVoice: enumOr(settings.speechVoice, SPEECH_VOICES, fallback.settings.speechVoice),
       fxLevel: enumOr(settings.fxLevel, FX_LEVELS, fallback.settings.fxLevel),
+      practiceArt: enumOr(settings.practiceArt, new Set(PRACTICE_ARTS), fallback.settings.practiceArt),
       playPrefs: sanitizePlayPrefs(settings.playPrefs),
       researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),
       judgmentWindowMs: numberInRange(

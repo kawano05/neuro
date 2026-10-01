@@ -129,6 +129,15 @@ export const SETTING_DEFINITIONS = Object.freeze({
       ["device", "端末の声"],
     ],
   },
+  practiceArt: {
+    type: "select",
+    label: "タイミングの遊びの絵",
+    hint: "リール・高い音だけ・アーム・さかなつりの、れんしゅうの回の絵です。そくていの回は いつも前の絵です。",
+    options: [
+      ["world", "新しい絵（まわりの世界つき）"],
+      ["classic", "前の絵"],
+    ],
+  },
 
   slotCycleMs: {
     type: "range",

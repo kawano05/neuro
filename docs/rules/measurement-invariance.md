@@ -10,9 +10,11 @@
    種・受付時間など）。支援者の設定より優先し、支援者は変えられない。変えるときは、それまでのデータと比べられなく
    なることを承知で、研究者と決めてから変える。
 2. **遊ぶ画面の見え方** — 刺激（合図・目標・動くもの）と、その位置・大きさ・時刻・色。**1画素も変えない。**
-   新しい絵・世界・動き・演出は、れんしゅうの回だけに出す（遊ぶ面に `.is-practice` が付く。リールは
-   `.slot-task[data-difficulty-mode="practice"]` も）。CSS は必ずその下に書き、JS で絵を替えるときも
-   `difficultyMode !== "measure"` のときだけ。
+   新しい絵・世界・動き・演出は、れんしゅうの回だけに出す。新しい絵（世界つき）は、支援者の設定
+   「タイミングの遊びの絵」（`settings.practiceArt`）が「新しい絵」のれんしゅうの回だけで、遊ぶ面に
+   `.has-world-art` が付く。`src/world-*.css` の規則は必ずこの印の下に書き（`tests/fishing-world-art.test.mjs`
+   が4つのファイル全部を見る）、JS で絵を替えるときも `showsWorldArt()`（`src/lib/artVersion.js`）が真の
+   ときだけ。前の版からある れんしゅうの見た目は `.is-practice`（リールは `.slot-task[data-difficulty-mode="practice"]` も）。
 3. **判定と時刻** — 入力の時刻の取り方（シェルの入口で取る）、判定の式、合図の出る時刻、試行の順序。
 4. **雰囲気と演出** — そくていの回は雰囲気を none として扱う（`src/lib/atmosphere.js`・`fx.forMeasurement()`）。
    ラッコ・びん・音楽・観客・粒・背景の動きは出さない。

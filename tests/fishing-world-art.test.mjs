@@ -140,14 +140,20 @@ function splitSelectors(selector) {
   return parts;
 }
 
-test("world-fishing.css only styles the practice run", () => {
-  const rules = rulesOf(worldCss).filter((rule) => !rule.selector.startsWith("@keyframes"));
-  assert.ok(rules.length > 20, "規則が読み取れていない");
-  rules.forEach((rule) => {
-    splitSelectors(rule.selector).forEach((selector) => {
-      assert.match(selector, /\.is-practice/, `.is-practice の下にない規則: ${selector.trim()}`);
+test("every world-*.css rule styles only the new pictures of a practice run", () => {
+  // 新しい絵の印（.has-world-art）は、れんしゅうの回で「タイミングの遊びの絵」が「新しい絵」の
+  // ときだけ付く（src/lib/artVersion.js）。規則がこの印の外に漏れると、そくていの回か、前の絵を
+  // 選んだ回の見え方が変わる。
+  for (const name of ["slot", "crane", "fishing", "gonogo"]) {
+    const css = name === "fishing" ? worldCss : readFileSync(pathOf(`../src/world-${name}.css`), "utf8");
+    const rules = rulesOf(css).filter((rule) => !rule.selector.startsWith("@keyframes"));
+    assert.ok(rules.length > 10, `${name}: 規則が読み取れていない`);
+    rules.forEach((rule) => {
+      splitSelectors(rule.selector).forEach((selector) => {
+        assert.match(selector, /\.has-world-art/, `world-${name}.css: .has-world-art の下にない規則: ${selector.trim()}`);
+      });
     });
-  });
+  }
 });
 
 test("endless motion stays on translate / rotate / scale (opacity only on the small bubbles)", () => {

@@ -19,17 +19,17 @@
 
 /* --- 世界の動き -------------------------------------------------------- */
 
-body[data-world-motion="off"] :is(.pop-sea, .module-fishing.is-practice .fishing-sea) *,
-body[data-world-motion="off"] .module-fishing.is-practice :is(.fishing-cloud, .fishing-otter-eyes),
+body[data-world-motion="off"] :is(.pop-sea, .module-fishing.has-world-art .fishing-sea) *,
+body[data-world-motion="off"] .module-fishing.has-world-art :is(.fishing-cloud, .fishing-otter-eyes),
 body[data-world-motion="off"] .balloon:not(.is-popping) {
   animation: none !important;
 }
 
-body[data-world-motion="off"] .module-fishing.is-practice .fishing-cloud {
+body[data-world-motion="off"] .module-fishing.has-world-art .fishing-cloud {
   translate: var(--rest) 0;
 }
 
-body[data-world-motion="off"] :is(.pop-sea, .module-fishing.is-practice .fishing-sea) .sea-bubbles {
+body[data-world-motion="off"] :is(.pop-sea, .module-fishing.has-world-art .fishing-sea) .sea-bubbles {
   display: none;
 }
 

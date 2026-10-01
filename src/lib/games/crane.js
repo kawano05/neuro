@@ -62,7 +62,7 @@ import {
   craneRoomHtml,
   craneWorldHtml,
 } from "../art/craneWorldArt.js";
-import { shownArtVersion } from "../artVersion.js";
+import { showsWorldArt, shownArtVersion } from "../artVersion.js";
 
 const FEEDBACK_GAIN = 0.05;
 const MISS_GAIN = 0.018;
@@ -323,7 +323,7 @@ function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = nul
     fxLevel,
     // 見え方の版（art/craneWorldArt.js）。れんしゅうの回の景品やアームの絵が変わった
     // 前後を分けるため。
-    artVersion: shownArtVersion(resolveDifficultyMode(settings), CRANE_ART_VERSION),
+    artVersion: shownArtVersion(resolveDifficultyMode(settings), CRANE_ART_VERSION, settings.practiceArt),
     // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
     // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
     measurementReadiness: readiness || "n/a",
@@ -352,9 +352,12 @@ export function createCraneGame(ctx) {
   // 漢字の名前を足すと静かにルビだけ落ちる。その線は
   // tests/i18n.test.mjs の「景品名に漢字を使わない」で縛ってある。
   const config = resolveCraneConfig(ctx.settings, ctx.readiness, ctx.endless, ctx.fx?.level() ?? null);
-  // れんしゅうの回だけ、おもちゃ屋さんの世界（src/lib/art/craneWorldArt.js）の絵を使う。
-  // そくていの回は、刺激の見え方も測定の条件なので、いまの PNG のまま動かさない。
+  // れんしゅうの回か（前の版からの、明るい色の台。theme-hakkiri.css）。
   const practice = config.difficultyMode !== "measure";
+  // 新しい絵（おもちゃ屋さんの世界。src/lib/art/craneWorldArt.js・world-crane.css）を出すか。
+  // れんしゅうの回だけで、支援者の設定「タイミングの遊びの絵」で前の絵も選べる（artVersion.js）。
+  // そくていの回は、刺激の見え方も測定の条件なので、いつも前の PNG のまま動かさない。
+  const worldArt = showsWorldArt(config.difficultyMode, ctx.settings.practiceArt);
   let stageEl = null;
   let sceneEl = null;
   let statusEl = null;
@@ -423,7 +426,7 @@ export function createCraneGame(ctx) {
     return DECOR_SPOTS.map((spot, index) => {
       const prize = cranePrizes[index % cranePrizes.length];
       const at = project(spot.x, spot.y);
-      if (practice) {
+      if (worldArt) {
         return `<div class="crane-decor" aria-hidden="true"
           style="left:${at.left}%;top:${at.top}%;--prize-scale:${at.scale.toFixed(3)}">${prizePicture(prize.asset)}</div>`;
       }
@@ -446,16 +449,16 @@ export function createCraneGame(ctx) {
     // れんしゅうの回だけ、店内（台の外）と箱の中の部屋・床のマットを足す。
     // 世界は始めに1回だけ作る（試行ごとには作り直さない）。景品とアームは
     // PNG ではなく SVG を入れる（同じクラスなので、位置と大きさの CSS はそのまま効く）。
-    const worldHtml = practice ? presentation.run("world.crane", craneWorldHtml, "") : "";
-    const roomHtml = practice ? presentation.run("world.room", craneRoomHtml, "") : "";
-    const shadeHtml = practice
+    const worldHtml = worldArt ? presentation.run("world.crane", craneWorldHtml, "") : "";
+    const roomHtml = worldArt ? presentation.run("world.room", craneRoomHtml, "") : "";
+    const shadeHtml = worldArt
       ? `<line class="crane-guide-shade crane-guide-shade-x" vector-effect="non-scaling-stroke" /><line class="crane-guide-shade crane-guide-shade-y" vector-effect="non-scaling-stroke" />`
       : "";
-    const matHtml = practice ? `${presentation.run("world.mat", craneMatHtml, "")}<div class="crane-tint" aria-hidden="true"></div>` : "";
-    const prizeHtml = practice
+    const matHtml = worldArt ? `${presentation.run("world.mat", craneMatHtml, "")}<div class="crane-tint" aria-hidden="true"></div>` : "";
+    const prizeHtml = worldArt
       ? `<div class="crane-prize" aria-hidden="true"></div>`
       : `<img class="crane-prize" src="" alt="" />`;
-    const clawMarkup = practice
+    const clawMarkup = worldArt
       ? `<div class="crane-claw" aria-hidden="true">${presentation.run("world.crane.claw", clawHtml, `<img src="${clawOpenUrl}" alt="" style="width:100%;height:100%" />`)}</div>`
       : `<img class="crane-claw" src="${clawOpenUrl}" alt="" />`;
     stageEl.innerHTML = `${worldHtml}
@@ -576,7 +579,7 @@ export function createCraneGame(ctx) {
     const target = currentTarget();
     const prize = currentPrize();
     const at = project(target.x, target.y);
-    if (practice) prizeEl.innerHTML = prizePicture(prize.asset);
+    if (worldArt) prizeEl.innerHTML = prizePicture(prize.asset);
     else prizeEl.src = PRIZE_ART[prize.asset];
     prizeEl.style.left = `${at.left}%`;
     prizeEl.style.top = `${at.top}%`;
@@ -601,7 +604,7 @@ export function createCraneGame(ctx) {
    * 2枚は下端（つかむ点）をそろえてあるので、切り替えてもアームは跳ねない。
    */
   function setClawClosed(closed) {
-    if (practice) clawEl.classList.toggle("is-closed", closed);
+    if (worldArt) clawEl.classList.toggle("is-closed", closed);
     else clawEl.src = closed ? clawClosedUrl : clawOpenUrl;
   }
 
@@ -1033,16 +1036,16 @@ export function createCraneGame(ctx) {
     window.setTimeout(() => chuteEl?.classList.remove("is-filled"), 600);
     // 取れた景品を筐体の外に並べていく。数字の「つかんだ N」だけだと、
     // 何を取ったのかも、増えていくことも見えない。
-    const badge = document.createElement(practice ? "div" : "img");
+    const badge = document.createElement(worldArt ? "div" : "img");
     badge.className = "crane-collected-item";
-    if (practice) {
+    if (worldArt) {
       badge.innerHTML = prizePicture(currentPrize().asset);
     } else {
       badge.src = PRIZE_ART[currentPrize().asset];
       badge.alt = "";
     }
     collectedEl.appendChild(badge);
-    if (practice) trimTray();
+    if (worldArt) trimTray();
     // 受け口に落ちたら紙吹雪（れんしゅうの回だけ）。
     fx?.craneWin(chuteEl);
     fx?.motion.popIn(badge, { from: 0.4 });
@@ -1095,6 +1098,8 @@ export function createCraneGame(ctx) {
     // world-crane.css）。ガラスの箱の中の床・景品・狙いの位置と大きさ、アームの
     // 動く範囲は、そくていの回と同じ。
     stageEl.classList.toggle("is-practice", practice);
+    // 新しい絵の印。world-crane.css はすべてこの下に書く（前の絵を選んだ回には付けない）。
+    stageEl.classList.toggle("has-world-art", worldArt);
     renderMarkup();
     railEl.dataset.top = "8";
 
@@ -1181,7 +1186,7 @@ export function createCraneGame(ctx) {
       logTrial(session);
     }
     if (stageEl) {
-      stageEl.classList.remove("module-crane", "is-practice");
+      stageEl.classList.remove("module-crane", "is-practice", "has-world-art");
       stageEl.innerHTML = "";
     }
     stageEl = null;

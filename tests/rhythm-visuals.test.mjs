@@ -110,12 +110,13 @@ function fakeStage() {
   };
 }
 
-function mountedMarkup(gameId, measurement, visualGuidance) {
+function mountedMarkup(gameId, measurement, visualGuidance, practiceArt = undefined) {
   const stage = fakeStage();
   const visuals = createRhythmVisuals({
     gameId,
     visualGuidance,
     measurement,
+    practiceArt,
     exactToleranceMs: 30,
     t: (key) => `[${key}]`,
   });
@@ -171,6 +172,7 @@ test("measured and untouched rhythm screens build exactly the version-1 markup",
   const measured = mountedMarkup("gonogo", true, false);
   assert.equal(measured.visuals.artVersion, ORIGINAL_ART_VERSION);
   assert.equal(measured.stage.classes.has("is-practice"), false, "そくていの回に れんしゅうの印を付けない");
+  assert.equal(measured.stage.classes.has("has-world-art"), false, "そくていの回に新しい絵の印を付けない");
   assert.doesNotMatch(measured.markup, /gonogo-/, "そくていの回に世界の絵を入れない");
 });
 
@@ -179,6 +181,7 @@ test("gonogo practice keeps the same skeleton and only swaps pictures", () => {
   const original = mountedMarkup("gonogo", true, true);
   assert.equal(world.visuals.artVersion, GONOGO_ART_VERSION);
   assert.ok(world.stage.classes.has("is-practice"));
+  assert.ok(world.stage.classes.has("has-world-art"));
   // 骨組み（rhythm.js・演出・テストが頼る rhythm-* の class）は同じものが同じ数だけある。
   // 位置と大きさは CSS のまま。
   const skeleton = (markup) =>
@@ -187,6 +190,18 @@ test("gonogo practice keeps the same skeleton and only swaps pictures", () => {
   assert.match(world.markup, /class="rhythm-pulse"><svg class="gonogo-pad"/);
   assert.match(world.markup, /class="rhythm-shield"><svg class="gonogo-shield"/);
   assert.doesNotMatch(world.markup, /fa-solid/, "音楽会の世界は Font Awesome を使わない");
+});
+
+test("choosing the old pictures shows the original gonogo practice look and records version 1", () => {
+  // 支援者の設定「タイミングの遊びの絵」が「前の絵」の れんしゅうの回は、そくていの回と同じ組み立て
+  // （Font Awesome の絵、世界なし）で、れんしゅうの印だけが付く（2026-09-30 より前と同じ）。
+  const classic = mountedMarkup("gonogo", false, true, "classic");
+  assert.equal(classic.visuals.artVersion, ORIGINAL_ART_VERSION, "前の絵を見せた回は版 1");
+  assert.ok(classic.stage.classes.has("is-practice"));
+  assert.equal(classic.stage.classes.has("has-world-art"), false);
+  assert.doesNotMatch(classic.markup, /gonogo-/, "前の絵の回に世界の絵を入れない");
+  // 知らない値は新しい絵（既定）として扱う。
+  assert.equal(mountedMarkup("gonogo", false, true, "sparkly").visuals.artVersion, GONOGO_ART_VERSION);
 });
 
 test("the practice notes differ only as much as the original visual cue did", () => {

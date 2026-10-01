@@ -3193,7 +3193,76 @@ body.result-mode.user-world #resultHome::before {
    そくていの回は今までの見た目のまま（§3.3）。
    --------------------------------------------------------------------- */
 
-/* リールのれんしゅうの台・枠・色は world-slot.css の持ち物。 */
+/* 新しい絵（世界つき）の台・枠・色は world-<遊び>.css の持ち物（.has-world-art の下）。
+   ここは「前の絵」（支援者の設定「タイミングの遊びの絵」）を選んだ れんしゅうの回の見た目で、
+   2026-09-30 より前の版と同じ規則（a7ee704 の theme-hakkiri.css から戻した）。 */
+
+/* リール: 明るい台に、紫の枠（ホームのタイルと同じ色）。 */
+.slot-stage.is-practice:not(.has-world-art) {
+  background: linear-gradient(180deg, #ffe5da 0%, #ffd0bd 100%);
+  color: #1a1a1a;
+}
+
+.slot-stage.is-practice:not(.has-world-art) .slot-status {
+  color: #1a1a1a;
+}
+
+.slot-stage.is-practice:not(.has-world-art) .slot-reel {
+  border: 4px solid #1a1a1a;
+  background: #6f5bb8;
+  color: #ffffff;
+  box-shadow: 0 8px 0 #4a3a8a;
+}
+
+.slot-stage.is-practice:not(.has-world-art) .slot-reel.is-active {
+  border-color: #1a1a1a;
+  box-shadow:
+    0 0 0 6px #ffc83d,
+    0 8px 0 #4a3a8a;
+}
+
+.slot-stage.is-practice:not(.has-world-art) .slot-reel.is-stopped {
+  background: #8a79cc;
+}
+
+/* アームでつかむ: 明るい床（地）と、茶色の台（ホームのタイルと同じ色）。
+   ガラスの箱の中（床・景品・狙いの輪・アーム）は、そくていの回と同じ。 */
+.game-stage-content.module-crane.is-practice:not(.has-world-art) {
+  background: linear-gradient(180deg, #f3e4d6 0%, #e9cfb6 100%);
+}
+
+.module-crane.is-practice:not(.has-world-art) .crane-marquee,
+.module-crane.is-practice:not(.has-world-art) .crane-console {
+  border-color: #1a1a1a;
+  background: #804000;
+  box-shadow: none;
+}
+
+.module-crane.is-practice:not(.has-world-art) .crane-marquee-title {
+  color: #ffffff;
+}
+
+/* 高い音だけ: 紫と黄色の明るい台。音符と判定の丸はそのまま。 */
+.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"]:not(.has-world-art) {
+  --rhythm-panel: #5a2a80;
+  --rhythm-panel-deep: #3b1757;
+  --rhythm-accent: #ffc83d;
+  --rhythm-accent-strong: #f6aa00;
+}
+
+.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"]:not(.has-world-art) .rhythm-world {
+  background: linear-gradient(180deg, #f6ddf6 0%, #e7b8ea 100%);
+}
+
+.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"]:not(.has-world-art) .rhythm-grid-floor {
+  display: none;
+}
+
+.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"]:not(.has-world-art) .rhythm-cabinet {
+  border-color: #1a1a1a;
+  background: linear-gradient(160deg, #990099, #5a1a6e);
+  box-shadow: 0 10px 0 #4a0f5c;
+}
 
 /* 外したときの「おしい！」は、白い札で控えめに。 */
 .slot-cheer.is-nudge .slot-cheer-word {
@@ -3201,7 +3270,7 @@ body.result-mode.user-world #resultHome::before {
 }
 
 /* リズムの遊び（れんしゅうの回）: 飾り（両脇のスピーカー・上のランプ・「ゲーム」の札）を外す。
-   高い音だけの色と絵は world-gonogo.css（夕方の丘の音楽会）。 */
+   高い音だけの新しい絵は world-gonogo.css（夕方の丘の音楽会）、前の絵の色は上。 */
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-speaker-bank,
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-cabinet-lamps,
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-profile-panel {

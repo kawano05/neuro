@@ -91,11 +91,13 @@ const PRACTICE_ART_VERSIONS = Object.freeze({ gonogo: GONOGO_ART_VERSION });
  * その回に画面へ出す絵の版（session.config.artVersion に残す。src/lib/artVersion.js）。
  * measurement は予告のない測定の版面を出す回（そくていの回と、キャリブレーション）。
  * キャリブレーションは支援者の設定が れんしゅう でも元の絵なので、どちらでも 1 になる。
+ * practiceArt は支援者の設定「タイミングの遊びの絵」（前の絵なら 1）。
  */
-export function rhythmArtVersion(gameId, measurement) {
+export function rhythmArtVersion(gameId, measurement, practiceArt) {
   return shownArtVersion(
     measurement ? "measure" : "practice",
-    PRACTICE_ART_VERSIONS[gameId] ?? ORIGINAL_ART_VERSION
+    PRACTICE_ART_VERSIONS[gameId] ?? ORIGINAL_ART_VERSION,
+    practiceArt
   );
 }
 
@@ -137,14 +139,15 @@ export function rhythmSkin(gameId, artVersion) {
  *   gameId:string,
  *   visualGuidance:boolean,
  *   measurement:boolean,
+ *   practiceArt?:string,
  *   exactToleranceMs:number,
  *   t:(key:string, vars?:object)=>string,
  * }} options
  */
 export function createRhythmVisuals(options) {
-  const { gameId, visualGuidance, measurement, exactToleranceMs, t } = options;
+  const { gameId, visualGuidance, measurement, practiceArt, exactToleranceMs, t } = options;
   const profile = rhythmVisualProfile(gameId, visualGuidance);
-  const artVersion = rhythmArtVersion(gameId, measurement);
+  const artVersion = rhythmArtVersion(gameId, measurement, practiceArt);
   const skin = rhythmSkin(gameId, artVersion);
   let stageEl = null;
   let pulseEl = null;
@@ -186,9 +189,11 @@ export function createRhythmVisuals(options) {
     // れんしゅうの回だけの見た目（明るい色・飾りを減らす。theme-hakkiri.css）。
     // そくていの回（measurement）は今までの見た目のまま。
     stageEl.dataset.rhythmMode = measurement ? "measure" : "practice";
-    // れんしゅうの回の印（ほかのタイミングの遊びと同じ .is-practice）。高い音だけの世界の
-    // CSS（world-gonogo.css）は、この印の下にだけ書く。
+    // れんしゅうの回の印（ほかのタイミングの遊びと同じ .is-practice）。
     stageEl.classList.toggle("is-practice", !measurement);
+    // 新しい絵の印。高い音だけの世界の CSS（world-gonogo.css）は、この印の下にだけ書く
+    // （前の絵を選んだ回・そくていの回には付けない）。
+    stageEl.classList.toggle("has-world-art", skin.world);
     stageEl.innerHTML = `
       <div class="rhythm-world" aria-hidden="true">${skin.sceneryHtml}
         <div class="rhythm-aurora"></div>
@@ -388,7 +393,7 @@ export function createRhythmVisuals(options) {
     feedbackTimer = null;
     noteNodes.clear();
     if (stageEl) {
-      stageEl.classList.remove("module-rhythm", "is-practice");
+      stageEl.classList.remove("module-rhythm", "is-practice", "has-world-art");
       delete stageEl.dataset.rhythmTheme;
       delete stageEl.dataset.rhythmProfile;
       delete stageEl.dataset.rhythmMode;

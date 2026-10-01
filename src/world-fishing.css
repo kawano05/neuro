@@ -1,3 +1,6 @@
+/* 新しい絵（世界つき）の規則は、すべて .has-world-art の下に書く。この印は、れんしゅうの回で、
+   支援者の設定「タイミングの遊びの絵」が「新しい絵」のときだけ付く（src/lib/artVersion.js）。
+   前の絵を選んだ回と、そくていの回には付かない。 */
 /* =====================================================================
    さかなつり（れんしゅうの回）の世界
 
@@ -5,7 +8,7 @@
    水の中の光と泡と海藻と砂、ラッコの舟、色つきの魚。絵は src/lib/art/fishingWorldArt.js。
 
    決まり
-     - 全部 .is-practice の下に書く。そくていの回（.is-practice が付かない）は
+     - 全部 .has-world-art の下に書く。そくていの回（.has-world-art が付かない）は
        styles.css の見え方のまま、1px も変えない（docs/design-renewal-2026-09-25.md §3.3）。
      - 判定・時刻・泳ぐ経路と口の基準位置は games/fishing.js のまま。
        れんしゅうの縦画面では島を遠ざけ、スマホの魚を大きくする。
@@ -18,14 +21,14 @@
 
 /* --- 空 ---------------------------------------------------------------- */
 
-.module-fishing.is-practice .fishing-sky {
+.module-fishing.has-world-art .fishing-sky {
   overflow: hidden;
   pointer-events: none;
   background: linear-gradient(180deg, #5fc4f6 0%, #a9e1fb 58%, #e4f7ff 100%);
 }
 
 /* 雲は上の帯（のこり・設定・おわる。高さ 66px まで）の下を流れる。帯の裏に入れない。 */
-.module-fishing.is-practice .fishing-cloud {
+.module-fishing.has-world-art .fishing-cloud {
   position: absolute;
   pointer-events: none;
   left: 0;
@@ -33,14 +36,14 @@
   animation: fishing-cloud-drift 97s linear infinite;
 }
 
-.module-fishing.is-practice .fishing-cloud-a {
+.module-fishing.has-world-art .fishing-cloud-a {
   --rest: 16vw;
   top: max(30%, 62px);
   width: clamp(96px, 15%, 200px);
   animation-delay: -31s;
 }
 
-.module-fishing.is-practice .fishing-cloud-b {
+.module-fishing.has-world-art .fishing-cloud-b {
   --rest: 64vw;
   top: max(46%, 66px);
   width: clamp(70px, 10%, 150px);
@@ -48,7 +51,7 @@
   animation-delay: -88s;
 }
 
-.module-fishing.is-practice .fishing-cloud-c {
+.module-fishing.has-world-art .fishing-cloud-c {
   --rest: 3vw;
   top: 58%;
   width: clamp(60px, 8%, 120px);
@@ -67,7 +70,7 @@
 }
 
 /* 島は水平線に座る。水のほうが手前なので、島の下の縁は水に隠れる。 */
-.module-fishing.is-practice .fishing-island {
+.module-fishing.has-world-art .fishing-island {
   position: absolute;
   pointer-events: none;
   right: 7%;
@@ -76,7 +79,7 @@
   aspect-ratio: 300 / 120;
 }
 
-.module-fishing.is-practice .fishing-island-far {
+.module-fishing.has-world-art .fishing-island-far {
   position: absolute;
   pointer-events: none;
   bottom: 0;
@@ -86,39 +89,39 @@
 }
 /* 縦長では舟に視線を集める。島は小さな遠景へ退ける。 */
 @media (max-aspect-ratio: 1/1) {
-  .module-fishing.is-practice .fishing-island { right: 4%; height: min(20%, 52px); }
-  .module-fishing.is-practice .fishing-island-far { left: 4%; height: min(14%, 36px); }
+  .module-fishing.has-world-art .fishing-island { right: 4%; height: min(20%, 52px); }
+  .module-fishing.has-world-art .fishing-island-far { left: 4%; height: min(14%, 36px); }
 }
 @media (max-width: 560px) and (max-aspect-ratio: 1/1) {
   /* 口の基準点と泳ぐ経路は維持して、魚種間の大小を保ちながら絵を大きくする。 */
-  .module-fishing.is-practice .fishing-swimmer[data-species="small"] { width: min(132px, 23%); }
-  .module-fishing.is-practice .fishing-swimmer[data-species="medium"] { width: min(178px, 29%); }
-  .module-fishing.is-practice .fishing-swimmer[data-species="large"] { width: min(232px, 36%); }
-  .module-fishing.is-practice .fishing-swimmer.is-boot { width: min(120px, 20%); }
+  .module-fishing.has-world-art .fishing-swimmer[data-species="small"] { width: min(132px, 23%); }
+  .module-fishing.has-world-art .fishing-swimmer[data-species="medium"] { width: min(178px, 29%); }
+  .module-fishing.has-world-art .fishing-swimmer[data-species="large"] { width: min(232px, 36%); }
+  .module-fishing.has-world-art .fishing-swimmer.is-boot { width: min(120px, 20%); }
 }
 
 /* --- 水（押すと 出てくる の海の色の流れ。暗く沈ませない） ------------------- */
 
-.module-fishing.is-practice .fishing-water {
+.module-fishing.has-world-art .fishing-water {
   background:
     linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 7%),
     linear-gradient(180deg, #2b8bd5 0%, #1667b5 42%, #0c4b93 100%);
 }
 
-.module-fishing.is-practice .fishing-sea {
+.module-fishing.has-world-art .fishing-sea {
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
 }
 
-.module-fishing.is-practice .fishing-sea .sea-spot {
+.module-fishing.has-world-art .fishing-sea .sea-spot {
   position: absolute;
   inset: 0;
   background: radial-gradient(ellipse 40% 44% at 50% 45%, rgba(170, 230, 255, 0.22), rgba(170, 230, 255, 0) 72%);
 }
 
-.module-fishing.is-practice .fishing-sea .sea-rays i {
+.module-fishing.has-world-art .fishing-sea .sea-rays i {
   position: absolute;
   top: -8%;
   width: 9%;
@@ -128,13 +131,13 @@
   animation: fishing-ray 17s ease-in-out infinite alternate;
 }
 
-.module-fishing.is-practice .fishing-sea .sea-rays i:nth-child(1) {
+.module-fishing.has-world-art .fishing-sea .sea-rays i:nth-child(1) {
   left: 14%;
   transform: rotate(16deg);
   animation-delay: -1s;
 }
 
-.module-fishing.is-practice .fishing-sea .sea-rays i:nth-child(2) {
+.module-fishing.has-world-art .fishing-sea .sea-rays i:nth-child(2) {
   left: 36%;
   width: 6%;
   transform: rotate(10deg);
@@ -142,14 +145,14 @@
   animation-delay: -4s;
 }
 
-.module-fishing.is-practice .fishing-sea .sea-rays i:nth-child(3) {
+.module-fishing.has-world-art .fishing-sea .sea-rays i:nth-child(3) {
   left: 60%;
   width: 11%;
   transform: rotate(6deg);
   animation-delay: -6s;
 }
 
-.module-fishing.is-practice .fishing-sea .sea-rays i:nth-child(4) {
+.module-fishing.has-world-art .fishing-sea .sea-rays i:nth-child(4) {
   left: 82%;
   width: 7%;
   transform: rotate(2deg);
@@ -168,7 +171,7 @@
 }
 
 /* 水面の波。押すと 出てくる の .sea-surface と同じ絵、同じ寄せかた。 */
-.module-fishing.is-practice .fishing-sea .sea-surface {
+.module-fishing.has-world-art .fishing-sea .sea-surface {
   position: absolute;
   top: 0;
   left: -7%;
@@ -187,7 +190,7 @@
   }
 }
 
-.module-fishing.is-practice .fishing-sea .sea-bubbles i {
+.module-fishing.has-world-art .fishing-sea .sea-bubbles i {
   position: absolute;
   bottom: 6%;
   width: var(--s);
@@ -223,7 +226,7 @@
   }
 }
 
-.module-fishing.is-practice .fishing-sea .sea-weed {
+.module-fishing.has-world-art .fishing-sea .sea-weed {
   position: absolute;
   bottom: 6%;
   width: 3.7%;
@@ -241,7 +244,7 @@
   }
 }
 
-.module-fishing.is-practice .fishing-sea .sea-floor {
+.module-fishing.has-world-art .fishing-sea .sea-floor {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -252,7 +255,7 @@
 /* 終盤の夕暮れ（fishing.js が .is-dusk を付ける。残り時間の合図）。styles.css は
    色を切り替えるだけだが、れんしゅうの回は夕焼けの空を重ねて、1.2秒かけて滑らかに変える
    （空は雲・島の下、水は暖かい色を薄く重ねる）。 */
-.module-fishing.is-practice .fishing-dusk-sky {
+.module-fishing.has-world-art .fishing-dusk-sky {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -261,7 +264,7 @@
   transition: opacity 1200ms linear;
 }
 
-.module-fishing.is-practice .fishing-dusk {
+.module-fishing.has-world-art .fishing-dusk {
   position: absolute;
   inset: 30% 0 0;
   z-index: 0;
@@ -271,20 +274,20 @@
   transition: opacity 1200ms linear;
 }
 
-.module-fishing.is-practice .fishing-scene.is-dusk :is(.fishing-dusk-sky, .fishing-dusk) {
+.module-fishing.has-world-art .fishing-scene.is-dusk :is(.fishing-dusk-sky, .fishing-dusk) {
   opacity: 1;
 }
 
 /* --- 舟とラッコ（画像から SVG へ。箱の大きさと位置は styles.css のまま） -------- */
 
-.module-fishing.is-practice .fishing-boat {
+.module-fishing.has-world-art .fishing-boat {
   height: auto;
   aspect-ratio: 720 / 444;
   overflow: visible;
   /* 水中の糸は合図の位置なので動かさず、舟の糸との継ぎ目も固定する。 */
 }
 
-.module-fishing.is-practice .fishing-otter-eyes {
+.module-fishing.has-world-art .fishing-otter-eyes {
   transform-box: fill-box;
   transform-origin: center;
   animation: fishing-blink 13s linear infinite;
@@ -304,7 +307,7 @@
 
 /* 糸の上のうきと、下のはり。糸の長さ（styles.css の .fishing-line）はそのまま、
    糸が短くなる（is-pulled）ときは一緒に上がる。 */
-.module-fishing.is-practice .fishing-line::before {
+.module-fishing.has-world-art .fishing-line::before {
   content: "";
   position: absolute;
   top: -6px;
@@ -317,7 +320,7 @@
   box-shadow: 0 0 0 1.5px #1a1a1a;
 }
 
-.module-fishing.is-practice .fishing-line::after {
+.module-fishing.has-world-art .fishing-line::after {
   content: "";
   position: absolute;
   top: 100%;
@@ -331,26 +334,26 @@
 
 /* --- 魚と長靴（画像から SVG へ。箱の縦横比は元の画像のまま） ------------------ */
 
-.module-fishing.is-practice .fishing-swimmer-art {
+.module-fishing.has-world-art .fishing-swimmer-art {
   position: relative;
   display: block;
   width: 100%;
   aspect-ratio: 520 / 358;
 }
 
-.module-fishing.is-practice .fishing-swimmer[data-species="small"] .fishing-swimmer-art {
+.module-fishing.has-world-art .fishing-swimmer[data-species="small"] .fishing-swimmer-art {
   aspect-ratio: 400 / 306;
 }
 
-.module-fishing.is-practice .fishing-swimmer[data-species="large"] .fishing-swimmer-art {
+.module-fishing.has-world-art .fishing-swimmer[data-species="large"] .fishing-swimmer-art {
   aspect-ratio: 640 / 480;
 }
 
-.module-fishing.is-practice .fishing-swimmer.is-boot .fishing-swimmer-art {
+.module-fishing.has-world-art .fishing-swimmer.is-boot .fishing-swimmer-art {
   aspect-ratio: 400 / 466;
 }
 
-.module-fishing.is-practice .fishing-swimmer-art svg {
+.module-fishing.has-world-art .fishing-swimmer-art svg {
   position: absolute;
   inset: 0;
   display: block;
@@ -359,37 +362,37 @@
 }
 
 /* 釣果札の上端を帯と合計点の下に留める。測定の札・魚・合図の位置は変えない。 */
-.module-fishing.is-practice .fishing-catch {
+.module-fishing.has-world-art .fishing-catch {
   top: max(17%, 104px);
   /* 大きく出る演出でも、札の上端を基点にして合計点へせり上がらせない。 */
   transform-origin: 50% 0;
   transform: translate(-50%, 0);
 }
 
-.module-fishing.is-practice .fishing-catch.is-shown {
+.module-fishing.has-world-art .fishing-catch.is-shown {
   transform: translate(-50%, 0);
 }
 
 /* 背の低い画面では合計点も帯の下へ来るため、釣果札は巻き上げた魚の下に出す。 */
 @media (max-height: 500px) {
-  .module-fishing.is-practice .fishing-catch {
+  .module-fishing.has-world-art .fishing-catch {
     top: max(48%, 132px);
   }
 }
 
 /* --- 高コントラスト（絵が課題の対象と競わないよう、飾りは消す） ---------------- */
 
-body.high-contrast .module-fishing.is-practice .fishing-water {
+body.high-contrast .module-fishing.has-world-art .fishing-water {
   background: linear-gradient(#1d6f92, #032a41);
 }
 
-body.high-contrast .module-fishing.is-practice :is(.fishing-cloud, .fishing-island, .fishing-island-far, .fishing-dusk),
-body.high-contrast .module-fishing.is-practice .fishing-line::before,
-body.high-contrast .module-fishing.is-practice .fishing-line::after {
+body.high-contrast .module-fishing.has-world-art :is(.fishing-cloud, .fishing-island, .fishing-island-far, .fishing-dusk),
+body.high-contrast .module-fishing.has-world-art .fishing-line::before,
+body.high-contrast .module-fishing.has-world-art .fishing-line::after {
   display: none;
 }
 
 /* Split Viewでも得点を上の操作帯から離す。測定には適用しない。 */
 @media (max-aspect-ratio: 1/1) {
-  body.game-mode.user-world .module-fishing.is-practice .fishing-score { top: 78px; left: 4%; transform: none; }
+  body.game-mode.user-world .module-fishing.has-world-art .fishing-score { top: 78px; left: 4%; transform: none; }
 }

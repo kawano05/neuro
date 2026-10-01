@@ -105,6 +105,7 @@ const checks = [
   ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
   ["speaks with the app's own natural voice, and with the device voice when asked to", checkAppVoiceSpeaks],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
+  ["lets the supporter choose the old pictures for timing practice and records the shown version", checkPracticeArtChoice],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
   ["fills the screen with the practice reels without any of them spilling off it", checkPracticeReelsFillTheScreen],
   [
@@ -2719,6 +2720,53 @@ async function checkIpadSwitchControlMode(page, project) {
  * slot-v1 L1 の実画面契約。生成画像が読み込まれ、1回の入力で1試行だけ
  * 記録されたあと、Esc 中断が partial session として失われず残ることを確認する。
  */
+/**
+ * 支援者の設定「タイミングの遊びの絵」（settings.practiceArt。src/lib/artVersion.js）。
+ * 「前の絵」の れんしゅうの回は、新しい絵の印（.has-world-art）も世界の絵も付けずに、前の版の
+ * れんしゅうの見た目（.is-practice）で遊び、見せた絵の版 1 を記録に残す。「新しい絵」に戻すと
+ * 世界が出る。そくていの回は どちらでも前の絵（compare-measure-screens.mjs が画素で見る）。
+ */
+async function checkPracticeArtChoice(page, project) {
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
+  for (const practiceArt of ["classic", "world"]) {
+    await patchSettings(page, { practiceArt, difficultyMode: "practice", autoScan: false, speechEnabled: false });
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+    await openActivity(page, t("tile.slot-corner.title"));
+    await openActivity(page, t("tile.slot-l1.title"));
+    await finishReady(page);
+    await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
+    const look = await page.evaluate(() => {
+      const stage = document.querySelector("#gameStageContent");
+      return {
+        practice: stage.classList.contains("is-practice"),
+        world: stage.classList.contains("has-world-art"),
+        worldNodes: document.querySelectorAll(".slot-world, .slot-world-symbol").length,
+      };
+    });
+    assert(look.practice, `${practiceArt}: the practice run keeps its practice look`);
+    if (practiceArt === "classic") {
+      assert(!look.world && look.worldNodes === 0, `The old pictures must not draw the new world: ${JSON.stringify(look)}`);
+    } else {
+      assert(look.world && look.worldNodes > 0, `The new pictures must draw the world: ${JSON.stringify(look)}`);
+    }
+    await page.locator("#gameStage").dispatchEvent("click");
+    await page.waitForTimeout(200);
+    await page.keyboard.press("Escape");
+    await waitForClass(page, "#homeView", "is-active");
+    const artVersion = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key)).sessions.filter((item) => item.gameId === "slot-l1").at(-1)?.config?.artVersion,
+      storageKey
+    );
+    assert(
+      practiceArt === "classic" ? artVersion === 1 : artVersion > 1,
+      `${practiceArt}: the record keeps the version of the pictures that were shown, got ${artVersion}`
+    );
+  }
+}
+
 async function checkSlotL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();

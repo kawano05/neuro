@@ -608,6 +608,7 @@ export function createRhythmGame(gameId) {
       rhythmVisuals = createRhythmVisuals({
         gameId,
         visualGuidance,
+        practiceArt: settings.practiceArt,
         measurement: gameId === "calibration" || resolveDifficultyMode(settings) === "measure",
         exactToleranceMs: EXACT_TOLERANCE_MS,
         t,

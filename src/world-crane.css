@@ -1,10 +1,13 @@
+/* 新しい絵（世界つき）の規則は、すべて .has-world-art の下に書く。この印は、れんしゅうの回で、
+   支援者の設定「タイミングの遊びの絵」が「新しい絵」のときだけ付く（src/lib/artVersion.js）。
+   前の絵を選んだ回と、そくていの回には付かない。 */
 /* =====================================================================
    「アームで つかむ」のれんしゅうの回の世界: おもちゃ屋さんのクレーンゲーム
    （絵は src/lib/art/craneWorldArt.js。games/crane.js が、れんしゅうの回にだけ
    .crane-world・.crane-room・.crane-mat などを足す）。
 
    守る線: そくていの回は今のまま（1px も変えない）。なので、この中の規則は
-   すべて .module-crane.is-practice の下に書く。れんしゅうの台の割り付けと
+   すべて .module-crane.has-world-art の下に書く。れんしゅうの台の割り付けと
    スマホ縦の主役の大きさは画面に合わせる。判定座標と時刻は
    games/craneGeometry.js のまま。
 
@@ -12,39 +15,39 @@
    当たりの輪・景品より背景が目立つと、止める場所を見失いやすいため。
    ===================================================================== */
 
-.game-stage-content.module-crane.is-practice {
+.game-stage-content.module-crane.has-world-art {
   background: #d7f4ea;
 }
 
 /* れんしゅうでは箱へ高さを割り当て、状態札と受け皿は別の行に保つ。
    測定の4:3の箱と刺激寸法には、この規則を当てない。 */
-.module-crane.is-practice .crane-cabinet {
+.module-crane.has-world-art .crane-cabinet {
   padding: 78px max(16px, 3vw) 18px;
   grid-template-rows: auto minmax(0, 1fr) auto;
   align-content: stretch;
   gap: 0;
 }
-.module-crane.is-practice .crane-stage,
-.module-crane.is-practice .crane-marquee,
-.module-crane.is-practice .crane-console { width: min(100%, 1100px); }
-.module-crane.is-practice .crane-stage {
+.module-crane.has-world-art .crane-stage,
+.module-crane.has-world-art .crane-marquee,
+.module-crane.has-world-art .crane-console { width: min(100%, 1100px); }
+.module-crane.has-world-art .crane-stage {
   height: 100%;
   min-height: 0;
   max-height: none;
   aspect-ratio: auto;
 }
-.module-crane.is-practice .crane-marquee { padding: 8px 16px; }
-.module-crane.is-practice .crane-console { padding: 12px 16px; gap: 10px; z-index: 1; min-width: 0; }
-.module-crane.is-practice .crane-status { white-space: normal; overflow-wrap: anywhere; text-align: center; max-width: 100%; }
-.module-crane.is-practice .crane-tray { min-height: 64px; padding: 8px 12px; }
+.module-crane.has-world-art .crane-marquee { padding: 8px 16px; }
+.module-crane.has-world-art .crane-console { padding: 12px 16px; gap: 10px; z-index: 1; min-width: 0; }
+.module-crane.has-world-art .crane-status { white-space: normal; overflow-wrap: anywhere; text-align: center; max-width: 100%; }
+.module-crane.has-world-art .crane-tray { min-height: 64px; padding: 8px 12px; }
 /* つかんだ景品がアームから下がる量は、箱の幅を基準にする。styles.css の 6% は箱の
    高さが基準で、れんしゅうの縦長の箱では、景品が閉じた爪の下へ離れてぶら下がって
    見えた。4:3 の箱なら 6%（高さ）＝ 4.5%（幅）で、横画面とそくていの見え方と同じ。 */
-.module-crane.is-practice .crane-stage { container-type: size; }
-.module-crane.is-practice .crane-prize { --prize-hang: 4.5cqw; }
+.module-crane.has-world-art .crane-stage { container-type: size; }
+.module-crane.has-world-art .crane-prize { --prize-hang: 4.5cqw; }
 @media (min-aspect-ratio: 5/4) {
   /* 横画面はガラスを4:3に保ち、状態と受け皿を右に移す。 */
-  .module-crane.is-practice .crane-cabinet {
+  .module-crane.has-world-art .crane-cabinet {
     grid-template-columns: minmax(0, 1fr) minmax(150px, 22%);
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
@@ -54,40 +57,40 @@
     align-items: center;
     gap: 16px;
   }
-  .module-crane.is-practice .crane-stage { grid-area: stage; }
-  .module-crane.is-practice .crane-console { grid-area: console; }
+  .module-crane.has-world-art .crane-stage { grid-area: stage; }
+  .module-crane.has-world-art .crane-console { grid-area: console; }
   /* 看板は右の列の上に小さく置き、得点（つかんだ N）を見せる。題名は上の帯に
      遊びの名前が出ているので省く（以前は看板ごと隠していて、得点が見えなかった）。 */
-  .module-crane.is-practice .crane-marquee {
+  .module-crane.has-world-art .crane-marquee {
     grid-area: marquee;
     justify-content: center;
     padding: 6px 8px;
     border-width: 3px;
     border-radius: 14px;
   }
-  .module-crane.is-practice .crane-marquee-title { display: none; }
-  .module-crane.is-practice .crane-stage {
+  .module-crane.has-world-art .crane-marquee-title { display: none; }
+  .module-crane.has-world-art .crane-stage {
     width: min(100%, calc((100dvh - 96px) * 4 / 3));
     height: auto;
     aspect-ratio: 4 / 3;
   }
-  .module-crane.is-practice .crane-console { width: 100%; border-top: 3px solid #1a1a1a; border-radius: 18px; }
-  .module-crane.is-practice .crane-tray { display: grid; }
-  .module-crane.is-practice .crane-status { max-width: 100%; padding: 8px; font-size: clamp(18px, 2.2vw, 26px); }
+  .module-crane.has-world-art .crane-console { width: 100%; border-top: 3px solid #1a1a1a; border-radius: 18px; }
+  .module-crane.has-world-art .crane-tray { display: grid; }
+  .module-crane.has-world-art .crane-status { max-width: 100%; padding: 8px; font-size: clamp(18px, 2.2vw, 26px); }
 }
 @media (max-height: 500px) {
-  .module-crane.is-practice .crane-cabinet { padding: 62px 14px 10px; gap: 12px; }
-  .module-crane.is-practice .crane-stage { width: min(100%, calc((100dvh - 72px) * 4 / 3)); }
-  .module-crane.is-practice .crane-console { padding: 10px; }
+  .module-crane.has-world-art .crane-cabinet { padding: 62px 14px 10px; gap: 12px; }
+  .module-crane.has-world-art .crane-stage { width: min(100%, calc((100dvh - 72px) * 4 / 3)); }
+  .module-crane.has-world-art .crane-console { padding: 10px; }
 }
 @media (max-width: 560px) and (max-aspect-ratio: 1/1) {
-  .module-crane.is-practice .crane-prize { width: 13.5%; }
-  .module-crane.is-practice .crane-claw { width: 17%; }
+  .module-crane.has-world-art .crane-prize { width: 13.5%; }
+  .module-crane.has-world-art .crane-claw { width: 17%; }
 }
 
 /* --- 台の外（店内） ---------------------------------------------------- */
 
-.module-crane.is-practice .crane-world {
+.module-crane.has-world-art .crane-world {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -97,7 +100,7 @@
 }
 
 /* 床の境目だけを静かに示す。台や主役の寸法には触れない。 */
-.module-crane.is-practice .crane-world::after {
+.module-crane.has-world-art .crane-world::after {
   content: "";
   position: absolute;
   inset: 88% 0 0;
@@ -109,30 +112,30 @@
 /* --- 台（看板・ガラスの枠・本体） --------------------------------------- */
 
 /* 看板: 無地の青。文字と得点の札を読みやすくする。 */
-.module-crane.is-practice .crane-marquee {
+.module-crane.has-world-art .crane-marquee {
   border-color: #1a1a1a;
   background: #005aff;
   box-shadow: none;
 }
 
-.module-crane.is-practice .crane-marquee-title {
+.module-crane.has-world-art .crane-marquee-title {
   color: #ffffff;
   text-shadow: 0 2px 0 rgba(0, 20, 90, 0.55);
 }
 
-.module-crane.is-practice .crane-score {
+.module-crane.has-world-art .crane-score {
   background: #ffffff;
   color: #1a1a1a;
   box-shadow: 0 0 0 3px #1a1a1a;
 }
 
 /* ガラスの枠: 桃色。外側は黒（枠の太さは変えず、内側に重ねて描く）。 */
-.module-crane.is-practice .crane-stage {
+.module-crane.has-world-art .crane-stage {
   border-color: #1a1a1a;
   box-shadow: none;
 }
 
-.module-crane.is-practice .crane-stage::after {
+.module-crane.has-world-art .crane-stage::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -144,7 +147,7 @@
 }
 
 /* ガラスの反射: 静止した斜めの帯。 */
-.module-crane.is-practice .crane-glass {
+.module-crane.has-world-art .crane-glass {
   background: linear-gradient(
     118deg,
     rgba(255, 255, 255, 0.24) 0 8%,
@@ -155,41 +158,41 @@
 }
 
 /* 本体: 青。状態の札は白地に黒字で、はっきり読ませる。 */
-.module-crane.is-practice .crane-console {
+.module-crane.has-world-art .crane-console {
   border-color: #1a1a1a;
   background: #005aff;
   box-shadow: none;
 }
 
-.module-crane.is-practice .crane-status {
+.module-crane.has-world-art .crane-status {
   background: #ffffff;
   color: #1a1a1a;
   box-shadow: 0 0 0 3px #1a1a1a;
 }
 
 /* 「まってね」の合図は黄色の札のまま（styles.css の .is-waiting と同じ意味）。 */
-.module-crane.is-practice .crane-stage.is-waiting .crane-status {
+.module-crane.has-world-art .crane-stage.is-waiting .crane-status {
   background: rgba(255, 226, 122, 0.95);
   color: #23303f;
 }
 
 /* 取れた景品の受け皿: 明るい面に、黒のふち。 */
-.module-crane.is-practice .crane-tray {
+.module-crane.has-world-art .crane-tray {
   background: #fffdf4;
   box-shadow:
     inset 0 5px 0 rgba(26, 26, 26, 0.12),
     0 0 0 3px #1a1a1a;
 }
 
-.module-crane.is-practice .crane-tray-label {
+.module-crane.has-world-art .crane-tray-label {
   color: #1a1a1a;
 }
 
-.module-crane.is-practice .crane-collected-item {
+.module-crane.has-world-art .crane-collected-item {
   filter: none;
 }
 
-.module-crane.is-practice .crane-collected-item svg {
+.module-crane.has-world-art .crane-collected-item svg {
   display: block;
   width: 100%;
   height: auto;
@@ -197,44 +200,44 @@
 
 /* --- 箱の中（ガラスの中）: 部屋・床のマット ---------------------------- */
 
-.module-crane.is-practice .crane-back {
+.module-crane.has-world-art .crane-back {
   background: #e3ebf3;
 }
 
-.module-crane.is-practice .crane-room {
+.module-crane.has-world-art .crane-room {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.module-crane.is-practice .cr-face {
+.module-crane.has-world-art .cr-face {
   position: absolute;
   inset: 0;
 }
 
-.module-crane.is-practice .cr-ceiling {
+.module-crane.has-world-art .cr-ceiling {
   background: #d3deeb;
 }
 
 /* 壁は同じパステル色の明暗だけで、奥行きを示す。 */
-.module-crane.is-practice .cr-back {
+.module-crane.has-world-art .cr-back {
   background: #e3ebf3;
 }
 
-.module-crane.is-practice .cr-wall {
+.module-crane.has-world-art .cr-wall {
   background: #dbe5ef;
 }
 
 /* 手前の縁は、主役と競合しない無地にする。 */
-.module-crane.is-practice .cr-front {
+.module-crane.has-world-art .cr-front {
   background: #d5e2e9;
 }
 
-.module-crane.is-practice .crane-floor {
+.module-crane.has-world-art .crane-floor {
   background: none;
 }
 
-.module-crane.is-practice .crane-mat {
+.module-crane.has-world-art .crane-mat {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -246,46 +249,46 @@
    同じ意味（つかめた＝明るく、すべった＝あたたかく、はずれ＝ほんの少し暗く）の膜を
    部屋の上に重ねる。床の上でも主役が読みやすいよう、色は白・桃・藍にした。
    景品とアームより下。 */
-.module-crane.is-practice .crane-tint {
+.module-crane.has-world-art .crane-tint {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
 }
 
-.module-crane.is-practice .crane-stage.is-grip .crane-tint {
+.module-crane.has-world-art .crane-stage.is-grip .crane-tint {
   background: rgba(255, 255, 255, 0.32);
 }
 
-.module-crane.is-practice .crane-stage.is-slip .crane-tint {
+.module-crane.has-world-art .crane-stage.is-slip .crane-tint {
   background: rgba(255, 128, 130, 0.22);
 }
 
-.module-crane.is-practice .crane-stage.is-miss .crane-tint {
+.module-crane.has-world-art .crane-stage.is-miss .crane-tint {
   background: rgba(20, 30, 70, 0.1);
 }
 
 /* 奥に置いておく景品（狙う対象ではない）: 薄く、彩度を落とす。今までと同じ意味。 */
-.module-crane.is-practice .crane-decor {
+.module-crane.has-world-art .crane-decor {
   pointer-events: none;
   opacity: 0.6;
   filter: saturate(0.5);
 }
 
-.module-crane.is-practice .crane-decor svg,
-.module-crane.is-practice .crane-prize svg,
-.module-crane.is-practice .crane-claw svg {
+.module-crane.has-world-art .crane-decor svg,
+.module-crane.has-world-art .crane-prize svg,
+.module-crane.has-world-art .crane-claw svg {
   display: block;
   width: 100%;
   height: auto;
 }
 
-.module-crane.is-practice .crane-prize {
+.module-crane.has-world-art .crane-prize {
   filter: drop-shadow(0 5px 0 rgba(26, 26, 26, 0.16));
 }
 
 /* 掴める範囲の輪: 色は今までの淡い黄のまま、黒いふちを付けて、どの床の上でも読めるようにする。 */
-.module-crane.is-practice .crane-ring {
+.module-crane.has-world-art .crane-ring {
   border-color: rgba(255, 226, 122, 0.95);
   background: rgba(255, 226, 122, 0.2);
   box-shadow:
@@ -293,35 +296,35 @@
     inset 0 0 0 2px rgba(26, 26, 26, 0.3);
 }
 
-.module-crane.is-practice .crane-ring::after {
+.module-crane.has-world-art .crane-ring::after {
   border: 3px dashed rgba(255, 255, 255, 0.95);
 }
 
 /* 走査の線: 黒い太線を下に敷く（games/crane.js の syncGuideShade）。 */
-.module-crane.is-practice .crane-guide-shade {
+.module-crane.has-world-art .crane-guide-shade {
   stroke: rgba(26, 26, 26, 0.55);
   stroke-width: 8;
   stroke-linecap: round;
   visibility: hidden;
 }
 
-.module-crane.is-practice .crane-guide-shade.is-shown {
+.module-crane.has-world-art .crane-guide-shade.is-shown {
   visibility: visible;
 }
 
-.module-crane.is-practice .crane-shadow {
+.module-crane.has-world-art .crane-shadow {
   background: #1a1a1a;
   filter: none;
 }
 
 /* レール・台車・索・アーム: 太い色つきの部品に黒の輪郭。大きさと位置は今までと同じ
    （輪郭は box-shadow で外側に描くので、寸法を動かさない）。 */
-.module-crane.is-practice .crane-rail {
+.module-crane.has-world-art .crane-rail {
   background: #e3ebf3;
   box-shadow: 0 0 0 3px #1a1a1a;
 }
 
-.module-crane.is-practice .crane-trolley {
+.module-crane.has-world-art .crane-trolley {
   background:
     radial-gradient(circle at 24% 50%, #ffffff 0 2.5px, #1a1a1a 2.7px 4px, transparent 4.3px),
     radial-gradient(circle at 76% 50%, #ffffff 0 2.5px, #1a1a1a 2.7px 4px, transparent 4.3px),
@@ -329,7 +332,7 @@
   box-shadow: 0 0 0 3px #1a1a1a;
 }
 
-.module-crane.is-practice .crane-cable {
+.module-crane.has-world-art .crane-cable {
   width: 6px;
   background: #5a6b7b;
   box-shadow: 0 0 0 2.5px #1a1a1a;
@@ -337,63 +340,63 @@
   clip-path: inset(0 -4px 7px -4px);
 }
 
-.module-crane.is-practice .crane-claw {
+.module-crane.has-world-art .crane-claw {
   filter: none;
 }
 
-.module-crane.is-practice .crane-claw .claw-closed {
+.module-crane.has-world-art .crane-claw .claw-closed {
   display: none;
 }
 
-.module-crane.is-practice .crane-claw.is-closed .claw-open {
+.module-crane.has-world-art .crane-claw.is-closed .claw-open {
   display: none;
 }
 
-.module-crane.is-practice .crane-claw.is-closed .claw-closed {
+.module-crane.has-world-art .crane-claw.is-closed .claw-closed {
   display: block;
 }
 
 /* 景品の出口: 無地のふちと、奥へ落ちる暗い口。 */
-.module-crane.is-practice .crane-chute {
+.module-crane.has-world-art .crane-chute {
   border: 3px solid #1a1a1a;
   background: #d5e2e9;
   box-shadow: none;
 }
 
-.module-crane.is-practice .crane-chute-mouth {
+.module-crane.has-world-art .crane-chute-mouth {
   border: 3px solid #1a1a1a;
   background: radial-gradient(circle at 50% 30%, #4b3a8f, #21174d 80%);
 }
 
-.module-crane.is-practice .crane-chute.is-filled {
+.module-crane.has-world-art .crane-chute.is-filled {
   border-color: #1a1a1a;
   box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.95);
 }
 
 /* 連続記録の札 */
-.module-crane.is-practice .crane-streak {
+.module-crane.has-world-art .crane-streak {
   background: #1a1a1a;
 }
 
 /* --- 高コントラスト設定: 白黒のはっきりした面にする -------------------- */
 
-body.high-contrast .module-crane.is-practice .crane-world {
+body.high-contrast .module-crane.has-world-art .crane-world {
   display: none;
 }
 
-body.high-contrast .module-crane.is-practice .crane-marquee,
-body.high-contrast .module-crane.is-practice .crane-console,
-body.high-contrast .module-crane.is-practice .crane-tray {
+body.high-contrast .module-crane.has-world-art .crane-marquee,
+body.high-contrast .module-crane.has-world-art .crane-console,
+body.high-contrast .module-crane.has-world-art .crane-tray {
   border-color: #ffffff;
   background: #000000;
 }
 
-body.high-contrast .module-crane.is-practice .crane-tray-label {
+body.high-contrast .module-crane.has-world-art .crane-tray-label {
   color: #ffffff;
 }
 
 /* 受け皿からはみ出した景品の数（games/crane.js の trimTray）。 */
-.module-crane.is-practice .crane-collected-more {
+.module-crane.has-world-art .crane-collected-more {
   display: inline-grid;
   place-items: center;
   min-width: 44px;

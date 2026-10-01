@@ -15,12 +15,33 @@
 export const ORIGINAL_ART_VERSION = 1;
 
 /**
+ * れんしゅうの回の絵（支援者の設定「タイミングの遊びの絵」、settings.practiceArt）。
+ *   world   … 新しい絵（世界つき。各遊びの art/<遊び>WorldArt.js と world-<遊び>.css）
+ *   classic … 前の絵（2026-09-30 より前の、れんしゅうの回の見た目）
+ * 「品質が下がった」と言われ、前の絵と見比べたうえで、ユーザーが「設定できるように」と決めた
+ * （2026-10-01）。そくていの回は、どちらを選んでも前の絵のまま。
+ */
+export const PRACTICE_ARTS = Object.freeze(["world", "classic"]);
+export const DEFAULT_PRACTICE_ART = "world";
+
+/**
+ * この回に新しい絵（世界つき）を出すか。そくていの回はいつも出さない。
+ * 知らない値は新しい絵（既定）として扱う（保存の sanitize が既定へ戻すのと同じ）。
+ * @param {string} difficultyMode "measure" | "practice"
+ * @param {string} [practiceArt] settings.practiceArt
+ */
+export function showsWorldArt(difficultyMode, practiceArt = DEFAULT_PRACTICE_ART) {
+  return difficultyMode !== "measure" && practiceArt !== "classic";
+}
+
+/**
  * その回に画面へ出した絵の版。
  * @param {string} difficultyMode "measure" | "practice"
- * @param {number} practiceVersion れんしゅうの回の絵の版（各遊びの *_ART_VERSION）
+ * @param {number} practiceVersion れんしゅうの回の新しい絵の版（各遊びの *_ART_VERSION）
+ * @param {string} [practiceArt] settings.practiceArt。前の絵なら版 1
  */
-export function shownArtVersion(difficultyMode, practiceVersion) {
-  return difficultyMode === "measure" ? ORIGINAL_ART_VERSION : practiceVersion;
+export function shownArtVersion(difficultyMode, practiceVersion, practiceArt = DEFAULT_PRACTICE_ART) {
+  return showsWorldArt(difficultyMode, practiceArt) ? practiceVersion : ORIGINAL_ART_VERSION;
 }
 
 /**

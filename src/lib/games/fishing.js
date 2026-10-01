@@ -39,7 +39,7 @@ import { FISHING_ART_VERSION, fishingBoatSvg, fishingCatchSvg, fishingSeaHtml, f
 import { generateGoNoGoSequence } from "./judge.js";
 import { generateForeperiods, judgeReaction } from "./reaction.js";
 import { renderAudioUnavailable } from "./unavailableScreen.js";
-import { shownArtVersion } from "../artVersion.js";
+import { showsWorldArt, shownArtVersion } from "../artVersion.js";
 
 // 素材の URL。`import boat from "...png"` ではなく new URL(...) を使う。
 // 前者だと Vite は解決できるが、素の Node が .png を読めずに落ちる
@@ -268,10 +268,13 @@ export function createFishingGame(gameId) {
   //   - fishing-gonogo には出さない。長靴のときに出さず魚のときだけ出すと、
   //     「！を見たら押す」だけで解けてしまい、見送る練習にならない。
   const showBiteMark = gameId === "fishing" && resolveDifficultyMode(ctx.settings) !== "measure";
-  // れんしゅうの回だけ、押すと 出てくる とつながる海と、ラッコの舟・色つきの魚にする
-  // （src/world-fishing.css、art/fishingWorldArt.js）。動くもの・合図の位置・大きさ・時刻は
-  // 変えず、描いてある絵だけを替える。そくていの回は、いまの絵（PNG）のまま1pxも変えない。
+  // れんしゅうの回か。
   const practice = resolveDifficultyMode(ctx.settings) !== "measure";
+  // 新しい絵（押すと 出てくる とつながる海と、ラッコの舟・色つきの魚。src/world-fishing.css、
+  // art/fishingWorldArt.js）を出すか。れんしゅうの回だけで、支援者の設定「タイミングの遊びの絵」で
+  // 前の絵も選べる（artVersion.js）。動くもの・合図の位置・大きさ・時刻は変えず、描いてある絵だけを
+  // 替える。そくていの回は、いまの絵（PNG）のまま1pxも変えない。
+  const worldArt = showsWorldArt(resolveDifficultyMode(ctx.settings), ctx.settings.practiceArt);
   // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
   // 返すので、測る回の長さは protocol のまま動かない。
   config.endless = resolveEndlessMode(ctx.settings, ctx.endless);
@@ -755,7 +758,7 @@ export function createFishingGame(gameId) {
     } else {
       if (swimmerArtEl && swimmerArtEl.dataset.index !== String(planned.index)) {
         swimmerArtEl.dataset.index = String(planned.index);
-        if (practice) swimmerArtEl.innerHTML = presentation.run("world.fishing.catch", () => fishingCatchSvg(planned.kind === "fake" ? "boot" : planned.species), `<img src="${planned.kind === "fake" ? bootUrl : FISH_ART[planned.species]}" alt="" style="width:100%;height:100%;object-fit:contain" />`);
+        if (worldArt) swimmerArtEl.innerHTML = presentation.run("world.fishing.catch", () => fishingCatchSvg(planned.kind === "fake" ? "boot" : planned.species), `<img src="${planned.kind === "fake" ? bootUrl : FISH_ART[planned.species]}" alt="" style="width:100%;height:100%;object-fit:contain" />`);
         else swimmerArtEl.src = planned.kind === "fake" ? bootUrl : FISH_ART[planned.species];
         swimmerEl.classList.toggle("is-boot", planned.kind === "fake");
         // 画面上の大きさを魚種に合わせる（styles.css の
@@ -915,10 +918,11 @@ export function createFishingGame(gameId) {
   function mount(el) {
     stageEl = el;
     stageEl.classList.add("module-fishing");
-    // 世界を出し分ける印。CSS はすべてこの下に書いてある（src/world-fishing.css）。
     stageEl.classList.toggle("is-practice", practice);
+    // 新しい絵の印。world-fishing.css はすべてこの下に書く（前の絵を選んだ回には付けない）。
+    stageEl.classList.toggle("has-world-art", worldArt);
     renderMarkup();
-    if (practice) decoratePractice();
+    if (worldArt) decoratePractice();
 
     const { trials, kindSequence, foreperiods } = buildPlan();
     trialsPlan = trials;
@@ -1013,7 +1017,7 @@ export function createFishingGame(gameId) {
         fxLevel: ctx.fx?.level() ?? null,
         // 見え方の版（art/fishingWorldArt.js）。れんしゅうの回の釣り人・魚・長靴の絵が
         // 変わった前後を分けるため。
-        artVersion: shownArtVersion(resolveDifficultyMode(ctx.settings), FISHING_ART_VERSION),
+        artVersion: shownArtVersion(resolveDifficultyMode(ctx.settings), FISHING_ART_VERSION, ctx.settings.practiceArt),
         // 成立確認の状態（met / overridden / n/a）。他の課題と同じ意味。
         measurementReadiness: ctx.readiness || "n/a",
       },
@@ -1063,7 +1067,7 @@ export function createFishingGame(gameId) {
       logTrial(session);
     }
     if (stageEl) {
-      stageEl.classList.remove("module-fishing", "is-practice");
+      stageEl.classList.remove("module-fishing", "is-practice", "has-world-art");
       stageEl.innerHTML = "";
     }
     stageEl = null;
