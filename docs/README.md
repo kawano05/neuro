@@ -48,5 +48,6 @@
 | 2026-10-01 | `reports/2026-10-01/capture-screens.md` | 画面の撮影の道具を今のアプリと 14 の大きさに合わせた（GPT） |
 | 2026-10-01 | `reports/2026-10-01/tests-style.md` | 検査の下ごしらえを `tests/helpers.mjs` にまとめ、書き方を整えた（GPT） |
 | 2026-10-01 | `reports/2026-10-01/css-sweep.md` | 使われていない CSS と見えない重ね書きを片づけた（GPT） |
+| 2026-10-01 | `reports/2026-10-01/rhythm-checks.md` | 一度も回っていなかったリズムの検査3つを向け直して回した（GPT） |
 
 報告の中の `test-results/` や `output/` へのリンクは、そのとき作業した PC にだけある（git の外）。
