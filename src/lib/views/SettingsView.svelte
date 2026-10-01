@@ -1,7 +1,7 @@
 <script>
   // よく使う6項目だけを常設し、目的別の詳細は複数同時に開ける形にする。
-  // 開閉は保存状態に影響しない。設計と項目表: docs/settings-simple-2026-09-30.md、
-  // 見直し: docs/settings-polish-2026-10-01.md。
+  // 開閉は保存状態に影響しない。設計と項目表: docs/rules/supporter-settings.md、
+  // 見直し: docs/reports/2026-10-01/settings-polish.md。
   import { PLAY_DETAILS, settingsGroup as group } from "../settingsFields.js";
   import SettingsFields from "./SettingsFields.svelte";
   import SettingsGuide from "./SettingsGuide.svelte";

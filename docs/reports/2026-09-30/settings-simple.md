@@ -1,7 +1,10 @@
 # 支援者設定を、よく使う6項目と畳める詳細にする
 
+> この報告は、その日の作業の記録（あとから書き換えない）。今の決まりは `docs/rules/` を見る。
+> 中の `test-results/`・`output/` へのリンクは、そのとき作業した PC にだけある（git の外）。
+
 > 2026-10-01 の見直しで変わったところ（研究者モードを画面から外した・使えない理由を行に出す・既定に戻す・
-> 説明書を1か所から作る・回の名前を れんしゅう／そくてい にそろえた）は `docs/settings-polish-2026-10-01.md`。
+> 説明書を1か所から作る・回の名前を れんしゅう／そくてい にそろえた）は `docs/reports/2026-10-01/settings-polish.md`。
 > 下の表の「研究者モード」の行と「練習／測定」の言葉は、この日より前の記録として残す。
 
 ## 調査と配置（実装前に作成）
@@ -68,9 +71,9 @@ src/lib/settingsFields.js が表示と入力型の唯一の定義。Svelte の�
 
 | 実寸 | 変更前・初期表示 | 変更前・全項目 | 変更後・畳んだ状態 | 変更後・全部開いた状態 |
 |---|---|---|---|---|
-| iPad横 1180×820 | [画像](../output/playwright/settings/before-ipad-landscape-collapsed.png) | [画像](../output/playwright/settings/before-ipad-landscape-all.png) | [画像](../output/playwright/settings/after-ipad-landscape-collapsed.png) | [画像](../output/playwright/settings/after-ipad-landscape-all.png) |
-| iPad縦 834×1194 | [画像](../output/playwright/settings/before-ipad-portrait-collapsed.png) | [画像](../output/playwright/settings/before-ipad-portrait-all.png) | [画像](../output/playwright/settings/after-ipad-portrait-collapsed.png) | [画像](../output/playwright/settings/after-ipad-portrait-all.png) |
-| スマホ縦 390×844 | [画像](../output/playwright/settings/before-phone-collapsed.png) | [画像](../output/playwright/settings/before-phone-all.png) | [画像](../output/playwright/settings/after-phone-collapsed.png) | [画像](../output/playwright/settings/after-phone-all.png) |
+| iPad横 1180×820 | [画像](../../../output/playwright/settings/before-ipad-landscape-collapsed.png) | [画像](../../../output/playwright/settings/before-ipad-landscape-all.png) | [画像](../../../output/playwright/settings/after-ipad-landscape-collapsed.png) | [画像](../../../output/playwright/settings/after-ipad-landscape-all.png) |
+| iPad縦 834×1194 | [画像](../../../output/playwright/settings/before-ipad-portrait-collapsed.png) | [画像](../../../output/playwright/settings/before-ipad-portrait-all.png) | [画像](../../../output/playwright/settings/after-ipad-portrait-collapsed.png) | [画像](../../../output/playwright/settings/after-ipad-portrait-all.png) |
+| スマホ縦 390×844 | [画像](../../../output/playwright/settings/before-phone-collapsed.png) | [画像](../../../output/playwright/settings/before-phone-all.png) | [画像](../../../output/playwright/settings/after-phone-collapsed.png) | [画像](../../../output/playwright/settings/after-phone-all.png) |
 
 3実寸の全展開で、横はみ出し0px・入力28項目・操作標的44px以上を確認。保存・再読み込み、Tab／Enter／Spaceでの開閉、明示的なラベル、測定への切り替えで練習値を失わないことを web-smoke に組み込んだ。VoiceOverそのものを使うiPad実機検証は未実施。ブラウザのアクセシブル名・ネイティブ入力・ネイティブ折り畳みを確認した。
 

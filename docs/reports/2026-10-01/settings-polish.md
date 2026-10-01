@@ -1,6 +1,9 @@
 # 支援者設定の見直し（2026-10-01）
 
-`docs/settings-simple-2026-09-30.md`（よく使う6項目＋畳める詳細）の見直しで見つかったものを直した記録。
+> この報告は、その日の作業の記録（あとから書き換えない）。今の決まりは `docs/rules/` を見る。
+> 中の `test-results/`・`output/` へのリンクは、そのとき作業した PC にだけある（git の外）。
+
+`docs/reports/2026-09-30/settings-simple.md`（よく使う6項目＋畳める詳細）の見直しで見つかったものを直した記録。
 変えていないもの: 保存の形（state.settings のキーと値）・既定値・sanitize・CSV・session.config の意味・
 そくていの回の条件（`MEASUREMENT_PROTOCOL`）。
 

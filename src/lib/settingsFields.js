@@ -1,12 +1,12 @@
 // =====================================================================
 // settingsFields.js — 支援者の設定画面の並びと、画面の決まり（DOM に触れない）
 //
-// よく使う6項目だけを常設し、くわしい設定は目的別に畳む（docs/settings-simple-2026-09-30.md）。
+// よく使う6項目だけを常設し、くわしい設定は目的別に畳む（docs/rules/supporter-settings.md）。
 // 項目の名前・範囲・値の形は settingDefinitions.js（遊びの中の設定と共有する表）から引く。
 // ここで決めるのは、どのまとまりに置くか・DOM の id・いま変えられるか（とその理由）・
 // 既定に戻すときに何を戻すか。
 // 保存・既定値・そくていの解決は state.js / difficultyMode.js のまま。
-// 見直しの記録: docs/settings-polish-2026-10-01.md。
+// 見直しの記録: docs/reports/2026-10-01/settings-polish.md。
 // =====================================================================
 
 import { isMeasurementMode } from "./difficultyMode.js";

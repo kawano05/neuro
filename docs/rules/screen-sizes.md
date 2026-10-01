@@ -46,4 +46,4 @@
 
 ## 経緯
 
-- `docs/reports/2026-09-30/responsive-report.md` … 説明・けっか・れんしゅうの画面を 14 の大きさに合わせたとき
+- `docs/reports/2026-09-30/responsive.md` … 説明・けっか・れんしゅうの画面を 14 の大きさに合わせたとき

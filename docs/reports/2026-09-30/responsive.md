@@ -1,5 +1,8 @@
 # 説明・けっか・練習画面の実寸対応（2026-09-30）
 
+> この報告は、その日の作業の記録（あとから書き換えない）。今の決まりは `docs/rules/` を見る。
+> 中の `test-results/`・`output/` へのリンクは、そのとき作業した PC にだけある（git の外）。
+
 `test-results/brief-responsive.md` の対応報告。作業は `D:/Code/neuro-wt/resp` 内で行った。push はしていない。
 
 ## 変えたもの
@@ -32,7 +35,7 @@
 
 ## 前後の証拠
 
-原寸画像とDOMの寸法記録は [変更前](../test-results/responsive/before/) と [変更後](../test-results/responsive/after/) に保存した。各336枚の練習画像（6ゲーム×4場面×14サイズ）と84枚の測定画像が比較対象。変更前フォルダには初期の撮影失敗なども残っているため、フォルダの総数を検証数には使っていない。
+原寸画像とDOMの寸法記録は [変更前](../../../test-results/responsive/before/) と [変更後](../../../test-results/responsive/after/) に保存した。各336枚の練習画像（6ゲーム×4場面×14サイズ）と84枚の測定画像が比較対象。変更前フォルダには初期の撮影失敗なども残っているため、フォルダの総数を検証数には使っていない。
 
 14サイズは1133×744、744×1133、1180×820、820×1180、1194×834、834×1194、1366×1024、1024×1366、590×820、1366×650、1920×1080、844×390、667×375、390×844。
 
@@ -40,35 +43,35 @@
 
 | 例 | 前 | 後 |
 | --- | --- | --- |
-| 説明 | [アーム](../test-results/responsive/before/sheets/crane-01-ready.jpg) | [アーム](../test-results/responsive/after/sheets/crane-01-ready.jpg) |
-| 状態札と箱 | [アーム](../test-results/responsive/before/sheets/crane-02-active.jpg) | [アーム](../test-results/responsive/after/sheets/crane-02-active.jpg) |
-| 長い状態文 | [アーム成功](../test-results/responsive/before/sheets/crane-03-hit.jpg) | [アーム成功](../test-results/responsive/after/sheets/crane-03-hit.jpg) |
-| 目標と流れる絵 | [1本リール](../test-results/responsive/before/sheets/slot-l1-02-active.jpg) | [1本リール](../test-results/responsive/after/sheets/slot-l1-02-active.jpg) |
-| 島と魚 | [さかなつり](../test-results/responsive/before/sheets/fishing-02-active.jpg) | [さかなつり](../test-results/responsive/after/sheets/fishing-02-active.jpg) |
-| 結果ボタン | [3本リール](../test-results/responsive/before/sheets/slot-l2-04-result.jpg) | [3本リール](../test-results/responsive/after/sheets/slot-l2-04-result.jpg) |
+| 説明 | [アーム](../../../test-results/responsive/before/sheets/crane-01-ready.jpg) | [アーム](../../../test-results/responsive/after/sheets/crane-01-ready.jpg) |
+| 状態札と箱 | [アーム](../../../test-results/responsive/before/sheets/crane-02-active.jpg) | [アーム](../../../test-results/responsive/after/sheets/crane-02-active.jpg) |
+| 長い状態文 | [アーム成功](../../../test-results/responsive/before/sheets/crane-03-hit.jpg) | [アーム成功](../../../test-results/responsive/after/sheets/crane-03-hit.jpg) |
+| 目標と流れる絵 | [1本リール](../../../test-results/responsive/before/sheets/slot-l1-02-active.jpg) | [1本リール](../../../test-results/responsive/after/sheets/slot-l1-02-active.jpg) |
+| 島と魚 | [さかなつり](../../../test-results/responsive/before/sheets/fishing-02-active.jpg) | [さかなつり](../../../test-results/responsive/after/sheets/fishing-02-active.jpg) |
+| 結果ボタン | [3本リール](../../../test-results/responsive/before/sheets/slot-l2-04-result.jpg) | [3本リール](../../../test-results/responsive/after/sheets/slot-l2-04-result.jpg) |
 
-結果の雰囲気4段は既存のレンダラーで別途確認した。[なし](../test-results/responsive/party/sheet-none.jpg)、[ひかえめ](../test-results/responsive/party/sheet-subtle.jpg)、[にぎやか](../test-results/responsive/party/sheet-normal.jpg)、[おおさわぎ](../test-results/responsive/party/sheet-big.jpg)。14サイズ×4表記×4段×完了/タイミング結果の448条件。これは結果レンダラーを使った配置用のフィクスチャで、実際のゲーム遷移の撮影とは分けている。ラッコ・びん・当日のびん・ごほうびの構造は変更していない。
+結果の雰囲気4段は既存のレンダラーで別途確認した。[なし](../../../test-results/responsive/party/sheet-none.jpg)、[ひかえめ](../../../test-results/responsive/party/sheet-subtle.jpg)、[にぎやか](../../../test-results/responsive/party/sheet-normal.jpg)、[おおさわぎ](../../../test-results/responsive/party/sheet-big.jpg)。14サイズ×4表記×4段×完了/タイミング結果の448条件。これは結果レンダラーを使った配置用のフィクスチャで、実際のゲーム遷移の撮影とは分けている。ラッコ・びん・当日のびん・ごほうびの構造は変更していない。
 
 ## 検証
 
 | 検証 | 結果・証拠 |
 | --- | --- |
-| `npm run test:unit` | 成功。[ログ](../test-results/responsive/unit.log)。研究条件の保存・復元・CSV・判定の既存検査も含む。 |
-| `npm run build` | 成功。[ログ](../test-results/responsive/build.log)。既存の500kB超チャンク警告あり。 |
-| Chromium全項目 | `chromium-desktop` の全50項目で47成功・対象外3・失敗0。[ログ](../test-results/responsive/smoke-chromium.log)。検査項目は絞っていない。 |
-| WebKit全項目 | `phone-landscape,ipad-portrait` の最終実行の完了後に件数を記載する。[ログ](../test-results/responsive/smoke-webkit.log)。 |
+| `npm run test:unit` | 成功。[ログ](../../../test-results/responsive/unit.log)。研究条件の保存・復元・CSV・判定の既存検査も含む。 |
+| `npm run build` | 成功。[ログ](../../../test-results/responsive/build.log)。既存の500kB超チャンク警告あり。 |
+| Chromium全項目 | `chromium-desktop` の全50項目で47成功・対象外3・失敗0。[ログ](../../../test-results/responsive/smoke-chromium.log)。検査項目は絞っていない。 |
+| WebKit全項目 | `phone-landscape,ipad-portrait` の最終実行の完了後に件数を記載する。[ログ](../../../test-results/responsive/smoke-webkit.log)。 |
 | 説明・結果の追加検査 | 7サイズ×日本語/英語×6課題。大きい文字＋くっきり表示で、見える手順・ボタン・アームの状態札・結果の領域・結果見出しの色を検査する。 |
-| 現行UIで選べない2表記 | 漢字のみ・かなのみの既存の辞書を実際の説明DOMとページ分割処理へ渡す配置用フィクスチャ。14サイズ×2表記×6課題の168条件で全手順と題名・操作の収まりを確認。[寸法記録](../test-results/responsive/legacy-ready-layouts.json)、[撮影コード](../test-results/responsive/legacy-ready-layout.mjs)。画面遷移を通った2表記とは区別する。 |
+| 現行UIで選べない2表記 | 漢字のみ・かなのみの既存の辞書を実際の説明DOMとページ分割処理へ渡す配置用フィクスチャ。14サイズ×2表記×6課題の168条件で全手順と題名・操作の収まりを確認。[寸法記録](../../../test-results/responsive/legacy-ready-layouts.json)、[撮影コード](../../../test-results/responsive/legacy-ready-layout.mjs)。画面遷移を通った2表記とは区別する。 |
 | 入力と走査 | 説明中の1押しで課題を始めない、連打で確認を飛ばさない、説明の入力でセッションを作らない、自前走査とOS委譲の両方で開始・終了へ届く、課題中には走査しないことを検査する。 |
 | 14サイズのテキスト | 練習336場面の表示対象の説明・状態・結果テキストについて、画面外・クリップ・操作帯との重なりは0。既存の視覚的に隠した `#result-title` は読み上げ用の見出しとして除外する。リール窓が流れるコマを切ることも意図した描画として扱う。 |
-| 雰囲気4段 | 4表記を含む448条件で結果内容のスクロール0、結果ボタンの画面外0、見出し・要約の切れ0。[寸法記録](../test-results/responsive/party/layouts.json)。 |
-| 測定6ゲーム×14サイズ | 84組すべてRGB差0。描画リセット後の比較で許容差なし。[比較結果](../test-results/responsive/measurement-final-pixels.json)、[集計ログ](../test-results/responsive/measure-comparison.log)。 |
+| 雰囲気4段 | 4表記を含む448条件で結果内容のスクロール0、結果ボタンの画面外0、見出し・要約の切れ0。[寸法記録](../../../test-results/responsive/party/layouts.json)。 |
+| 測定6ゲーム×14サイズ | 84組すべてRGB差0。描画リセット後の比較で許容差なし。[比較結果](../../../test-results/responsive/measurement-final-pixels.json)、[集計ログ](../../../test-results/responsive/measure-comparison.log)。 |
 
 測定の比較は、乱数と仮想時計を固定し、開始をperformance.now()=10000msへそろえた。動くトラック、CSSアニメーション、遷移、合成レイヤーを両版で同じ静止状態へ戻す。その時点で各要素の計算済みフォントサイズを固定し、描画ごとに新しいブラウザへDOMと各版のCSSを読み直す。最初の描画後にDOMを再配置し、300ms待って撮影することで、以前の説明で使ったフォントやSVGの描画キャッシュと初回描画の揺れを持ち越さない。変更が許可された上のモード帯76pxは比較から除外し、進捗ラベルを両版で同じ値へ正規化して非表示にする。これは帯の文字が背景ぼかしへ映り込む影響も除くためで、ゲームの絵・札・座標を隠す処理はしていない。全RGBを比較し、許容差は設けない。
 
-再現用の撮影コードは [通常撮影](../test-results/responsive/capture.mjs)、[測定の描画リセット](../test-results/responsive/capture-measure-final.mjs)、[RGB集計](../test-results/responsive/compare-measure.py)。測定の5ゲームでは開始直後の保存済みconfigも70条件すべて同じ。[config比較記録](../test-results/responsive/measurement-configs.json)。「高い音だけ」はこの時点ではまだセッションを保存しないため、開始直後のconfig比較の件数には含めていない。
+再現用の撮影コードは [通常撮影](../../../test-results/responsive/capture.mjs)、[測定の描画リセット](../../../test-results/responsive/capture-measure-final.mjs)、[RGB集計](../../../test-results/responsive/compare-measure.py)。測定の5ゲームでは開始直後の保存済みconfigも70条件すべて同じ。[config比較記録](../../../test-results/responsive/measurement-configs.json)。「高い音だけ」はこの時点ではまだセッションを保存しないため、開始直後のconfig比較の件数には含めていない。
 
-測定の原寸比較画像は [前](../test-results/responsive/measure-final-before/) と [後](../test-results/responsive/measure-final-after/)、6ゲームの短い横画面を並べた画像は [比較一覧](../test-results/responsive/measure-final-sheet.jpg)。変更前のビルドは `test-results/responsive/baseline-dist` に保存した。ブラウザー全項目はビルドの途中変更を避けるため、最終ソースと同じ `test-results/responsive/checked-dist` を `SMOKE_DIST` に指定して実行した。最後に通常の `npm run build` も再実行した。撮影用・確認用に起動したサーバーは終了時に停止した。
+測定の原寸比較画像は [前](../../../test-results/responsive/measure-final-before/) と [後](../../../test-results/responsive/measure-final-after/)、6ゲームの短い横画面を並べた画像は [比較一覧](../../../test-results/responsive/measure-final-sheet.jpg)。変更前のビルドは `test-results/responsive/baseline-dist` に保存した。ブラウザー全項目はビルドの途中変更を避けるため、最終ソースと同じ `test-results/responsive/checked-dist` を `SMOKE_DIST` に指定して実行した。最後に通常の `npm run build` も再実行した。撮影用・確認用に起動したサーバーは終了時に停止した。
 
 途中のWebKit試行では、画像の読み込み前の判定と、未導入の仮想時計が最初の進行時に時刻を0へ戻す問題で失敗した。画像の読み込み完了を待ち、説明の押下ガードを検査の時計でも逆行させないよう補助処理を直した。大量撮影と並走した試行では説明DOMが非表示になる遷移補助の失敗もあり、補助操作の直前に遷移を再確認するようにした。最終のWebKit全項目は大量撮影と他のブラウザー検証の終了後に単独で実行した。実際のポインター・キー入力は入力安全性の検査で確認し、版面検査は終了までの仮想時間を進めて結果面を検査する。
 
