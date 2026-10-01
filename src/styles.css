@@ -653,7 +653,10 @@ body.high-contrast #settings .setting-reason { border-left-color: #000000; backg
    押したあとの知らせをすぐ下に出す。 */
 #settings .settings-reset { display: grid; gap: 8px; justify-items: start; margin: 12px 0 4px; }
 #settings .settings-reset-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; max-width: 100%; text-align: left; }
-#settings .settings-reset-status { margin: 0; color: var(--ink); line-height: 1.6; overflow-wrap: anywhere; }
+#settings .settings-reset-status { margin: 0; padding: 6px 10px; border-left: 4px solid var(--accent); border-radius: 4px; background: var(--accent-soft); color: var(--ink); line-height: 1.6; overflow-wrap: anywhere; }
+body.high-contrast #settings .settings-reset-status { border-left-color: #000000; background: #ffffff; color: #000000; }
+/* 押すタイミングの基準をとるボタン。説明の横で字が1文字ずつ折り返さないようにする。 */
+#settings .supporter-actions > button { flex: 0 0 auto; white-space: nowrap; }
 #settings .settings-reset-status[hidden] { display: none; }
 @media (max-width: 700px) {
   #settings .settings-grid { grid-template-columns: minmax(0, 1fr); }
