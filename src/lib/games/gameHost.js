@@ -122,6 +122,12 @@ export function createGameHost(ctx) {
   const readyScreen = createReadyScreen(ctx, beginSession);
   const modeKey = () => activeGameId === "calibration" || isMeasurementMode(state.settings) ? "session.measure" : "session.practice";
   const modeText = () => ctx.t(`${modeKey()}Short`);
+  /**
+   * 回の種類（そくてい／れんしゅう）の札を出す遊びか。そくていの回があるのはタイミングの遊び
+   * （taskType を持つもの。基準をとる回も）だけ。はじめの遊びに「れんしゅう」と出すと、設定を
+   * そくていにしたとき「そくてい」と出て、測っていない遊びを測ったと取り違える（UD の B3）。
+   */
+  const showsSessionMode = (module) => Boolean(module?.taskType);
 
   /**
    * 段階を変える（phase を書き換えるのはここだけ）。「この遊びの設定」のボタンを出すかは
@@ -149,12 +155,17 @@ export function createGameHost(ctx) {
    * 「れんしゅう · の…」になって、のこりが読めなかった）。
    */
   function renderProgress(text) {
-    const mode = document.createElement("span");
-    mode.className = "game-progress-mode";
-    mode.textContent = modeText();
     const body = document.createElement("span");
     body.className = "game-progress-text";
     body.textContent = text;
+    const module = activeGameId ? findGameModule(activeGameId) : null;
+    if (!showsSessionMode(module)) {
+      elements.gameProgress.replaceChildren(body);
+      return;
+    }
+    const mode = document.createElement("span");
+    mode.className = "game-progress-mode";
+    mode.textContent = modeText();
     elements.gameProgress.replaceChildren(mode, body);
   }
 
@@ -544,7 +555,7 @@ export function createGameHost(ctx) {
     elements.gameStageContent.innerHTML = `
       <div class="game-ready">
         <div class="game-ready-info">
-        <span class="session-mode">${ctx.tHtml(modeKey())}</span>
+        ${showsSessionMode(module) ? `<span class="session-mode">${ctx.tHtml(modeKey())}</span>` : ""}
         ${icon}
         <strong class="game-ready-title">${moduleTitle(module, true)}</strong>
         </div>
@@ -840,8 +851,8 @@ export function createGameHost(ctx) {
       // ここだけ日本語になる。
       if (activeModule) renderProgress(moduleTitle(activeModule));
       else elements.gameProgress.replaceChildren();
-      elements.resultMode.innerHTML = activeModule?.taskType ? ctx.tHtml(modeKey()) : "";
-      elements.resultMode.hidden = !activeModule?.taskType;
+      elements.resultMode.innerHTML = showsSessionMode(activeModule) ? ctx.tHtml(modeKey()) : "";
+      elements.resultMode.hidden = !showsSessionMode(activeModule);
       elements.resultView.dataset.world = tileThemeFor(activeGameId)?.palette || "pop";
       // 変えられる項目のある遊びでだけ出す（そくていの回で速さしか無い遊びは出さない）。
       // お祝いの待ち・終わりの選択では出さない（開くと、けっかを飛ばしてしまう）。

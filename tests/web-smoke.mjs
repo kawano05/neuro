@@ -784,6 +784,14 @@ async function checkColorCompletionFlow(page) {
     await page.waitForTimeout(200);
   }
 
+  // はじめの遊びには そくてい／れんしゅうの区別が無いので、上の帯に回の種類を出さない
+  // （出すと、設定を そくてい にしたとき「そくてい」と出て、測っていない遊びを取り違える）。
+  await waitForPrompt();
+  assert(
+    (await page.locator("#gameProgress .game-progress-mode").count()) === 0,
+    "A beginner game must not show a measure/practice label in the top bar"
+  );
+
   async function progressSnapshot() {
     return page.evaluate(() => {
       const plainText = (selector) => {
@@ -2732,6 +2740,11 @@ async function checkSlotL1GameFlow(page) {
   await finishReady(page);
   await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
   assert((await page.locator(".slot-reel").count()) === 1, "slot-l1 must render exactly one reel");
+  // タイミングの遊びは、上の帯に回の種類（れんしゅう／そくてい）を出す（支援者の取り違えを防ぐ）。
+  assert(
+    (await page.locator("#gameProgress .game-progress-mode").textContent())?.trim() === t("session.practiceShort"),
+    "A timing game must show its measure/practice label in the top bar"
+  );
 
   // 6つの絵の一覧は、そくていの回にだけ出す（れんしゅうでは「リールの周りの
   // 余計なもの」として外した。docs/design-renewal-2026-09-25.md §1.5）。
