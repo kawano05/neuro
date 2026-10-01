@@ -2183,6 +2183,25 @@ async function checkSettingsReset(page) {
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert(overflow <= 2, `Reset buttons and messages must stay within the viewport, overflow ${overflow}px`);
+
+  // キーボード（Tab）だけで、開いたまとまりの使える項目と「既定に戻す」の全部に届く。
+  for (const name of ["switch", "senses", "play", "research"]) await openSettingsDetails(page, name);
+  const reachable = await page.locator("#settings").evaluate((root) =>
+    [...root.querySelectorAll("input, select, button")]
+      .filter((node) => node.id && !node.disabled && node.getClientRects().length > 0)
+      .map((node) => node.id)
+  );
+  await page.locator("#settingsGuide > summary").focus();
+  const visited = new Set();
+  for (let index = 0; index < 150; index += 1) {
+    await page.keyboard.press("Tab");
+    const id = await page.evaluate(() => (document.activeElement?.closest("#settings") ? document.activeElement.id : null));
+    if (id === null) break;
+    if (id) visited.add(id);
+  }
+  const missed = reachable.filter((id) => !visited.has(id));
+  assert(missed.length === 0, `Tab must reach every usable setting and reset button: ${missed.join(", ")}`);
+  assert(reachable.filter((id) => id.endsWith("Reset")).length === 6, "All six reset buttons must be reachable in practice");
 }
 
 /**

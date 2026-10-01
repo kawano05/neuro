@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { ATMOSPHERE_LEVELS } from "../src/lib/atmosphere.js";
 import { MEASUREMENT_PROTOCOL } from "../src/lib/difficultyMode.js";
 import { GAME_SETTINGS } from "../src/lib/games/gameSettings.js";
-import { SETTING_DEFINITIONS, inGameSettingKeys, protocolText } from "../src/lib/settingDefinitions.js";
+import { SETTING_DEFINITIONS, protocolText } from "../src/lib/settingDefinitions.js";
 import {
   SETTINGS_FIELDS,
   SETTINGS_GROUPS,
@@ -106,7 +106,6 @@ test("in-game settings use the same keys, names, measured flags and ranges", () 
       assert.ok(seen.has(`${gameId}:${key}`), `${key} は ${gameId} の「この遊びの設定」にある`);
     });
   });
-  assert.deepEqual(inGameSettingKeys("crane"), ["craneSweepMs", "craneToleranceR"]);
 });
 
 test("the protocol value shown for a measured field is the one the games use", () => {

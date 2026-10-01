@@ -31,7 +31,7 @@ import { MEASUREMENT_PROTOCOL, resolveDifficultyMode } from "./difficultyMode.js
 import { resolveTextMode, translate } from "./i18n.js";
 
 /** 値を文にする形。画面の数字と、スライダーの読み上げ（aria-valuetext）で同じものを使う。 */
-export const FORMATS = Object.freeze({
+const FORMATS = Object.freeze({
   seconds: (ms) => `${Number((ms / 1000).toFixed(2))}秒`,
   percent: (ratio) => `${Math.round(ratio * 100)}%`,
   times: (count) => `${count}回`,
@@ -335,11 +335,4 @@ export function protocolText(key) {
   if (!definition.measured) return "";
   const format = FORMATS[definition.format] || FORMATS.plain;
   return format(definition.protocol);
-}
-
-/** 遊びの中の「この遊びの設定」でも変えられる保存キー（gameId → キーの一覧）。 */
-export function inGameSettingKeys(gameId) {
-  return Object.entries(SETTING_DEFINITIONS)
-    .filter(([, definition]) => definition.inGame?.includes(gameId))
-    .map(([key]) => key);
 }

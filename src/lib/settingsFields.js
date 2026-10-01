@@ -194,7 +194,7 @@ export function describedByIds(field, settings) {
 }
 
 /** state.js の既定値（保存の既定）。画面で「既定」と言うのはこれ。 */
-export function defaultFieldValue(field) {
+function defaultFieldValue(field) {
   return defaultState.settings[field.key];
 }
 
