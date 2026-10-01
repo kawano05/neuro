@@ -15,7 +15,7 @@ import { chromium, devices, webkit } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
-import { colorLegacyPreset, rhythmPresets, storageKey } from "../src/lib/content.js";
+import { colorLegacyPreset, cueTones, storageKey } from "../src/lib/content.js";
 import { resolveTextMode, toSpeechText, translate } from "../src/lib/i18n.js";
 import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
 import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLegacy.js";
@@ -111,6 +111,9 @@ const checks = [
     "keeps the measured reels at their fixed size and shrinks them only when they cannot fit",
     checkMeasuredReelsStayOnScreen
   ],
+  ["records rhythm real offsets without subtracting the baseline", checkRhythmRecordsRealOffsets],
+  ["keeps rhythm visual profiles in practice, measurement, and calibration", checkRhythmVisualProfiles],
+  ["plays home gonogo, stops scanning, and records an aborted session on Escape", checkRhythmL1GameFlow],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
   ["counts up instead of counting down in endless fishing", checkEndlessFishingHasNoClock],
   ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
@@ -200,7 +203,12 @@ try {
       for (const [name, check] of selectedChecks) {
         const context = await browser.newContext({
           ...project.contextOptions,
-          serviceWorkers: [checkPresentationFaults, checkDecorationMotion, checkPresentationCleanup].includes(check)
+          serviceWorkers: [
+            checkPresentationFaults,
+            checkDecorationMotion,
+            checkPresentationCleanup,
+            checkRhythmRecordsRealOffsets
+          ].includes(check)
             ? "block"
             : "allow"
         });
@@ -3108,9 +3116,10 @@ async function checkRhythmL1GameFlow(page) {
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 9);
 
-  await openActivity(page, "リズム");
-  await waitForActivityChoices(page, 4);
-  await openActivity(page, "リズム 練習");
+  // rhythm-l1 は履歴互換だけ。ホームにある gonogo で同じ中断契約を検査する。
+  // rhythm.js の destroy() は全プリセット共通で aborted:true を保存する。
+  await waitForText(page, "#scanState", "枠が動いています");
+  await openActivity(page, t("tile.gonogo.title"));
 
   await waitForClass(page, "#gameView", "is-active");
   await page.waitForFunction(() => document.body.classList.contains("game-mode"));
@@ -3125,8 +3134,9 @@ async function checkRhythmL1GameFlow(page) {
   // from here would leave no session at all, so start the session before
   // testing the abort path below.
   await page.locator(".game-ready").waitFor({ state: "visible" });
-  await page.locator("#gameStage").click();
   await finishReady(page);
+  await waitForText(page, "#scanState", "枠は止まっています");
+  assert((await page.locator(".scan-focus").count()) === 0, "Playing gonogo must clear scan focus");
 
   // Let the countdown/first beat render a moment before aborting.
   await page.waitForTimeout(500);
@@ -3169,7 +3179,7 @@ async function checkRhythmL1GameFlow(page) {
   await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
 
   // The abort path (games/rhythm.js destroy(), gameHost.js persistSession)
-  // must still have written an aborted session for rhythm-l1 (detailed-design.md
+  // must still have written an aborted session for gonogo (detailed-design.md
   // §7.3 MUST: trials recorded so far are confirmed with aborted:true, no
   // silent data loss on early exit).
   const hasAbortedSession = await page.evaluate((key) => {
@@ -3178,9 +3188,12 @@ async function checkRhythmL1GameFlow(page) {
       return false;
     }
     const state = JSON.parse(raw);
-    return (state.sessions || []).some((session) => session.gameId === "rhythm-l1" && session.aborted === true);
+    return (state.sessions || []).some(
+      (session) => session.gameId === "gonogo" && session.taskType === "gonogo" &&
+        session.aborted === true && session.finished === false
+    );
   }, storageKey);
-  assert(hasAbortedSession, "Expected an aborted rhythm-l1 session in state.sessions");
+  assert(hasAbortedSession, "Expected an aborted gonogo session in state.sessions");
 }
 
 /**
@@ -3201,12 +3214,23 @@ async function checkRhythmVisualProfiles(page, project) {
   }
 
   const practiceThemes = [];
+  const layoutFailures = [];
+  async function inspectLayout(check, ...size) {
+    try {
+      await check(...size);
+    } catch (error) {
+      // 版面の欠陥があっても、測定の予告禁止・基準の版面まで検査する。
+      // 失敗は最後に必ず投げ直す。srcを直さず再現画面とともに報告する。
+      layoutFailures.push(`${check.name}(${size.join(", ")}): ${error.message}`);
+      await mkdir("test-results/rhythm-layout", { recursive: true });
+      await page.screenshot({ path: `test-results/rhythm-layout/${check.name}-${size.join("x")}.png` });
+    }
+  }
 
-  async function launchPracticeTask(name) {
+  async function launchGonogo() {
     await waitForClass(page, "#homeView", "is-active");
-    await openActivity(page, t("tile.rhythm-corner.title"));
-    await waitForActivityChoices(page, 4);
-    await openActivity(page, name);
+    // 現行の gonogo は利用者と同じホームタイルから開く。
+    await openActivity(page, t("tile.gonogo.title"));
     await startReadyRhythm();
   }
 
@@ -3215,12 +3239,15 @@ async function checkRhythmVisualProfiles(page, project) {
     await page.locator(".game-ready").waitFor({ state: "visible" });
     // タイルを選んだ物理入力と、開始のひと押しを同じ入力としてdedupeしない。
     await page.waitForTimeout(180);
-    await page.locator("#gameStage").click();
     await finishReady(page);
     await page.locator("#gameStageContent[data-rhythm-profile]").waitFor({ state: "visible" });
   }
 
-  async function rhythmSnapshot(expectedProfile, expectedTheme) {
+  async function rhythmSnapshot(
+    expectedProfile,
+    expectedTheme,
+    concert = expectedTheme === "gonogo" && expectedProfile === "lane"
+  ) {
     const stage = page.locator("#gameStageContent");
     await page.waitForFunction(
       ({ profile, theme }) => {
@@ -3263,7 +3290,10 @@ async function checkRhythmVisualProfiles(page, project) {
       return {
         profile: target.dataset.rhythmProfile,
         theme: target.dataset.rhythmTheme,
-        icon: target.querySelector(".rhythm-cabinet-icon i")?.getAttribute("class") || "",
+        // gonogo 練習は2026-10-01からSVGの音楽会。iのclassだけでは絵を検査できない。
+        icon: target.querySelector(".rhythm-cabinet-icon")?.innerHTML.trim() || "",
+        svgIconCount: target.querySelectorAll(".rhythm-cabinet-icon svg").length,
+        sceneryCount: target.querySelectorAll(".gonogo-scenery").length,
         background: world ? getComputedStyle(world).backgroundImage : "",
         noteLayerCount: target.querySelectorAll(".rhythm-note-layer").length,
         noteCount: notes.length,
@@ -3285,6 +3315,9 @@ async function checkRhythmVisualProfiles(page, project) {
       `${expectedTheme}: expected ${expectedProfile}, got ${snapshot.profile}`
     );
     assert(snapshot.theme === expectedTheme, `Expected rhythm theme ${expectedTheme}, got ${snapshot.theme}`);
+    assert(snapshot.icon.length > 0, `${expectedTheme}: the cabinet icon must contain artwork`);
+    assert(snapshot.svgIconCount === (concert ? 1 : 0), `${expectedTheme}: unexpected icon skin`);
+    assert(snapshot.sceneryCount === (concert ? 1 : 0), `${expectedTheme}: concert scenery must stay in practice`);
     assert(snapshot.noteLayerCount === 1, `${expectedTheme}: expected exactly one persistent note layer`);
     assert(
       snapshot.paintedHiddenNoteCount === 0,
@@ -3391,8 +3424,13 @@ async function checkRhythmVisualProfiles(page, project) {
       };
     });
     assert(layout.consoleRect, `Rhythm console must exist at ${width}px`);
-    assert(layout.children.length === 3, `Rhythm console must keep all three panels at ${width}px`);
+    assert(layout.children.length === 3, `Rhythm console must keep all three panel elements at ${width}px`);
     layout.children.forEach((child) => {
+      // theme-hakkiri.css は練習の冗長な版面ラベルを隠す。得点と目盛りは可視のまま。
+      if (String(child.className).includes("rhythm-profile-panel")) {
+        assert(child.display === "none" && child.width === 0, `Practice must hide its redundant profile panel at ${width}px`);
+        return;
+      }
       assert(child.display !== "none" && child.width > 0, `${child.className} disappeared at ${width}px`);
       assert(
         child.left >= layout.consoleRect.left - 2 && child.right <= layout.consoleRect.right + 2,
@@ -3437,7 +3475,13 @@ async function checkRhythmVisualProfiles(page, project) {
         consoleChildren: consoleEl
           ? [...consoleEl.children].map((child) => {
               const rect = child.getBoundingClientRect();
-              return { left: rect.left, right: rect.right, width: rect.width };
+              return {
+                className: child.className,
+                display: getComputedStyle(child).display,
+                left: rect.left,
+                right: rect.right,
+                width: rect.width
+              };
             })
           : []
       };
@@ -3463,6 +3507,11 @@ async function checkRhythmVisualProfiles(page, project) {
     }
     assert(layout.consoleChildren.length === 3, `Console lost a panel at ${width}x${height}`);
     layout.consoleChildren.forEach((child) => {
+      // 練習では版面ラベルだけを意図して隠す（theme-hakkiri.css）。他の2枚は収める。
+      if (String(child.className).includes("rhythm-profile-panel")) {
+        assert(child.display === "none" && child.width === 0, `Practice profile panel must be hidden at ${width}x${height}`);
+        return;
+      }
       assert(child.width > 0, `Console child disappeared at ${width}x${height}`);
       assert(
         child.left >= consoleBox.left - 2 && child.right <= consoleBox.right + 2,
@@ -3489,9 +3538,9 @@ async function checkRhythmVisualProfiles(page, project) {
           : null;
       };
       return {
-        chip: rectOf(".color-chip"),
-        progress: rectOf(".color-session-progress"),
-        hud: rectOf(".color-stage-hud"),
+        chip: rectOf(".pop-stage"),
+        progress: rectOf(".pop-dots"),
+        hud: rectOf("#gameSettings"),
         exit: rectOf("#gameExit"),
         gameProgress: rectOf("#gameProgress"),
         scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)
@@ -3507,7 +3556,7 @@ async function checkRhythmVisualProfiles(page, project) {
     });
     assert(
       layout.chip.bottom <= layout.progress.top + 2,
-      `Colour prism overlaps progress at ${width}x${height}: ${JSON.stringify(layout)}`
+      `Pop stage overlaps progress at ${width}x${height}: ${JSON.stringify(layout)}`
     );
   }
 
@@ -3522,38 +3571,36 @@ async function checkRhythmVisualProfiles(page, project) {
   assert(freshSettings.visualGuidance === true, "Fresh practice must default visualGuidance to true");
   assert(freshSettings.difficultyMode === "practice", "Fresh state must begin in practice mode");
 
-  await launchPracticeTask(t("tile.rhythm-l1.title"));
-  practiceThemes.push(await rhythmSnapshot("lane", "rhythm-l1"));
-  await assertLandscapeCabinetFits();
-  await assertNarrowConsoleFits(390);
-  await assertNarrowConsoleFits(507);
-  await assertShortRhythmComposition(619, 390);
-  await assertShortRhythmComposition(568, 320);
-  await assertShortRhythmComposition(422, 195);
+  // 旧2種は registry.gameModules にも無く launch が何もしない。現行課題を検査する。
+  await launchGonogo();
+  practiceThemes.push(await rhythmSnapshot("lane", "gonogo"));
+  await inspectLayout(assertLandscapeCabinetFits);
+  await inspectLayout(assertNarrowConsoleFits, 390);
+  await inspectLayout(assertNarrowConsoleFits, 507);
+  await inspectLayout(assertShortRhythmComposition, 619, 390);
+  await inspectLayout(assertShortRhythmComposition, 568, 320);
+  await inspectLayout(assertShortRhythmComposition, 422, 195);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForTimeout(120);
   await abortToLobby();
 
   await openActivity(page, t("tile.color-legacy.title"));
   await waitForClass(page, "#gameView", "is-active");
-  await page.locator(".game-ready").waitFor({ state: "visible" });
-  await page.waitForTimeout(180);
-  await page.locator("#gameStage").click();
-  await finishReady(page);
-  await page.locator("#gameStageContent.module-color").waitFor({ state: "visible" });
-  await assertShortColorComposition(619, 390);
-  await assertShortColorComposition(568, 320);
-  await assertShortColorComposition(422, 195);
+  // 「押すと 出てくる」は説明なしの module-pop。旧色プリズム・HUDを
+  // 現行の舞台・進みの点・設定ボタンへ置き換え、収まりと非重複を保つ。
+  await page.locator("#gameStageContent.module-pop").waitFor({ state: "visible" });
+  await inspectLayout(assertShortColorComposition, 619, 390);
+  await inspectLayout(assertShortColorComposition, 568, 320);
+  await inspectLayout(assertShortColorComposition, 422, 195);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForTimeout(120);
   await abortToLobby();
 
-  await launchPracticeTask(t("tile.rhythm-l2.title"));
-  practiceThemes.push(await rhythmSnapshot("lane", "rhythm-l2"));
-  await abortToLobby();
-
-  await launchPracticeTask(t("tile.gonogo.title"));
-  practiceThemes.push(await rhythmSnapshot("lane", "gonogo"));
+  // 予告なし練習でも音楽会の絵を保ち、未来ノートは作らない。
+  await patchSettings(page, { visualGuidance: false });
+  await page.locator("#startStage").click();
+  await launchGonogo();
+  practiceThemes.push(await rhythmSnapshot("instrument", "gonogo", true));
   await abortToLobby();
 
   // 保存値がONのままでも、measureは実効値をOFFへ固定して計器盤にする。
@@ -3562,8 +3609,9 @@ async function checkRhythmVisualProfiles(page, project) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await launchPracticeTask(t("tile.rhythm-l1.title"));
-  await rhythmSnapshot("instrument", "rhythm-l1");
+  // gonogo も測定では音楽会を出さず、元の予告なし計器盤を保つ。
+  await launchGonogo();
+  const measuredTheme = await rhythmSnapshot("instrument", "gonogo");
   await abortToLobby();
 
   // calibrationは支援者画面から起動する専用手順。設定値に関係なくinstrument。
@@ -3574,16 +3622,19 @@ async function checkRhythmVisualProfiles(page, project) {
   await startReadyRhythm();
   const calibrationTheme = await rhythmSnapshot("instrument", "calibration");
 
-  const allThemes = [...practiceThemes, calibrationTheme];
+  const allThemes = [...practiceThemes, measuredTheme, calibrationTheme];
+  // 現行は gonogo / calibration の2課題。練習のSVG・測定の盾・基準の時計の
+  // 3つの絵を区別する。架空の旧4課題を数えず、各モードの版面も上で固定する。
   assert(
-    new Set(allThemes.map((item) => item.theme)).size === 4,
-    "All four rhythm games need distinct theme identifiers"
+    new Set(allThemes.map((item) => item.theme)).size === 2,
+    "The two current auditory tasks need distinct theme identifiers"
   );
-  assert(new Set(allThemes.map((item) => item.icon)).size === 4, "All four rhythm games need distinct cabinet icons");
+  assert(new Set(allThemes.map((item) => item.icon)).size === 3, "Practice, measurement, and calibration need distinct cabinet artwork");
   assert(
-    new Set(allThemes.map((item) => item.background)).size === 4,
-    "All four rhythm games need distinct rendered worlds"
+    new Set(allThemes.map((item) => item.background)).size === 3,
+    "Practice, measurement, and calibration need distinct rendered worlds"
   );
+  assert(layoutFailures.length === 0, `Rhythm visual layout failures:\n${layoutFailures.join("\n")}`);
 }
 
 /**
@@ -4248,38 +4299,42 @@ async function checkRhythmRecordsRealOffsets(page, project) {
     return SKIPPED;
   }
 
-  // 支援者が設定できる範囲で短くする（bpm 80 / 5拍）。押しどころの時刻は
-  // プリセットから導く——カウントイン拍数を決め打ちすると、練習の既定値を
-  // 調整したときに黙ってずれる（実際 countInBeats を 3→2 にして落ちた）。
-  await page.context().addInitScript(({ key, value }) => localStorage.setItem(key, value), {
-    key: storageKey,
-    // 基準オフセットを 0 以外にしておく。0 だと「生値を記録する」規則を
-    // 壊しても値が変わらず、検査が素通りする（実際そうなった）。
-    value: JSON.stringify({
-      version: 3,
-      settings: { rhythmBpm: 80, targetBeats: 5, baselineOffsetMs: 60 }
-    })
-  });
-  await page.reload();
-
+  // 現行ホームの gonogo（共通 rhythm.js）を最後まで通す。8拍中Goは5拍。
+  // 音の計画を観測して押しどころを導き、ランダムなGo/No-Go順に依存しない。
+  // 現行の保存形式は patchSettings に任せ、v3のテスト用保存を作らない。
+  // 0では補正を誤って記録から引いても検出できないので、基準を60msにする。
+  await exposePresentationContext(page);
+  await patchSettings(page, { rhythmBpm: 80, targetBeats: 8, baselineOffsetMs: 60 });
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "リズム");
-  await openActivity(page, "リズム 練習");
+  await openActivity(page, t("tile.gonogo.title"));
   await page.locator(".game-ready").waitFor({ state: "visible" });
-  await page.locator("#gameStage").click();
+  // 実際のstartを呼び、返った音時計とperformance時計の対応・配信する拍を読むだけ。
+  // 入力はシェルへの物理クリックで行い、judge / logTrial / 保存には差し込まない。
+  await page.evaluate(() => {
+    const scheduler = window.__presentationCtx.audio.scheduler;
+    const start = scheduler.start.bind(scheduler);
+    scheduler.start = (plan) => {
+      const perfMs = performance.now();
+      const startAt = start(plan);
+      window.__rhythmSchedule = {
+        beats: plan.beats,
+        startPerfMs: perfMs + (startAt - scheduler.now()) * 1000
+      };
+      return startAt;
+    };
+  });
   await finishReady(page);
-  const startedAt = Date.now();
+  const schedule = await page.evaluate(() => window.__rhythmSchedule);
 
   // わざと早い側・遅い側へずらして押す。どちらの符号も出ることを見たいので、
   // 全部を「ぴったり」に寄せない。
-  const beatMs = 60000 / 80;
-  const countIn = rhythmPresets["rhythm-l1"].countInBeats;
-  const trialPeriodMs = (countIn + 1.5) * beatMs; // TRIAL_GAP_BEATS = 1.5
-  const cueOffsetMs = countIn * beatMs;
+  const goBeats = schedule.beats.filter((beat) => beat.tone === cueTones.high);
   const intended = [-180, 120, -60, 200, 40];
+  assert(goBeats.length === intended.length, "The current eight-beat gonogo plan must contain five Go cues");
   for (let index = 0; index < intended.length; index += 1) {
-    const wait = index * trialPeriodMs + cueOffsetMs + intended[index] - (Date.now() - startedAt);
+    const now = await page.evaluate(() => performance.now());
+    const wait = schedule.startPerfMs + goBeats[index].timeS * 1000 + intended[index] - now;
     if (wait > 0) {
       await page.waitForTimeout(wait);
     }
@@ -4287,6 +4342,11 @@ async function checkRhythmRecordsRealOffsets(page, project) {
   }
 
   // 最後の判定も、同じJSタスク内で結果へ消さず、利用者が読める時間を残す。
+  // 最後がNo-Goでも、全拍が確定してからのフィードバック時間を検査する。
+  await page.waitForFunction((key) =>
+    JSON.parse(localStorage.getItem(key) || "{}").sessions?.at(-1)?.finished === true,
+    storageKey
+  );
   await page.waitForFunction(
     () => (document.querySelector(".rhythm-judgment strong")?.textContent || "").trim().length > 0
   );
@@ -4303,10 +4363,16 @@ async function checkRhythmRecordsRealOffsets(page, project) {
   await waitForClass(page, "#resultView", "is-active");
   const session = await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || "{}");
-    return (state.sessions || []).findLast((item) => item.gameId === "rhythm-l1") || null;
+    return (state.sessions || []).findLast((item) => item.gameId === "gonogo") || null;
   }, storageKey);
 
-  assert(session, "Expected a recorded rhythm-l1 session");
+  assert(session, "Expected a recorded gonogo session");
+  assert(session.taskType === "gonogo" && session.config.targetBeats === 8, "The current auditory task must record its actual protocol");
+  assert(session.trials.length === 8, "All eight Go/No-Go beats must be recorded");
+  assert(
+    session.trials.filter((trial) => trial.judgment === "correctRejection").length === 3,
+    "All three unpressed No-Go beats must be recorded as correct rejections"
+  );
   assert(session.finished === true && session.aborted === false, "Expected a completed session");
 
   const hits = (session.trials || []).filter((trial) => trial.judgment === "hit");
@@ -4319,7 +4385,8 @@ async function checkRhythmRecordsRealOffsets(page, project) {
     );
     // 判定窓の外の値が hit として記録されていたら、判定か時刻変換が壊れている。
     assert(
-      Math.abs(trial.rawOffsetMs) <= session.config.effectiveWindowMs,
+      // 判定窓の中心は基準Cだけ移動する。生値を中心0で検査するのは誤り。
+      Math.abs(trial.rawOffsetMs - trial.appliedBaselineMs) <= session.config.effectiveWindowMs,
       `hit offset ${trial.rawOffsetMs}ms lies outside the judgment window ` + `(±${session.config.effectiveWindowMs}ms)`
     );
     // 記録は生値のまま。基準を差し引いていれば、この等式が基準のぶん崩れる。
