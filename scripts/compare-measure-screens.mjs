@@ -202,16 +202,24 @@ async function captureBuild(browser, port, label) {
               await tick(550);
               return;
             }
-            await page.locator(".game-tile.scan-pager").first().evaluate((element) => element.click());
+            const pager = page.locator(".game-tile.scan-pager");
+            if (!(await pager.count())) break;
+            await pager.first().evaluate((element) => element.click());
             await tick(300);
           }
           throw new Error(`見つからない遊び: ${id}`);
         };
         await page.keyboard.press("Space");
         await tick(550);
-        if (CORNER[game]) await open(CORNER[game]);
-        await open(game);
-        await page.locator(".game-ready").waitFor();
+        if (game === "calibration") {
+          // 押すタイミングの基準をとる回は、ホームではなく支援者の設定の研究の欄から始める。
+          await page.locator("#startCalibration").evaluate((element) => element.click());
+          await tick(550);
+        } else {
+          if (CORNER[game]) await open(CORNER[game]);
+          await open(game);
+        }
+        await page.locator(".game-ready").waitFor({ timeout: 5000 });
         await tick(600);
         const name = `${game}-${size[0]}x${size[1]}`;
         await page.keyboard.press("Space");
@@ -223,6 +231,10 @@ async function captureBuild(browser, port, label) {
           shots.set(`${name}-${moment}ms`, await settledShot(page));
         }
         if (errors.length) console.warn(`${label} ${name}: ページのエラー`, errors);
+      } catch (error) {
+        // 1つの場面で失敗しても、ほかの場面は撮り続ける（撮れなかった場面は「撮れていない」として数える）。
+        const reason = error.message.split(/\r?\n/)[0];
+        console.warn(`${label} ${game}-${size[0]}x${size[1]}: 撮れなかった（${reason}）`);
       } finally {
         await context.close();
       }
@@ -292,15 +304,16 @@ try {
   const after = await captureBuild(browser, ports[1], "後");
   const comparePage = await browser.newPage();
   const results = [];
-  for (const [name, shot] of before) {
+  for (const name of new Set([...before.keys(), ...after.keys()])) {
+    const shot = before.get(name);
     const other = after.get(name);
-    const counts = other ? await countRgbDiff(comparePage, shot, other) : null;
+    const counts = shot && other ? await countRgbDiff(comparePage, shot, other) : null;
     const styleChanges = counts?.changed ? styleDifferences(shot, other) : [];
     results.push({ name, changed: counts ? counts.changed : null, band: counts ? counts.band : null, styleChanges });
     if (!counts || counts.changed || counts.band) {
       await mkdir(`${outDir}/before`, { recursive: true });
       await mkdir(`${outDir}/after`, { recursive: true });
-      await writeFile(`${outDir}/before/${name}.png`, shot.png);
+      if (shot) await writeFile(`${outDir}/before/${name}.png`, shot.png);
       if (other) await writeFile(`${outDir}/after/${name}.png`, other.png);
     }
   }
