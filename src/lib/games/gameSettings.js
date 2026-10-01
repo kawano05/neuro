@@ -29,6 +29,7 @@
 // =====================================================================
 
 import { isMeasurementMode } from "../difficultyMode.js";
+import { SETTING_DEFINITIONS } from "../settingDefinitions.js";
 import { PLAY_BACKGROUNDS_BY_GAME, PLAY_SOUNDS_BY_GAME } from "../state.js";
 
 /** 音の選択肢の名前（支援者の画面の言葉）。 */
@@ -103,86 +104,68 @@ function baseballGroups() {
   ];
 }
 
-// リールが1周する時間（ミリ秒）。大きいほど ゆっくり。範囲は設定画面の
-// つまみと同じ（2800〜6000）。ふつう＝content.js の slotPresets.cycleMs。
-const SLOT_SPEED = {
-  key: "slotCycleMs",
-  label: "リールの速さ",
-  measured: true,
-  options: [
+/**
+ * タイミングの遊びの、遊びの中だけの選択肢（ゆっくり／ふつう／はやい）。
+ *
+ * 名前・「そくていで固定されるか」・どの遊びに出すか（inGame）は、設定画面と共有する表
+ * （settingDefinitions.js）から引く。以前はここにも名前と measured を書いていて、片方だけ
+ * 直すと2つの画面で食い違った。選択肢の値は、表の範囲と sanitize の中にあること
+ * （tests/settings-definitions.test.mjs）。null は「ふつう」＝ content.js のプリセット。
+ */
+const IN_GAME_CHOICES = {
+  // リールが1周する時間（ミリ秒）。大きいほど ゆっくり。ふつう＝slotPresets.cycleMs。
+  slotCycleMs: [
     [4800, "ゆっくり"],
     [3200, "ふつう"],
     [2800, "はやい"],
   ],
-};
-
-// 「合った」にする広さ（目標の真ん中から前後何ミリ秒までを合ったとするか）。
-// 既定の 220 がいちばん広い（設定画面のつまみの上限）。打ち合わせで、ほかの
-// ソフトの「遊びの中でボールの大きさをボンと変えられる」のが使いやすいと
-// 言われた（docs/design-renewal-2026-09-25.md §1.8）。速さと並べて置く。
-const SLOT_TOLERANCE = {
-  key: "slotToleranceMs",
-  label: "「合った」にする広さ",
-  measured: true,
-  options: [
+  // 「合った」にする広さ（目標の真ん中から前後何ミリ秒まで）。既定の 220 がいちばん広い。
+  // 打ち合わせで、ほかのソフトの「遊びの中でボールの大きさをボンと変えられる」のが使いやすいと
+  // 言われた（docs/design-renewal-2026-09-25.md §1.8）。速さと並べて置く。
+  slotToleranceMs: [
     [220, "ひろい"],
     [160, "すこし せまい"],
     [100, "せまい"],
   ],
-};
-
-// アームで「つかめる」広さ（床の上の半径）。null は content.js の cranePresets（15）。
-// 範囲は設定画面のつまみと同じ（4〜40）。
-const CRANE_TOLERANCE = {
-  key: "craneToleranceR",
-  label: "つかめる広さ",
-  measured: true,
-  options: [
-    [24, "ひろい"],
+  // 「高い音だけ」の音の速さ（1分あたりの拍数）。ふつう＝rhythmPresets（50）。
+  rhythmBpm: [
+    [40, "ゆっくり"],
     [null, "ふつう"],
-    [9, "せまい"],
+    [60, "はやい"],
   ],
-};
-
-// アームが端から端まで動く時間。null は content.js の cranePresets（2200ms）。
-// 速くしすぎると「狙って押す」より前に目で追うことが辛くなる
-// （cranePresets のコメント）ので、はやいも控えめにしてある。
-const CRANE_SPEED = {
-  key: "craneSweepMs",
-  label: "アームの速さ",
-  measured: true,
-  options: [
+  // アームが端から端まで動く時間。ふつう＝cranePresets（2200ms）。速くしすぎると「狙って押す」
+  // より前に目で追うことが辛くなる（cranePresets のコメント）ので、はやいも控えめにしてある。
+  craneSweepMs: [
     [3200, "ゆっくり"],
     [null, "ふつう"],
     [1700, "はやい"],
   ],
-};
-
-// さかなつりの、アタリが続く長さ（食いついてから逃げるまで。ミリ秒）。null は
-// content.js の fishingPresets（2000）。長いほど、ゆっくり押しても釣れる。
-const FISHING_LIMIT = {
-  key: "fishingLimitMs",
-  label: "アタリが続く長さ",
-  measured: true,
-  options: [
+  // アームで「つかめる」広さ（床の上の半径）。ふつう＝cranePresets（15）。
+  craneToleranceR: [
+    [24, "ひろい"],
+    [null, "ふつう"],
+    [9, "せまい"],
+  ],
+  // さかなつりの、アタリが続く長さ（食いついてから逃げるまで）。ふつう＝fishingPresets（2000ms）。
+  // 長いほど、ゆっくり押しても釣れる。
+  fishingLimitMs: [
     [3000, "ながい"],
     [null, "ふつう"],
     [1400, "みじかい"],
   ],
 };
 
-// 「高い音だけ」の音の速さ（1分あたりの拍数）。null は content.js の rhythmPresets
-// （50）。設定画面の「テンポ」と同じ値で、あちらの選択肢（30〜80）の中から選ぶ。
-const GONOGO_TEMPO = {
-  key: "rhythmBpm",
-  label: "音の速さ（テンポ）",
-  measured: true,
-  options: [
-    [40, "ゆっくり"],
-    [null, "ふつう"],
-    [60, "はやい"],
-  ],
-};
+/** タイミングの遊び1つに出す項目（表の inGame にその遊びがあるもの。表の順）。 */
+function timingGroups(gameId) {
+  return Object.entries(SETTING_DEFINITIONS)
+    .filter(([, definition]) => definition.inGame?.includes(gameId))
+    .map(([key, definition]) => ({
+      key,
+      label: definition.label,
+      measured: definition.measured === true,
+      options: IN_GAME_CHOICES[key],
+    }));
+}
 
 /** 遊びごとの設定。ここに無い遊びにはボタンを出さない。 */
 export const GAME_SETTINGS = {
@@ -190,12 +173,12 @@ export const GAME_SETTINGS = {
   balloon: { mode: "live", groups: beginnerGroups("balloon") },
   coloring: { mode: "live", groups: beginnerGroups("coloring") },
   baseball: { mode: "live", groups: baseballGroups() },
-  "slot-l1": { mode: "restart", groups: [SLOT_SPEED, SLOT_TOLERANCE] },
-  "slot-l2": { mode: "restart", groups: [SLOT_SPEED, SLOT_TOLERANCE] },
-  gonogo: { mode: "restart", groups: [GONOGO_TEMPO] },
-  crane: { mode: "restart", groups: [CRANE_SPEED, CRANE_TOLERANCE] },
-  fishing: { mode: "restart", groups: [FISHING_LIMIT] },
-  "fishing-gonogo": { mode: "restart", groups: [FISHING_LIMIT] },
+  "slot-l1": { mode: "restart", groups: timingGroups("slot-l1") },
+  "slot-l2": { mode: "restart", groups: timingGroups("slot-l2") },
+  gonogo: { mode: "restart", groups: timingGroups("gonogo") },
+  crane: { mode: "restart", groups: timingGroups("crane") },
+  fishing: { mode: "restart", groups: timingGroups("fishing") },
+  "fishing-gonogo": { mode: "restart", groups: timingGroups("fishing-gonogo") },
 };
 
 /** settings の中の値を、点つなぎの場所で読む（"playPrefs.balloon.sound"）。 */
