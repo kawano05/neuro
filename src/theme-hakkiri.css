@@ -3161,6 +3161,39 @@ body.result-mode.user-world #resultHome::before {
   }
 }
 
+/* 200% に拡大したスマホの横（422x195 相当）。上の余白 64px と下 48px のあいだは 83px しか無く、
+   120px の輪と言葉が入らずに、舞台が画面の下へ 45px 出ていた（2026-10-01、一度も回っていなかった
+   検査を向け直して見つけた）。輪・絵・字を詰め、上の帯（下端 55px）のすぐ下から置く。 */
+@media (max-height: 240px) {
+  .game-stage-content.module-pop {
+    padding: 56px 16px 40px;
+  }
+
+  .pop-stage {
+    min-height: 0;
+  }
+
+  .pop-prompt,
+  .pop-figure {
+    gap: 4px;
+  }
+
+  .pop-prompt-ring {
+    width: 56px;
+    height: 56px;
+    border-width: 3px;
+    font-size: 1.6rem;
+  }
+
+  .pop-figure svg {
+    max-height: 30vh;
+  }
+
+  .pop-word {
+    font-size: 1.1rem;
+  }
+}
+
 /* ---------------------------------------------------------------------
    タイミングの遊び（れんしゅうの回だけ）の見た目
    打ち合わせで「仕様はそのままでいい。イラスト（見た目）を変えるくらいで」

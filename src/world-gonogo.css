@@ -467,6 +467,32 @@ body:not(.high-contrast) .module-rhythm.is-practice[data-rhythm-theme="gonogo"] 
   }
 }
 
+/* --- 200% に拡大したスマホの横（422x195 相当） ------------------------------------ */
+/* 狭い画面では上の帯（回の種類とのこり）が2段（下端 55px）になり、背の低い画面の決まり
+   （theme-hakkiri.css）が台を 60px 下げる。styles.css の 240px 以下の行（看板 32 + 舞台 72 + 点の台 42
+   = 146px）が残り（195 - 60 - 2 = 133px）に入らず、点の台が画面の下へ 14px 出ていた
+   （2026-10-01、一度も回っていなかった検査を向け直して見つけた）。れんしゅうの回だけ、帯のすぐ下から
+   始め、看板と舞台を詰める。そくていの回は前のまま（入りきっている）。 */
+@media (max-height: 240px) {
+  .module-rhythm.is-practice[data-rhythm-theme="gonogo"] .rhythm-world {
+    padding-top: calc(56px + env(safe-area-inset-top));
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .module-rhythm.is-practice[data-rhythm-theme="gonogo"] .rhythm-cabinet {
+    grid-template-rows: 30px minmax(64px, 1fr) 42px;
+  }
+
+  .module-rhythm.is-practice[data-rhythm-theme="gonogo"] .rhythm-cabinet-header {
+    min-height: 30px;
+    padding-block: 1px;
+  }
+
+  .module-rhythm.is-practice[data-rhythm-theme="gonogo"] :is(.rhythm-playfield, .rhythm-main-display) {
+    min-height: 64px;
+  }
+}
+
 /* --- くっきり表示: 世界を隠し、白黒の面にする ----------------------------------- */
 /* 台・舞台・目盛りは styles.css のくっきり表示の決まりがそのまま効く。
    ここでは SVG の絵（styles.css が知らない部品）だけを白黒にする。 */
