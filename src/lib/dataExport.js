@@ -411,101 +411,149 @@ export function buildTaskCsvRows(sessions, taskType) {
   return [];
 }
 
+/**
+ * 書き出す記録に入っている参加者（"" は参加者IDを入れずに記録した回）。
+ * 並びは記録の順（はじめて出てきた順）。
+ */
+export function recordedParticipants(sessions) {
+  return [...new Set((Array.isArray(sessions) ? sessions : []).map((session) => session?.participantId || ""))];
+}
+
+/**
+ * 書き出しの名前に入れる参加者。
+ *
+ * 以前は「いま欄に入っている参加者ID」を使っていたので、次の人のIDを入れてから前の人の記録を
+ * 書き出すと、名前と中身の参加者が食い違った（確かめ表 B4）。名前は中身から決める:
+ * 記録の参加者が1人ならそのID（IDなしの回だけなら no-id）、2人以上（IDなしの回が混ざる場合も）
+ * なら multi。記録が1件も無いもの（操作ログだけ）は no-id。
+ */
+export function exportParticipantLabel(sessions) {
+  const participants = recordedParticipants(sessions);
+  if (participants.length > 1) return "multi";
+  return participants[0] || "";
+}
+
+/**
+ * 参加者を切り替えて記録を消したあと、欄に残す参加者ID。
+ *
+ * 書き出したあとに入れた次の人のIDなら残す（消してから入れ直させない）。前の人のIDが
+ * 残っていると、次の人の回に前の人のIDが焼き付く（取り違え。確かめ表 B4）ので、消す記録の
+ * 参加者か、書き出したときに欄にあったIDなら空にする。
+ */
+export function nextParticipantAfterHandOver(typed, sessions, participantAtExport) {
+  const id = typed || "";
+  if (!id || id === participantAtExport || recordedParticipants(sessions).includes(id)) return "";
+  return id;
+}
+
+/** 書き出しのファイル名（neuronode-slot-P001-2026-10-01-153000.csv）。 */
+export function exportFileName(stem, sessions, extension, date = new Date()) {
+  return `${stem}-${exportFileStamp(exportParticipantLabel(sessions), date)}.${extension}`;
+}
+
+/** CSV の本文（Excel が UTF-8 と分かるよう、先頭に BOM を付けるのは download の側）。 */
+export function csvText(rows) {
+  return rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+}
+
+/**
+ * 課題ごとの書き出し。押したボタン・名前・記録の選び方・列・無いときの知らせを1か所に持つ。
+ * kind は控え（recordBackup.js）の種類。消す前に、記録に入っている課題の種類がすべて
+ * 書き出してあるかをこの名前で確かめる。
+ */
+const TASK_EXPORTS = [
+  {
+    button: "exportRhythmCsv",
+    kind: "rhythm",
+    stem: "neuronode-rhythm",
+    select: (session) => session.taskType === "sms" || session.taskType === "gonogo",
+    rows: buildRhythmCsvRows,
+    empty: "書き出すリズム計測データがありません",
+    how: "リズムまたはGo/No-Goを1回終えると記録されます。",
+  },
+  {
+    button: "exportSlotCsv",
+    kind: "slot",
+    stem: "neuronode-slot",
+    select: (session) => session.taskType === "slot",
+    rows: buildSlotCsvRows,
+    empty: "書き出すリール停止データがありません",
+    how: "L1またはL2を1回終えると記録されます。",
+  },
+  {
+    button: "exportScanCsv",
+    kind: "scan",
+    stem: "neuronode-scan",
+    select: (session) => session.taskType === "scan",
+    rows: (sessions) => buildTaskCsvRows(sessions, "scan"),
+    empty: "書き出す走査課題データがありません",
+    how: "利用者が該当のあそびを1回終えると記録されます。",
+  },
+  {
+    button: "exportRtCsv",
+    kind: "rt",
+    stem: "neuronode-rt",
+    select: (session) => session.taskType === "rt",
+    rows: (sessions) => buildTaskCsvRows(sessions, "rt"),
+    empty: "書き出す反応課題データがありません",
+    how: "利用者が該当のあそびを1回終えると記録されます。",
+  },
+  {
+    button: "exportSessionLedgerCsv",
+    kind: "ledger",
+    stem: "neuronode-sessions",
+    select: () => true,
+    rows: buildSessionLedgerRows,
+    empty: "書き出すセッションがありません",
+    how: "あそびを1回終えると1行ぶん記録されます。",
+  },
+];
+
 export function initDataExport(ctx) {
   const { state, elements, save, announce, notifySupporter } = ctx;
 
   const backup = createRecordBackup(state);
   ctx.recordBackup = backup;
 
-  function downloadCsv(rows, filenameStem, kind) {
-    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
+  /**
+   * 記録を1つのファイルにして渡す（ただ1つの道）。
+   *
+   * rows（表）なら BOM 付きの CSV、それ以外は JSON。名前は書き出す記録の参加者と時刻から
+   * 決め（exportFileName）、書き出したことを控え（kind）に残す。評価ログの操作ログCSVも
+   * ここを通る（ctx.downloadRecords）。
+   *
+   * @param {Array<Array>|object} content
+   * @param {string} stem ファイル名の頭（neuronode-slot など）
+   * @param {string} kind 控えの種類（recordBackup.js）
+   * @param {Array<object>} sessions 名前の参加者を決める記録（既定は端末の全セッション）
+   * @returns {string} 付けたファイル名
+   */
+  function download(content, stem, kind, sessions = state.sessions) {
+    const isCsv = Array.isArray(content);
+    const blob = isCsv
+      ? new Blob([`﻿${csvText(content)}`], { type: "text/csv;charset=utf-8" })
+      : new Blob([JSON.stringify(content, null, 2)], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${filenameStem}-${exportFileStamp(state.evaluation.participantId)}.csv`;
+    link.download = exportFileName(stem, sessions, isCsv ? "csv" : "json");
     link.click();
     backup.mark(kind);
     URL.revokeObjectURL(url);
+    return link.download;
   }
+  ctx.downloadRecords = download;
 
-  function exportRhythmCsv() {
-    const sessions = state.sessions.filter(
-      (session) => session.taskType === "sms" || session.taskType === "gonogo"
-    );
+  function exportTask(definition) {
+    const sessions = state.sessions.filter(definition.select);
     if (!sessions.length) {
-      announce("書き出すリズム計測データがありません");
-      // announce の出力先 #liveRegion は .sr-only なので、読み上げを使わない
-      // 支援者には何も届かない——押しても無反応に見え、壊れていると受け取られる。
-      // 他の書き出しには notifySupporter を足してあったのに、ここだけ抜けていた
-      // （2026-08-28、tests/web-smoke.mjs の checkExportButtonsAreWired が検出）。
-      notifySupporter(
-        "書き出すリズム計測データがありません。リズムまたはGo/No-Goを1回終えると記録されます。"
-      );
+      // announce の出力先 #liveRegion は .sr-only なので、読み上げを使わない支援者には
+      // 何も届かない——押しても無反応に見え、壊れていると受け取られる。画面にも出す。
+      announce(definition.empty);
+      notifySupporter(`${definition.empty}。${definition.how}`);
       return;
     }
-    const rows = buildRhythmCsvRows(sessions);
-    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `neuronode-rhythm-${exportFileStamp(state.evaluation.participantId)}.csv`;
-    link.click();
-    backup.mark("rhythm");
-    URL.revokeObjectURL(url);
-  }
-
-  function exportSlotCsv() {
-    const sessions = state.sessions.filter((session) => session.taskType === "slot");
-    if (!sessions.length) {
-      announce("書き出すリール停止データがありません");
-      notifySupporter("書き出すリール停止データがありません。L1またはL2を1回終えると記録されます。");
-      return;
-    }
-    const rows = buildSlotCsvRows(sessions);
-    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `neuronode-slot-${exportFileStamp(state.evaluation.participantId)}.csv`;
-    link.click();
-    backup.mark("slot");
-    URL.revokeObjectURL(url);
-  }
-
-  function exportTaskCsv(taskType) {
-    const sessions = state.sessions.filter((session) => session.taskType === taskType);
-    if (!sessions.length) {
-      const label = taskType === "scan" ? "走査課題" : "反応課題";
-      announce(`書き出す${label}データがありません`);
-      notifySupporter(
-        `書き出す${label}データがありません。利用者が該当のあそびを1回終えると記録されます。`
-      );
-      return;
-    }
-    const rows = buildTaskCsvRows(sessions, taskType);
-    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `neuronode-${taskType}-${exportFileStamp(state.evaluation.participantId)}.csv`;
-    link.click();
-    backup.mark(taskType);
-    URL.revokeObjectURL(url);
-  }
-
-  function exportSessionLedgerCsv() {
-    if (!state.sessions.length) {
-      announce("書き出すセッションがありません");
-      notifySupporter(
-        "書き出すセッションがありません。あそびを1回終えると1行ぶん記録されます。"
-      );
-      return;
-    }
-    downloadCsv(buildSessionLedgerRows(state.sessions), "neuronode-sessions", "ledger");
+    download(definition.rows(sessions), definition.stem, definition.kind, sessions);
   }
 
   function exportRawJson() {
@@ -521,16 +569,7 @@ export function initDataExport(ctx) {
       logCount: state.logs.length,
       state,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `neuronode-raw-${exportFileStamp(state.evaluation.participantId)}.json`;
-    link.click();
-    backup.mark("raw");
-    URL.revokeObjectURL(url);
+    download(payload, "neuronode-raw", "raw");
     notifySupporter(
       `生データを書き出しました（セッション${state.sessions.length}件、ログ${state.logs.length}件）。`
     );
@@ -554,12 +593,6 @@ export function initDataExport(ctx) {
           "または「生データ(JSON)」を書き出してください。"
         : `セッションの保存上限（${MAX_SESSIONS}件）に達しています。` +
           "次の回を記録すると最も古い回が消えます。今すぐ書き出してください。";
-  }
-
-  function recordedParticipants() {
-    const ids = new Set();
-    (state.sessions || []).forEach((session) => ids.add(session.participantId || ""));
-    return [...ids];
   }
 
   function handOverToNextParticipant() {
@@ -589,19 +622,32 @@ export function initDataExport(ctx) {
       return;
     }
 
+    const nextParticipant = nextParticipantAfterHandOver(
+      state.evaluation.participantId,
+      state.sessions,
+      backup.participantAtExport()
+    );
     const fresh = cloneDefaultState();
     state.sessions = [];
     state.logs = [];
-    state.evaluation = { ...fresh.evaluation };
+    state.evaluation = { ...fresh.evaluation, participantId: nextParticipant };
     state.arcade = { ...fresh.arcade };
     backup.reset();
     save();
     ctx.renderAll();
-    notifySupporter(
-      `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。` +
-        "次の参加者IDを入れてから始めてください。"
-    );
-    announce("記録を消しました。次の参加者IDを入れてください");
+    if (nextParticipant) {
+      notifySupporter(
+        `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。` +
+          `次の参加者「${nextParticipant}」で始められます。`
+      );
+      announce(`記録を消しました。次の参加者は${nextParticipant}です`);
+    } else {
+      notifySupporter(
+        `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。` +
+          "次の参加者IDを入れてから始めてください。"
+      );
+      announce("記録を消しました。次の参加者IDを入れてください");
+    }
   }
 
   /** 参加者IDと保存上限の警告を画面へ反映する。 */
@@ -616,11 +662,9 @@ export function initDataExport(ctx) {
     state.evaluation.participantId = event.target.value;
     save();
   });
-  elements.exportRhythmCsv?.addEventListener("click", exportRhythmCsv);
-  elements.exportSlotCsv?.addEventListener("click", exportSlotCsv);
-  elements.exportScanCsv?.addEventListener("click", () => exportTaskCsv("scan"));
-  elements.exportRtCsv?.addEventListener("click", () => exportTaskCsv("rt"));
-  elements.exportSessionLedgerCsv?.addEventListener("click", exportSessionLedgerCsv);
+  TASK_EXPORTS.forEach((definition) => {
+    elements[definition.button]?.addEventListener("click", () => exportTask(definition));
+  });
   elements.exportRawJson?.addEventListener("click", exportRawJson);
   elements.handOverParticipant?.addEventListener("click", handOverToNextParticipant);
 

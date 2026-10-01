@@ -118,19 +118,11 @@ export function toLocalIso(isoString, offsetMinutes) {
 }
 
 /**
- * 書き出しファイル名に使う日付（YYYY-MM-DD、端末のローカル時刻）。
+ * 書き出しの識別子（参加者-YYYY-MM-DD-HHmmss、端末のローカル時刻）。保存時刻やCSVの時刻表現は変えない。
  *
- * `new Date().toISOString().slice(0, 10)` を使っていたため、中身はローカル
- * 時刻なのにファイル名の日付だけUTCだった。UTCより東の時間帯では、朝のうちに
- * 書き出すとファイル名が前日になる——書き出したファイルを日付で並べる運用では、
- * その1本だけ前日の束に入る（2026-08-29に発見）。
+ * 日付はローカル時刻で付ける。`toISOString()` の日付（UTC）を使っていた頃は、UTCより東の
+ * 時間帯で朝のうちに書き出すと、ファイル名だけ前日になった（2026-08-29に発見）。
  */
-export function localFileStamp(date = new Date()) {
-  const iso = toLocalIso(date instanceof Date ? date.toISOString() : String(date));
-  return iso ? iso.slice(0, 10) : "";
-}
-
-/** 書き出しの識別子。保存時刻やCSVの時刻表現は変えない。 */
 export function exportFileStamp(participantId, date = new Date()) {
   const iso = toLocalIso(date instanceof Date ? date.toISOString() : String(date));
   const participant = String(participantId || "no-id")

@@ -130,6 +130,7 @@ const checks = [
   ["lets one switch leave the screen where audio cannot start", checkSwitchUnavailableExit],
   ["blocks deletion when records change after an export", checkBackupRevision],
   ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
+  ["hands the device to the next participant after an export, keeping the newly typed ID", checkHandOverAfterExport],
 ];
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。
@@ -5336,15 +5337,74 @@ async function checkDoubleVoiceFailure(page) {
   await page.waitForFunction(text => document.querySelector("#liveRegion").textContent.includes(text), t("howto.slot-l1.1"));
 }
 
+/** 1人ぶんの記録（中断した回1つ）を端末に入れて読み込み直す。書き出しの名前と切り替えの検査用。 */
+async function seedOneParticipantSession(page, participantId) {
+  await page.evaluate(({ key, participantId }) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    state.sessions = [{
+      sessionId: `smoke-${participantId}`,
+      taskType: "rt",
+      gameId: "fishing",
+      participantId,
+      startedAtIso: "2026-10-01T00:00:00.000Z",
+      aborted: true,
+      finished: false,
+      trials: [],
+    }];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, { key: storageKey, participantId });
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+}
+
 async function checkExportFileName(page) {
+  // 名前の参加者は、書き出す記録に入っている参加者。欄に次の人のIDを入れてあっても、
+  // 中身が前の人の記録なら前の人の名前で出す（以前は欄の値で、中身と食い違った）。
+  await seedOneParticipantSession(page, "P:01/test");
   await page.locator("#startStage").click();
   await openSupporterLog(page);
-  await page.locator("#participantId").fill("P:01/test");
+  await page.locator("#participantId").fill("P02");
+  for (const [selector, pattern] of [
+    ["#exportRawJson", /^neuronode-raw-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.json$/],
+    ["#exportRtCsv", /^neuronode-rt-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/],
+    ["#exportSessionLedgerCsv", /^neuronode-sessions-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/],
+  ]) {
+    const download = page.waitForEvent("download");
+    await page.locator(selector).click();
+    const file = await download;
+    assert(pattern.test(file.suggestedFilename()), `Participant and time must come from the records: ${file.suggestedFilename()}`);
+  }
+}
+
+/**
+ * 書き出したあとに次の人のIDを入れてから「参加者を切り替える」を押しても、拒まれない
+ * （記録そのものは書き出したものと同じ）。入れた次の人のIDは消さずに残す。
+ */
+async function checkHandOverAfterExport(page) {
+  await seedOneParticipantSession(page, "P001");
+  await page.locator("#startStage").click();
+  await openSupporterLog(page);
+  await page.locator("#participantId").fill("P001");
   const download = page.waitForEvent("download");
   await page.locator("#exportRawJson").click();
-  const file = await download;
-  assert(/^neuronode-raw-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.json$/.test(file.suggestedFilename()),
-    `Participant and time missing: ${file.suggestedFilename()}`);
+  await download;
+  await page.locator("#participantId").fill("P002");
+  let dialogs = 0;
+  page.on("dialog", (dialog) => {
+    dialogs += 1;
+    return dialog.accept();
+  });
+  await page.locator("#handOverParticipant").click();
+  await page.waitForTimeout(200);
+  assert(dialogs === 1, "Typing the next ID after an export must not block the hand-over");
+  const after = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return { sessions: (state.sessions || []).length, participantId: state.evaluation?.participantId };
+  }, storageKey);
+  assert(after.sessions === 0, `The exported records must be cleared: ${JSON.stringify(after)}`);
+  assert(after.participantId === "P002", `The next participant typed after the export must stay: ${JSON.stringify(after)}`);
+  assert(await page.locator("#participantId").inputValue() === "P002", "The field must keep the next ID");
+  assert((await page.locator("#supporterMessage").textContent()).includes("P002"), "The supporter must see who is next");
 }
 
 // スイッチ1つの利用者と同じ手順で、目的のものまで枠を送って選ぶ。
