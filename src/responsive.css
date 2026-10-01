@@ -198,6 +198,8 @@ body.high-contrast .game-ready-steps li::before { background: #000; color: #fff;
 
 /* 操作に必要な高さを先に取る。支援者の詳細を開いてもボタンは動かさない。 */
 body.result-mode.user-world #resultView {
+  display: grid;
+  justify-items: center;
   position: fixed;
   inset: 0;
   z-index: 20;
@@ -215,6 +217,10 @@ body.result-mode.user-world #resultView[data-world="fish"] { background: #d9f3ff
 body.result-mode.user-world #resultView[data-world="high"] { background: #f6ddf6; }
 body.result-mode.user-world #resultView[data-world="pop"] { background: #e5f4ff; }
 body.result-mode.user-world .result-stats {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   grid-row: 2;
   width: min(1280px, 100%);
   height: 100%;
