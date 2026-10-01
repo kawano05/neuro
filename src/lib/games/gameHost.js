@@ -120,15 +120,14 @@ export function createGameHost(ctx) {
   // 二重保存を防ぎ、保存後は確認文言に切り替える。launch() のたびにリセット）。
   let calibrationOffsetSaved = false;
   const readyScreen = createReadyScreen(ctx, beginSession);
-  const modeKey = () => activeGameId === "calibration" || isMeasurementMode(state.settings) ? "session.measure" : "session.practice";
-  const modeText = () => ctx.t(`${modeKey()}Short`);
   /**
-   * 回の種類の札（「そくてい」「そくていの回」）を出すか。出すのは、そくていの回（と基準をとる回）の
+   * 「そくてい」の札（上の帯・説明・けっか）を出すか。出すのは、そくていの回（と基準をとる回）の
    * タイミングの遊びだけ。支援者が測る回を ふだんの回と取り違えないため（UD の B3）。
    * れんしゅうの回には出さない（2026-10-01、ユーザーの判断「れんしゅうの回の表記いらない」）。
    * はじめの遊びには そくていの回が無いので出さない（出すと、測っていない遊びを測ったと取り違える）。
    */
-  const showsSessionMode = (module) => Boolean(module?.taskType) && modeKey() === "session.measure";
+  const showsMeasureLabel = (module) =>
+    Boolean(module?.taskType) && (activeGameId === "calibration" || isMeasurementMode(state.settings));
 
   /**
    * 段階を変える（phase を書き換えるのはここだけ）。「この遊びの設定」のボタンを出すかは
@@ -151,22 +150,22 @@ export function createGameHost(ctx) {
   }
 
   /**
-   * 上の帯の進みぐあい。回の種類（そくてい／れんしゅう）と、のこり・遊びの名前を別の
-   * 部品にする。狭い画面では2段に積み、のこりの数を省略記号で切らない（以前は
-   * 「れんしゅう · の…」になって、のこりが読めなかった）。
+   * 上の帯の進みぐあい。「そくてい」の札と、のこり・遊びの名前を別の部品にする。狭い画面では
+   * 2段に積み、のこりの数を省略記号で切らない（以前は「れんしゅう · の…」になって、のこりが
+   * 読めなかった）。
    */
   function renderProgress(text) {
     const body = document.createElement("span");
     body.className = "game-progress-text";
     body.textContent = text;
     const module = activeGameId ? findGameModule(activeGameId) : null;
-    if (!showsSessionMode(module)) {
+    if (!showsMeasureLabel(module)) {
       elements.gameProgress.replaceChildren(body);
       return;
     }
     const mode = document.createElement("span");
     mode.className = "game-progress-mode";
-    mode.textContent = modeText();
+    mode.textContent = ctx.t("session.measureShort");
     elements.gameProgress.replaceChildren(mode, body);
   }
 
@@ -556,7 +555,7 @@ export function createGameHost(ctx) {
     elements.gameStageContent.innerHTML = `
       <div class="game-ready">
         <div class="game-ready-info">
-        ${showsSessionMode(module) ? `<span class="session-mode">${ctx.tHtml(modeKey())}</span>` : ""}
+        ${showsMeasureLabel(module) ? `<span class="session-mode">${ctx.tHtml("session.measure")}</span>` : ""}
         ${icon}
         <strong class="game-ready-title">${moduleTitle(module, true)}</strong>
         </div>
@@ -852,8 +851,8 @@ export function createGameHost(ctx) {
       // ここだけ日本語になる。
       if (activeModule) renderProgress(moduleTitle(activeModule));
       else elements.gameProgress.replaceChildren();
-      elements.resultMode.innerHTML = showsSessionMode(activeModule) ? ctx.tHtml(modeKey()) : "";
-      elements.resultMode.hidden = !showsSessionMode(activeModule);
+      elements.resultMode.innerHTML = showsMeasureLabel(activeModule) ? ctx.tHtml("session.measure") : "";
+      elements.resultMode.hidden = !showsMeasureLabel(activeModule);
       elements.resultView.dataset.world = tileThemeFor(activeGameId)?.palette || "pop";
       // 変えられる項目のある遊びでだけ出す（そくていの回で速さしか無い遊びは出さない）。
       // お祝いの待ち・終わりの選択では出さない（開くと、けっかを飛ばしてしまう）。
