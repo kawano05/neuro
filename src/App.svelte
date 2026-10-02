@@ -2,6 +2,10 @@
   import { onMount } from "svelte";
   import SettingsView from "./lib/views/SettingsView.svelte";
   import { initNeuroNodeApp } from "./lib/neuronodeApp.js";
+  import { say, supporterLanguage } from "./lib/supporterText.js";
+
+  // 支援者の入口とタブの言葉は、支援者の画面の言語（利用者の「言語」に合わせる。supporterText.js）。
+  $: t = (text) => say(text, $supporterLanguage);
 
   // P0-0（起動経路の一本化）: このファイルはマークアップ骨格のみを持ち、
   // 状態管理・走査・音声・各画面のロジックはすべて src/lib 配下（分割版）に
@@ -28,7 +32,7 @@
       -->
       <button class="home-supporter-menu" id="homeSupporterMenu" type="button" hidden>
         <i class="fa-solid fa-sliders" aria-hidden="true"></i>
-        <span>支援者の設定</span>
+        <span>{t({ ja: "支援者の設定", en: "Supporter settings" })}</span>
       </button>
     </div>
   </header>
@@ -58,20 +62,20 @@
       id="homeReturn"
       type="button"
       data-scan
-      aria-label="ホームへもどる"
+      aria-label={t({ ja: "ホームへもどる", en: "Back to home" })}
     >
-      <span class="tab-full">← ホームへ</span><span class="tab-short">ホーム</span>
+      <span class="tab-full">{t({ ja: "← ホームへ", en: "← Home" })}</span><span class="tab-short">{t({ ja: "ホーム", en: "Home" })}</span>
     </button>
     <!--
       マッチング・VOCA・文字学習は利用者向けアクティビティなので、タブでは
       なくホームの「まなぶ・つたえる」二階層から入る。
       タブバーに残るのは支援者機能（評価ログ・設定）のみ。
     -->
-    <button class="tab" data-view="log" data-scan aria-label="評価ログ">
-      <span class="tab-full">評価ログ</span><span class="tab-short">ログ</span>
+    <button class="tab" data-view="log" data-scan aria-label={t({ ja: "評価ログ", en: "Records" })}>
+      <span class="tab-full">{t({ ja: "評価ログ", en: "Records" })}</span><span class="tab-short">{t({ ja: "ログ", en: "Records" })}</span>
     </button>
-    <button class="tab" data-view="settings" data-scan aria-label="設定">
-      <span class="tab-full">設定</span><span class="tab-short">設定</span>
+    <button class="tab" data-view="settings" data-scan aria-label={t({ ja: "設定", en: "Settings" })}>
+      <span class="tab-full">{t({ ja: "設定", en: "Settings" })}</span><span class="tab-short">{t({ ja: "設定", en: "Settings" })}</span>
     </button>
   </nav>
 

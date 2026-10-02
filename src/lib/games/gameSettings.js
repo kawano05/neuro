@@ -24,7 +24,8 @@
 // 無い遊びではボタンそのものを出さない——効かない操作子を置かない
 // （引き継ぎ書 §3）。開いただけで回が止まる、も起きない。
 //
-// 文言は支援者向けなので日本語だけ（支援者の世界と同じ扱い。i18n は通さない）。
+// 文言は支援者向け。支援者の画面の言語（利用者の「言語」に合わせた日本語か英語。
+// src/lib/supporterText.js）で出す。文は {ja, en} の組。i18n の辞書（ふりがな・声）は通さない。
 // 「小学校高学年が読んで分かる」くらいの言葉で書く（打ち合わせ §1.8）。
 // =====================================================================
 
@@ -32,16 +33,19 @@ import { isMeasurementMode } from "../difficultyMode.js";
 import { ART_FAMILIES } from "../artVersion.js";
 import { SETTING_DEFINITIONS } from "../settingDefinitions.js";
 import { PLAY_BACKGROUNDS_BY_GAME, PLAY_SOUNDS_BY_GAME } from "../state.js";
+import { say, supporterLang } from "../supporterText.js";
+
+const NONE = { ja: "なし", en: "None" };
 
 /** 音の選択肢の名前（支援者の画面の言葉）。 */
 const SOUND_LABELS = {
-  instrument: "楽器の音",
-  pop: "明るい効果音",
-  boing: "ボヨーン",
-  creature: "生きものの声",
-  boom: "びっくりする音",
-  bat: "カキーン（バット）",
-  none: "なし",
+  instrument: { ja: "楽器の音", en: "Instrument" },
+  pop: { ja: "明るい効果音", en: "Bright pop" },
+  boing: { ja: "ボヨーン", en: "Boing" },
+  creature: { ja: "生きものの声", en: "Animal voices" },
+  boom: { ja: "びっくりする音", en: "Surprise sound" },
+  bat: { ja: "カキーン（バット）", en: "Crack (bat)" },
+  none: NONE,
 };
 
 /** できたときのおいわい（歓声と拍手・笑い声。「なし」以外なら「やったー」の声つき）。 */
@@ -49,12 +53,12 @@ function cheerGroup(gameId) {
   return {
     key: `playPrefs.${gameId}.cheer`,
     kind: "cheer",
-    label: "できたときのおいわい（「やったー」の声つき）",
+    label: { ja: "できたときのおいわい（「やったー」の声つき）", en: "Celebration when done (with a “Yay!” voice)" },
     options: [
-      ["both", "歓声と拍手、笑い声"],
-      ["applause", "歓声と拍手"],
-      ["laugh", "笑い声"],
-      ["none", "なし"],
+      ["both", { ja: "歓声と拍手、笑い声", en: "Cheers, applause and laughter" }],
+      ["applause", { ja: "歓声と拍手", en: "Cheers and applause" }],
+      ["laugh", { ja: "笑い声", en: "Laughter" }],
+      ["none", NONE],
     ],
   };
 }
@@ -74,16 +78,20 @@ function soundGroup(gameId, label) {
  * key は settings の中の場所（"playPrefs.balloon.sound" のような点つなぎ）。
  */
 // 海は「押すと 出てくる」だけ（state.js の PLAY_BACKGROUNDS_BY_GAME）。
-const BACKGROUND_LABELS = { sea: "海", dark: "暗い", light: "明るい" };
+const BACKGROUND_LABELS = {
+  sea: { ja: "海", en: "Sea" },
+  dark: { ja: "暗い", en: "Dark" },
+  light: { ja: "明るい", en: "Light" },
+};
 
 function beginnerGroups(gameId) {
   return [
     {
       key: `playPrefs.${gameId}.background`,
-      label: "遊ぶ画面の背景",
+      label: { ja: "遊ぶ画面の背景", en: "Background" },
       options: PLAY_BACKGROUNDS_BY_GAME[gameId].map((value) => [value, BACKGROUND_LABELS[value]]),
     },
-    soundGroup(gameId, "押したときの音"),
+    soundGroup(gameId, { ja: "押したときの音", en: "Press sound" }),
     cheerGroup(gameId),
   ];
 }
@@ -93,14 +101,14 @@ function baseballGroups() {
   return [
     {
       key: "playPrefs.baseball.speed",
-      label: "ボールの速さ",
+      label: { ja: "ボールの速さ", en: "Ball speed" },
       options: [
-        ["slow", "ゆっくり"],
-        ["normal", "ふつう"],
-        ["fast", "はやい"],
+        ["slow", { ja: "ゆっくり", en: "Slow" }],
+        ["normal", { ja: "ふつう", en: "Normal" }],
+        ["fast", { ja: "はやい", en: "Fast" }],
       ],
     },
-    soundGroup("baseball", "打ったときの音"),
+    soundGroup("baseball", { ja: "打ったときの音", en: "Hit sound" }),
     cheerGroup("baseball"),
   ];
 }
@@ -116,43 +124,43 @@ function baseballGroups() {
 const IN_GAME_CHOICES = {
   // リールが1周する時間（ミリ秒）。大きいほど ゆっくり。ふつう＝slotPresets.cycleMs。
   slotCycleMs: [
-    [4800, "ゆっくり"],
-    [3200, "ふつう"],
-    [2800, "はやい"],
+    [4800, { ja: "ゆっくり", en: "Slow" }],
+    [3200, { ja: "ふつう", en: "Normal" }],
+    [2800, { ja: "はやい", en: "Fast" }],
   ],
   // 「合った」にする広さ（目標の真ん中から前後何ミリ秒まで）。既定の 220 がいちばん広い。
   // 打ち合わせで、ほかのソフトの「遊びの中でボールの大きさをボンと変えられる」のが使いやすいと
   // 言われた（docs/design-renewal-2026-09-25.md §1.8）。速さと並べて置く。
   slotToleranceMs: [
-    [220, "ひろい"],
-    [160, "すこし せまい"],
-    [100, "せまい"],
+    [220, { ja: "ひろい", en: "Wide" }],
+    [160, { ja: "すこし せまい", en: "A bit narrow" }],
+    [100, { ja: "せまい", en: "Narrow" }],
   ],
   // 「高い音だけ」の音の速さ（1分あたりの拍数）。ふつう＝rhythmPresets（50）。
   rhythmBpm: [
-    [40, "ゆっくり"],
-    [null, "ふつう"],
-    [60, "はやい"],
+    [40, { ja: "ゆっくり", en: "Slow" }],
+    [null, { ja: "ふつう", en: "Normal" }],
+    [60, { ja: "はやい", en: "Fast" }],
   ],
   // アームが端から端まで動く時間。ふつう＝cranePresets（2200ms）。速くしすぎると「狙って押す」
   // より前に目で追うことが辛くなる（cranePresets のコメント）ので、はやいも控えめにしてある。
   craneSweepMs: [
-    [3200, "ゆっくり"],
-    [null, "ふつう"],
-    [1700, "はやい"],
+    [3200, { ja: "ゆっくり", en: "Slow" }],
+    [null, { ja: "ふつう", en: "Normal" }],
+    [1700, { ja: "はやい", en: "Fast" }],
   ],
   // アームで「つかめる」広さ（床の上の半径）。ふつう＝cranePresets（15）。
   craneToleranceR: [
-    [24, "ひろい"],
-    [null, "ふつう"],
-    [9, "せまい"],
+    [24, { ja: "ひろい", en: "Wide" }],
+    [null, { ja: "ふつう", en: "Normal" }],
+    [9, { ja: "せまい", en: "Narrow" }],
   ],
   // さかなつりの、アタリが続く長さ（食いついてから逃げるまで）。ふつう＝fishingPresets（2000ms）。
   // 長いほど、ゆっくり押しても釣れる。
   fishingLimitMs: [
-    [3000, "ながい"],
-    [null, "ふつう"],
-    [1400, "みじかい"],
+    [3000, { ja: "ながい", en: "Long" }],
+    [null, { ja: "ふつう", en: "Normal" }],
+    [1400, { ja: "みじかい", en: "Short" }],
   ],
 };
 
@@ -164,15 +172,15 @@ const IN_GAME_CHOICES = {
 function artGroup(gameId) {
   return {
     key: `practiceArts.${ART_FAMILIES[gameId]}`,
-    label: "絵の かんじ",
+    label: { ja: "絵の かんじ", en: "Picture style" },
     measured: true,
     // 版の新旧ではなく、見た目で言う（2026-10-02、「前の絵、新しい絵じゃなくて適切な表現で」）。
     // 選ぶ札は短い1語にする（かっこの補足があると読む量が増える、と言われて外した）。
     //   world   … えほんみたい: 顔のある絵と、まわりの けしき（ゆうえんち・おもちゃ屋・海・音楽会）
     //   classic … シンプル: 形の はっきりした絵（記号の形・色の地）。そくていの回と同じ組み立て
     options: [
-      ["world", "えほんみたい"],
-      ["classic", "シンプル"],
+      ["world", { ja: "えほんみたい", en: "Picture book" }],
+      ["classic", { ja: "シンプル", en: "Simple" }],
     ],
   };
 }
@@ -265,23 +273,39 @@ export function createGameSettings(ctx, host) {
   function notesFor(definition, measuring) {
     const notes = [];
     if (definition.mode === "live") {
-      notes.push({ text: "設定を開いているあいだは、スイッチを押しても遊びは進みません。ここまでの回数は、そのまま残ります。" });
+      notes.push({
+        text: {
+          ja: "設定を開いているあいだは、スイッチを押しても遊びは進みません。ここまでの回数は、そのまま残ります。",
+          en: "While the settings are open, pressing the switch does not move the game forward. The presses so far are kept.",
+        },
+      });
     } else if (stoppedSession) {
-      notes.push({ text: "設定を開いたので、この回はここで止めました。閉じると、はじめから やり直します。" });
+      notes.push({
+        text: {
+          ja: "設定を開いたので、この回はここで止めました。閉じると、はじめから やり直します。",
+          en: "Opening the settings stopped this round. When closed, it starts again from the beginning.",
+        },
+      });
     } else {
-      notes.push({ text: "閉じると、この設定で はじめます。" });
+      notes.push({ text: { ja: "閉じると、この設定で はじめます。", en: "When closed, the game starts with these settings." } });
     }
     if (measuring && definition.groups.some((group) => group.measured)) {
       notes.push({
         lock: true,
-        text: "いまは「そくてい」の回なので、速さや広さ・長さは変えられません。記録の条件をそろえるためです。",
+        text: {
+          ja: "いまは「そくてい」の回なので、速さや広さ・長さは変えられません。記録の条件をそろえるためです。",
+          en: "This is a measured run, so speed, range and length cannot be changed. This keeps the recording conditions the same.",
+        },
       });
     }
     const soundGroup = definition.groups.find((group) => group.kind === "sound");
     if (soundGroup && !state.settings.soundEnabled) {
       notes.push({
         lock: true,
-        text: "支援者の設定で「効果音」が切ってあるので、押したときの音・拍手・笑い声は出ません。",
+        text: {
+          ja: "支援者の設定で「効果音」が切ってあるので、押したときの音・拍手・笑い声は出ません。",
+          en: "“Sound effects” is off in the supporter settings, so press sounds, applause and laughter do not play.",
+        },
       });
     }
     if (soundGroup && draft[soundGroup.key] === "boom") {
@@ -289,13 +313,19 @@ export function createGameSettings(ctx, host) {
       // 選べるようにはするが、選んだ人にはその場で注意を出す。
       notes.push({
         lock: true,
-        text: "「びっくりする音」は強い音です。音に驚きやすい人や、発作のある人には使わないでください。",
+        text: {
+          ja: "「びっくりする音」は強い音です。音に驚きやすい人や、発作のある人には使わないでください。",
+          en: "“Surprise sound” is a strong sound. Do not use it for people who startle easily or who have seizures.",
+        },
       });
     }
     if (definition.groups.some((group) => group.kind === "cheer") && !state.settings.speechEnabled) {
       notes.push({
         lock: true,
-        text: "支援者の設定で「読み上げ」が切ってあるので、「やったー」の声は出ません（歓声と拍手、笑い声は出ます）。",
+        text: {
+          ja: "支援者の設定で「読み上げ」が切ってあるので、「やったー」の声は出ません（歓声と拍手、笑い声は出ます）。",
+          en: "“Read aloud” is off in the supporter settings, so the “Yay!” voice does not play (cheers, applause and laughter still do).",
+        },
       });
     }
     return notes;
@@ -305,8 +335,10 @@ export function createGameSettings(ctx, host) {
     const definition = GAME_SETTINGS[openFor];
     if (!definition || !dialog) return;
     const measuring = isMeasurementMode(state.settings);
+    const lang = supporterLang(state.settings);
+    const tr = (text) => escapeHtml(say(text, lang));
     const notes = notesFor(definition, measuring)
-      .map((note) => `<p class="gs-note${note.lock ? " is-lock" : ""}">${escapeHtml(note.text)}</p>`)
+      .map((note) => `<p class="gs-note${note.lock ? " is-lock" : ""}">${tr(note.text)}</p>`)
       .join("");
     const groups = definition.groups
       .map((group) => {
@@ -314,28 +346,31 @@ export function createGameSettings(ctx, host) {
         const options = group.options
           .map(([value, label]) => {
             const pressed = draft[group.key] === value;
-            return `<button type="button" class="gs-option" data-gs-key="${group.key}" data-gs-value="${escapeHtml(JSON.stringify(value))}" aria-pressed="${pressed}"${locked ? " disabled" : ""}>${escapeHtml(label)}</button>`;
+            return `<button type="button" class="gs-option" data-gs-key="${group.key}" data-gs-value="${escapeHtml(JSON.stringify(value))}" aria-pressed="${pressed}"${locked ? " disabled" : ""}>${tr(label)}</button>`;
           })
           .join("");
-        return `<fieldset class="gs-group"><legend>${escapeHtml(group.label)}</legend><div class="gs-options">${options}</div></fieldset>`;
+        return `<fieldset class="gs-group"><legend>${tr(group.label)}</legend><div class="gs-options">${options}</div></fieldset>`;
       })
       .join("");
-    const applyLabel = definition.mode === "restart" ? "この設定で はじめる" : "この設定で戻る";
+    const applyLabel =
+      definition.mode === "restart"
+        ? tr({ ja: "この設定で はじめる", en: "Start with these settings" })
+        : tr({ ja: "この設定で戻る", en: "Back with these settings" });
     dialog.innerHTML = `
       <div class="gs-panel">
         <div class="gs-head">
           <div>
-            <span class="gs-eyebrow">支援者の方へ</span>
-            <h2 class="gs-title" id="gameSettingsTitle">この遊びの設定</h2>
+            <span class="gs-eyebrow">${tr({ ja: "支援者の方へ", en: "For supporters" })}</span>
+            <h2 class="gs-title" id="gameSettingsTitle">${tr({ ja: "この遊びの設定", en: "Game settings" })}</h2>
           </div>
-          <button type="button" class="gs-close" data-gs-action="cancel" aria-label="閉じる">
+          <button type="button" class="gs-close" data-gs-action="cancel" aria-label="${tr({ ja: "閉じる", en: "Close" })}">
             <i class="fa-solid fa-xmark" aria-hidden="true"></i>
           </button>
         </div>
         ${notes}
         ${groups}
         <div class="gs-actions">
-          <button type="button" class="gs-cancel" data-gs-action="cancel">変えずに戻る</button>
+          <button type="button" class="gs-cancel" data-gs-action="cancel">${tr({ ja: "変えずに戻る", en: "Back without changes" })}</button>
           <button type="button" class="gs-apply" data-gs-action="apply">${applyLabel}</button>
         </div>
       </div>
@@ -380,7 +415,7 @@ export function createGameSettings(ctx, host) {
       definition.groups.forEach((group) => {
         if (readSetting(state.settings, group.key) !== draft[group.key]) {
           writeSetting(state.settings, group.key, draft[group.key]);
-          changed.push(group.label);
+          changed.push(say(group.label, supporterLang(state.settings)));
         }
       });
       if (changed.length) save();
@@ -390,7 +425,11 @@ export function createGameSettings(ctx, host) {
     dialog.hidden = true;
     dialog.innerHTML = "";
     elements.gameSettings?.setAttribute("aria-expanded", "false");
-    if (changed.length) announce(`${changed.join("と")}を変えました`);
+    if (changed.length) {
+      announce(
+        supporterLang(state.settings) === "en" ? `Changed ${changed.join(" and ")}` : `${changed.join("と")}を変えました`
+      );
+    }
 
     if (definition.mode === "restart") {
       // 止めた回は戻せないので、変えても変えなくても はじめから。

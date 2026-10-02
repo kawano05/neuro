@@ -13,6 +13,7 @@ import { MEASUREMENT_PROTOCOL } from "../src/lib/difficultyMode.js";
 import { GAME_SETTINGS } from "../src/lib/games/gameSettings.js";
 import { SETTING_DEFINITIONS, protocolText } from "../src/lib/settingDefinitions.js";
 import {
+  PLAY_DETAILS,
   SETTINGS_FIELDS,
   SETTINGS_GROUPS,
   describeReset,
@@ -20,11 +21,13 @@ import {
   fieldValue,
   formatFieldValue,
   resetPlan,
+  settingPath,
   settingsField,
   settingsGroup,
   unavailableReason,
 } from "../src/lib/settingsFields.js";
 import { defaultState, sanitizeState } from "../src/lib/state.js";
+import { say, supporterLang } from "../src/lib/supporterText.js";
 
 let passed = 0;
 let failed = 0;
@@ -53,7 +56,7 @@ test("every field on the screen comes from the shared definitions, once", () => 
   const ids = SETTINGS_FIELDS.map((field) => field.id);
   assert.equal(new Set(ids).size, ids.length, "DOM の id は重ならない");
   SETTINGS_FIELDS.forEach((field) => assert.ok(field.label && field.hint, `${field.key} に名前と説明がある`));
-  assert.equal(SETTINGS_GROUPS[0].fields.length, 6, "よく使う設定は6つ");
+  assert.equal(SETTINGS_GROUPS[0].fields.length, 7, "よく使う設定は7つ（言語を含む）");
   assert.equal(SETTINGS_FIELDS.some((field) => field.key === "researcherMode"), false, "効かない研究者モードは画面に出さない");
 });
 
@@ -233,6 +236,54 @@ test("each detailed group can go back to the state.js defaults, except what cann
   // 読み上げがオフのあいだは、声の大きさと声を戻さない（戻しても効かない）。
   const sensesPlan = resetPlan(settingsGroup("senses"), { ...defaultState.settings, speechEnabled: false, highContrast: true, speechVolume: 0.4 });
   assert.deepEqual(sensesPlan.changes.map(({ field }) => field.key), ["highContrast"]);
+});
+
+// 支援者の画面の言語（2026-10-02、「言語が変わったら、支援者設定の名称も変更されるように」）。
+test("every supporter-screen name, hint, option and group title has Japanese and English", () => {
+  const kana = /[\u3040-\u30ff]/;
+  const check = (text, where) => {
+    assert.ok(say(text, "ja"), `${where}: 日本語がある`);
+    assert.ok(say(text, "en"), `${where}: English exists`);
+    if (typeof text === "object") assert.ok(!kana.test(text.en), `${where}: English has no kana (${text.en})`);
+  };
+  SETTINGS_FIELDS.forEach((field) => {
+    if (field.key !== "textMode") check(field.label, `${field.key}.label`);
+    check(field.hint, `${field.key}.hint`);
+    (field.options || []).forEach(([value, label]) => {
+      if (field.key !== "textMode") check(label, `${field.key}=${value}`);
+    });
+  });
+  SETTINGS_GROUPS.forEach((group) => {
+    check(group.title, `${group.id}.title`);
+    if (group.reset) check(group.reset, `${group.id}.reset`);
+  });
+  check(PLAY_DETAILS.title, "PLAY_DETAILS");
+});
+
+test("the language choice sits at the top of the common settings and drives the supporter language", () => {
+  assert.equal(settingsGroup("common").fields[0].key, "textMode", "言語は よく使う設定の いちばん上");
+  assert.ok(!settingsGroup("senses").fields.some((field) => field.key === "textMode"), "見え方・声には もう無い");
+  assert.deepEqual(settingsField("textMode").options, [["ruby", "日本語"], ["en", "English"]]);
+  assert.equal(supporterLang({ textMode: "en" }), "en");
+  assert.equal(supporterLang({ textMode: "ruby" }), "ja");
+  assert.equal(supporterLang({ textMode: "kana" }), "ja", "古い表記は日本語");
+});
+
+test("lock reasons, values and reset messages follow the supporter language", () => {
+  const english = { ...defaultState.settings, textMode: "en", difficultyMode: "measure" };
+  assert.equal(unavailableReason(settingsField("slotCycleMs"), english), "Fixed in measured runs (measured runs use 3.2 s).");
+  assert.equal(formatFieldValue(settingsField("scanInterval"), 1600, "en"), "1.6 s");
+  assert.equal(formatFieldValue(settingsField("largeText"), true, "en"), "On");
+  assert.equal(formatFieldValue(settingsField("slotL2Rounds"), 1, "en"), "1 time");
+  const slot = settingsGroup("slot");
+  const englishPractice = { ...defaultState.settings, textMode: "en", slotCycleMs: 4800 };
+  assert.equal(
+    describeReset(slot, resetPlan(slot, englishPractice), "en"),
+    "Reset “Spin and stop” to the defaults: Spin speed (4.8 s → 3.2 s)."
+  );
+  const blocked = resetPlan(slot, english);
+  assert.equal(blocked.blockedReason, "Fixed in measured runs, so it cannot be reset.");
+  assert.equal(settingPath("craneSweepMs", "en"), "“Difficulty of each game” → “Claw grab” → “Claw speed”");
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

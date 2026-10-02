@@ -119,7 +119,8 @@ function checkDiscrimination(sessions) {
   const runs = sessions.filter((session) => isUsable(session) && session.taskType === "gonogo");
   const usable = runs.filter((session) => countTrials(session) >= MIN_TRIALS);
   if (usable.length < MIN_SESSIONS) {
-    return { met: false, value: null, reason: `「高い音だけ」をあと${MIN_SESSIONS - usable.length}回` };
+    const left = MIN_SESSIONS - usable.length;
+    return { met: false, value: null, reason: `「高い音だけ」をあと${left}回`, reasonEn: `${left} more “high notes” ${left === 1 ? "run" : "runs"}` };
   }
   const margins = usable.map(
     (session) => (session.summary?.goHitRate ?? 0) - (session.summary?.commissionRate ?? 0)
@@ -132,6 +133,7 @@ function checkDiscrimination(sessions) {
       worst >= DISCRIMINATION_MARGIN
         ? ""
         : "高い音と低い音で、押す割合がほとんど同じ",
+    reasonEn: worst >= DISCRIMINATION_MARGIN ? "" : "presses are almost as frequent on low notes as on high notes",
   };
 }
 
@@ -146,7 +148,8 @@ function checkVolition(sessions) {
   const runs = sessions.filter((session) => isUsable(session) && session.taskType === "rt");
   const usable = runs.filter((session) => typeof session.summary?.meanRtMs === "number");
   if (usable.length < MIN_SESSIONS) {
-    return { met: false, value: null, reason: `「さかなつり」をあと${MIN_SESSIONS - usable.length}回` };
+    const left = MIN_SESSIONS - usable.length;
+    return { met: false, value: null, reason: `「さかなつり」をあと${left}回`, reasonEn: `${left} more fishing ${left === 1 ? "run" : "runs"}` };
   }
   const rts = usable.map((session) => session.summary.meanRtMs);
   const worst = Math.max(...rts);
@@ -160,6 +163,11 @@ function checkVolition(sessions) {
       : fastest < VOLUNTARY_RT_MIN_MS
         ? "合図より先に押しはじめている"
         : "合図と押すことが結びついていない",
+    reasonEn: inRange
+      ? ""
+      : fastest < VOLUNTARY_RT_MIN_MS
+        ? "pressing starts before the cue"
+        : "pressing is not linked to the cue",
   };
 }
 
@@ -177,7 +185,8 @@ function checkRuleExecution(sessions) {
       typeof session.summary?.sdRawOffsetMs === "number" && typeof session.config?.bpm === "number"
   );
   if (usable.length < MIN_SESSIONS) {
-    return { met: false, value: null, reason: `「リズム」をあと${MIN_SESSIONS - usable.length}回` };
+    const left = MIN_SESSIONS - usable.length;
+    return { met: false, value: null, reason: `「リズム」をあと${left}回`, reasonEn: `${left} more rhythm ${left === 1 ? "run" : "runs"}` };
   }
   const ratios = usable.map(
     (session) => session.summary.sdRawOffsetMs / uniformOffsetSdMs(session.config.bpm)
@@ -187,6 +196,7 @@ function checkRuleExecution(sessions) {
     met: worst <= SYNC_SD_RATIO,
     value: worst,
     reason: worst <= SYNC_SD_RATIO ? "" : "押すタイミングが合図と結びついていない",
+    reasonEn: worst <= SYNC_SD_RATIO ? "" : "press timing is not linked to the cues",
   };
 }
 
@@ -194,14 +204,15 @@ function checkRuleExecution(sessions) {
  * 3つの前提の確認結果。
  *
  * label は支援者向け（この画面には支援者が同席する）。reason は「まだ通って
- * いない理由」で、通っているときは空。
+ * いない理由」で、通っているときは空。英語の画面のために labelEn・reasonEn も持つ
+ * （支援者の画面は、利用者の「言語」に合わせる。src/lib/supporterText.js）。
  */
 export const READINESS_CHECK_IDS = ["discrimination", "volition", "ruleExecution"];
 
 const CHECKS = [
-  { id: "discrimination", label: "高い音と低い音を聞き分けられる", run: checkDiscrimination },
-  { id: "volition", label: "合図に対して意図して押せる", run: checkVolition },
-  { id: "ruleExecution", label: "追加の合図なしに規則を続けられる", run: checkRuleExecution },
+  { id: "discrimination", label: "高い音と低い音を聞き分けられる", labelEn: "Tells high notes from low notes", run: checkDiscrimination },
+  { id: "volition", label: "合図に対して意図して押せる", labelEn: "Presses on purpose in response to a cue", run: checkVolition },
+  { id: "ruleExecution", label: "追加の合図なしに規則を続けられる", labelEn: "Keeps following the rule without extra cues", run: checkRuleExecution },
 ];
 
 /**
@@ -216,7 +227,7 @@ export function evaluateReadiness(sessions, participantId = "") {
   const scoped = participantId
     ? list.filter((session) => (session.participantId || "") === participantId)
     : list;
-  const checks = CHECKS.map(({ id, label, run }) => ({ id, label, ...run(scoped) }));
+  const checks = CHECKS.map(({ id, label, labelEn, run }) => ({ id, label, labelEn, ...run(scoped) }));
   return { checks, allMet: checks.every((check) => check.met) };
 }
 

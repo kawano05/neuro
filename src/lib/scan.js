@@ -15,6 +15,7 @@
 // =====================================================================
 
 import { isSupporterView } from "./viewWorld.js";
+import { say, supporterLang } from "./supporterText.js";
 
 /**
  * @param {object} ctx - アプリ共有コンテキスト
@@ -184,10 +185,27 @@ export function createScanEngine(ctx) {
     scanIndex = scanTargets.length ? Math.max(0, scanIndex) : -1;
     updateFocus();
     scanTimer = window.setInterval(step, state.settings.scanInterval);
-    // 画面に出る言葉は「走査」を使わない（打ち合わせで、ふだん目にしない言葉は
-    // 難しく感じると言われた。docs/design-renewal-2026-09-25.md §1.2）。
-    elements.scanState.textContent = "枠が動いています";
-    elements.toggleScanLabel.textContent = "枠を止める";
+    renderStatus();
+  }
+
+  /**
+   * 枠の状態の札（上の帯）と、枠を動かす・止めるボタンの字。支援者の画面の言語で
+   * （supporterText.js。言語を変えたときは views/settings.js が呼び直す）。
+   * 画面に出る言葉は「走査」を使わない（打ち合わせで、ふだん目にしない言葉は
+   * 難しく感じると言われた。docs/design-renewal-2026-09-25.md §1.2）。
+   */
+  function renderStatus() {
+    const lang = supporterLang(state.settings);
+    const status = scanTimer
+      ? { ja: "枠が動いています", en: "Highlight is moving" }
+      : usesNativeSwitchControl()
+        ? { ja: "iPad で操作中", en: "Using iPad Switch Control" }
+        : { ja: "枠は止まっています", en: "Highlight is stopped" };
+    elements.scanState.textContent = say(status, lang);
+    elements.toggleScanLabel.textContent = say(
+      scanTimer ? { ja: "枠を止める", en: "Stop the highlight" } : { ja: "枠を動かす", en: "Move the highlight" },
+      lang
+    );
   }
 
   /** 走査を停止する。clearFocus=false ならハイライト位置を保持する。 */
@@ -196,8 +214,7 @@ export function createScanEngine(ctx) {
       window.clearInterval(scanTimer);
       scanTimer = null;
     }
-    elements.scanState.textContent = usesNativeSwitchControl() ? "iPad で操作中" : "枠は止まっています";
-    elements.toggleScanLabel.textContent = "枠を動かす";
+    renderStatus();
     if (clearFocus) {
       clearScanFocus();
     }
@@ -273,5 +290,5 @@ export function createScanEngine(ctx) {
     return Boolean(scanTimer);
   }
 
-  return { refresh, step, start, stop, restartIfNeeded, activate, toggle, isRunning };
+  return { refresh, step, start, stop, restartIfNeeded, activate, toggle, isRunning, renderStatus };
 }

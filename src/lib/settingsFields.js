@@ -1,8 +1,9 @@
 // =====================================================================
 // settingsFields.js — 支援者の設定画面の並びと、画面の決まり（DOM に触れない）
 //
-// よく使う6項目だけを常設し、くわしい設定は目的別に畳む（docs/rules/supporter-settings.md）。
+// よく使う7項目（言語を含む）だけを常設し、くわしい設定は目的別に畳む（docs/rules/supporter-settings.md）。
 // 項目の名前・範囲・値の形は settingDefinitions.js（遊びの中の設定と共有する表）から引く。
+// 画面の言葉は、利用者の「言語」に合わせた日本語か英語（supporterText.js。文は {ja, en} の組）。
 // ここで決めるのは、どのまとまりに置くか・DOM の id・いま変えられるか（とその理由）・
 // 既定に戻すときに何を戻すか。
 // 保存・既定値・そくていの解決は state.js / difficultyMode.js のまま。
@@ -10,8 +11,10 @@
 // =====================================================================
 
 import { isMeasurementMode } from "./difficultyMode.js";
+import { translate } from "./i18n.js";
 import { SETTING_DEFINITIONS, describeSettingValue, effectiveSettingValue, protocolText } from "./settingDefinitions.js";
 import { defaultState } from "./state.js";
+import { say, supporterLang } from "./supporterText.js";
 
 /**
  * いま変えられない理由の種類。
@@ -26,18 +29,32 @@ const LOCKS = {
   // いるので、実際に使う値を添える（例: つまみは 4.8秒でも、そくていでは 3.2秒）。
   measured: {
     active: (settings) => isMeasurementMode(settings),
-    reason: (field) => `そくていの回は固定です（そくていでは ${protocolText(field.key)}）。`,
-    resetReason: "そくていの回は固定なので、戻せません。",
+    reason: (field, lang) =>
+      lang === "en"
+        ? `Fixed in measured runs (measured runs use ${protocolText(field.key, "en")}).`
+        : `そくていの回は固定です（そくていでは ${protocolText(field.key)}）。`,
+    resetReason: { ja: "そくていの回は固定なので、戻せません。", en: "Fixed in measured runs, so it cannot be reset." },
   },
   switchControl: {
     active: (settings) => settings?.switchControlMode === true,
-    reason: () => "iPad のスイッチコントロールを使っているあいだは、アプリの枠を使いません。",
-    resetReason: "iPad のスイッチコントロールを使っているあいだは、戻せません。",
+    reason: (field, lang) =>
+      say(
+        {
+          ja: "iPad のスイッチコントロールを使っているあいだは、アプリの枠を使いません。",
+          en: "While iPad Switch Control is in use, the app's highlight is not used.",
+        },
+        lang
+      ),
+    resetReason: {
+      ja: "iPad のスイッチコントロールを使っているあいだは、戻せません。",
+      en: "Cannot be reset while iPad Switch Control is in use.",
+    },
   },
   speech: {
     active: (settings) => settings?.speechEnabled === false,
-    reason: () => "「声で読み上げる」がオフのあいだは使いません。",
-    resetReason: "「声で読み上げる」がオフのあいだは、戻せません。",
+    reason: (field, lang) =>
+      say({ ja: "「声で読み上げる」がオフのあいだは使いません。", en: "Not used while “Read aloud” is off." }, lang),
+    resetReason: { ja: "「声で読み上げる」がオフのあいだは、戻せません。", en: "Cannot be reset while “Read aloud” is off." },
   },
 };
 
@@ -49,59 +66,56 @@ const FIELD_LOCKS = {
   speechVoice: ["speech"],
 };
 
+/** 遊びの名前（利用者の世界の辞書。日本語は漢字の表記）と、その遊びを既定に戻すボタンの文字。 */
+function gameGroup(titleKey) {
+  const title = { ja: translate(titleKey, "kanji"), en: translate(titleKey, "en") };
+  return { title, reset: { ja: `「${title.ja}」を既定に戻す`, en: `Reset “${title.en}”` } };
+}
+
 /**
  * 画面のまとまり。fields は保存キー（DOM の id が違うものだけ [キー, id]）。
- *   reset … 既定に戻すボタンの文字。くわしい設定のまとまりごとに置く（よく使う設定と研究には置かない）
- *   keep  … 既定に戻さない項目と、その理由
+ *   title … 見出し {ja, en}
+ *   reset … 既定に戻すボタンの文字 {ja, en}。くわしい設定のまとまりごとに置く（よく使う設定と研究には置かない）
+ *   keep  … 既定に戻さない項目と、その理由 {ja, en}
  */
 const GROUPS = [
   {
     id: "common",
-    title: "よく使う設定",
-    fields: ["fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"],
+    title: { ja: "よく使う設定", en: "Common settings" },
+    // 言語は いちばん上（2026-10-02、「言語の選択を よく使う設定に」）。英語にしてしまっても、
+    // 開いてすぐのところで戻せる。
+    fields: ["textMode", "fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"],
   },
   {
     id: "switch",
-    title: "スイッチのくわしい設定",
+    title: { ja: "スイッチのくわしい設定", en: "Switch settings" },
     fields: ["switchControlMode", "autoScan", "scanFeedback", "showScreenSwitch"],
     // iPad 本体の設定と合わせるもの。アプリだけ既定（オフ）に戻すと、iPad 本体の
     // スイッチコントロールがオンのまま、アプリの黄色い枠も動き出す（枠が2つ出る）。
-    keep: { switchControlMode: "iPad 本体の設定と合わせるため" },
-    reset: "スイッチの設定を既定に戻す",
+    keep: { switchControlMode: { ja: "iPad 本体の設定と合わせるため", en: "it must match the iPad's own setting" } },
+    reset: { ja: "スイッチの設定を既定に戻す", en: "Reset switch settings" },
   },
   {
     id: "senses",
-    title: "見え方・声のくわしい設定",
-    fields: ["textMode", "highContrast", "speechVolume", "speechVoice"],
-    reset: "見え方・声の設定を既定に戻す",
+    title: { ja: "見え方・声のくわしい設定", en: "Display and voice settings" },
+    fields: ["highContrast", "speechVolume", "speechVoice"],
+    reset: { ja: "見え方・声の設定を既定に戻す", en: "Reset display and voice settings" },
   },
-  {
-    id: "slot",
-    title: "くるくる 止める",
-    fields: ["slotCycleMs", "slotToleranceMs", "slotL1Rounds", "slotL2Rounds"],
-    reset: "「くるくる 止める」を既定に戻す",
-  },
+  { id: "slot", ...gameGroup("tile.slot-corner.title"), fields: ["slotCycleMs", "slotToleranceMs", "slotL1Rounds", "slotL2Rounds"] },
   {
     id: "rhythm",
-    title: "高い音だけ 押す",
+    ...gameGroup("tile.gonogo.title"),
     fields: ["rhythmBpm", ["targetBeats", "rhythmTargetBeats"], "visualGuidance"],
-    reset: "「高い音だけ 押す」を既定に戻す",
   },
   {
     id: "crane",
-    title: "アームで つかむ",
+    ...gameGroup("tile.crane-corner.title"),
     fields: ["craneSweepMs", "craneToleranceR", "craneTargetTrials", "craneAudioGuidance"],
-    reset: "「アームで つかむ」を既定に戻す",
   },
-  {
-    id: "fishing",
-    title: "さかなつり",
-    fields: ["fishingLimitMs"],
-    reset: "「さかなつり」を既定に戻す",
-  },
+  { id: "fishing", ...gameGroup("tile.fishing-corner.title"), fields: ["fishingLimitMs"] },
   {
     id: "research",
-    title: "研究（れんしゅう／そくてい）",
+    title: { ja: "研究（れんしゅう／そくてい）", en: "Research (practice / measure)" },
     fields: ["difficultyMode"],
   },
 ];
@@ -142,7 +156,7 @@ export function settingsField(key) {
 
 /** 遊びごとのまとまりを1つの折り畳み（「遊びごとの難しさ」）にまとめて置く。 */
 export const PLAY_DETAILS = Object.freeze({
-  title: "遊びごとの難しさ",
+  title: Object.freeze({ ja: "遊びごとの難しさ", en: "Difficulty of each game" }),
   groups: Object.freeze(["slot", "rhythm", "crane", "fishing"]),
 });
 
@@ -150,11 +164,13 @@ export const PLAY_DETAILS = Object.freeze({
  * 画面での道順（「スイッチのくわしい設定」→「枠を自動で動かす」）。説明書（supporterGuide.js）が使う。
  * 遊びごとのまとまりは「遊びごとの難しさ」の中にあるので、それも頭に付ける。
  */
-export function settingPath(key) {
+export function settingPath(key, lang = "ja") {
   const field = settingsField(key);
   const steps = [settingsGroup(field.group).title, field.label];
   if (PLAY_DETAILS.groups.includes(field.group)) steps.unshift(PLAY_DETAILS.title);
-  return steps.map((step) => `「${step}」`).join("→");
+  return lang === "en"
+    ? steps.map((step) => `“${say(step, "en")}”`).join(" → ")
+    : steps.map((step) => `「${say(step)}」`).join("→");
 }
 
 /** 入力に見せる値（null の範囲はプリセット、古い値は読み替えたもの）。 */
@@ -163,8 +179,8 @@ export function fieldValue(field, settings) {
 }
 
 /** 画面の数字と、スライダーの読み上げ（aria-valuetext）の文。同じものを使う。 */
-export function formatFieldValue(field, value) {
-  return describeSettingValue(field.key, value);
+export function formatFieldValue(field, value, lang = "ja") {
+  return describeSettingValue(field.key, value, lang);
 }
 
 export function readFieldValue(field, control) {
@@ -177,10 +193,10 @@ function activeLocks(field, settings) {
   return field.locks.filter((kind) => LOCKS[kind].active(settings));
 }
 
-/** いま変えられない理由（行に出す文）。変えられるなら ""。 */
+/** いま変えられない理由（行に出す文。支援者の画面の言語で）。変えられるなら ""。 */
 export function unavailableReason(field, settings) {
   const [kind] = activeLocks(field, settings);
-  return kind ? LOCKS[kind].reason(field) : "";
+  return kind ? LOCKS[kind].reason(field, supporterLang(settings)) : "";
 }
 
 /** 行の読み上げに渡す説明の id（名前の下の1文・選んだものの説明・注記・変えられない理由）。 */
@@ -209,11 +225,12 @@ function defaultFieldValue(field) {
  *   blockedReason … 戻せる項目が1つも無いときの理由（ボタンを使えなくし、この文を出す）
  */
 export function resetPlan(group, settings) {
+  const lang = supporterLang(settings);
   const changes = [];
   const kept = [];
   let resettable = 0;
   group.fields.forEach((field) => {
-    const reason = field.keepReason || unavailableReason(field, settings);
+    const reason = say(field.keepReason, lang) || unavailableReason(field, settings);
     if (reason) {
       kept.push({ field, reason });
       return;
@@ -226,25 +243,37 @@ export function resetPlan(group, settings) {
   let blockedReason = "";
   if (resettable === 0) {
     const [kind] = group.fields.flatMap((field) => activeLocks(field, settings));
-    blockedReason = kind ? LOCKS[kind].resetReason : "戻せる項目がありません。";
+    blockedReason = say(kind ? LOCKS[kind].resetReason : { ja: "戻せる項目がありません。", en: "Nothing can be reset." }, lang);
   }
   return { changes, kept, blockedReason };
 }
 
-/** 既定に戻したあとの知らせ（画面にも読み上げにも同じ文）。 */
-export function describeReset(group, plan) {
+/**
+ * 既定に戻したあとの知らせ（画面にも読み上げにも同じ文）。lang は resetPlan と同じ言語
+ * （残した理由の文は、resetPlan がその言語で作っている）。
+ */
+export function describeReset(group, plan, lang = "ja") {
   if (plan.blockedReason) return plan.blockedReason;
+  const en = lang === "en";
+  const title = say(group.title, lang);
   // 残した理由ごとにまとめる（「そくていの回は固定です」を項目の数だけ繰り返さない）。
   const byReason = new Map();
   plan.kept.forEach(({ field, reason }) => {
-    byReason.set(reason, [...(byReason.get(reason) || []), field.label]);
+    byReason.set(reason, [...(byReason.get(reason) || []), say(field.label, lang)]);
   });
   const kept = [...byReason]
-    .map(([reason, labels]) => `変えていないもの: ${labels.join("、")}（${reason.replace(/。$/, "")}）。`)
+    .map(([reason, labels]) =>
+      en
+        ? ` Not changed: ${labels.join(", ")} (${reason.replace(/\.$/, "")}).`
+        : `変えていないもの: ${labels.join("、")}（${reason.replace(/。$/, "")}）。`
+    )
     .join("");
-  if (!plan.changes.length) return `「${group.title}」は、もう既定のままです。${kept}`;
+  if (!plan.changes.length) return en ? `“${title}” is already at the defaults.${kept}` : `「${title}」は、もう既定のままです。${kept}`;
   const changed = plan.changes
-    .map(({ field, from, to }) => `${field.label}（${formatFieldValue(field, from)} → ${formatFieldValue(field, to)}）`)
-    .join("、");
-  return `「${group.title}」を既定に戻しました: ${changed}。${kept}`;
+    .map(({ field, from, to }) => {
+      const values = `${formatFieldValue(field, from, lang)} → ${formatFieldValue(field, to, lang)}`;
+      return en ? `${say(field.label, lang)} (${values})` : `${say(field.label)}（${values}）`;
+    })
+    .join(en ? ", " : "、");
+  return en ? `Reset “${title}” to the defaults: ${changed}.${kept}` : `「${title}」を既定に戻しました: ${changed}。${kept}`;
 }

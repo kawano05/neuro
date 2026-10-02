@@ -85,7 +85,7 @@ const projects = [
 ];
 
 const checks = [
-  ["explains every atmosphere from the shared Japanese descriptions", checkAtmosphereDescriptions],
+  ["explains every atmosphere from the shared descriptions, in the chosen language", checkAtmosphereDescriptions],
   ["isolates presentation faults and completes recorded beginner and timing runs", checkPresentationFaults],
   ["follows the atmosphere for decorative motion and ignores the device's reduce-motion setting", checkDecorationMotion],
   ["cancels scheduled sounds and result music when hidden or interrupted", checkPresentationCleanup],
@@ -124,8 +124,9 @@ const checks = [
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
-  ["shows six common settings and preserves values through accessible details", checkSettingsDetails],
+  ["shows the seven common settings and preserves values through accessible details", checkSettingsDetails],
   ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
+  ["switches the supporter screens to the chosen language from the common settings", checkSupporterLanguage],
   ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
   ["keeps all supporter screens out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
   ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
@@ -2085,9 +2086,9 @@ async function checkSettingsDetails(page) {
   assert(
     JSON.stringify(visibleIds) ===
       JSON.stringify(
-        ["fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"].sort()
+        ["textMode", "fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"].sort()
       ),
-    "Only six common settings should be visible initially"
+    "Only the seven common settings (with the language) should be visible initially"
   );
   assert((await page.locator("#settings details[open]").count()) === 0, "Details should start collapsed");
   const summary = page.locator("#settingsSwitch > summary");
@@ -2321,6 +2322,39 @@ async function checkSupporterGuide(page) {
  * ボタンのすぐ下と読み上げに出ること、そくていの回に固定される項目は戻さないこと、
  * iPad 本体に合わせる「スイッチコントロールを使う」は戻さないことを見る。
  */
+/**
+ * 言語は よく使う設定の いちばん上にあり、変えると支援者の画面（設定の名前・説明・状態・タブ・
+ * 枠の状態の札）もその場で同じ言語になる（2026-10-02、「言語が変わったら、支援者設定の名称も
+ * 変更されるように」）。日本語へ戻すと日本語に戻る。
+ */
+async function checkSupporterLanguage(page, project) {
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator("#textMode").waitFor({ state: "visible" });
+  const firstCommon = await page.locator("#settings .settings-grid").first().locator("select, input").first().getAttribute("id");
+  assert(firstCommon === "textMode", `The language must be the first common setting (saw ${firstCommon})`);
+
+  await page.locator("#textMode").selectOption("en");
+  await waitForText(page, 'label[for="fxLevel"]', "Play atmosphere");
+  await waitForText(page, "#settings-title", "Settings");
+  await waitForText(page, '.tab[data-view="settings"] .tab-full', "Settings");
+  await waitForText(page, "#scanState", "Highlight is stopped");
+  assert((await page.locator("#scanIntervalValue").textContent()).trim().endsWith(" s"), "Values are written in English");
+  const kana = await page.evaluate(() =>
+    (document.querySelector("#settings").innerText.replace(/Language \/ 言語|日本語/g, "").match(/[\u3040-\u30ff]/g) || []).join("")
+  );
+  assert(kana === "", `The English settings screen still shows Japanese: ${kana}`);
+
+  await page.locator("#textMode").selectOption("ruby");
+  await waitForText(page, 'label[for="fxLevel"]', "遊びの雰囲気");
+  await waitForText(page, "#settings-title", "設定");
+  await waitForText(page, "#scanState", "枠は止まっています");
+}
+
 async function checkSettingsReset(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -2405,14 +2439,22 @@ async function checkSettingsReset(page) {
     "Reset must reach the screen, not only the saved value"
   );
 
-  // 見え方: 文字づかいを戻すと、ホームの文言も戻る。
+  // 見え方: くっきり表示を戻すと、画面にも戻る。言語は「よく使う設定」へ移したので（2026-10-02）、
+  // 見え方・声を既定に戻しても変わらない（英語で使っている人の画面を、日本語へ戻さない）。
   await openSettingsDetails(page, "senses");
   await page.locator("#textMode").selectOption("en");
+  await page.locator("#highContrast").click();
   await page.locator("#sensesReset").click();
-  assert((await savedSettings()).textMode === "ruby", "Senses reset restores the text mode");
+  assert((await savedSettings()).highContrast === false, "Senses reset restores high contrast");
+  assert(
+    !(await page.evaluate(() => document.body.classList.contains("high-contrast"))),
+    "The restored contrast must reach the page"
+  );
+  assert((await savedSettings()).textMode === "en", "Senses reset keeps the chosen language");
+  await page.locator("#textMode").selectOption("ruby");
   assert(
     await page.evaluate(() => document.documentElement.classList.contains("text-ruby")),
-    "The restored text mode must reach the page"
+    "Choosing Japanese again must reach the page"
   );
 
   const overflow = await page.evaluate(
@@ -5449,16 +5491,20 @@ async function checkAtmosphereDescriptions(page) {
       "The setting must use the shared Japanese label"
     );
   }
-  await openSettingsDetails(page, "senses");
+  // 言語を English にすると、支援者の画面の雰囲気の名前と説明も英語（2026-10-02。以前は日本語のままにしていた）。
+  // 読み込み直しても、保存した言語のまま描く。
   await page.locator("#textMode").selectOption("en");
   await page.reload();
   await page.locator("#startStage").click();
   await page.locator("#homeSupporterMenu").click();
   await page.locator(".tab[data-view='settings']").click();
   assert(
-    (await page.locator("#fxLevelDescription").textContent()) ===
-      translate("party.atmosphere.big.description", "kanji"),
-    "The supporter description stays Japanese after reload in English"
+    (await page.locator("#fxLevelDescription").textContent()) === translate("party.atmosphere.big.description", "en"),
+    "The supporter description follows the chosen language after reload"
+  );
+  assert(
+    (await page.locator("#fxLevel option[value='big']").textContent()) === translate("party.atmosphere.big.label", "en"),
+    "The atmosphere names follow the chosen language"
   );
   assert(
     (await page.locator("#fxLevel").getAttribute("aria-describedby")).includes("fxLevelDescription"),

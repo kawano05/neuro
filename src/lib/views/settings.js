@@ -23,17 +23,21 @@ import { isMeasurementMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
 import { evaluateReadiness } from "../readinessCheck.js";
 import { SOUND_CREDITS } from "../soundCredits.js";
+import { say, supporterLang, supporterLanguage } from "../supporterText.js";
 
 /** 音の素材のクレジットを描く。中身は固定の表なので、字はそのまま入れる。 */
-export function renderSoundCredits(listEl, { links = true } = {}) {
+export function renderSoundCredits(listEl, { links = true, lang = "ja" } = {}) {
   if (!listEl) return;
+  const en = lang === "en";
   listEl.replaceChildren(
     ...SOUND_CREDITS.map((credit) => {
       const item = document.createElement("li");
       const use = document.createElement("strong");
-      use.textContent = credit.use;
+      use.textContent = en ? credit.useEn || credit.use : credit.use;
       const line = document.createElement("span");
-      line.textContent = `「${credit.title}」 ${credit.author}。${credit.changes}。 `;
+      line.textContent = en
+        ? ` “${credit.title}” ${credit.author}. ${credit.changesEn || credit.changes}. `
+        : `「${credit.title}」 ${credit.author}。${credit.changes}。 `;
       // CC BY はライセンスの場所（URL）も示すのが条件。
       const address = (text, href) => {
         const node = links ? document.createElement("a") : document.createElement("span");
@@ -66,11 +70,20 @@ export function initSettings(ctx) {
     elements.settingsGuidePrint.hidden = true;
   }
 
+  /** 支援者の画面の言語（利用者の「言語」に合わせる。src/lib/supporterText.js）。 */
+  const lang = () => supporterLang(state.settings);
+  /** {ja, en} の文を、いまの言語で。 */
+  const tr = (text) => say(text, lang());
+
   // 音の素材のクレジット（src/lib/soundCredits.js）。アプリ版では、上の説明書と
   // 同じ理由でリンクにしない（アドレスは字で出す）。
-  renderSoundCredits(elements.soundCreditsList, {
-    links: !globalThis.Capacitor?.isNativePlatform?.(),
-  });
+  const renderCredits = () =>
+    renderSoundCredits(elements.soundCreditsList, {
+      links: !globalThis.Capacitor?.isNativePlatform?.(),
+      lang: lang(),
+    });
+  renderCredits();
+  supporterLanguage.set(lang());
 
   // 同じ定義からUIと入力配線を作り、手書きの型・キーの重複を持たない。
   const fields = SETTINGS_FIELDS.map(field => ({
@@ -88,18 +101,20 @@ export function initSettings(ctx) {
    */
   function showRangeValue(field, value) {
     if (!field.output) return;
-    const text = formatFieldValue(field, value);
+    const text = formatFieldValue(field, value, lang());
     field.output.value = text;
     field.control.setAttribute("aria-valuetext", text);
   }
 
   function render() {
+    // 記録の読み込みなどで設定ごと入れ替わったときも、画面の言語を合わせる。
+    supporterLanguage.set(lang());
     fields.forEach(field => {
       const value = fieldValue(field, state.settings);
       if (field.type === "checkbox") field.control.checked = value;
       else field.control.value = value === null ? "" : String(value);
       showRangeValue(field, value);
-      if (field.description) field.descriptionOutput.textContent = field.description(value);
+      if (field.description) field.descriptionOutput.textContent = field.description(value, lang());
     });
     applyAvailability();
   }
@@ -134,8 +149,11 @@ export function initSettings(ctx) {
   function updateModeStatus(measuring) {
     const status = elements.settingsModeStatus;
     status.textContent = measuring
-      ? "そくていの回です。遊びごとの難しさは固定です。変更は自動で保存されます。"
-      : "れんしゅうの回です。変更は自動で保存されます。";
+      ? tr({
+          ja: "そくていの回です。遊びごとの難しさは固定です。変更は自動で保存されます。",
+          en: "Measured runs. The difficulty of each game is fixed. Changes are saved automatically.",
+        })
+      : tr({ ja: "れんしゅうの回です。変更は自動で保存されます。", en: "Practice runs. Changes are saved automatically." });
     status.classList.toggle("is-measuring", measuring);
   }
 
@@ -159,8 +177,11 @@ export function initSettings(ctx) {
       state.evaluation?.participantId || ""
     );
     elements.readinessLead.textContent = allMet
-      ? "3つとも れんしゅうの記録から確認できています。"
-      : "確認できていない項目があります。このまま測ることもできますが、その回の記録には「成立確認なし」が残ります。";
+      ? tr({ ja: "3つとも れんしゅうの記録から確認できています。", en: "All three are confirmed from the practice records." })
+      : tr({
+          ja: "確認できていない項目があります。このまま測ることもできますが、その回の記録には「成立確認なし」が残ります。",
+          en: "Some items are not confirmed yet. You can still measure, but that run will be recorded as “not confirmed”.",
+        });
     elements.readinessLead.classList.toggle("is-unmet", !allMet);
 
     elements.readinessList.innerHTML = "";
@@ -173,7 +194,9 @@ export function initSettings(ctx) {
       icon.setAttribute("aria-hidden", "true");
       const label = document.createElement("span");
       label.className = "readiness-label";
-      label.textContent = check.met ? check.label : `${check.label}（${check.reason}）`;
+      const name = lang() === "en" ? check.labelEn || check.label : check.label;
+      const reason = lang() === "en" ? check.reasonEn || check.reason : check.reason;
+      label.textContent = check.met ? name : lang() === "en" ? `${name} (${reason})` : `${name}（${reason}）`;
       item.append(icon, label);
       elements.readinessList.append(item);
     });
@@ -209,7 +232,18 @@ export function initSettings(ctx) {
    */
   const AFTER_CHANGE = {
     // 利用者の世界の文言が全部変わる。表記は定数として持てない——描画のたびに引き直す。
-    textMode: () => ctx.views.home.render(),
+    // 支援者の画面も同じ言語へ（名前・説明・選択肢は Svelte が、数値・理由・状態はここで描き直す）。
+    // 前の言語で出した「既定に戻しました」の知らせは消す。
+    textMode: () => {
+      supporterLanguage.set(lang());
+      resets.forEach((entry) => {
+        entry.message = "";
+      });
+      renderCredits();
+      render();
+      scan.renderStatus?.();
+      ctx.views.home.render();
+    },
     // ホームに出す遊びが変わる。走査の輪はホームへ戻ったときに作り直される。
     hideVisualTasks: () => ctx.views.home.render(),
     speechEnabled: () => {
@@ -227,13 +261,15 @@ export function initSettings(ctx) {
 
   /** 手で変えたときだけの返事（「既定に戻す」はまとめて1つの文で知らせる）。 */
   const FEEDBACK = {
-    scanFeedback: () => announce("枠が動いたときの音を変えました"),
-    textMode: () => announce("文字づかいを変えました"),
+    scanFeedback: () => announce(tr({ ja: "枠が動いたときの音を変えました", en: "Changed the sound when the highlight moves" })),
+    // 選んだ言語で知らせる。
+    textMode: () => announce(tr({ ja: "言語を日本語にしました", en: "Language set to English" })),
     // 読み上げの声を替えたら、その声で一言読む（支援者が聞いて選べるように）。
     speechVoice: () => audio.speak(ctx.t("color.voice.cheer")),
     fxLevel: () => {
       // 画面の名前は「遊びの雰囲気」。読み上げだけ古い名前（演出の強さ）だった。
-      announce(`遊びの雰囲気を「${formatFieldValue(fieldOf("fxLevel"), state.settings.fxLevel)}」にしました`);
+      const chosen = formatFieldValue(fieldOf("fxLevel"), state.settings.fxLevel, lang());
+      announce(tr({ ja: `遊びの雰囲気を「${chosen}」にしました`, en: `Play atmosphere set to “${chosen}”` }));
       // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
       ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });
       ctx.fx?.engine.burst({
@@ -265,7 +301,7 @@ export function initSettings(ctx) {
         }
         state.settings[field.key] = readFieldValue(field, field.control);
         showRangeValue(field, state.settings[field.key]);
-        if (field.description) field.descriptionOutput.textContent = field.description(state.settings[field.key]);
+        if (field.description) field.descriptionOutput.textContent = field.description(state.settings[field.key], lang());
         save();
         forgetReset(field.group);
         afterChange([field.key]);
@@ -291,8 +327,14 @@ export function initSettings(ctx) {
     scan.stop(true);
     announce(
       delegated
-        ? "iPad のスイッチコントロールで選ぶようにしました。このアプリの黄色い枠と読み上げは止めました"
-        : "iPad のスイッチコントロールを使うのをやめました。黄色い枠は止まったままです"
+        ? tr({
+            ja: "iPad のスイッチコントロールで選ぶようにしました。このアプリの黄色い枠と読み上げは止めました",
+            en: "Now choosing with iPad Switch Control. The app's yellow highlight and voice are stopped",
+          })
+        : tr({
+            ja: "iPad のスイッチコントロールを使うのをやめました。黄色い枠は止まったままです",
+            en: "Stopped using iPad Switch Control. The yellow highlight stays stopped",
+          })
     );
   });
 
@@ -302,8 +344,8 @@ export function initSettings(ctx) {
     afterChange(["difficultyMode"]);
     announce(
       isMeasurementMode(state.settings)
-        ? "そくていの回にしました。むずかしさは固定されます"
-        : "れんしゅうの回にしました。むずかしさを調整できます"
+        ? tr({ ja: "そくていの回にしました。むずかしさは固定されます", en: "Switched to measured runs. The difficulty is fixed" })
+        : tr({ ja: "れんしゅうの回にしました。むずかしさを調整できます", en: "Switched to practice runs. The difficulty can be adjusted" })
     );
     logEvent({
       type: "measurement",
@@ -349,7 +391,7 @@ export function initSettings(ctx) {
         state.settings[field.key] = to;
       });
       if (plan.changes.length) save();
-      entry.message = describeReset(entry.group, plan);
+      entry.message = describeReset(entry.group, plan, lang());
       render();
       afterChange(plan.changes.map(({ field }) => field.key));
       announce(entry.message);

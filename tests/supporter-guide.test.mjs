@@ -14,6 +14,7 @@ import { ATMOSPHERE_LEVELS, ATMOSPHERES } from "../src/lib/atmosphere.js";
 import { translate } from "../src/lib/i18n.js";
 import { PLAY_DETAILS, SETTINGS_GROUPS, settingPath, settingsGroup } from "../src/lib/settingsFields.js";
 import { supporterGuideHtml } from "../src/lib/supporterGuide.js";
+import { say } from "../src/lib/supporterText.js";
 import { readCommittedGuide, renderPrintableGuide } from "../scripts/generate-guide.mjs";
 
 let passed = 0;
@@ -66,13 +67,13 @@ await test("the guide uses the settings screen's own names, order and atmosphere
   const text = textOf(supporterGuideHtml());
   const common = settingsGroup("common");
   common.fields.forEach((field) => {
-    assert.ok(text.includes(field.label), `よく使う設定: ${field.label}`);
-    assert.ok(text.includes(field.hint), `よく使う設定の説明: ${field.hint}`);
+    assert.ok(text.includes(say(field.label)), `よく使う設定: ${say(field.label)}`);
+    assert.ok(text.includes(say(field.hint)), `よく使う設定の説明: ${say(field.hint)}`);
   });
   SETTINGS_GROUPS.filter((group) => !PLAY_DETAILS.groups.includes(group.id)).forEach((group) => {
-    assert.ok(text.includes(group.title), `見出し: ${group.title}`);
+    assert.ok(text.includes(say(group.title)), `見出し: ${say(group.title)}`);
   });
-  assert.ok(text.includes(PLAY_DETAILS.title));
+  assert.ok(text.includes(say(PLAY_DETAILS.title)));
   ATMOSPHERE_LEVELS.forEach((level) => {
     assert.ok(text.includes(translate(ATMOSPHERES[level].label, "kanji")), `雰囲気の名前: ${level}`);
     assert.ok(text.includes(translate(ATMOSPHERES[level].description, "kanji")), `雰囲気の説明: ${level}`);
@@ -81,6 +82,27 @@ await test("the guide uses the settings screen's own names, order and atmosphere
     assert.ok(text.includes(settingPath(key)), `こまったときの道順: ${settingPath(key)}`);
   });
   assert.ok(text.includes("既定に戻す"), "元に戻す方法を書く");
+});
+
+// 支援者の画面の言語が英語のとき（2026-10-02）。説明書も英語で、名前・道順は英語の画面と同じ。
+await test("the guide in English uses the English names and paths of the settings screen", () => {
+  const html = supporterGuideHtml({ lang: "en" });
+  const text = textOf(html);
+  const common = settingsGroup("common");
+  common.fields.forEach((field) => {
+    assert.ok(text.includes(say(field.label, "en")), `common setting: ${say(field.label, "en")}`);
+    assert.ok(text.includes(say(field.hint, "en")), `common setting hint: ${say(field.hint, "en")}`);
+  });
+  ["autoScan", "scanInterval", "fxLevel", "textMode", "difficultyMode"].forEach((key) => {
+    assert.ok(text.includes(settingPath(key, "en")), `path: ${settingPath(key, "en")}`);
+  });
+  ATMOSPHERE_LEVELS.forEach((level) => {
+    assert.ok(text.includes(translate(ATMOSPHERES[level].description, "en")), `atmosphere: ${level}`);
+  });
+  // かな（ひらがな・かたかな）が残っていない。漢字は「言語 / Language」の名前にだけ使う。
+  const kana = text.replace(/Language \/ 言語|言語 \/ Language|日本語/g, "").match(/[\u3040-\u30ff]/g);
+  assert.equal(kana, null, `English guide still has Japanese: ${(kana || []).join("")}`);
+  assert.equal(questions(html).length, questions(supporterGuideHtml()).length, "same number of troubleshooting questions");
 });
 
 await test("no directions through the four tabs that are gone", () => {
