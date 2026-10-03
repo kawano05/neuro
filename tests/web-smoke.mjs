@@ -2172,10 +2172,13 @@ async function checkSettingsDetails(page) {
     assert((await page.locator("#" + id).getAttribute("aria-valuetext")) === text, `${id} must read as ${text}`);
     assert((await page.locator(`#${id}Value`).textContent()) === text, `${id} must show ${text}`);
   }
+  // れんしゅうの回は、回の種類の1行を出さない（2026-10-03）。そくていの回だけ注意を出す。
+  assert(await page.locator("#settingsModeStatus").isHidden(), "Practice runs show no status line");
   await page.locator("#difficultyMode").selectOption("measure");
   await page.locator("#settingsResearch > summary").click();
   assert(
-    (await page.locator("#settingsModeStatus").textContent()).includes("そくていの回"),
+    (await page.locator("#settingsModeStatus").isVisible()) &&
+      (await page.locator("#settingsModeStatus").textContent()).includes("そくていの回"),
     "Measurement status must remain visible with research collapsed"
   );
   assert(await page.locator("#slotCycleMs").isDisabled(), "Measured settings must remain locked");

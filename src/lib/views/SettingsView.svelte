@@ -21,8 +21,8 @@
       <h2 id="settings-title">{t({ ja: "設定", en: "Settings" })}</h2>
     </div>
   </div>
-  <!-- どちらの回か（views/settings.js の updateModeStatus が、いまの言語で書く）。 -->
-  <p class="settings-status" id="settingsModeStatus"></p>
+  <!-- そくていの回のときだけ出す注意（views/settings.js の updateModeStatus が、いまの言語で書く）。 -->
+  <p class="settings-status" id="settingsModeStatus" hidden></p>
   <SettingsGuide />
   <h3 class="settings-group-title">{t(group("common").title)}</h3>
   <SettingsFields group={group("common")} />

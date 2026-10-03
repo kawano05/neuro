@@ -145,15 +145,20 @@ export function initSettings(ctx) {
     renderResets();
   }
 
-  // 研究欄を畳んでも、前の回から残ったそくていの回を見落とさない。
+  /**
+   * 研究欄を畳んでも、前の回から残ったそくていの回を見落とさない（そくていの回のときだけ出す）。
+   * れんしゅうの回の「れんしゅうの回です。変更は自動で保存されます。」は出さない（2026-10-03、
+   * ユーザーの判断「消していい」）。自動で保存されることは、はじめての方への説明に書いてある。
+   */
   function updateModeStatus(measuring) {
     const status = elements.settingsModeStatus;
     status.textContent = measuring
       ? tr({
-          ja: "そくていの回です。遊びごとの難しさは固定です。変更は自動で保存されます。",
-          en: "Measured runs. The difficulty of each game is fixed. Changes are saved automatically.",
+          ja: "そくていの回です。遊びごとの難しさは固定です。",
+          en: "Measured runs. The difficulty of each game is fixed.",
         })
-      : tr({ ja: "れんしゅうの回です。変更は自動で保存されます。", en: "Practice runs. Changes are saved automatically." });
+      : "";
+    status.hidden = !measuring;
     status.classList.toggle("is-measuring", measuring);
   }
 
