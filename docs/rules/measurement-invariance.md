@@ -15,8 +15,8 @@
    `.has-world-art` が付く。`src/world-*.css` の規則は必ずこの印の下に書き（`tests/fishing-world-art.test.mjs`
    が4つのファイル全部を見る）、JS で絵を替えるときも `showsWorldArt()`（`src/lib/artVersion.js`）が真の
    ときだけ。前の版からある れんしゅうの見た目（「シンプル」）は `.is-practice`（リールは `.slot-task[data-difficulty-mode="practice"]` も）。
-   遊びの名前を変えても、そくていの回の遊ぶ面に出る題（高い音だけの台の題）は前の字のまま
-   （`stage.gonogo.measureTitle`。2026-10-02）。アームの看板は、コーナー名「アームで つかむ」のまま変えていない。
+   遊びの名前を変えても、そくていの回の遊ぶ面に出る題（アームの看板「アームで つかむ」・高い音だけの台の題
+   「高い音だけ」）は前の字のまま（`stage.crane.measureTitle`・`stage.gonogo.measureTitle`。名前は 9/30 と 10/12 に変えた）。
 3. **判定と時刻** — 入力の時刻の取り方（シェルの入口で取る）、判定の式、合図の出る時刻、試行の順序。
 4. **雰囲気と演出** — そくていの回は雰囲気を none として扱う（`src/lib/atmosphere.js`・`fx.forMeasurement()`）。
    ラッコ・びん・音楽・観客・粒・背景の動きは出さない。

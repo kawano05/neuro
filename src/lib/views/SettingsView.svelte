@@ -24,8 +24,11 @@
   <!-- そくていの回のときだけ出す注意（views/settings.js の updateModeStatus が、いまの言語で書く）。 -->
   <p class="settings-status" id="settingsModeStatus" hidden></p>
   <SettingsGuide />
-  <h3 class="settings-group-title">{t(group("common").title)}</h3>
-  <SettingsFields group={group("common")} />
+  <!-- よく使う設定は、先頭に囲んで置く（main の 9/30 の直しの見た目。theme-hakkiri.css の .settings-quick）。 -->
+  <div class="settings-quick">
+    <h3 class="settings-group-title">{t(group("common").title)}</h3>
+    <SettingsFields group={group("common")} />
+  </div>
 
   <div class="settings-details-list">
     <details class="settings-details" id="settingsSwitch">

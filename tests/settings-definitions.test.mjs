@@ -203,9 +203,9 @@ test("each detailed group can go back to the state.js defaults, except what cann
   );
   assert.equal(
     describeReset(slot, plan),
-    "「くるくる 止める」を既定に戻しました: 絵が回る速さ（4.8秒 → 3.2秒）、「合った」にする広さ（0.1秒 → 0.22秒）。"
+    "「絵あわせ」を既定に戻しました: 絵が回る速さ（4.8秒 → 3.2秒）、「合った」にする広さ（0.1秒 → 0.22秒）。"
   );
-  assert.equal(describeReset(slot, resetPlan(slot, defaultState.settings)), "「くるくる 止める」は、もう既定のままです。");
+  assert.equal(describeReset(slot, resetPlan(slot, defaultState.settings)), "「絵あわせ」は、もう既定のままです。");
 
   // null（あそびごとの既定）へ戻すものは null へ。値の文はプリセットで読む。
   const crane = settingsGroup("crane");
@@ -279,11 +279,11 @@ test("lock reasons, values and reset messages follow the supporter language", ()
   const englishPractice = { ...defaultState.settings, textMode: "en", slotCycleMs: 4800 };
   assert.equal(
     describeReset(slot, resetPlan(slot, englishPractice), "en"),
-    "Reset “Spin and stop” to the defaults: Spin speed (4.8 s → 3.2 s)."
+    "Reset “Picture match” to the defaults: Spin speed (4.8 s → 3.2 s)."
   );
   const blocked = resetPlan(slot, english);
   assert.equal(blocked.blockedReason, "Fixed in measured runs, so it cannot be reset.");
-  assert.equal(settingPath("craneSweepMs", "en"), "“Difficulty of each game” → “Claw grab” → “Claw speed”");
+  assert.equal(settingPath("craneSweepMs", "en"), "“Difficulty of each game” → “Claw machine” → “Claw speed”");
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

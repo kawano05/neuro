@@ -196,7 +196,7 @@ function settingsSection(w, lang) {
       html: `
       <p>
         Open it by touching “<strong>Supporter settings</strong>” at the top right of the game-choosing screen (it does not open with the switch,
-        so the player cannot open it by mistake, and the yellow highlight stops on the settings screen). To go back, use “← Home”.
+        so the player cannot open it by mistake, and the yellow highlight stops on the settings screen). To go back, use “← Back to home”.
         Changes are saved automatically. With a keyboard, move with Tab and open or close headings with Enter / Space.
       </p>
       <p><strong>“${escapeHtml(say(common.title, lang))}”</strong> (the ${count} shown from the start)</p>
@@ -231,7 +231,7 @@ function settingsSection(w, lang) {
     html: `
       <p>
         遊びを選ぶ画面の右上「<strong>支援者の設定</strong>」を、指でさわると開きます（スイッチでは開きません。
-        ご本人が誤って開かないようにしてあり、設定の画面では黄色い枠も止まります）。戻るときは「← ホームへ」です。
+        ご本人が誤って開かないようにしてあり、設定の画面では黄色い枠も止まります）。戻るときは「← ホームへもどる」です。
         変更は自動で保存されます。キーボードでは Tab で移動し、Enter／Space で見出しを開閉します。
       </p>
       <p><strong>「${escapeHtml(say(common.title))}」</strong>（最初から出ている${count}つ）</p>

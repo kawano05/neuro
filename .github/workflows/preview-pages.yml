@@ -1,6 +1,6 @@
 name: Update Pages preview
 
-# デザイン改修中のブランチ（design/hakkiri）へ push したら、本番サイトの
+# デザイン改修中のブランチ（design/sekai）へ push したら、本番サイトの
 # /preview/ を作り直す（https://kawano05.github.io/neuro/preview/）。
 #
 # ここでは公開しない。公開先の github-pages 環境は main からしか公開を
@@ -16,7 +16,7 @@ name: Update Pages preview
 on:
   push:
     branches:
-      - design/hakkiri
+      - design/sekai
 
 permissions:
   actions: write

@@ -64,7 +64,7 @@
       data-scan
       aria-label={t({ ja: "ホームへもどる", en: "Back to home" })}
     >
-      <span class="tab-full">{t({ ja: "← ホームへ", en: "← Home" })}</span><span class="tab-short">{t({ ja: "ホーム", en: "Home" })}</span>
+      <span class="tab-full">{t({ ja: "← ホームへもどる", en: "← Back to home" })}</span><span class="tab-short">{t({ ja: "ホーム", en: "Home" })}</span>
     </button>
     <!--
       マッチング・VOCA・文字学習は利用者向けアクティビティなので、タブでは

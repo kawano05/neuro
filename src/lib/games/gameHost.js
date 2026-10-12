@@ -9,7 +9,8 @@
 //   idle        … 遊びの画面にいない（ホーム・けっか）
 //   ready       … 遊ぶ前の説明（games/readyScreen.js）。押下は「声を止める／始める」
 //   playing     … 遊んでいる最中。押下は課題の入力。走査しない
-//   unavailable … 音が出せず始められない画面（ゲームが ctx.markUnavailable で知らせる）。押下でホームへ
+//   unavailable … 音が出せず始められない画面（ゲームが ctx.markUnavailable で知らせる）。押下は、音が
+//                 止まっていただけなら1回だけ ためし直し、そうでなければホームへ
 //   finale      … 遊び終えてから、けっかへ移る前のお祝いの待ち。押下は受けない
 //   exitChoice  … エンドレスで押さずに待ったときの「もういちど／おわる」。ここだけ走査する
 //
@@ -772,7 +773,13 @@ export function createGameHost(ctx) {
         armExitChoice();
         return;
       case "unavailable":
-        // 音が出ず課題が始まらない画面には試行がない。次のひと押しで戻れる。
+        // 音が止まっていただけなら、このひと押しで もう一度ためす（押した操作の中で音を戻せる。
+        // 遊びの retryUnavailable が1回だけ true を返す）。ためしても鳴らない・鳴らせない端末なら、
+        // 試行は無いので、次のひと押しで戻れる。
+        if (activeInstance?.retryUnavailable?.()) {
+          setPhase("playing");
+          return;
+        }
         returnHome();
         return;
       case "exitChoice":
@@ -842,6 +849,8 @@ export function createGameHost(ctx) {
     stopPresentation,
     /** 設定が開いていれば閉じる（変更は捨てる）。閉じたら true（Esc 用）。 */
     closeSettings: () => gameSettings.close({ apply: false }),
+    /** 支援者が「この遊びの設定」を開いているか（キーを支援者の操作に返すため）。 */
+    settingsOpen: () => gameSettings.isOpen(),
     getActiveGameId: () => activeGameId,
     getLastSummary: () => lastResultSummary,
     /** gameProgress / resultStats の表示更新（ctx.renderAll() から呼ばれる）。 */

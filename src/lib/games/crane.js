@@ -36,6 +36,7 @@
 
 import { presentation } from "../presentation.js";
 import { cranePresets, cranePrizes, cueTones } from "../content.js";
+import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
   ENDLESS_PROTOCOL_VERSION,
   endlessDifficultyStep,
@@ -64,10 +65,11 @@ import {
 } from "../art/craneWorldArt.js";
 import { practiceArtFor, showsWorldArt, shownArtVersion } from "../artVersion.js";
 
-const FEEDBACK_GAIN = 0.05;
-const MISS_GAIN = 0.018;
+// 合図と当たりの音は合図の大きさ、外れは小さく（audio.js の CUE_TONE_GAIN / CUE_SOFT_GAIN）。
+const FEEDBACK_GAIN = CUE_TONE_GAIN;
+const MISS_GAIN = CUE_SOFT_GAIN;
 /** 走査カーソルが目標を通過した合図。目で追いにくい利用者への補助なので控えめに。 */
-const PASS_GAIN = 0.016;
+const PASS_GAIN = CUE_TONE_GAIN * 0.32;
 
 const COUNT_IN_STEP_S = 0.55;
 
@@ -464,7 +466,7 @@ export function createCraneGame(ctx) {
     stageEl.innerHTML = `${worldHtml}
       <div class="crane-cabinet" aria-hidden="true">
         <div class="crane-marquee">
-          <span class="crane-marquee-title">${tHtml("tile.crane-corner.title")}</span>
+          <span class="crane-marquee-title">${tHtml(practice ? "tile.crane-corner.title" : "stage.crane.measureTitle")}</span>
           <div class="crane-score">${tHtml("crane.score", { n: 0 })}</div>
         </div>
         <div class="crane-stage">
@@ -1134,6 +1136,9 @@ export function createCraneGame(ctx) {
       finished: false,
       config: {
         ...config,
+        // 合図音の大きさ（audio.js の CUE_TONE_GAIN）。2026-09-30 に 0.05 から上げたので、
+        // どちらの大きさで取った記録かを分けられるように残す。
+        cueGain: FEEDBACK_GAIN,
         targetSequence: targets.map((target) => ({ x: target.x, y: target.y })),
       },
       device: audio.getDeviceInfo(),

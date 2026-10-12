@@ -120,7 +120,7 @@ function checkDiscrimination(sessions) {
   const usable = runs.filter((session) => countTrials(session) >= MIN_TRIALS);
   if (usable.length < MIN_SESSIONS) {
     const left = MIN_SESSIONS - usable.length;
-    return { met: false, value: null, reason: `「高い音だけ」をあと${left}回`, reasonEn: `${left} more “high notes” ${left === 1 ? "run" : "runs"}` };
+    return { met: false, value: null, reason: `「音あそび」をあと${left}回`, reasonEn: `${left} more “Sound game” ${left === 1 ? "run" : "runs"}` };
   }
   const margins = usable.map(
     (session) => (session.summary?.goHitRate ?? 0) - (session.summary?.commissionRate ?? 0)

@@ -123,6 +123,7 @@ const checks = [
   ["keeps every scan target visible above the input dock", checkScanFocusStaysVisible],
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
+  ["starts a cue task once suspended sound comes back, and retries on the next press", checkCueTasksWaitForSuspendedSound],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["shows the seven common settings and preserves values through accessible details", checkSettingsDetails],
   ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
@@ -135,6 +136,7 @@ const checks = [
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
   ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
   ["keeps researcher data on the one log screen, with no dead researcher-mode switch", checkResearcherDataOnOneScreen],
+  ["takes any key as switch input on the start screen and inside a game", checkAnyKeyOnUserScreens],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps every screen free of overflow and undersized targets", checkLayoutInvariants],
@@ -1805,8 +1807,8 @@ async function checkHomeReturnFromTabs(page) {
  * キーを限ると「押しているのに何も起きない」が起きる——本人には理由が
  * 分からない。
  *
- * ただし走査中に限る。止まっているあいだは支援者がキーボードで普通に
- * 操作している場面なので、そこまで奪うと支援者の操作が壊れる。
+ * 走査が止まっていても受けるのは本人の画面だけ（checkAnyKeyOnUserScreens）。
+ * 支援者の画面ではキーボードで普通に操作するので、奪うと支援者の操作が壊れる。
  * 修飾キー単独と修飾キー付き（Ctrl+R 等）も奪わない。
  */
 async function checkAnyKeyWhileScanning(page) {
@@ -1843,6 +1845,37 @@ async function checkAnyKeyWhileScanning(page) {
   await page.waitForTimeout(600);
   const moved = await page.evaluate(() => document.querySelector(".view.is-active")?.id);
   assert(moved !== viewBefore, `F5 while scanning must activate the highlighted item (view stayed ${moved})`);
+}
+
+/**
+ * 本人の画面では、走査が止まっていても、どのキーでもスイッチ入力として受ける。
+ *
+ * スタート画面と遊びの中は走査を動かさない。以前はそこで Space / Enter しか
+ * 届かず、F5 を送るように設定した機器（NeuroNode はほかのアプリに合わせて
+ * キーを変えて使われる）では、パソコンのブラウザがページを読み直していた。
+ */
+async function checkAnyKeyOnUserScreens(page) {
+  await page.evaluate(() => {
+    window.__stillSamePage = true;
+  });
+  const samePage = () => page.evaluate(() => window.__stillSamePage === true);
+
+  // スタート画面：F5 で始まる。ページは読み直さない。
+  await page.keyboard.press("F5");
+  await waitForClass(page, "#homeView", "is-active");
+  assert(await samePage(), "F5 on the start screen must start, not reload the page");
+
+  // 遊びの中：F5 で「やりかた」を抜けて始まる。
+  await openActivity(page, t("tile.gonogo.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  for (let attempt = 0; attempt < 4 && (await page.locator(".game-ready").count()) > 0; attempt += 1) {
+    await page.waitForTimeout(250);
+    await page.keyboard.press("F5");
+  }
+  await page.waitForFunction(() => document.querySelectorAll(".game-ready").length === 0, null, { timeout: 5000 });
+  assert(await samePage(), "F5 inside a game must act as the switch, not reload the page");
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 async function checkKeyboardAndSwitchInput(page) {
@@ -2091,6 +2124,11 @@ async function checkSettingsDetails(page) {
     "Only the seven common settings (with the language) should be visible initially"
   );
   assert((await page.locator("#settings details[open]").count()) === 0, "Details should start collapsed");
+  // よく使う設定は囲んで先に出す。設定の画面では枠が動かないので、押せない入力ドックと
+  // 「枠は止まっています」の札を出さない（main の 9/30 の直し。theme-hakkiri.css の「支援者の世界」）。
+  await page.locator(".settings-quick #textMode").waitFor({ state: "visible" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await page.locator(".status-pill").waitFor({ state: "hidden" });
   const summary = page.locator("#settingsSwitch > summary");
   await page.locator("#hideVisualTasks").focus();
   await page.keyboard.press("Tab");
@@ -2752,6 +2790,8 @@ async function checkIpadSwitchControlMode(page, project) {
   await openSettingsDetails(page, "switch");
   await mode.click();
   await page.waitForFunction(() => !document.body.classList.contains("switch-control-mode"));
+  // 設定の画面では、委譲していなくても入力ドックは出さない（押せないものを
+  // 項目に重ねない。theme-hakkiri.css の「支援者の世界」）。
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
   assert(!(await page.locator("#autoScan").isDisabled()), "Auto scan control must unlock after delegation ends");
   assert(!(await page.locator("#autoScan").isChecked()), "Auto scan must remain stopped until explicitly enabled");
@@ -2885,13 +2925,18 @@ async function checkSlotL1GameFlow(page) {
   // 6つの絵の一覧は、そくていの回にだけ出す（れんしゅうでは「リールの周りの
   // 余計なもの」として外した。docs/design-renewal-2026-09-25.md §1.5）。
   // 画像そのものは そくていの回で使うので、読み込めることは見ておく。
-  await page.waitForFunction(() => {
-    const image = document.querySelector(".slot-symbol-guide img");
-    return image?.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
-  });
+  // 読み込みを待ってから見る。すぐ見ると、読み込み中のときに落ちる（前からあった
+  // タイミング次第の失敗。変更の前後どちらでも起きた）。
   const imageReady = await page
-    .locator(".slot-symbol-guide img")
-    .evaluate((image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+    .waitForFunction(
+      () => {
+        const image = document.querySelector(".slot-symbol-guide img");
+        return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+      },
+      null,
+      { timeout: 5000 }
+    )
+    .then(() => true, () => false);
   assert(imageReady, "Generated six-symbol guide PNG must load in the actual game");
   assert(
     !(await page.locator(".slot-symbol-guide").isVisible()),
@@ -4318,8 +4363,12 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
  *
  * 焦点が外れたら必ず戻ることまで見る。戻らないと、走査で操作する手段が
  * 画面から消えたままになる——利用者にとっては操作不能と同じ。
+ *
+ * ドックは、画面の「おす」ボタンを出す設定のときだけ出る（評価ログも本人の
+ * 画面と同じ）。設定の画面では出さない（押せないものを項目に重ねない）。
  */
 async function checkDockStepsAsideForTextEntry(page) {
+  await enableScreenSwitch(page);
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
@@ -4348,6 +4397,118 @@ async function checkDockStepsAsideForTextEntry(page) {
     !(await page.evaluate(() => document.body.classList.contains("supporter-menu-mode"))),
     "ホームへ戻ったら supporter-menu-mode は外れる"
   );
+}
+
+/**
+ * 遊びを始める瞬間に音が止まっていても（iOS のスリープ・ほかのアプリ・読み上げのあと）、
+ * 戻れば始まる。以前は始めた瞬間に1回だけ canSound() を見ていたので、resume() の途中だと
+ * 「おとが ならせません」になり、そのまま戻れなかった（2026-09-30 の打ち合わせで
+ * 「高い音だけ が動かない」）。戻らないときは理由を出し、直したあとで押せば始まる。
+ *
+ * iOS の「resume() のあと少ししてから running になる」を、state の getter を差し替えて作る。
+ */
+async function checkCueTasksWaitForSuspendedSound(page, project) {
+  if (project.name !== "chromium-desktop") return SKIPPED;
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) return SKIPPED;
+  await page.context().addInitScript(() => {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx || typeof BaseAudioContext === "undefined") return;
+    window.__fakeAudio = { state: null, resumeWorks: true };
+    const real = Object.getOwnPropertyDescriptor(BaseAudioContext.prototype, "state");
+    Object.defineProperty(Ctx.prototype, "state", {
+      configurable: true,
+      get() {
+        return window.__fakeAudio.state ?? real.get.call(this);
+      },
+    });
+    const resume = Ctx.prototype.resume;
+    Ctx.prototype.resume = function delayedResume() {
+      if (window.__fakeAudio.state === "suspended" && window.__fakeAudio.resumeWorks) {
+        setTimeout(() => {
+          window.__fakeAudio.state = null;
+        }, 300);
+      }
+      return resume.call(this);
+    };
+  });
+  await page.reload();
+
+  const passReady = async () => {
+    if ((await page.locator(".game-ready").count()) === 0) return;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await page.waitForTimeout(250);
+      await page.locator("#gameStage").click();
+      if ((await page.locator(".game-ready").count()) === 0) break;
+    }
+  };
+  const open = async (corner, task) => {
+    await page.locator("#startStage").click();
+    await waitForClass(page, "#homeView", "is-active");
+    if (corner) await openActivity(page, corner);
+    await openActivity(page, task);
+    await waitForClass(page, "#gameView", "is-active");
+  };
+  const started = (moduleClass) =>
+    page.evaluate(
+      (cls) => ({
+        running: document.querySelector("#gameStageContent")?.classList.contains(cls) || false,
+        unavailable: Boolean(document.querySelector(".game-unavailable")),
+      }),
+      moduleClass
+    );
+
+  // 1. 押した直後は止まっていて、0.3秒後に戻る（iOS のふつうの戻り方）。どちらの課題も始まる。
+  for (const [corner, task, moduleClass] of [
+    [null, t("tile.gonogo.title"), "module-rhythm"],
+    ["さかなつり", t("tile.fishing.title"), "module-fishing"],
+  ]) {
+    await open(corner, task);
+    await page.evaluate(() => {
+      window.__fakeAudio.state = "suspended";
+      window.__fakeAudio.resumeWorks = true;
+    });
+    await passReady();
+    await page.waitForTimeout(1200);
+    const result = await started(moduleClass);
+    assert(result.running && !result.unavailable, `${task} must start once the suspended sound comes back, got ${JSON.stringify(result)}`);
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+    await page.reload();
+  }
+
+  // 2. 戻らないままなら理由を出す。音を直してから押せば、その場で始まる。
+  await open(null, t("tile.gonogo.title"));
+  await page.evaluate(() => {
+    window.__fakeAudio.state = "suspended";
+    window.__fakeAudio.resumeWorks = false;
+  });
+  await passReady();
+  await page.locator(".game-unavailable").waitFor({ state: "visible" });
+  await page.evaluate(() => {
+    window.__fakeAudio.resumeWorks = true;
+  });
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(1500);
+  const retried = await started("module-rhythm");
+  assert(retried.running && !retried.unavailable, `Pressing again after fixing the sound must start the task, got ${JSON.stringify(retried)}`);
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.reload();
+
+  // 3. ためし直しても鳴らなければ、次のひと押しでホームへ戻れる（スイッチだけの人を、この画面に
+  //    閉じ込めない。games/unavailableScreen.js）。ためし直しは1回だけ。
+  await open(null, t("tile.gonogo.title"));
+  await page.evaluate(() => {
+    window.__fakeAudio.state = "suspended";
+    window.__fakeAudio.resumeWorks = false;
+  });
+  await passReady();
+  await page.locator('.game-unavailable[data-retry="true"]').waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator('.game-unavailable[data-retry="false"]').waitFor({ state: "visible", timeout: 5000 });
+  await page.locator("#gameStage").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 /**
@@ -4420,6 +4581,11 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
     const reason = await page.locator(".game-unavailable").getAttribute("data-reason");
     assert(reason === "stopped", `Expected the stopped-audio wording, got reason: ${reason}`);
 
+    // 止まっていただけなら、最初のひと押しは もう一度ためす（1回だけ）。鳴らないままなので、
+    // もう一度 同じ画面になり、次のひと押しで既存の安全な出口からホームへ戻る。
+    await page.waitForTimeout(200);
+    await page.locator("#gameStage").click();
+    await page.locator('.game-unavailable[data-retry="false"]').waitFor({ state: "visible", timeout: 5000 });
     await page.waitForTimeout(200);
     await page.locator("#gameStage").click();
     await page.waitForTimeout(300);
@@ -4428,7 +4594,6 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
       return (state.sessions || []).length;
     }, storageKey);
     assert(sessions === 0, `A task whose cue never sounds must not record trials, found ${sessions} session(s)`);
-    // 音を鳴らせない画面のひと押しは、既存の安全な出口からホームへ戻る。
     await waitForClass(page, "#homeView", "is-active");
     await page.reload();
   }
@@ -6127,8 +6292,19 @@ async function checkSwitchUnavailableExit(page) {
       await page.keyboard.press("Space");
       await finishReady(page);
       await page.locator(".game-unavailable").waitFor({ state: "visible" });
+      // 音が止まっていただけなら、最初のひと押しは もう一度ためす（1回だけ）。それでも鳴らなければ、
+      // 次のひと押しで戻れる（games/unavailableScreen.js）。ためし直せるかは画面が言う（data-retry）:
+      // AudioContext の無いブラウザ（Windows の WebKit）では「止まっていた」を作れず、鳴らせない端末と
+      // 同じ画面になるので、ひと押しで戻る。
+      const retries = (await page.locator(".game-unavailable").getAttribute("data-retry")) === "true";
+      assert(fault === "suspended" || !retries, "A device that cannot sound at all must not offer a retry");
       await page.waitForTimeout(180);
       await page.keyboard.press("Space");
+      if (retries) {
+        await page.locator('.game-unavailable[data-retry="false"]').waitFor({ state: "visible", timeout: 5000 });
+        await page.waitForTimeout(180);
+        await page.keyboard.press("Space");
+      }
       await waitForClass(page, "#homeView", "is-active");
       const count = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).sessions.length, storageKey);
       assert(count === 0, "Unavailable audio must not create a measurement session");

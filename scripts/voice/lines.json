@@ -1265,6 +1265,18 @@
    ]
   },
   {
+   "text": "いないいないばあ",
+   "from": [
+    "tile.color-legacy.title"
+   ]
+  },
+  {
+   "text": "いないいないばあ。",
+   "from": [
+    "tile.color-legacy.title (ready)"
+   ]
+  },
+  {
    "text": "う",
    "from": [
     "letters.option"
@@ -1342,18 +1354,6 @@
    "text": "くまさんをつかんだ！",
    "from": [
     "crane.voice.grip"
-   ]
-  },
-  {
-   "text": "くるくる止める",
-   "from": [
-    "tile.slot-corner.title"
-   ]
-  },
-  {
-   "text": "くるくる止める。",
-   "from": [
-    "tile.slot-corner.title (ready)"
    ]
   },
   {
@@ -1784,18 +1784,6 @@
    ]
   },
   {
-   "text": "アームでつかむ",
-   "from": [
-    "tile.crane-corner.title"
-   ]
-  },
-  {
-   "text": "アームでつかむ。",
-   "from": [
-    "tile.crane-corner.title (ready)"
-   ]
-  },
-  {
    "text": "イルカができたよ。",
    "from": [
     "coloring.voice.finish",
@@ -1868,6 +1856,18 @@
    "from": [
     "color.voice.progress",
     "party.voice.press"
+   ]
+  },
+  {
+   "text": "クレーンゲーム",
+   "from": [
+    "tile.crane-corner.title"
+   ]
+  },
+  {
+   "text": "クレーンゲーム。",
+   "from": [
+    "tile.crane-corner.title (ready)"
    ]
   },
   {
@@ -1965,18 +1965,6 @@
    "text": "ボールが転がって来ます。",
    "from": [
     "howto.baseball.1"
-   ]
-  },
-  {
-   "text": "ボールを打つ",
-   "from": [
-    "tile.baseball.title"
-   ]
-  },
-  {
-   "text": "ボールを打つ。",
-   "from": [
-    "tile.baseball.title (ready)"
    ]
   },
   {
@@ -2168,18 +2156,6 @@
    ]
   },
   {
-   "text": "押すと出てくる",
-   "from": [
-    "tile.color-legacy.title"
-   ]
-  },
-  {
-   "text": "押すと出てくる。",
-   "from": [
-    "tile.color-legacy.title (ready)"
-   ]
-  },
-  {
    "text": "支援者と一緒に使う測定です。",
    "from": [
     "howto.calibration.3"
@@ -2272,6 +2248,18 @@
    ]
   },
   {
+   "text": "絵あわせ",
+   "from": [
+    "tile.slot-corner.title"
+   ]
+  },
+  {
+   "text": "絵あわせ。",
+   "from": [
+    "tile.slot-corner.title (ready)"
+   ]
+  },
+  {
    "text": "続けるほど難しくなります。",
    "from": [
     "howto.endless.crane",
@@ -2297,9 +2285,33 @@
    ]
   },
   {
+   "text": "野球",
+   "from": [
+    "tile.baseball.title"
+   ]
+  },
+  {
+   "text": "野球。",
+   "from": [
+    "tile.baseball.title (ready)"
+   ]
+  },
+  {
    "text": "静かにしたいです",
    "from": [
     "voca.phrase"
+   ]
+  },
+  {
+   "text": "音あそび",
+   "from": [
+    "tile.gonogo.title"
+   ]
+  },
+  {
+   "text": "音あそび。",
+   "from": [
+    "tile.gonogo.title (ready)"
    ]
   },
   {
@@ -2312,18 +2324,6 @@
    "text": "音で釣る。",
    "from": [
     "tile.fishing.title (ready)"
-   ]
-  },
-  {
-   "text": "高い音だけ押す",
-   "from": [
-    "tile.gonogo.title"
-   ]
-  },
-  {
-   "text": "高い音だけ押す。",
-   "from": [
-    "tile.gonogo.title (ready)"
    ]
   },
   {
@@ -3081,6 +3081,18 @@
    ]
   },
   {
+   "text": "Baseball",
+   "from": [
+    "tile.baseball.title"
+   ]
+  },
+  {
+   "text": "Baseball.",
+   "from": [
+    "tile.baseball.title (ready)"
+   ]
+  },
+  {
    "text": "Basics",
    "from": [
     "voca.category"
@@ -3112,13 +3124,13 @@
    ]
   },
   {
-   "text": "Claw grab",
+   "text": "Claw machine",
    "from": [
     "tile.crane-corner.title"
    ]
   },
   {
-   "text": "Claw grab.",
+   "text": "Claw machine.",
    "from": [
     "tile.crane-corner.title (ready)"
    ]
@@ -3273,18 +3285,6 @@
    "text": "Here it comes...",
    "from": [
     "baseball.word.ready"
-   ]
-  },
-  {
-   "text": "Hit the ball",
-   "from": [
-    "tile.baseball.title"
-   ]
-  },
-  {
-   "text": "Hit the ball.",
-   "from": [
-    "tile.baseball.title (ready)"
    ]
   },
   {
@@ -3523,6 +3523,18 @@
    ]
   },
   {
+   "text": "Peekaboo",
+   "from": [
+    "tile.color-legacy.title"
+   ]
+  },
+  {
+   "text": "Peekaboo.",
+   "from": [
+    "tile.color-legacy.title (ready)"
+   ]
+  },
+  {
    "text": "Pick a game",
    "from": [
     "result.home"
@@ -3538,6 +3550,18 @@
    "text": "Pick a letter.",
    "from": [
     "tile.letters.title (ready)"
+   ]
+  },
+  {
+   "text": "Picture match",
+   "from": [
+    "tile.slot-corner.title"
+   ]
+  },
+  {
+   "text": "Picture match.",
+   "from": [
+    "tile.slot-corner.title (ready)"
    ]
   },
   {
@@ -3589,18 +3613,6 @@
    ]
   },
   {
-   "text": "Press and see",
-   "from": [
-    "tile.color-legacy.title"
-   ]
-  },
-  {
-   "text": "Press and see.",
-   "from": [
-    "tile.color-legacy.title (ready)"
-   ]
-  },
-  {
    "text": "Press as soon as you hear the bite and see the big “!”.",
    "from": [
     "howto.fishing.2.practice"
@@ -3610,18 +3622,6 @@
    "text": "Press as soon as you hear the bite.",
    "from": [
     "howto.fishing.2"
-   ]
-  },
-  {
-   "text": "Press on high notes",
-   "from": [
-    "tile.gonogo.title"
-   ]
-  },
-  {
-   "text": "Press on high notes.",
-   "from": [
-    "tile.gonogo.title (ready)"
    ]
   },
   {
@@ -3855,15 +3855,15 @@
    ]
   },
   {
-   "text": "Spin and stop",
+   "text": "Sound game",
    "from": [
-    "tile.slot-corner.title"
+    "tile.gonogo.title"
    ]
   },
   {
-   "text": "Spin and stop.",
+   "text": "Sound game.",
    "from": [
-    "tile.slot-corner.title (ready)"
+    "tile.gonogo.title (ready)"
    ]
   },
   {

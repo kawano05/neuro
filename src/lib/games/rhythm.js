@@ -40,6 +40,7 @@
 // =====================================================================
 
 import { rhythmPresets, cueTones } from "../content.js";
+import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
   allowsVisualGuidance,
   resolveDifficultyMode,
@@ -56,10 +57,10 @@ import { practiceArtFor } from "../artVersion.js";
 import { createRhythmVisuals } from "./rhythmVisuals.js";
 import { renderAudioUnavailable } from "./unavailableScreen.js";
 
-// フィードバック音（detailed-design.md §5.3）: hit は既定音量、miss/extra は
-// 小音量・短めにして罰的にしない。
-const FEEDBACK_GAIN_HIT = 0.05;
-const FEEDBACK_GAIN_MISS = 0.018;
+// フィードバック音（detailed-design.md §5.3）: hit は合図と同じ大きさ、miss/extra は
+// 小音量・短めにして罰的にしない（audio.js の CUE_TONE_GAIN / CUE_SOFT_GAIN）。
+const FEEDBACK_GAIN_HIT = CUE_TONE_GAIN;
+const FEEDBACK_GAIN_MISS = CUE_SOFT_GAIN;
 // 最終判定も通常の判定と同じだけ画面へ残してから結果へ進む。
 // 入力と音のスケジューラは判定直後に止めるので、待機中に6回目は入らない。
 export const RHYTHM_FINAL_FEEDBACK_MS = 480;
@@ -517,6 +518,12 @@ export function createRhythmGame(gameId) {
     let artVersion = null;
     let rafId = null;
     let destroyed = false;
+    // 音が止まっていて始められないとき（おとが ならせません）と、戻るのを待っているあいだ。
+    let soundUnavailable = false;
+    let waitingForSound = false;
+    // 「音が鳴らせません」を出したときの音の状態と、ためし直しを済ませたか（1回だけ）。
+    let unavailableState = null;
+    let retriedSound = false;
     let hitFlashTimer = null;
     let finishTimer = null;
     // 画面から拍の手がかりを出すか（resolveVisualGuidance）。mount() で
@@ -594,6 +601,11 @@ export function createRhythmGame(gameId) {
      * にしかならず、どうすればいいかが伝わらない。この画面に来る時点で
      * 支援者が同席している前提なので、原因と次の手を書く。
      */
+    /** 音が止まっていただけ（iOS の suspended / interrupted）で、まだ ためし直していないか。 */
+    function canRetrySound() {
+      return !retriedSound && (unavailableState === "suspended" || unavailableState === "interrupted");
+    }
+
     function renderUnavailable(audioState) {
       if (!stageEl) return;
       rhythmVisuals?.destroy();
@@ -602,7 +614,8 @@ export function createRhythmGame(gameId) {
       offsetTrackEl = null;
       offsetMeanEl = null;
       stageEl.classList.remove("module-rhythm");
-      renderAudioUnavailable(stageEl, ctx, "rhythm", audioState);
+      unavailableState = audioState;
+      renderAudioUnavailable(stageEl, ctx, "rhythm", audioState, { canRetry: canRetrySound() });
     }
 
     function mountStageVisuals() {
@@ -879,6 +892,58 @@ export function createRhythmGame(gameId) {
       excludedTrialCount = params.excludedTrialCount || 0;
       mountStageVisuals();
 
+      // 音が止まっていたら（iOS のスリープ・ほかのアプリ・読み上げのあと）、戻るのを
+      // 少し待ってから始める。戻らなければ理由を出し、次のひと押しでもう一度ためす
+      // （audio.js の waitUntilRunning）。
+      if (audio.scheduler.canSound()) beginSession();
+      else waitForSound();
+    }
+
+    /**
+     * 「音が鳴らせません」の画面でのひと押し（gameHost の段階 "unavailable" から呼ばれる）。
+     * 音が止まっていただけなら、押した操作の中で音を戻せるので（neuronodeApp.js の
+     * resumeIfSuspended）、1回だけ もう一度ためして true を返す。ためしても鳴らない・鳴らせない
+     * 端末のときは false（ホストがホームへ戻す。スイッチだけの人を、この画面に閉じ込めない）。
+     * 記録はしない。
+     */
+    function retryUnavailable() {
+      if (destroyed || session) return false;
+      if (waitingForSound) return true;
+      if (!soundUnavailable || !canRetrySound()) return false;
+      retriedSound = true;
+      waitForSound({ remount: true });
+      return true;
+    }
+
+    /**
+     * 音が鳴るようになるのを待って始める。鳴らないままなら「音が 鳴らせません」。
+     * その画面で押せば、1回だけ もう一度ためす（retryUnavailable）。
+     */
+    function waitForSound({ remount = false } = {}) {
+      if (waitingForSound) return;
+      waitingForSound = true;
+      const waiting = audio.scheduler.waitUntilRunning
+        ? audio.scheduler.waitUntilRunning()
+        : Promise.resolve(audio.scheduler.canSound());
+      waiting.then((running) => {
+        waitingForSound = false;
+        if (destroyed || session) return;
+        if (!running) {
+          soundUnavailable = true;
+          renderUnavailable(audio.scheduler.state());
+          return;
+        }
+        soundUnavailable = false;
+        if (remount) {
+          rhythmVisuals?.destroy();
+          mountStageVisuals();
+        }
+        beginSession();
+      });
+    }
+
+    /** セッションを始める（合図の予約・記録の用意）。音が鳴る状態で呼ぶ。 */
+    function beginSession() {
       // §6.3: 対応ペアの取得は「セッション開始時に1回」。perfMs/audioS を
       // 隣接する行で取得し、以降のずれ（クロックドリフト）は許容誤差内とする。
       anchorPerfMs = performance.now();
@@ -901,6 +966,7 @@ export function createRhythmGame(gameId) {
       // 素通りする。ヘッドレスでは再現しないので CI にも出てこない。
       if (startAt === null || !audio.scheduler.canSound()) {
         audio.scheduler.stop();
+        soundUnavailable = true;
         renderUnavailable(audio.scheduler.state());
         return;
       }
@@ -939,6 +1005,9 @@ export function createRhythmGame(gameId) {
         finished: false,
         config: {
           bpm: params.bpm,
+          // 合図音の大きさ（audio.js の CUE_TONE_GAIN）。2026-09-30 に 0.05 から上げたので、
+          // どちらの大きさで取った記録かを分けられるように残す。
+          cueGain: FEEDBACK_GAIN_HIT,
           countInBeats: params.countInBeats,
           targetBeats: params.targetBeats,
           judgmentWindowMs: settings.judgmentWindowMs,
@@ -1011,6 +1080,6 @@ export function createRhythmGame(gameId) {
       offsetMeanEl = null;
     }
 
-    return { mount, handleInput, destroy };
+    return { mount, handleInput, destroy, retryUnavailable };
   };
 }

@@ -28,6 +28,7 @@
 
 import { presentation } from "../presentation.js";
 import { cueTones, fishingPresets, fishingSpecies } from "../content.js";
+import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
   ENDLESS_PROTOCOL_VERSION,
   endlessDifficultyStep,
@@ -53,8 +54,9 @@ const fishLargeUrl = new URL("../../assets/fishing/fish-large.png", import.meta.
 const fishMediumUrl = new URL("../../assets/fishing/fish-medium.png", import.meta.url).href;
 const fishSmallUrl = new URL("../../assets/fishing/fish-small.png", import.meta.url).href;
 
-const FEEDBACK_GAIN = 0.05;
-const MISS_GAIN = 0.018;
+// アタリと当たりの音は合図の大きさ、外れは小さく（audio.js の CUE_TONE_GAIN / CUE_SOFT_GAIN）。
+const FEEDBACK_GAIN = CUE_TONE_GAIN;
+const MISS_GAIN = CUE_SOFT_GAIN;
 
 /** 魚の見た目（content.js の species.asset → 画像URL）。 */
 const FISH_ART = {
@@ -302,6 +304,14 @@ export function createFishingGame(gameId) {
   let castTimer = null;
   let catchTimer = null;
   let destroyed = false;
+  // 始める前に作った計画と、音が止まっていて始められないとき（おとが ならせません）・
+  // 戻るのを待っているあいだの印。
+  let preparedPlan = null;
+  let soundUnavailable = false;
+  let waitingForSound = false;
+  // 「音が鳴らせません」を出したときの音の状態と、ためし直しを済ませたか（1回だけ）。
+  let unavailableState = null;
+  let retriedSound = false;
   let finished = false;
   let sessionStartAudioMs = 0;
   let anchorPerfMs = 0;
@@ -361,8 +371,14 @@ export function createFishingGame(gameId) {
    * 音が出せない端末で、課題を始められない理由を画面に出す。
    * 読む相手は支援者なので、原因と次の手を書く（games/rhythm.js と同型）。
    */
+  /** 音が止まっていただけ（iOS の suspended / interrupted）で、まだ ためし直していないか。 */
+  function canRetrySound() {
+    return !retriedSound && (unavailableState === "suspended" || unavailableState === "interrupted");
+  }
+
   function renderUnavailable(audioState) {
-    renderAudioUnavailable(stageEl, ctx, "fishing", audioState);
+    unavailableState = audioState;
+    renderAudioUnavailable(stageEl, ctx, "fishing", audioState, { canRetry: canRetrySound() });
   }
 
   function renderMarkup() {
@@ -923,8 +939,59 @@ export function createFishingGame(gameId) {
     stageEl.classList.toggle("has-world-art", worldArt);
     renderMarkup();
     if (worldArt) decoratePractice();
+    preparedPlan = buildPlan();
 
-    const { trials, kindSequence, foreperiods } = buildPlan();
+    // 音が止まっていたら（iOS のスリープ・ほかのアプリ・読み上げのあと）、戻るのを
+    // 少し待ってから始める。戻らなければ理由を出し、次のひと押しでもう一度ためす
+    // （audio.js の waitUntilRunning。games/rhythm.js と同じ）。
+    if (audio.scheduler.canSound()) beginSession();
+    else waitForSound();
+  }
+
+  /**
+   * 「音が鳴らせません」の画面でのひと押し（gameHost の段階 "unavailable" から呼ばれる）。
+   * 音が止まっていただけなら、押した操作の中で音を戻せるので（neuronodeApp.js の
+   * resumeIfSuspended）、1回だけ もう一度ためして true を返す。ためしても鳴らない・鳴らせない
+   * 端末のときは false（ホストがホームへ戻す。スイッチだけの人を、この画面に閉じ込めない）。
+   * 記録はしない。
+   */
+  function retryUnavailable() {
+    if (destroyed || session) return false;
+    if (waitingForSound) return true;
+    if (!soundUnavailable || !canRetrySound()) return false;
+    retriedSound = true;
+    waitForSound({ remount: true });
+    return true;
+  }
+
+  /** 音が鳴るようになるのを待って始める。鳴らないままなら「おとが ならせません」。 */
+  function waitForSound({ remount = false } = {}) {
+    if (waitingForSound) return;
+    waitingForSound = true;
+    const waiting = audio.scheduler.waitUntilRunning
+      ? audio.scheduler.waitUntilRunning()
+      : Promise.resolve(audio.scheduler.canSound());
+    waiting.then((running) => {
+      waitingForSound = false;
+      if (destroyed || session) return;
+      if (!running) {
+        soundUnavailable = true;
+        renderUnavailable(audio.scheduler.state());
+        return;
+      }
+      soundUnavailable = false;
+      if (remount && stageEl) {
+        stageEl.classList.add("module-fishing");
+        renderMarkup();
+        if (worldArt) decoratePractice();
+      }
+      beginSession();
+    });
+  }
+
+  /** セッションを始める（合図の予約・記録の用意）。音が鳴る状態で呼ぶ。 */
+  function beginSession() {
+    const { trials, kindSequence, foreperiods } = preparedPlan;
     trialsPlan = trials;
     currentIndex = 0;
     endlessFailed = false;
@@ -966,6 +1033,7 @@ export function createFishingGame(gameId) {
     // CI には出てこない種類の失敗。
     if (startAt === null || !audio.scheduler.canSound()) {
       audio.scheduler.stop();
+      soundUnavailable = true;
       renderUnavailable(audio.scheduler.state());
       return;
     }
@@ -997,6 +1065,9 @@ export function createFishingGame(gameId) {
       finished: false,
       config: {
         ...config,
+        // 合図音の大きさ（audio.js の CUE_TONE_GAIN）。2026-09-30 に 0.05 から上げたので、
+        // どちらの大きさで取った記録かを分けられるように残す。
+        cueGain: FEEDBACK_GAIN,
         seedSequence: foreperiods,
         kindSequence,
         // その回が「そくてい」か「れんしゅう」か（src/lib/difficultyMode.js）。
@@ -1081,6 +1152,6 @@ export function createFishingGame(gameId) {
     streakEl = null;
   }
 
-    return { mount, handleInput, destroy };
+    return { mount, handleInput, destroy, retryUnavailable };
   };
 }
