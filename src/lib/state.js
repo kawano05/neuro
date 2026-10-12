@@ -7,6 +7,7 @@
 //   失敗時は console.error と onError コールバック（連続失敗の初回のみ）で通知する。
 // =====================================================================
 
+import { DEFAULT_PRACTICE_ARTS, sanitizeArtVersion, sanitizePracticeArts } from "./artVersion.js";
 import {
   storageKey,
   readinessItems,
@@ -194,10 +195,16 @@ export const defaultState = {
     scanFeedback: "none",
     // 演出の強さ（FX_LEVELS）。
     fxLevel: "normal",
+    // れんしゅうの回の、タイミングの遊びの絵（遊びの種類ごと。artVersion.js の ART_FAMILIES）。
+    // 遊びの中の「この遊びの設定」で変える。そくていの回はいつも前の絵。どちらの絵を
+    // 見せたかは session.config.artVersion に残る。
+    practiceArts: { ...DEFAULT_PRACTICE_ARTS },
     // はじめの遊びの、遊びごとの見え方と音（ゲームの中の「この遊びの設定」で
     // 変える）。中身と理由は上の DEFAULT_PLAY_PREFS。
     playPrefs: JSON.parse(JSON.stringify(DEFAULT_PLAY_PREFS)),
-    // 既定OFF。ONで操作訓練/効果測定/研究タブを表示する（P0-0, detailed-design.md §0.2）。
+    // 研究者モード。もとは操作訓練・効果測定・研究のタブを出し分けていたが、その3タブは
+    // 2026-08-29 に消え、押しても何も変わらない操作子になっていたので、2026-10-01 に
+    // 設定画面から外した。保存の形を変えないためにキーと sanitize だけ残す（どこからも読まない）。
     researcherMode: false,
     // P0-2（ゲーム系設定、detailed-design.md §9.1）。judgmentWindowMs は判定窓の
     // 設定半幅（既定600・範囲200〜1500）、baselineOffsetMs はキャリブレーション由来の
@@ -711,6 +718,10 @@ function sanitizeRhythmSession(session, taskType) {
     // 成績に効きうるので、実際に効いていた強さを残す。この列を持たない古い記録は
     // 演出エンジンが無かった頃のもので、null（分からない）のまま。
     fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
+    // 見え方の版（その回に画面へ出した絵の版。src/lib/artVersion.js）。高い音だけの
+    // れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）。落とすと再読み込みで消え、
+    // 絵が変わる前後の回を分けられない。この列を持たない古い記録は null（分からない）。
+    artVersion: sanitizeArtVersion(config.artVersion),
     // どの表記で回したか。手順の説明が読めるかは成績に効きうる。
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
@@ -921,6 +932,9 @@ function sanitizeScanSession(session) {
     // 成績に効きうるので、実際に効いていた強さを残す。この列を持たない古い記録は
     // 演出エンジンが無かった頃のもので、null（分からない）のまま。
     fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
+    // 見え方の版（art/craneWorldArt.js・art/fishingWorldArt.js）。落とすと再読み込みで
+    // 消え、絵が変わる前後の回を分けられない。持たない古い記録は null（分からない）。
+    artVersion: sanitizeArtVersion(config.artVersion),
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
     textMode: enumOr(config.textMode, TEXT_MODES, "kana"),
@@ -1081,6 +1095,9 @@ function sanitizeReactionSession(session) {
     // 成績に効きうるので、実際に効いていた強さを残す。この列を持たない古い記録は
     // 演出エンジンが無かった頃のもので、null（分からない）のまま。
     fxLevel: enumOr(config.fxLevel, FX_LEVELS, null),
+    // 見え方の版（art/craneWorldArt.js・art/fishingWorldArt.js）。落とすと再読み込みで
+    // 消え、絵が変わる前後の回を分けられない。持たない古い記録は null（分からない）。
+    artVersion: sanitizeArtVersion(config.artVersion),
     // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
     measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
   };
@@ -1320,9 +1337,9 @@ export function sanitizeState(candidate) {
       scanFeedback: enumOr(settings.scanFeedback, SCAN_FEEDBACKS, fallback.settings.scanFeedback),
       speechVoice: enumOr(settings.speechVoice, SPEECH_VOICES, fallback.settings.speechVoice),
       fxLevel: enumOr(settings.fxLevel, FX_LEVELS, fallback.settings.fxLevel),
+      practiceArts: sanitizePracticeArts(settings.practiceArts),
       playPrefs: sanitizePlayPrefs(settings.playPrefs),
-      // 研究者モードの画面も外した。保存されていても効かせない。
-      researcherMode: false,
+      researcherMode: booleanOr(settings.researcherMode, fallback.settings.researcherMode),
       judgmentWindowMs: numberInRange(
         settings.judgmentWindowMs,
         fallback.settings.judgmentWindowMs,
@@ -1364,11 +1381,11 @@ export function sanitizeState(candidate) {
       fishingLimitMs: nullableNumberInRange(settings.fishingLimitMs, null, 800, 6000, true),
       craneTargetTrials: nullableNumberInRange(settings.craneTargetTrials, null, 3, 15, true),
       visualGuidance: booleanOr(settings.visualGuidance, fallback.settings.visualGuidance),
-      // 測定の回は選べなくした（2026-09-30。設定の「そくてい（研究）」を外した）。
-      // 以前に「測定」を保存した端末は、戻す画面が無いまま速さや回数が固定されて
-      // しまうので、読み込むときに必ず練習へ戻す。記録（session.config）の値は
-      // 下の sanitize で当時のまま残す。
-      difficultyMode: "practice",
+      difficultyMode: enumOr(
+        settings.difficultyMode,
+        DIFFICULTY_MODES,
+        fallback.settings.difficultyMode
+      ),
       // 設定は「いまどう表示するか」なので、選べる表記へ倒す。以前の
       // kanji / kana が保存された端末はここでルビ付き漢字になる。
       // セッション記録側（下の sanitize）は当時の値をそのまま残す——

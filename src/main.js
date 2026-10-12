@@ -9,6 +9,22 @@ import "@fortawesome/fontawesome-free/css/regular.min.css";
 import "./styles.css";
 // 利用者の世界のデザイン（はっきりした色）。styles.css より後に読む。
 import "./theme-hakkiri.css";
+// 遊びの雰囲気「おおさわぎ」の、遊びごとの見せ場（くす玉・額縁・空へ上がるパレード）。
+import "./party-themes.css";
+// タイミングの遊びの、れんしゅうの回の世界。theme-hakkiri.css の後に読む。
+// リールを 止める（昼の ゆうえんち）。
+import "./world-slot.css";
+// アームで つかむ（おもちゃ屋さん）。
+import "./world-crane.css";
+// さかなつり（押すと 出てくる とつながる海）。
+import "./world-fishing.css";
+// 高い音だけ（夕方の丘の音楽会）。
+import "./world-gonogo.css";
+// 説明・けっか・れんしゅうの割り付けを、画面の大きさに合わせる。
+import "./responsive.css";
+// 装飾の動きを止める決まり（雰囲気・そくてい）。どの動きより
+// 後から効かせたいので、いちばん最後に読む。
+import "./decoration-motion.css";
 
 const app = mount(App, {
   target: document.getElementById("app"),

@@ -53,7 +53,9 @@ import {
   computeBeatIntervalMs,
   generateGoNoGoSequence,
 } from "./judge.js";
+import { practiceArtFor } from "../artVersion.js";
 import { createRhythmVisuals } from "./rhythmVisuals.js";
+import { renderAudioUnavailable } from "./unavailableScreen.js";
 
 // フィードバック音（detailed-design.md §5.3）: hit は合図と同じ大きさ、miss/extra は
 // 小音量・短めにして罰的にしない（audio.js の CUE_TONE_GAIN / CUE_SOFT_GAIN）。
@@ -511,20 +513,23 @@ export function createRhythmGame(gameId) {
     let offsetMeanEl = null;
     let rhythmVisuals = null;
     let visualPresentation = "instrument";
+    // その回に画面へ出した絵の版（rhythmVisuals.js の rhythmArtVersion）。版面と同じく
+    // mount() で1回だけ決め、記録に残す。
+    let artVersion = null;
     let rafId = null;
     let destroyed = false;
     // 音が止まっていて始められないとき（おとが ならせません）と、戻るのを待っているあいだ。
     let soundUnavailable = false;
     let waitingForSound = false;
+    // 「音が鳴らせません」を出したときの音の状態と、ためし直しを済ませたか（1回だけ）。
+    let unavailableState = null;
+    let retriedSound = false;
     let hitFlashTimer = null;
     let finishTimer = null;
     // 画面から拍の手がかりを出すか（resolveVisualGuidance）。mount() で
     // 1回だけ確定させ、セッションの途中では変えない——途中で切り替わると、
     // その回の記録がどちらの条件だったのか言えなくなる。
     let visualGuidance = false;
-    // 動きを減らす設定。パルス円は rAF が毎フレーム transform を書くので、
-    // CSS の @media prefers-reduced-motion では止まらない。
-    let reduceMotion = false;
 
     // セッション文脈（mount() で1回だけ確定する。detailed-design.md §6.3）。
     let plan = null;
@@ -596,6 +601,11 @@ export function createRhythmGame(gameId) {
      * にしかならず、どうすればいいかが伝わらない。この画面に来る時点で
      * 支援者が同席している前提なので、原因と次の手を書く。
      */
+    /** 音が止まっていただけ（iOS の suspended / interrupted）で、まだ ためし直していないか。 */
+    function canRetrySound() {
+      return !retriedSound && (unavailableState === "suspended" || unavailableState === "interrupted");
+    }
+
     function renderUnavailable(audioState) {
       if (!stageEl) return;
       rhythmVisuals?.destroy();
@@ -604,38 +614,23 @@ export function createRhythmGame(gameId) {
       offsetTrackEl = null;
       offsetMeanEl = null;
       stageEl.classList.remove("module-rhythm");
-      // 原因で次の手が変わるので書き分ける。音が「使えない端末」なら端末を
-      // 変えるしかないが、「止まっている」だけなら消音スイッチや音量、
-      // 割り込みを直せばその場で続けられる。
-      const stopped = audioState === "suspended" || audioState === "interrupted";
-      const why = stopped
-        ? "音が止まっているため、リズムの課題は始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。画面を押すと、もう一度ためします。"
-        : "この端末では音を鳴らす機能が使えないため、リズムの課題は始められません。";
-      stageEl.innerHTML = `
-        <div class="game-unavailable">
-          <strong>おとが ならせません</strong>
-          <p>${why} 合図が音なので、続けても測定になりません。</p>
-          <p class="game-unavailable-hint">
-            右上の「おわる」で もどれます。${
-              stopped ? "直したあと、もう一度えらんでください。" : "音の出る端末で もう一度おためしください。"
-            }
-          </p>
-        </div>
-      `;
-      announce("音が鳴らせないため、リズムの課題を始められません");
+      unavailableState = audioState;
+      renderAudioUnavailable(stageEl, ctx, "rhythm", audioState, { canRetry: canRetrySound() });
     }
 
     function mountStageVisuals() {
       rhythmVisuals = createRhythmVisuals({
         gameId,
         visualGuidance,
-        reduceMotion,
+        practiceArt: practiceArtFor(settings, gameId),
         measurement: gameId === "calibration" || resolveDifficultyMode(settings) === "measure",
         exactToleranceMs: EXACT_TOLERANCE_MS,
         t,
       });
+      // そくていの回の台の題は、前の字のまま（遊びの名前を変えても、刺激の見え方は1pxも変えない）。
+      const measuredTitle = gameId === "gonogo" && resolveDifficultyMode(settings) === "measure";
       const mounted = rhythmVisuals.mount(stageEl, {
-        titleHtml: tHtml(`tile.${gameId}.title`),
+        titleHtml: tHtml(measuredTitle ? "stage.gonogo.measureTitle" : `tile.${gameId}.title`),
         instructionHtml: tHtml(STAGE_LABEL_KEYS[gameId] || STAGE_LABEL_KEYS.default),
         offsetMarkup: renderOffsetScale(),
       });
@@ -643,6 +638,7 @@ export function createRhythmGame(gameId) {
       offsetTrackEl = mounted.offsetTrackEl;
       offsetMeanEl = mounted.offsetMeanEl;
       visualPresentation = rhythmVisuals.profile;
+      artVersion = rhythmVisuals.artVersion;
     }
 
     /** 目盛りの上の位置（0=左端＝いちばん早い, 1=右端＝いちばん遅い）。 */
@@ -712,9 +708,8 @@ export function createRhythmGame(gameId) {
     function updatePulseVisual(nowAudioAbsMs) {
       if (!pulseEl || !plan) return;
       // 計器盤は予告のない測定面なので、音の前後を含めて円を動かさない。
-      // 動きを減らす設定も同じ静止表示にする。CSS の @media だけでは、rAF が
-      // 毎フレーム書く transform を止められないためJS側で固定する。
-      if (reduceMotion || visualPresentation === "instrument") {
+      // （端末の「動きを減らす」は見ない。2026-10-01、fx/fxSafety.js の resolveFxLevel）
+      if (visualPresentation === "instrument") {
         pulseEl.style.transform = "scale(0.93)";
         return;
       }
@@ -739,11 +734,27 @@ export function createRhythmGame(gameId) {
       setProgress(t("progress.remainingCount", { n: remainingBeats.length }));
     }
 
+    /**
+     * 押したときの返り（演出の粒・おおさわぎの仲間）を出す場所。手がかりを出す回は判定の帯。
+     * 出さない回（計器盤）は帯が隠れていて箱が (0,0) なので、粒が画面の左上に出ていた。
+     * そのときは押すところの円（太鼓）から出す。そくていの回は演出が何もしないので変わらない。
+     */
+    function feedbackSource() {
+      const hitLine = stageEl?.querySelector(".rhythm-hit-line");
+      if (hitLine && hitLine.getBoundingClientRect().width > 0) return hitLine;
+      return pulseEl || stageEl?.querySelector(".rhythm-judgment");
+    }
+
     /** 1件の trial 行をセッションへ追加し、gameHost へ永続化を依頼する。 */
     function recordTrial(row) {
       session.trials.push({ index: session.trials.length, ...row });
       session.summary = computeSummary(session.trials);
       logTrial(session);
+      if (row.beatIndex !== null) ctx.party?.react({
+        success: row.judgment === "hit" || row.judgment === "correctRejection",
+        source: feedbackSource(),
+        total: plan.judgedBeats.length,
+      });
     }
 
     function playFeedback(judgment) {
@@ -821,12 +832,6 @@ export function createRhythmGame(gameId) {
     // 引数名を t にしない: このスコープには文言を引く ctx.t がいる
     // （crane で実際に踏んだ。tests/i18n.test.mjs の shadow 検査を参照）。
     function handleInput(perfMs, _source) {
-      // 「おとが ならせません」の画面で押したら、もう一度ためす（押した操作の中で
-      // 止まった音を戻せる。neuronodeApp.js の resumeIfSuspended）。記録はしない。
-      if (!destroyed && !session && soundUnavailable) {
-        waitForSound({ remount: true });
-        return;
-      }
       if (destroyed || !session || session.finished) return;
       // §6.3: 入力時刻(performance.now()) → audio絶対時刻(ms) への変換をここに集約。
       const inputAbsMs = perfMs - anchorPerfMs + sessionStartAudioMs;
@@ -868,7 +873,7 @@ export function createRhythmGame(gameId) {
       });
       // 合った音符がはじける（れんしゅうの回だけ。そくていの回は演出エンジンが何もしない）。
       if (result.judgment === "hit") {
-        ctx.fx?.noteHit(stageEl?.querySelector(".rhythm-hit-line") || stageEl?.querySelector(".rhythm-judgment"));
+        ctx.fx?.noteHit(feedbackSource());
       }
       playFeedback(result.judgment);
       updateProgressText();
@@ -880,9 +885,6 @@ export function createRhythmGame(gameId) {
       // 版面（通常練習のノートレーンか、予告のない計器盤か）が
       // visualGuidance で変わるので、描くより先に確定させる。
       visualGuidance = resolveVisualGuidance(gameId, settings);
-      reduceMotion =
-        typeof window.matchMedia === "function" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       params = resolveParams(gameId, settings);
       effectiveWindowMs = computeEffectiveWindowMs(params.mode, params.bpm, settings.judgmentWindowMs);
@@ -898,9 +900,24 @@ export function createRhythmGame(gameId) {
     }
 
     /**
-     * 音が鳴るようになるのを待って始める。鳴らないままなら「おとが ならせません」。
-     * 押すたびに（ユーザー操作の中で）止まった音を戻せるので、その画面で押せば
-     * もう一度ためす（handleInput）。
+     * 「音が鳴らせません」の画面でのひと押し（gameHost の段階 "unavailable" から呼ばれる）。
+     * 音が止まっていただけなら、押した操作の中で音を戻せるので（neuronodeApp.js の
+     * resumeIfSuspended）、1回だけ もう一度ためして true を返す。ためしても鳴らない・鳴らせない
+     * 端末のときは false（ホストがホームへ戻す。スイッチだけの人を、この画面に閉じ込めない）。
+     * 記録はしない。
+     */
+    function retryUnavailable() {
+      if (destroyed || session) return false;
+      if (waitingForSound) return true;
+      if (!soundUnavailable || !canRetrySound()) return false;
+      retriedSound = true;
+      waitForSound({ remount: true });
+      return true;
+    }
+
+    /**
+     * 音が鳴るようになるのを待って始める。鳴らないままなら「音が 鳴らせません」。
+     * その画面で押せば、1回だけ もう一度ためす（retryUnavailable）。
      */
     function waitForSound({ remount = false } = {}) {
       if (waitingForSound) return;
@@ -1011,6 +1028,10 @@ export function createRhythmGame(gameId) {
           difficultyMode: resolveDifficultyMode(settings),
           // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
           fxLevel: ctx.fx?.level() ?? null,
+          // 見え方の版（その回に画面へ出した絵の版。src/lib/artVersion.js）。高い音だけの
+          // れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）ので、変わる前後の回を
+          // 分けられるようにする。そくていの回はいつでも 1。
+          artVersion,
           // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
           // 通っていない状態でも測定は止めない代わりに、どちらだったかを必ず
           // 残す。成績が低かった回について「規則を理解していなかったのでは」を
@@ -1059,6 +1080,6 @@ export function createRhythmGame(gameId) {
       offsetMeanEl = null;
     }
 
-    return { mount, handleInput, destroy };
+    return { mount, handleInput, destroy, retryUnavailable };
   };
 }

@@ -1,5 +1,6 @@
 // =====================================================================
-// dom.js — App.svelte が描画したマークアップへの参照を一括取得する
+// dom.js — Svelte が描画したマークアップへの参照を一括取得する
+// 設定は共通の項目定義から収集する（docs/rules/supporter-settings.md）。
 //
 // id を変更・追加した場合はここに追記する。各ビューは elements 経由でのみ
 // DOM に触れる（直接 querySelector しない）ことで、参照箇所を追いやすくする。
@@ -7,10 +8,37 @@
 // document.querySelector を併用している。
 // =====================================================================
 
+import { SETTINGS_FIELDS, SETTINGS_GROUPS } from "./settingsFields.js";
+
 export function collectElements() {
   return {
+    // 設定UIと同じ定義からIDを収集し、手書きの項目一覧を重複させない
+    // （入力・つまみの値・選んだものの説明・変えられない理由。SettingsFields.svelte と同じ id）。
+    ...Object.fromEntries(
+      SETTINGS_FIELDS.flatMap((field) => [
+        [field.id, document.getElementById(field.id)],
+        ...(field.type === "range" ? [[`${field.id}Value`, document.getElementById(`${field.id}Value`)]] : []),
+        ...(field.description ? [[`${field.id}Description`, document.getElementById(`${field.id}Description`)]] : []),
+        [`${field.id}Reason`, document.getElementById(`${field.id}Reason`)],
+      ])
+    ),
+    // くわしい設定のまとまりごとの「既定に戻す」と、その知らせ（SettingsReset.svelte）。
+    ...Object.fromEntries(
+      SETTINGS_GROUPS.filter((group) => group.reset).flatMap((group) => [
+        [`${group.id}Reset`, document.getElementById(`${group.id}Reset`)],
+        [`${group.id}ResetStatus`, document.getElementById(`${group.id}ResetStatus`)],
+      ])
+    ),
+    // 設定画面の常設部分（SettingsView.svelte / SettingsGuide.svelte）。
+    settingsView: document.querySelector("#settings"),
+    settingsModeStatus: document.querySelector("#settingsModeStatus"),
+    settingsGuidePrint: document.querySelector("#settingsGuidePrint"),
+    soundCreditsList: document.querySelector("#soundCreditsList"),
     scanState: document.querySelector("#scanState"),
     homeSupporterMenu: document.querySelector("#homeSupporterMenu"),
+    storageWarning: document.querySelector("#storageWarning"),
+    storageExport: document.querySelector("#storageExport"),
+    storageRetry: document.querySelector("#storageRetry"),
     liveRegion: document.querySelector("#liveRegion"),
     tabs: [...document.querySelectorAll(".tab")],
     views: [...document.querySelectorAll(".view")],
@@ -34,6 +62,17 @@ export function collectElements() {
     gameStageContent: document.querySelector("#gameStageContent"),
     gameProgress: document.querySelector("#gameProgress"),
     gameExit: document.querySelector("#gameExit"),
+    gameReadyControls: document.querySelector("#gameReadyControls"),
+    gameReadyStart: document.querySelector("#gameReadyStart"),
+    gameReadyPrevious: document.querySelector("#gameReadyPrevious"),
+    gameReadyForward: document.querySelector("#gameReadyForward"),
+    gameReadyPage: document.querySelector("#gameReadyPage"),
+    gameSwitchMenu: document.querySelector("#gameSwitchMenu"),
+    gameSwitchMenuTitle: document.querySelector("#gameSwitchMenuTitle"),
+    gameSwitchAgain: document.querySelector("#gameSwitchAgain"),
+    gameSwitchEnd: document.querySelector("#gameSwitchEnd"),
+    resultView: document.querySelector("#resultView"),
+    resultMode: document.querySelector("#resultMode"),
     gameSettings: document.querySelector("#gameSettings"),
     gameSettingsDialog: document.querySelector("#gameSettingsDialog"),
     resultStats: document.querySelector("#resultStats"),
@@ -64,6 +103,15 @@ export function collectElements() {
     resetOperation: document.querySelector("#resetOperation"),
     operationTrials: document.querySelector("#operationTrials"),
     operationSuccessRate: document.querySelector("#operationSuccessRate"),
+    participantId: document.querySelector("#participantId"),
+    exportRhythmCsv: document.querySelector("#exportRhythmCsv"),
+    exportSlotCsv: document.querySelector("#exportSlotCsv"),
+    exportSessionLedgerCsv: document.querySelector("#exportSessionLedgerCsv"),
+    exportRawJson: document.querySelector("#exportRawJson"),
+    sessionRetentionWarning: document.querySelector("#sessionRetentionWarning"),
+    exportScanCsv: document.querySelector("#exportScanCsv"),
+    exportRtCsv: document.querySelector("#exportRtCsv"),
+    handOverParticipant: document.querySelector("#handOverParticipant"),
     taskMistakes: document.querySelector("#taskMistakes"),
     taskTimingErrors: document.querySelector("#taskTimingErrors"),
     researchProfileGrid: document.querySelector("#researchProfileGrid"),
@@ -74,47 +122,23 @@ export function collectElements() {
     deploymentNotes: document.querySelector("#deploymentNotes"),
     copyDeploymentNote: document.querySelector("#copyDeploymentNote"),
     researchProtocolHint: document.querySelector("#researchProtocolHint"),
-    scanInterval: document.querySelector("#scanInterval"),
-    scanIntervalValue: document.querySelector("#scanIntervalValue"),
-    switchControlMode: document.querySelector("#switchControlMode"),
+    totalInputs: document.querySelector("#totalInputs"),
+    accuracyRate: document.querySelector("#accuracyRate"),
+    mistakeCount: document.querySelector("#mistakeCount"),
+    logList: document.querySelector("#logList"),
+    sessionList: document.querySelector("#sessionList"),
+    sessionTrends: document.querySelector("#sessionTrends"),
+    trendTabs: document.querySelector("#trendTabs"),
+    exportCsv: document.querySelector("#exportCsv"),
+    clearLog: document.querySelector("#clearLog"),
     switchControlModeNotice: document.querySelector("#switchControlModeNotice"),
-    autoScan: document.querySelector("#autoScan"),
-    showScreenSwitch: document.querySelector("#showScreenSwitch"),
-    scanFeedback: document.querySelector("#scanFeedback"),
-    fxLevel: document.querySelector("#fxLevel"),
-    speechEnabled: document.querySelector("#speechEnabled"),
-    speechVolume: document.querySelector("#speechVolume"),
-    speechVoice: document.querySelector("#speechVoice"),
-    speechVolumeValue: document.querySelector("#speechVolumeValue"),
-    soundEnabled: document.querySelector("#soundEnabled"),
-    largeText: document.querySelector("#largeText"),
-    highContrast: document.querySelector("#highContrast"),
     supporterMessage: document.querySelector("#supporterMessage"),
-    rhythmBpm: document.querySelector("#rhythmBpm"),
-    rhythmTargetBeats: document.querySelector("#rhythmTargetBeats"),
-    visualGuidance: document.querySelector("#visualGuidance"),
-    slotCycleMs: document.querySelector("#slotCycleMs"),
-    slotCycleMsValue: document.querySelector("#slotCycleMsValue"),
-    slotToleranceMs: document.querySelector("#slotToleranceMs"),
-    slotToleranceMsValue: document.querySelector("#slotToleranceMsValue"),
-    slotL1Rounds: document.querySelector("#slotL1Rounds"),
-    slotL1RoundsValue: document.querySelector("#slotL1RoundsValue"),
-    slotL2Rounds: document.querySelector("#slotL2Rounds"),
-    slotL2RoundsValue: document.querySelector("#slotL2RoundsValue"),
-    textMode: document.querySelector("#textMode"),
-    // 設定のタブと、その中身の面。
-    settingsTabs: [...document.querySelectorAll(".settings-tab")],
-    settingsMore: document.querySelector("#settingsMore"),
-    settingsPanels: [...document.querySelectorAll(".settings-panel")],
-    craneSweepMs: document.querySelector("#craneSweepMs"),
-    craneSweepMsValue: document.querySelector("#craneSweepMsValue"),
-    craneToleranceR: document.querySelector("#craneToleranceR"),
-    craneToleranceRValue: document.querySelector("#craneToleranceRValue"),
-    craneTargetTrials: document.querySelector("#craneTargetTrials"),
-    craneTargetTrialsValue: document.querySelector("#craneTargetTrialsValue"),
-    craneAudioGuidance: document.querySelector("#craneAudioGuidance"),
-    fishingLimitMs: document.querySelector("#fishingLimitMs"),
-    hideVisualTasks: document.querySelector("#hideVisualTasks"),
+    measureModeNotice: document.querySelector("#measureModeNotice"),
+    // そくていに入る前の成立確認（src/lib/readinessCheck.js）。
+    readinessCheck: document.querySelector("#readinessCheck"),
+    readinessLead: document.querySelector("#readinessLead"),
+    readinessList: document.querySelector("#readinessList"),
+    startCalibration: document.querySelector("#startCalibration"),
     toggleScan: document.querySelector("#toggleScan"),
     toggleScanLabel: document.querySelector("#toggleScanLabel"),
     primarySwitch: document.querySelector("#primarySwitch"),

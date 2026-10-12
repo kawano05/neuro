@@ -1,33 +1,37 @@
 // =====================================================================
-// fx/fxSafety.js — 演出の強さと、安全の上限（docs/overall-design-2026-09-28.md §4）
+// fx/fxSafety.js — 演出の係数と、安全の上限（docs/overall-design-2026-09-28.md §4）
 //
 // 打ち合わせで「強すぎる音ばかりだと発作を起こす人もいる」と言われた
 // （docs/design-renewal-2026-09-25.md §1.7）。光と動きも同じ扱いにする。
 // 上限はここで持ち、演出エンジン（fxEngine.js）が必ず通す——遊びの側で
 // 破れないようにするため。DOM に触れない純粋関数（テストで固定する）。
+//
+// 段（遊びの雰囲気）ごとの中身は src/lib/atmosphere.js の表がただ1つの持ち主。
+// ここはその表から、演出エンジンが使う係数だけを引き出す。
 // =====================================================================
 
-/** 演出の強さ（支援者の設定「見え方・音」）。 */
-export const FX_LEVELS = Object.freeze(["none", "subtle", "normal", "big"]);
-export const DEFAULT_FX_LEVEL = "normal";
+import { ATMOSPHERES, ATMOSPHERE_LEVELS } from "../atmosphere.js";
+
+/** 段（支援者の設定「遊びの雰囲気」。保存の値 settings.fxLevel）。 */
+export const FX_LEVELS = ATMOSPHERE_LEVELS;
+
+/** 演出エンジンに渡すおいわいの種類（紙吹雪とパレードは、エンジンから見れば同じ「full」）。 */
+const ENGINE_FINALE = { none: "none", ring: "ring", confetti: "full", parade: "full" };
 
 /**
- * 強さごとの係数。
- *   particles … 粒の数の倍率（0 なら粒を出さない）
- *   shake     … 画面を揺らすか
- *   camera    … 舞台が寄って戻るか
- *   glow      … やわらかい光の強さ
- *   finale    … できたときのおいわい: "none" | "ring"（星の輪だけ）| "full"（紙吹雪の雨まで）
- *   fireworks … 花火を足すか（展示会向けの「はで」だけ）
- *   hitStopMs … 当たった瞬間に止める長さ
- *   motion    … DOM の弾み・つぶれ（押したものが弾む）を出すか
+ * 段ごとの係数（atmosphere.js の表から作る）。
+ *   particles / particleSize / shake / camera / glow / fireworks / hitStopMs … 表の effects
+ *   finale … "none" | "ring"（星の輪だけ）| "full"（紙吹雪の雨まで）
+ *   motion … DOM の弾み・つぶれ（押したものが弾む）を出すか（表の pressMotion）
  */
-export const FX_SCALE = Object.freeze({
-  none: Object.freeze({ particles: 0, shake: false, camera: false, glow: 0, finale: "none", fireworks: false, hitStopMs: 0, motion: false }),
-  subtle: Object.freeze({ particles: 0.4, shake: false, camera: false, glow: 0.5, finale: "ring", fireworks: false, hitStopMs: 40, motion: true }),
-  normal: Object.freeze({ particles: 1, shake: true, camera: true, glow: 1, finale: "full", fireworks: false, hitStopMs: 80, motion: true }),
-  big: Object.freeze({ particles: 1.5, shake: true, camera: true, glow: 1, finale: "full", fireworks: true, hitStopMs: 90, motion: true }),
-});
+export const FX_SCALE = Object.freeze(
+  Object.fromEntries(
+    ATMOSPHERE_LEVELS.map((level) => {
+      const row = ATMOSPHERES[level];
+      return [level, Object.freeze({ ...row.effects, finale: ENGINE_FINALE[row.finale], motion: row.pressMotion })];
+    })
+  )
+);
 
 /** 同時に出す粒の上限（画面が埋まって何が起きたか分からなくならないように。重さの上限も兼ねる）。 */
 export const MAX_PARTICLES = 320;
@@ -41,22 +45,42 @@ export const MIN_GLOW_FADE_MS = 250;
 export const MAX_GLOW_ALPHA = 0.55;
 
 /**
- * いま使う強さ。
+ * いま使う段。
  * @param {object} settings state.settings（fxLevel）
- * @param {{reducedMotion?: boolean, measurement?: boolean}} [context]
- *   reducedMotion … 端末の「動きを減らす」。入っていれば「ひかえめ」より強くしない
- *   measurement   … そくていの回。何も足さない（docs/overall-design §5）
+ * @param {{measurement?: boolean}} [context]
+ *   measurement … そくていの回。何も足さない（docs/overall-design §5）
+ *
+ * 端末の「動きを減らす」（prefers-reduced-motion）は見ない（2026-10-01、ユーザーの判断）。
+ * 演出の量は支援者の設定「遊びの雰囲気」だけで決める。揺れや光が苦手な利用者には、支援者が
+ * 「なし」か「すっきり」を選ぶ。以前は端末の設定で弱め（9/28）、さらに全部止めていた（9/30）。
+ * Windows の「アニメーション効果」がオフの PC などでは、遊んでも何も起きないように見えた。
  */
-export function resolveFxLevel(settings, { reducedMotion = false, measurement = false } = {}) {
+export function resolveFxLevel(settings, { measurement = false } = {}) {
   if (measurement) return "none";
-  const chosen = FX_LEVELS.includes(settings?.fxLevel) ? settings.fxLevel : DEFAULT_FX_LEVEL;
-  if (reducedMotion && (chosen === "normal" || chosen === "big")) return "subtle";
-  return chosen;
+  // 保存の sanitize は既定の normal に戻す。実行中の未知値は装飾を足さない。
+  return FX_LEVELS.includes(settings?.fxLevel) ? settings.fxLevel : "none";
 }
 
-/** 強さの係数（知らない値は既定）。 */
+/** 実行時の係数（未知値は none。保存の既定値とは別）。 */
 export function fxScale(level) {
-  return FX_SCALE[level] || FX_SCALE[DEFAULT_FX_LEVEL];
+  return FX_LEVELS.includes(level) ? FX_SCALE[level] : FX_SCALE.none;
+}
+
+/**
+ * 装飾の動きの唯一の判定。課題に必要な移動と、記録する強さとは分ける。
+ *   motion      … 弾み・粒・ハンコなど、押したもの・おいわいの演出を出すか（表の pressMotion）
+ *   worldMotion … 世界のゆっくりした動き（海の光・泡・雲。表の worldMotion）
+ * そくていの回は、どちらも出さない（何も足さない）。
+ */
+export function resolveDecorationPolicy(settings, context = {}) {
+  const level = resolveFxLevel(settings, context);
+  const motion = !context.measurement && ATMOSPHERES[level].pressMotion;
+  return {
+    level,
+    motion,
+    worldMotion: motion && ATMOSPHERES[level].worldMotion,
+    scale: fxScale(motion ? level : "none"),
+  };
 }
 
 /**

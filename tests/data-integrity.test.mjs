@@ -1,6 +1,8 @@
+import { createRecordBackup } from "../src/lib/recordBackup.js";
 // state復元・CSV安全化・評価結果重複除去の回帰テスト。
 // npm run test:unit に含まれる。単独では次で実行できる:
 //   node tests/data-integrity.test.mjs
+import { ORIGINAL_ART_VERSION, shownArtVersion } from "../src/lib/artVersion.js";
 
 import assert from "node:assert/strict";
 import {
@@ -11,15 +13,19 @@ import {
   sanitizeState,
   summarizeRhythmTrials,
 } from "../src/lib/state.js";
-import { escapeCsv, formatTime, localFileStamp, toLocalIso } from "../src/lib/utils.js";
+import { escapeCsv, formatTime, exportFileStamp, toLocalIso } from "../src/lib/utils.js";
 import {
   buildSessionLedgerRows,
   buildSlotCsvRows,
   buildRhythmCsvRows,
   buildTaskCsvRows,
+  exportFileName,
+  exportParticipantLabel,
+  nextParticipantAfterHandOver,
+  recordedParticipants,
   SESSION_LEDGER_HEADERS,
-  buildLogCsvRows,
 } from "../src/lib/dataExport.js";
+import { buildLogCsvRows } from "../src/lib/views/log.js";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PRIZE_ART } from "../src/lib/games/craneArt.js";
@@ -45,6 +51,10 @@ import { coloringMarkup } from "../src/lib/games/coloring.js";
 import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
 import { POP_ANIMALS } from "../src/lib/art/hakkiriArt.js";
 import { SLOT_ENGINE_VERSION } from "../src/lib/games/slotJudge.js";
+import { CRANE_ART_VERSION } from "../src/lib/art/craneWorldArt.js";
+import { FISHING_ART_VERSION } from "../src/lib/art/fishingWorldArt.js";
+import { GONOGO_ART_VERSION } from "../src/lib/art/gonogoWorldArt.js";
+import { rhythmArtVersion } from "../src/lib/games/rhythmVisuals.js";
 
 class MemoryStorage {
   constructor() {
@@ -68,6 +78,17 @@ const tests = [];
 
 function test(name, fn) {
   tests.push({ name, fn });
+}
+
+/**
+ * CSV の行から、見出しの名前で列の値を引く（列の位置ではなく名前で）。
+ * 列はいちばん後ろに足していくので、後ろから何番目かで引くと、足すたびに検査が全部ずれる。
+ * 位置を動かさないことは、それぞれの CSV の「並びを固定する」検査が見る。
+ */
+function columnOf(rows, name) {
+  const index = rows[0].indexOf(name);
+  assert.ok(index >= 0, `CSV に ${name} の列がある`);
+  return rows.slice(1).map((row) => row[index]);
 }
 
 test("escapeCsv neutralizes spreadsheet formulas without changing numeric negatives", () => {
@@ -1023,12 +1044,14 @@ test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
     "fxLevel",
     // 画面に出した1コマの高さ（2026-09-28、games/slotFit.js）。その後ろ。
     "reelCellPx",
+    "artVersion",
   ]);
-  assert.equal(rows[0].length, 33);
-  assert.equal(rows[1].length, 33);
-  // 演出の強さ・1コマの高さを持たない古い記録は空欄（分からないことを空欄で表す）。
-  assert.equal(rows[1].at(-2), "");
-  assert.equal(rows[1].at(-1), "");
+  assert.equal(rows[0].length, 34);
+  assert.equal(rows[1].length, 34);
+  // 演出の強さ・1コマの高さ・見え方の版を持たない古い記録は空欄。
+  for (const name of ["fxLevel", "reelCellPx", "artVersion"]) {
+    assert.deepEqual(columnOf(rows, name), [""], `${name} を持たない古い記録は空欄`);
+  }
   assert.equal(rows[1][22], JSON.stringify(["circle", "fish", "star", "flower", "bird", "square"]));
   // 遅延を持たない端末の記録は空欄（0にしない——測っていないことと、
   // 遅延が0だったことは違う）。
@@ -1083,9 +1106,10 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // 既存18列 ＋ audioGuidance ＋ difficultyMode ＋ 端末6列 ＋ readiness
   // ＋ endless ＋ sweepMs。
   // ＋ endless ＋ sweepMs ＋ endlessProtocolVersion ＋ endReason。
-  // ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
-  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 6);
-  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 6);
+  // ＋ fxLevel（演出の強さ。2026-09-28）。
+  // ＋ artVersion（見え方の版。2026-09-30、いちばん後ろ）。
+  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 7);
+  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 7);
   assert.equal(scanRows[0][17], "judgment");
   assert.equal(scanRows[1][17], "grip");
   assert.equal(scanRows[0][18], "audioGuidance");
@@ -1116,13 +1140,11 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、toleranceR
   // だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
   assert.equal(scanRows[0][29], "sweepMs");
-  assert.equal(scanRows[0].at(-2), "endReason");
-  assert.equal(scanRows[0].at(-1), "fxLevel");
+  assert.deepEqual(scanRows[0].slice(-3), ["endReason", "fxLevel", "artVersion"]);
   assert.equal(scanRows[1][29], "");
   // 終了理由を持たない回は空欄（「分からない」と「予定どおり」は違う）。
-  assert.equal(scanRows[1].at(-2), "");
-  // 演出の強さを持たない古い記録も空欄。
-  assert.equal(scanRows[1].at(-1), "");
+  // 演出の強さ・見え方の版を持たない古い記録も空欄。
+  assert.deepEqual(scanRows[1].slice(-3), ["", "", ""]);
 
   const rtRows = buildTaskCsvRows(
     [
@@ -1151,9 +1173,10 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // 同じ2列を、既存列の**うしろ**に足す。
   // ＋ difficultyMode ＋ readiness ＋ endless ＋ limitMs
   //   ＋ endlessProtocolVersion ＋ endReason。
-  //   ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
-  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 7);
-  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 7);
+  //   ＋ fxLevel（演出の強さ。2026-09-28）。
+  //   ＋ artVersion（見え方の版。2026-09-30、いちばん後ろ）。
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 8);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 8);
   assert.equal(rtRows[0][13], "excluded");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 2], "deviceUserAgent");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceInputMethod");
@@ -1162,8 +1185,7 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 2], "endless");
   // 試行ごとの受付時間。エンドレスでは試行ごとに短くなる。
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 3], "limitMs");
-  assert.equal(rtRows[0].at(-2), "endReason");
-  assert.equal(rtRows[0].at(-1), "fxLevel");
+  assert.deepEqual(rtRows[0].slice(-3), ["endReason", "fxLevel", "artVersion"]);
   // 列を持たない古い記録は practice / n/a / false に倒す（scan と同じ既定）。
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS], "practice");
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 1], "n/a");
@@ -1558,7 +1580,8 @@ test("the filename date follows the device clock, like the contents do", () => {
     new Date("2026-01-01T15:30:00.000Z"),
   ];
   for (const sample of samples) {
-    assert.equal(localFileStamp(sample), toLocalIso(sample.toISOString()).slice(0, 10));
+    const stamp = exportFileStamp("P001", sample);
+    assert.equal(stamp.slice("P001-".length, "P001-".length + 10), toLocalIso(sample.toISOString()).slice(0, 10));
   }
 });
 
@@ -1960,8 +1983,8 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
   // 途中に挿すと、列位置で読んでいる解析側が黙って壊れる。
   // 既存18列 ＋ visualGuidance ＋ difficultyMode ＋ 端末7列 ＋ readiness。
   // 端末列は 2026-08-29 に deviceInputMethod を末尾へ足して7つになった。
-  // ＋ fxLevel（演出の強さ。2026-09-28、いちばん後ろ）。
-  assert.equal(rows[0].length, 20 + 7 + 2);
+  // ＋ fxLevel（演出の強さ。2026-09-28）＋ artVersion（見え方の版。2026-10-01、いちばん後ろ）。
+  assert.equal(rows[0].length, 20 + 7 + 3);
   assert.equal(rows[0][16], "judgment");
   assert.equal(rows[0][17], "excluded");
   assert.equal(rows[0][18], "visualGuidance");
@@ -1975,12 +1998,10 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
 
   // 末尾に成立確認の状態（src/lib/readinessCheck.js）。この列が無いと、
   // 成績の低い回について「そもそも課題が成立していたのか」を後から分けられない。
-  assert.equal(rows[0].at(-2), "measurementReadiness");
-  assert.equal(rows[0].at(-1), "fxLevel");
+  assert.deepEqual(rows[0].slice(-3), ["measurementReadiness", "fxLevel", "artVersion"]);
   // 列を持たない古い記録は n/a。met と復元してしまうと、確認を経た回と
-  // 区別できなくなる。
-  assert.equal(rows[1].at(-2), "n/a");
-  assert.equal(rows[1].at(-1), "");
+  // 区別できなくなる。演出の強さ・見え方の版を持たない古い記録は空欄。
+  assert.deepEqual(rows[1].slice(-3), ["n/a", "", ""]);
 });
 
 test("the rhythm CSV carries the readiness state of a measurement run", () => {
@@ -2010,7 +2031,7 @@ test("the rhythm CSV carries the readiness state of a measurement run", () => {
   ]);
   // 成立確認を通さずに測った回。測定は止めない代わりに、必ずそう書き出す
   // ——保存されているだけで書き出されない値は、実質「記録していない」のと同じ。
-  assert.equal(rows[1].at(-2), "overridden");
+  assert.deepEqual(columnOf(rows, "measurementReadiness"), ["overridden"]);
 });
 
 test("the effect level survives config -> sanitize -> CSV for every timing game", () => {
@@ -2047,15 +2068,181 @@ test("the effect level survives config -> sanitize -> CSV for every timing game"
   assert.equal(kept.config.fxLevel, "big");
   const unknown = sanitized.sessions.find((session) => session.sessionId === "fx-unknown");
   assert.equal(unknown.config.fxLevel, null, "知らない値は null（分からない）");
-  const rows = buildTaskCsvRows([kept], "rt");
-  assert.equal(rows[0].at(-1), "fxLevel");
-  assert.equal(rows[1].at(-1), "big");
-  const ledger = buildSessionLedgerRows([kept]);
-  assert.equal(ledger[0].at(-1), "fxLevel");
-  assert.equal(ledger[1].at(-1), "big");
+  assert.deepEqual(columnOf(buildTaskCsvRows([kept], "rt"), "fxLevel"), ["big"]);
+  assert.deepEqual(columnOf(buildSessionLedgerRows([kept]), "fxLevel"), ["big"]);
   // 設定そのものも保存をまたいで残り、知らない値は既定（ふつう）へ戻る。
   assert.equal(sanitizeState({ settings: { fxLevel: "subtle" } }).settings.fxLevel, "subtle");
   assert.equal(sanitizeState({ settings: { fxLevel: "strobe" } }).settings.fxLevel, "normal");
+});
+
+test("the recorded art version is the art that was shown: measured runs always show version 1", () => {
+  // そくていの回は元の絵のまま。「その版のアプリで遊んだ」ではなく「見せた絵」を残す
+  // （src/lib/artVersion.js）。見え方の変わらないそくていの記録を、版の列で分けないため。
+  assert.equal(shownArtVersion("measure", CRANE_ART_VERSION), ORIGINAL_ART_VERSION);
+  assert.equal(shownArtVersion("measure", FISHING_ART_VERSION), ORIGINAL_ART_VERSION);
+  assert.equal(shownArtVersion("practice", CRANE_ART_VERSION), CRANE_ART_VERSION);
+  assert.equal(shownArtVersion("practice", FISHING_ART_VERSION), FISHING_ART_VERSION);
+});
+
+test("the art version survives config -> sanitize -> CSV for the arm and fishing games", () => {
+  // れんしゅうの回の景品・アーム・魚の絵は刺激そのもの。絵を替えた前後の回を分けられるよう、
+  // 見え方の版を残す（art/craneWorldArt.js・art/fishingWorldArt.js）。3経路のどれかで
+  // 落ちると、残したつもりの値が再読み込みや書き出しで消える。
+  const base = {
+    startedAtIso: "2026-09-30T00:00:00.000Z",
+    aborted: false,
+    finished: true,
+    device: {},
+  };
+  const sanitized = sanitizeState({
+    sessions: [
+      {
+        ...base,
+        sessionId: "art-scan",
+        taskType: "scan",
+        gameId: "crane",
+        config: { targetTrials: 1, difficultyMode: "practice", artVersion: CRANE_ART_VERSION },
+        trials: [
+          {
+            index: 0,
+            targetX: 30,
+            targetY: 40,
+            toleranceR: 15,
+            // 真ん中でつかんだ試行（sanitize は距離と判定の食い違いを捨てる）。
+            selectedX: 30,
+            selectedY: 40,
+            dx: 0,
+            dy: 0,
+            distance: 0,
+            xPhaseMs: 500,
+            yPhaseMs: 600,
+            judgment: "grip",
+          },
+        ],
+      },
+      {
+        ...base,
+        sessionId: "art-rt",
+        taskType: "rt",
+        gameId: "fishing",
+        config: { targetTrials: 1, limitMs: 2000, difficultyMode: "practice", artVersion: FISHING_ART_VERSION },
+        trials: [{ index: 0, kind: "real", foreperiodMs: 1500, cueMs: 1800, inputMs: 2100, reactionTimeMs: 300, judgment: "hit", excluded: false }],
+      },
+      {
+        ...base,
+        sessionId: "art-old",
+        taskType: "rt",
+        gameId: "fishing",
+        config: { targetTrials: 1, limitMs: 2000, artVersion: "two" },
+        trials: [],
+      },
+    ],
+  });
+  const byId = (id) => sanitized.sessions.find((session) => session.sessionId === id);
+  assert.equal(byId("art-scan").config.artVersion, CRANE_ART_VERSION);
+  assert.equal(byId("art-rt").config.artVersion, FISHING_ART_VERSION);
+  assert.equal(byId("art-old").config.artVersion, null, "数でない値・列の無い古い記録は null（分からない）");
+
+  for (const value of [-1, 0, 1.8, "2", NaN, Infinity, null, undefined, 1, 1001]) {
+    const sessions = [byId("art-scan"), byId("art-rt")].map(session => ({
+      ...session, config: { ...session.config, artVersion: value },
+    }));
+    const restored = sanitizeState({ sessions }).sessions;
+    assert.equal(restored.length, 2);
+    restored.forEach(session => assert.equal(session.config.artVersion,
+      Number.isInteger(value) && value >= 1 ? value : null));
+  }
+
+  assert.deepEqual(columnOf(buildTaskCsvRows([byId("art-scan")], "scan"), "artVersion"), [CRANE_ART_VERSION]);
+  assert.deepEqual(columnOf(buildTaskCsvRows([byId("art-rt")], "rt"), "artVersion"), [FISHING_ART_VERSION]);
+  assert.deepEqual(
+    columnOf(buildSessionLedgerRows([byId("art-scan"), byId("art-rt"), byId("art-old")]), "artVersion"),
+    [CRANE_ART_VERSION, FISHING_ART_VERSION, ""]
+  );
+});
+
+test("the rhythm art version is the art that was shown and survives config -> sanitize -> CSV", () => {
+  // 高い音だけの れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）。記録するのは
+  // 「その回に見せた絵の版」（src/lib/artVersion.js）: そくていの回はいつでも 1、
+  // 作り直していないリズムの遊び（リズム練習・続けて・キャリブレーション）も 1。
+  assert.equal(rhythmArtVersion("gonogo", false), GONOGO_ART_VERSION);
+  assert.equal(rhythmArtVersion("gonogo", true), ORIGINAL_ART_VERSION);
+  assert.equal(rhythmArtVersion("gonogo", false), shownArtVersion("practice", GONOGO_ART_VERSION));
+  assert.equal(rhythmArtVersion("gonogo", true), shownArtVersion("measure", GONOGO_ART_VERSION));
+  for (const gameId of ["rhythm-l1", "rhythm-l2", "calibration"]) {
+    assert.equal(rhythmArtVersion(gameId, false), ORIGINAL_ART_VERSION, `${gameId}: 絵は元のまま`);
+    assert.equal(rhythmArtVersion(gameId, true), ORIGINAL_ART_VERSION, `${gameId}: そくていは元の絵`);
+  }
+
+  const base = {
+    taskType: "gonogo",
+    gameId: "gonogo",
+    participantId: "P001",
+    startedAtIso: "2026-10-01T00:00:00.000Z",
+    aborted: false,
+    finished: false,
+    device: {},
+    trials: [
+      {
+        index: 0,
+        beatIndex: 0,
+        beatKind: "go",
+        scheduledMs: 3600,
+        inputMs: 3650,
+        rawOffsetMs: 50,
+        appliedBaselineMs: 0,
+        judgment: "hit",
+        excluded: false,
+      },
+    ],
+  };
+  const gonogoConfig = {
+    ...RHYTHM_CONFIG,
+    mode: "gonogo",
+    countInBeats: 3,
+    targetBeats: 1,
+    goRatio: 0.6,
+    seedSequence: ["go"],
+  };
+  const sanitized = sanitizeState({
+    sessions: [
+      {
+        ...base,
+        sessionId: "art-gonogo-practice",
+        config: { ...gonogoConfig, difficultyMode: "practice", artVersion: GONOGO_ART_VERSION },
+      },
+      {
+        ...base,
+        sessionId: "art-gonogo-measure",
+        config: { ...gonogoConfig, difficultyMode: "measure", artVersion: ORIGINAL_ART_VERSION },
+      },
+      { ...base, sessionId: "art-gonogo-old", config: { ...gonogoConfig } },
+    ],
+  });
+  const byId = (id) => sanitized.sessions.find((session) => session.sessionId === id);
+  // 1. sanitize: 再読み込みで消えない。持たない古い記録は null（分からない）。
+  assert.equal(byId("art-gonogo-practice").config.artVersion, GONOGO_ART_VERSION);
+  assert.equal(byId("art-gonogo-measure").config.artVersion, ORIGINAL_ART_VERSION);
+  assert.equal(byId("art-gonogo-old").config.artVersion, null);
+  for (const value of [-1, 0, 1.8, "2", NaN, Infinity, null, undefined, 1, 2, 1001]) {
+    const restored = sanitizeState({
+      sessions: [{ ...base, sessionId: "art-v", config: { ...gonogoConfig, artVersion: value } }],
+    }).sessions[0];
+    assert.equal(
+      restored.config.artVersion,
+      Number.isInteger(value) && value >= 1 ? value : null,
+      `artVersion ${String(value)}: 1以上の整数だけを丸めずに残す`
+    );
+  }
+
+  // 2. リズムの CSV: いちばん後ろの列（ほかの列の位置を動かさない）。
+  const rows = buildRhythmCsvRows([byId("art-gonogo-practice"), byId("art-gonogo-measure"), byId("art-gonogo-old")]);
+  assert.equal(rows[0].indexOf("artVersion"), rows[0].indexOf("fxLevel") + 1, "fxLevel のすぐ後ろ");
+  assert.deepEqual(columnOf(rows, "artVersion"), [GONOGO_ART_VERSION, ORIGINAL_ART_VERSION, ""]);
+
+  // 3. 台帳: どの課題も同じ列。
+  const ledger = buildSessionLedgerRows([byId("art-gonogo-practice"), byId("art-gonogo-measure"), byId("art-gonogo-old")]);
+  assert.deepEqual(columnOf(ledger, "artVersion"), [GONOGO_ART_VERSION, ORIGINAL_ART_VERSION, ""]);
 });
 
 test("the phrase board has English for every phrase and group", () => {
@@ -2092,6 +2279,69 @@ test("every recorded sound has a credit, and every credit is complete", () => {
   const files = readdirSync(dir).filter((file) => /\.(mp3|m4a|aac|wav|ogg)$/.test(file));
   assert.ok(files.length > 0, "録音が1つも無い");
   files.forEach((file) => assert.ok(readme.includes(file), `${file} が README の表に無い`));
+});
+
+test("export names include a safe participant and local hours minutes seconds", () => {
+  const stamp = exportFileStamp('P:01/\\<>"|?*', new Date('2026-09-30T03:04:05Z'));
+  assert.match(stamp, /^P_01_+-\d{4}-\d{2}-\d{2}-\d{6}$/);
+  assert.ok(stamp.includes('120405') || stamp.includes('030405'), stamp);
+  assert.match(exportFileStamp(''), /^no-id-/);
+});
+
+test("backup receipts match record contents and require every relevant CSV", () => {
+  const state = cloneDefaultState();
+  state.sessions = [{ taskType: "slot", trials: [] }, { taskType: "rt", trials: [] }];
+  state.logs = [{ label: "old" }];
+  const backup = createRecordBackup(state);
+  assert.equal(backup.canClear(), false);
+  backup.mark("slot");
+  assert.equal(backup.canClear(), false);
+  backup.mark("ledger"); backup.mark("rt");
+  assert.equal(backup.canClear(), true);
+  state.logs[0].label = "same count, new record";
+  assert.equal(backup.canClear(), false);
+  backup.mark("raw"); assert.equal(backup.canClear(), true);
+  state.sessions[0].trials.push({ index: 0 });
+  assert.equal(backup.canClear(), false);
+  backup.mark("logs"); assert.equal(backup.canClear("logs"), true);
+  state.logs.push({ label: "new" });
+  assert.equal(backup.canClear("logs"), false);
+  backup.mark("raw"); backup.reset();
+  assert.equal(backup.canClear(), false);
+});
+
+test("export names come from the participants in the exported records, not the input field", () => {
+  const at = new Date("2026-10-01T06:30:00Z");
+  const of = (...ids) => ids.map((participantId) => ({ participantId }));
+  assert.deepEqual(recordedParticipants(of("P001", "P001", "", "P002")), ["P001", "", "P002"]);
+  assert.equal(exportParticipantLabel(of("P001", "P001")), "P001", "1人ならそのID");
+  assert.equal(exportParticipantLabel(of("P001", "P002")), "multi", "2人以上なら multi");
+  assert.equal(exportParticipantLabel(of("P001", "")), "multi", "IDなしの回が混ざっても multi");
+  assert.equal(exportParticipantLabel([]), "", "記録が無いものは no-id（exportFileStamp が付ける）");
+  assert.match(exportFileName("neuronode-slot", of("P:01"), "csv", at), /^neuronode-slot-P_01-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/);
+  assert.match(exportFileName("neuronode-raw", of("A", "B"), "json", at), /^neuronode-raw-multi-/);
+  assert.match(exportFileName("neuronode-log", [], "csv", at), /^neuronode-log-no-id-/);
+});
+
+test("typing the next participant after an export does not block clearing the same records", () => {
+  const state = cloneDefaultState();
+  state.sessions = [{ taskType: "rt", participantId: "P001", trials: [] }];
+  state.logs = [{ label: "a" }];
+  state.evaluation.participantId = "P001";
+  const backup = createRecordBackup(state);
+  backup.mark("raw");
+  state.evaluation.participantId = "P002";
+  assert.equal(backup.canClear(), true, "欄の参加者IDは記録そのものではない");
+  assert.equal(backup.participantAtExport(), "P001");
+  state.evaluation.observerNotes = "あとから書いたメモ";
+  assert.equal(backup.canClear(), false, "評価の値（記録）が変われば、また書き出す");
+
+  // 切り替えのあと欄に残すID: 書き出したあとに入れた次の人のIDだけ。
+  assert.equal(nextParticipantAfterHandOver("P002", state.sessions, "P001"), "P002");
+  assert.equal(nextParticipantAfterHandOver("P001", state.sessions, "P001"), "", "前の人のIDは残さない");
+  assert.equal(nextParticipantAfterHandOver("P001", state.sessions, "P009"), "", "消す記録の参加者のIDも残さない");
+  assert.equal(nextParticipantAfterHandOver("P003", [], "P003"), "", "書き出したときのIDは残さない");
+  assert.equal(nextParticipantAfterHandOver("", state.sessions, null), "");
 });
 
 for (const { name, fn } of tests) {

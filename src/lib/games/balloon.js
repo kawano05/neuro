@@ -59,11 +59,13 @@ export function createBalloonGame(ctx) {
         poppingIndex = -1;
         update();
       }, BALLOON_POP_MS);
+      return { source: balloons[pressIndex] };
     },
     progressSpeech: (remaining) => t("balloon.voice.progress", { n: remaining }),
     finishSpeech: () => t("balloon.voice.finish", { n: BEGINNER_TARGET_PRESSES }),
     finishSummary: () => ({ presses: BEGINNER_TARGET_PRESSES, balloons: [...BALLOON_COLORS] }),
-    onFinale: () => fx?.finale(stageEl?.querySelector(".balloon-stage") || stageEl, {}),
+    // ⑤ フィナーレ: 紙吹雪と紙テープ（粒の形は src/lib/partyThemes.js の ふうせん の型）。
+    onFinale: () => fx?.finale(stageEl?.querySelector(".balloon-stage") || stageEl, { theme: GAME_ID }),
   });
 
   function wordKey() {

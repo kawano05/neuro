@@ -1,0 +1,295 @@
+/* 説明とけっかは刺激ではない。遊ぶ面への規則は必ずれんしゅうに限定する。 */
+.session-mode {
+  display: inline-block;
+  padding: 5px 12px;
+  border: 2px solid #1a1a1a;
+  border-radius: 10px;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: clamp(16px, 2vmin, 24px);
+  font-weight: 800;
+  line-height: 1.35;
+}
+.session-mode[hidden] { display: none; }
+.is-ready { --ready-ground: #e3f4ec; }
+body.game-mode.user-world .game-stage-content.is-ready {
+  padding: max(78px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 92px max(20px, env(safe-area-inset-left));
+  background: var(--ready-ground);
+  color: #1a1a1a;
+  overflow: hidden;
+}
+.is-ready[data-ready-world="reel"] { --ready-ground: #ddf5ff; }
+.is-ready[data-ready-world="arm"] { --ready-ground: #d7f4ea; }
+.is-ready[data-ready-world="fish"] { --ready-ground: #d9f3ff; }
+.is-ready[data-ready-world="high"] { --ready-ground: #f6ddf6; }
+/* 遊ぶ前の説明の画面（games/gameHost.js の renderReady と games/readyScreen.js）。
+   以前は styles.css（暗い地）→ theme-hakkiri.css（紺の地）→ ここ（明るい地）の3枚が同じ
+   要素を上書きしていて、前の2枚は見えない規則だった。いまはこの1か所だけで決める。
+   まだ計測が始まっていない画面なので、絵も手順も自由に使える（進行中に同じことを
+   やると拍の視覚キューになり測定が交絡する。basic-design.md §6）。 */
+.game-ready {
+  display: grid;
+  justify-items: center;
+  width: min(1280px, 100%);
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(10px, 2vh, 24px);
+}
+.game-ready-info {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: clamp(8px, 1.5vh, 18px);
+  min-width: 0;
+}
+/* ホームで押したタイルと同じ絵（「さっき押した遊び」だと分かるように）。
+   絵は横長（360:176。art/hakkiriArt.js の SCENE_ART）。箱もこの比のまま、幅の上限と高さの上限の
+   きびしい方に合わせる（--ready-art-max-h × 360/176 が、高さから決まる幅）。以前は幅と高さを
+   両方決めていて aspect-ratio が効かず、縦長の画面（iPhone 縦・iPad 縦）では箱が縦長になり、
+   絵の左右が切れていた（2026-10-01、14 の大きさの撮影で見つけた）。 */
+.game-ready-art {
+  --ready-art-max-h: clamp(96px, 22vh, 240px);
+  display: block;
+  width: min(100%, clamp(220px, 46vmin, 420px), calc(var(--ready-art-max-h) * 360 / 176));
+  height: auto;
+  aspect-ratio: 360 / 176;
+  overflow: hidden;
+  border: 3px solid #1a1a1a;
+  border-radius: 20px;
+  background: var(--tile-thumb, #12305e);
+}
+.game-ready-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* 絵の無い遊びはアイコン。 */
+.game-ready-icon {
+  display: grid;
+  place-items: center;
+  color: #5a2a80;
+  font-size: clamp(2.6rem, 7vmin, 4rem);
+}
+.game-ready-title {
+  font-size: clamp(24px, 4.4vmin, 50px);
+  font-weight: 800;
+  line-height: 1.5;
+}
+/* 手順は1行1動作。番号を丸で振って、順番があることを形でも示す。 */
+.game-ready-steps {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  align-content: center;
+  gap: clamp(10px, 2vh, 24px);
+  margin: 0;
+  padding: 0;
+  counter-reset: game-step;
+  list-style: none;
+  text-align: left;
+}
+.game-ready-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  counter-increment: game-step;
+  font-size: clamp(19px, 2.8vmin, 34px);
+  font-weight: 600;
+  line-height: 1.6;
+}
+.game-ready-steps li::before {
+  content: counter(game-step);
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.9em;
+  height: 1.9em;
+  border: 2px solid #1a1a1a;
+  border-radius: 50%;
+  background: #fff;
+  place-items: center;
+  font-size: 0.82em;
+  font-weight: 800;
+}
+/* 手順が1行だけの場合は番号を振らない。 */
+.game-ready-steps li:only-child::before {
+  display: none;
+}
+.game-ready-go {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: clamp(16px, 2vmin, 23px);
+  font-weight: 700;
+  line-height: 1.5;
+}
+.game-ready-controls {
+  position: absolute;
+  z-index: 3;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: min(90%, 720px);
+  color: #1a1a1a;
+  font-weight: 800;
+}
+#gameReadyControls[hidden], #gameReadyPrevious[hidden], #gameReadyForward[hidden], .game-ready-steps li[hidden] { display: none; }
+.game-ready-endless { display: block; font-size: 16px; }
+/* 前後の説明は支援者のタップ用（走査の輪に入れない。games/readyScreen.js）。 */
+.game-ready-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.game-ready-pager:not(:has(button:not([hidden]))) { display: none; }
+#gameReadyPrevious,
+#gameReadyForward {
+  min-width: 44px;
+  min-height: 52px;
+  padding: 6px 12px;
+  border: 2px solid #1a1a1a;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 18px;
+}
+#gameReadyStart {
+  min-width: clamp(180px, 26vmin, 300px);
+  min-height: clamp(56px, 8vmin, 76px);
+  padding: 8px 28px;
+  border: 3px solid #1a1a1a;
+  border-radius: 16px;
+  background: #005aff;
+  color: #fff;
+  font-size: clamp(20px, 3.2vmin, 34px);
+}
+#gameReadyPage:empty { display: none; }
+body.large-text .game-ready-steps li { font-size: clamp(25px, 3.6vmin, 42px); }
+body.large-text .game-ready-go { font-size: clamp(20px, 2.5vmin, 28px); }
+@media (min-aspect-ratio: 5/4) {
+  .game-ready { grid-template-columns: minmax(0, 30%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 12px 4vw; }
+  /* 左の段いっぱいに広げる（真ん中寄せのままだと中身の幅に縮み、絵が小さくなっていた）。 */
+  .game-ready-info { grid-row: 1 / -1; justify-self: stretch; }
+  .game-ready-art { --ready-art-max-h: clamp(80px, 26vh, 300px); width: min(100%, calc(var(--ready-art-max-h) * 360 / 176)); }
+  .game-ready-steps { grid-column: 2; }
+  /* 押し方の札は「始める」と同じ真ん中に（右の段に寄せると、下の「始める」とずれて見えた）。 */
+  .game-ready-go { grid-column: 1 / -1; justify-self: center; }
+}
+@media (max-height: 500px) {
+  body.game-mode.user-world .game-stage-content.is-ready { padding: 64px 20px 74px; }
+  .game-ready { gap: 6px 24px; }
+  .game-ready-info { gap: 5px; }
+  .game-ready-art { --ready-art-max-h: 80px; }
+  .game-ready-title { font-size: 21px; line-height: 1.5; }
+  .game-ready-steps { gap: 8px; }
+  .game-ready-steps li { line-height: 1.5; }
+  .game-ready-go { font-size: 16px; padding: 2px 8px; }
+  body.large-text .game-ready-go { font-size: 20px; }
+  .game-ready-controls { bottom: max(8px, env(safe-area-inset-bottom)); }
+  #gameReadyStart { min-height: 52px; }
+}
+body.high-contrast.game-mode.user-world .game-stage-content.is-ready { background: #000; color: #fff; }
+body.high-contrast .game-ready-controls { color: #fff; }
+body.high-contrast .game-ready-go,
+body.high-contrast .game-ready-steps li::before { background: #000; color: #fff; border-color: #fff; }
+
+/* 操作に必要な高さを先に取る。支援者の詳細を開いてもボタンは動かさない。
+   中身とボタンは1つのまとまりとして真ん中に置く。中身の行は minmax(0, auto) で、入りきる画面では
+   中身の高さ、入りきらない画面では残りの高さまで縮む（中身だけがスクロールし、ボタンは画面に残る）。
+   以前は中身の行を 1fr にしていて、ボタンが画面の下の端に離れ、大きな画面ほど間延びしていた
+   （2026-10-01、ユーザーの「品質が下がった」の指摘で前の版と並べて見つけた）。 */
+body.result-mode.user-world #resultView {
+  display: grid;
+  justify-items: center;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  min-height: 0;
+  padding: max(18px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+  grid-template-rows: auto minmax(0, auto) auto auto;
+  align-content: safe center;
+  gap: clamp(8px, 2vh, 24px);
+  background: #e3f4ec;
+  color: #1a1a1a;
+  overflow: hidden;
+}
+body.result-mode.user-world #resultView[data-world="reel"] { background: #ddf5ff; }
+body.result-mode.user-world #resultView[data-world="fish"] { background: #d9f3ff; }
+body.result-mode.user-world #resultView[data-world="high"] { background: #f6ddf6; }
+body.result-mode.user-world #resultView[data-world="pop"] { background: #e5f4ff; }
+body.result-mode.user-world .result-stats {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  grid-row: 2;
+  width: min(1280px, 100%);
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+  align-self: stretch;
+  display: grid;
+  align-content: safe center;
+  padding: 6px;
+}
+body.result-mode.user-world #resultView > .action-row {
+  grid-row: 4;
+  margin-top: clamp(4px, 2.5vh, 28px);
+  width: min(1120px, 100%);
+  flex-wrap: nowrap;
+  gap: clamp(12px, 2vw, 24px);
+}
+/* ボタンの高さと字は、前の版（theme-hakkiri.css の 84px・1.75rem）と同じくらいを保つ。 */
+body.result-mode.user-world #resultView .action-row button {
+  width: min(460px, 50%);
+  min-height: clamp(56px, 10.5vh, 108px);
+  padding: 6px 10px;
+  font-size: clamp(20px, 3.6vmin, 36px);
+}
+body.result-mode.user-world #resultView .hk-result { gap: clamp(8px, 1.5vh, 18px); }
+body.result-mode.user-world #resultView .hk-stars { font-size: clamp(38px, 8vmin, 86px); }
+body.result-mode.user-world #resultView .hk-result-title { font-size: clamp(28px, 6.4vmin, 62px); }
+body.result-mode.user-world #resultView .hk-result-summary { font-size: clamp(19px, 2.8vmin, 34px); }
+body.result-mode.user-world #resultView .completion-result .hk-result-summary { max-width: 100%; overflow-wrap: anywhere; }
+body.large-text.result-mode.user-world #resultView .hk-result-title { font-size: clamp(34px, 7.4vmin, 72px); }
+body.large-text.result-mode.user-world #resultView .hk-result-summary { font-size: clamp(24px, 3.4vmin, 42px); }
+body.result-mode.user-world #resultView .hk-result-picture { width: clamp(160px, 30vmin, 380px); }
+body.result-mode.user-world #resultView .hk-result-item { width: clamp(56px, 14.5vmin, 144px); }
+body.result-mode.user-world #resultView .result-details > summary { min-height: 44px; }
+body.result-mode.user-world #resultView .calibration-offer { grid-row: 3; margin: 0; }
+body.result-mode.user-world #resultView .party-result-main { flex-shrink: 1; }
+body.high-contrast.result-mode.user-world #resultView { background: #000; color: #fff; }
+body.high-contrast.result-mode.user-world #resultView .hk-result-summary,
+body.high-contrast.result-mode.user-world #resultView .hk-result-title,
+body.high-contrast.result-mode.user-world #resultView .result-details > summary { color: #fff; }
+/* 保存障害の出口は結果面の外に確保し、全画面の結果で覆わない。 */
+body.result-mode:has(#storageWarning:not([hidden])) #storageWarning {
+  position: fixed;
+  inset: 0 12px auto;
+  z-index: 21;
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+}
+body.result-mode.user-world:has(#storageWarning:not([hidden])) #resultView { top: 180px; }
+@media (max-width: 560px) and (min-height: 501px) {
+  body.result-mode.user-world #resultView > .action-row { flex-direction: column; }
+  body.result-mode.user-world #resultView .action-row button { width: 100%; }
+}
+@media (max-height: 500px) {
+  body.result-mode.user-world #resultView { padding: 10px 20px; gap: 4px; }
+  body.result-mode.user-world #resultView .hk-result { gap: 4px; }
+  body.result-mode.user-world #resultView .hk-stars { font-size: 36px; }
+  body.result-mode.user-world #resultView .hk-result-title { font-size: 28px; line-height: 1.4; }
+  body.result-mode.user-world #resultView .hk-result-summary { font-size: 19px; }
+  body.result-mode.user-world #resultView .hk-result-picture { width: 100px; }
+  body.result-mode.user-world #resultView .hk-result-item { width: 44px; }
+  body.result-mode.user-world #resultView .action-row button { min-height: 56px; font-size: 20px; }
+  body.result-mode.user-world #resultView > .action-row { margin-top: 0; }
+  body.result-mode.user-world #resultView .party-result.is-added { gap: 12px; }
+}

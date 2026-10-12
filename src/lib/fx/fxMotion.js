@@ -81,7 +81,7 @@ export function createMotion(getScale) {
         { duration: 460, delay: delayMs, easing: "ease-out" }
       );
     },
-    /** 画面の揺れ（上限の中。強さ「ひかえめ」以下と「動きを減らす」では揺らさない）。 */
+    /** 画面の揺れ（上限の中。強さ「すっきり」以下では揺らさない）。 */
     shake(el, { px = 5, ms = 260 } = {}) {
       if (!getScale().shake) return null;
       const { amplitude, duration } = clampShake(px, ms);

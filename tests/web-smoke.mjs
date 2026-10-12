@@ -1,15 +1,30 @@
+// 利用者・支援者の操作と、入力・演出・記録の安全性を全実寸で確かめる。
+// 共通の下ごしらえは helpers.mjs に置き、検査固有の入力と判定はここに残す。
+
+import {
+  findAvailablePort,
+  waitForServer,
+  stopServer,
+  openActivity,
+  finishReady,
+  patchSettings,
+  settleStartGuard,
+  openSupporterLog
+} from "./helpers.mjs";
 import { chromium, devices, webkit } from "@playwright/test";
 import { spawn } from "node:child_process";
-import { once } from "node:events";
-import { createServer as createNetServer } from "node:net";
+import { mkdir } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
-import { colorLegacyPreset, rhythmPresets, storageKey } from "../src/lib/content.js";
+import { colorLegacyPreset, cueTones, storageKey } from "../src/lib/content.js";
 import { resolveTextMode, toSpeechText, translate } from "../src/lib/i18n.js";
 import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
 import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLegacy.js";
 import { BEGINNER_TARGET_PRESSES } from "../src/lib/games/beginnerKit.js";
 import { PARTY_FINISH_DELAY_MS, PARTY_RESULT_SCAN_DELAY_MS } from "../src/lib/games/partyStage.js";
 import { PARTY_JAR_CAPACITY, PARTY_STARS } from "../src/lib/party.js";
+import { SETTINGS_FIELDS } from "../src/lib/settingsFields.js";
+import { defaultState } from "../src/lib/state.js";
+import { checkResponsiveScreens, checkReadyInputSafety } from "./responsive-screens.mjs";
 
 // 利用者向けの文言は表記モードで変わる（src/lib/i18n.js）。テストが固定文字列を
 // 持つと、辞書を直したときにテストだけが古い文言を主張して落ちる——あるいは
@@ -28,17 +43,17 @@ const projects = [
   {
     name: "chromium-desktop",
     browserType: chromium,
-    contextOptions: { viewport: { width: 1280, height: 900 } },
+    contextOptions: { viewport: { width: 1280, height: 900 } }
   },
   {
     name: "mobile-webkit-like",
     browserType: webkit,
-    contextOptions: devices["iPhone 14"],
+    contextOptions: devices["iPhone 14"]
   },
   {
     name: "ipad-portrait",
     browserType: webkit,
-    contextOptions: { viewport: { width: 834, height: 1194 } },
+    contextOptions: { viewport: { width: 834, height: 1194 } }
   },
   {
     // 縦長のスマホ（390x812）。iPhone 14 の viewport は 664px なので、
@@ -51,8 +66,8 @@ const projects = [
     contextOptions: {
       viewport: { width: 390, height: 812 },
       isMobile: true,
-      hasTouch: true,
-    },
+      hasTouch: true
+    }
   },
   {
     // スマホを横にした状態。ここは長らく検査の外にあり、モバイル用の圧縮が
@@ -64,25 +79,42 @@ const projects = [
     contextOptions: {
       viewport: { width: 844, height: 390 },
       isMobile: true,
-      hasTouch: true,
-    },
-  },
+      hasTouch: true
+    }
+  }
 ];
 
 const checks = [
+  ["explains every atmosphere from the shared descriptions, in the chosen language", checkAtmosphereDescriptions],
+  ["isolates presentation faults and completes recorded beginner and timing runs", checkPresentationFaults],
+  ["follows the atmosphere for decorative motion and ignores the device's reduce-motion setting", checkDecorationMotion],
+  ["cancels scheduled sounds and result music when hidden or interrupted", checkPresentationCleanup],
   ["loads the main learning app", checkMainApp],
   ["keeps the start press from falling through into a home activity", checkStartInputGuard],
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
   ["finishes color-legacy with progress, result, retry, and home", checkColorCompletionFlow],
   ["plays the balloon and coloring games to the end, with live per-game settings", checkBeginnerGamesFlow],
   ["hits every pitch that is swung at and re-pitches a missed one in the baseball game", checkBaseballFlow],
-  ["adds effects within the safety rules", checkEffectsFollowSafetyRules],
+  ["adds effects within the safety rules and never in a measured run", checkEffectsFollowSafetyRules],
   ["plays the party atmosphere: otter, sparkles, crowd, reward, and a frame that waits", checkPartyAtmosphere],
+  [
+    "plays the shared party atmosphere in balloon, coloring, and baseball without research rewards",
+    checkSharedBeginnerParty
+  ],
+  ["keeps the timing party still before cues and counts only resolved successes", checkTimingParty],
   ["speaks the name of each item the scan frame moves to when asked to", checkScanFeedbackSpeaksNames],
   ["speaks with the app's own natural voice, and with the device voice when asked to", checkAppVoiceSpeaks],
   ["picks slot-l1, renders generated symbols, and records one stopped reel before abort", checkSlotL1GameFlow],
+  ["lets the supporter choose the old pictures for timing practice and records the shown version", checkPracticeArtChoice],
   ["stops slot-l2 reels one at a time from left to right and completes the session", checkSlotSequentialFlow],
   ["fills the screen with the practice reels without any of them spilling off it", checkPracticeReelsFillTheScreen],
+  [
+    "keeps the measured reels at their fixed size and shrinks them only when they cannot fit",
+    checkMeasuredReelsStayOnScreen
+  ],
+  ["records rhythm real offsets without subtracting the baseline", checkRhythmRecordsRealOffsets],
+  ["keeps rhythm visual profiles in practice, measurement, and calibration", checkRhythmVisualProfiles],
+  ["plays home gonogo, stops scanning, and records an aborted session on Escape", checkRhythmL1GameFlow],
   ["starts fishing, records one rt trial, and destroys cleanly on exit", checkFishingGameFlow],
   ["counts up instead of counting down in endless fishing", checkEndlessFishingHasNoClock],
   ["plays one crane trial and destroys cleanly between trials", checkCraneGameFlow],
@@ -92,19 +124,37 @@ const checks = [
   ["mutes effect sounds but never the measurement cue", checkEffectSoundsFollowTheSetting],
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["starts a cue task once suspended sound comes back, and retries on the next press", checkCueTasksWaitForSuspendedSound],
-  ["splits settings into tabs and keeps hidden panels out of the scan ring", checkSettingsTabs],
-  ["keeps the supporter menu itself out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
+  ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
+  ["shows the seven common settings and preserves values through accessible details", checkSettingsDetails],
+  ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
+  ["switches the supporter screens to the chosen language from the common settings", checkSupporterLanguage],
+  ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
+  ["keeps all supporter screens out of the scan ring", checkSupporterMenuStaysOutOfTheScanRing],
   ["delegates shell scanning exclusively to iPad Switch Control", checkIpadSwitchControlMode],
+  ["moves between visible feature tabs", checkFeatureTabs],
   ["returns from a tab to home via the home-return button", checkHomeReturnFromTabs],
   ["keeps native keyboard activation separate from switch input", checkKeyboardAndSwitchInput],
   ["treats any key as switch input while scanning, and only then", checkAnyKeyWhileScanning],
+  ["keeps researcher data on the one log screen, with no dead researcher-mode switch", checkResearcherDataOnOneScreen],
   ["takes any key as switch input on the start screen and inside a game", checkAnyKeyOnUserScreens],
-  ["shows the everyday settings first, folds the rest, and has no research or log screens", checkSupporterSettingsLayout],
   ["serves valid PWA assets and reloads offline", checkPwaDelivery],
   ["keeps the mobile layout inside the viewport", checkMobileLayout],
   ["keeps every screen free of overflow and undersized targets", checkLayoutInvariants],
+  ["keeps responsive explanations and results inside short and tall screens", checkResponsiveScreensOncePerEngine],
+  ["guards the explanation press and exposes ready controls to both scan methods", checkReadyInputSafety],
   ["keeps the iPad home readable with large text and high contrast", checkIpadAccessibilityLayout],
   ["keeps the hidden attribute effective against CSS display rules", checkHiddenAttributeIsRespected],
+  ["shows a visible reason when there is nothing to export", checkEmptyExportIsExplained],
+  ["lets the supporter reach every game's trend through tabs", checkTrendTabsCoverEveryGame],
+  ["wires every export button to a real download", checkExportButtonsAreWired],
+  ["keeps storage failures visible and exports the unsaved state", checkStorageRecovery],
+  ["announces the explanation after both voices fail asynchronously", checkDoubleVoiceFailure],
+  ["names downloads with participant and time", checkExportFileName],
+  ["lets one switch finish both endless games without changing measured input", checkSwitchEndlessExit],
+  ["lets one switch leave the screen where audio cannot start", checkSwitchUnavailableExit],
+  ["blocks deletion when records change after an export", checkBackupRevision],
+  ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
+  ["hands the device to the next participant after an export, keeping the newly typed ID", checkHandOverAfterExport]
 ];
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。
@@ -126,10 +176,10 @@ const selectedChecks = onlyChecks.length
   ? checks.filter(([name]) => onlyChecks.some((keyword) => name.includes(keyword)))
   : checks;
 
-const server = spawn(process.execPath, ["scripts/serve-dist.mjs", "dist", String(port)], {
+const server = spawn(process.execPath, ["scripts/serve-dist.mjs", process.env.SMOKE_DIST || "dist", String(port)], {
   stdio: ["ignore", "pipe", "pipe"],
   windowsHide: true,
-  env: { ...process.env, BASE_PATH: basePath },
+  env: { ...process.env, BASE_PATH: basePath }
 });
 
 server.stdout.on("data", (data) => process.stdout.write(data));
@@ -149,16 +199,28 @@ let skipped = 0;
 const SKIPPED = Symbol("skipped");
 
 try {
-  await waitForServer();
+  await waitForServer(baseUrl);
 
   for (const project of selectedProjects) {
     const browser = await project.browserType.launch({ headless: !headed });
     try {
       for (const [name, check] of selectedChecks) {
-        const context = await browser.newContext(project.contextOptions);
+        const context = await browser.newContext({
+          ...project.contextOptions,
+          serviceWorkers: [
+            checkPresentationFaults,
+            checkDecorationMotion,
+            checkPresentationCleanup,
+            checkRhythmRecordsRealOffsets
+          ].includes(check)
+            ? "block"
+            : "allow"
+        });
         await context.addInitScript(() => {
           const marker = "neuro-smoke-initialized";
-          if (sessionStorage.getItem(marker) === "1") return;
+          if (sessionStorage.getItem(marker) === "1") {
+            return;
+          }
           localStorage.clear();
           sessionStorage.setItem(marker, "1");
         });
@@ -175,20 +237,24 @@ try {
         const allowsMissingResources = check === checkPwaDelivery;
         page.on("pageerror", (error) => pageProblems.push(`pageerror: ${error.message}`));
         page.on("console", (message) => {
-          if (message.type() !== "error") return;
+          if (message.type() !== "error") {
+            return;
+          }
           // 読み込み失敗を無条件に無視すると、画像やCSSが本当に欠けていても
           // 気づけない（素材の欠落は画面が寂しくなるだけで、テストは通る）。
           // わざと存在しないURLを叩くのは PWA の検査だけなので、そこに限る。
-          if (allowsMissingResources && /Failed to load resource/i.test(message.text())) return;
+          if (allowsMissingResources && /Failed to load resource/i.test(message.text())) {
+            return;
+          }
+          if (check === checkStorageRecovery && message.text().startsWith("[neuro] 状態の保存に失敗しました")) {
+            return;
+          }
           pageProblems.push(`console.error: ${message.text()}`);
         });
         try {
           await page.goto(baseUrl);
           const outcome = await check(page, project);
-          assert(
-            pageProblems.length === 0,
-            `Page reported errors during the run:\n  ${pageProblems.join("\n  ")}`
-          );
+          assert(pageProblems.length === 0, `Page reported errors during the run:\n  ${pageProblems.join("\n  ")}`);
           // 検査によっては、その実寸やブラウザでは見るものが無い（iPad専用の
           // 版面、AudioContext が要る音の契約など）。何も見ずに return した
           // ものまで ok と数えると、通った件数が実際の被覆より多く見える。
@@ -213,7 +279,7 @@ try {
     }
   }
 } finally {
-  await stopServer();
+  await stopServer(server);
 }
 
 if (failures.length) {
@@ -235,50 +301,13 @@ if (failures.length) {
   }
 }
 
-async function findAvailablePort() {
-  const probe = createNetServer();
-  probe.unref();
-  await new Promise((resolve, reject) => {
-    probe.once("error", reject);
-    probe.listen(0, "127.0.0.1", resolve);
-  });
-  const address = probe.address();
-  const selectedPort = typeof address === "object" && address ? address.port : null;
-  await new Promise((resolve, reject) => probe.close((error) => (error ? reject(error) : resolve())));
-  if (!selectedPort) throw new Error("Could not allocate an available test port");
-  return selectedPort;
-}
-
-async function stopServer() {
-  if (server.exitCode !== null || server.signalCode !== null) return;
-  server.kill("SIGTERM");
-  await Promise.race([
-    once(server, "exit"),
-    delay(2_000).then(() => {
-      if (server.exitCode === null && server.signalCode === null) server.kill("SIGKILL");
-    }),
-  ]);
-}
-
-async function waitForServer() {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    try {
-      const response = await fetch(baseUrl);
-      if (response.ok) return;
-    } catch {
-      // Server is still starting.
-    }
-    await delay(500);
-  }
-  throw new Error(`Timed out waiting for ${baseUrl}`);
-}
-
 async function checkMainApp(page) {
   await waitForText(page, "h1", "NEURONODE");
-  // タブは設定の1つ＋「← ホームへもどる」。効果測定・操作訓練・研究の
-  // 3画面は 2026-08-29 に、評価ログは 2026-09-30 に外した。matching/voca/letters
-  // は利用者向けなので、以前にホームの「まなぶ・つたえる」二階層目へ移している。
-  await waitForCount(page, ".tab", 1);
+  // タブは2つ（評価ログ・設定）＋「← ホームへ」。効果測定・操作訓練・研究の
+  // 3画面は 2026-08-29 に削除し、支援者のデータ画面は評価ログ1枚へまとめた
+  // （手順は別紙の手順書に置く）。matching/voca/letters は利用者向けなので、
+  // 以前にホームの「まなぶ・つたえる」二階層目へ移している。
+  await waitForCount(page, ".tab", 2);
   // The app always boots into the start screen (detailed-design.md §2.1:
   // MUST start from "start" even on revisit, to guarantee the AudioContext
   // unlock + input continuity check every time).
@@ -400,7 +429,7 @@ async function checkStartToHomeToGameFlow(page) {
       synth = {};
       Object.defineProperty(window, "speechSynthesis", {
         configurable: true,
-        value: synth,
+        value: synth
       });
     }
     if (!("SpeechSynthesisUtterance" in window)) {
@@ -413,27 +442,29 @@ async function checkStartToHomeToGameFlow(page) {
             this.rate = 1;
             this.volume = 1;
           }
-        },
+        }
       });
     }
     const speechCalls = [];
     const cancelCalls = [];
     Object.defineProperty(synth, "speak", {
       configurable: true,
-      value: () => {},
+      value: () => {}
     });
     window.addEventListener("neuronode:speech", (event) => {
-      if (event.detail.fallback) return;
+      if (event.detail.fallback) {
+        return;
+      }
       speechCalls.push({
         text: event.detail.text,
         volume: event.detail.volume,
         via: event.detail.via,
-        at: performance.now(),
+        at: performance.now()
       });
     });
     Object.defineProperty(synth, "cancel", {
       configurable: true,
-      value: () => cancelCalls.push(performance.now()),
+      value: () => cancelCalls.push(performance.now())
     });
     live.textContent = "";
     const liveEvents = [];
@@ -470,9 +501,14 @@ async function checkStartToHomeToGameFlow(page) {
       animal: feedback?.dataset.animal || "",
       feedbackText: feedbackText?.textContent?.trim() || "",
       feedbackInViewport: Boolean(
-        box && box.width > 0 && box.height > 0 && box.left >= 0 && box.top >= 0 &&
-        box.right <= window.innerWidth && box.bottom <= window.innerHeight
-      ),
+        box &&
+          box.width > 0 &&
+          box.height > 0 &&
+          box.left >= 0 &&
+          box.top >= 0 &&
+          box.right <= window.innerWidth &&
+          box.bottom <= window.innerHeight
+      )
     };
   });
   assert(earlyFeedback.speechCount === 0, "App TTS must not start during the pure tone");
@@ -484,9 +520,9 @@ async function checkStartToHomeToGameFlow(page) {
   assert(earlyFeedback.feedbackInViewport, "Visual feedback must stay inside the viewport");
   // 出てくる動きが終わったら、はっきり見えていること（hk-pop の途中は opacity が低い）。
   await page.waitForTimeout(300);
-  const settledOpacity = await page.locator("#gameStageContent .pop-figure").evaluate(
-    (figure) => Number(getComputedStyle(figure).opacity)
-  );
+  const settledOpacity = await page
+    .locator("#gameStageContent .pop-figure")
+    .evaluate((figure) => Number(getComputedStyle(figure).opacity));
   assert(settledOpacity >= 0.9, `Expected the animal to be clearly visible, opacity=${settledOpacity}`);
   assert((await readLogCount(page)) === logsBeforeTimedFeedback + 1, "Timed click must log one input");
 
@@ -507,34 +543,31 @@ async function checkStartToHomeToGameFlow(page) {
   const speechCapable = await page.evaluate(
     () =>
       Boolean(window.AudioContext || window.webkitAudioContext) ||
-      (typeof window.SpeechSynthesisUtterance === "function" &&
-        typeof window.speechSynthesis?.speak === "function")
+      (typeof window.SpeechSynthesisUtterance === "function" && typeof window.speechSynthesis?.speak === "function")
   );
-  if (!speechCapable) return SKIPPED;
+  if (!speechCapable) {
+    return SKIPPED;
+  }
 
   try {
     await page.waitForFunction(() => window.__colorSpeechCalls?.length === 1, null, {
-      timeout: 5_000,
+      timeout: 5_000
     });
   } catch {
     const diagnosis = await page.evaluate(() => ({
       speechCalls: window.__colorSpeechCalls?.length ?? null,
       liveEvents: window.__colorLiveEvents?.length ?? null,
       liveText: document.querySelector("#liveRegion")?.textContent ?? null,
-      speechEnabled: JSON.parse(localStorage.getItem("neuronode-prototype-state-v4") || "{}")
-        ?.settings?.speechEnabled,
-      sinceClick: window.__colorClickAt ? Math.round(performance.now() - window.__colorClickAt) : null,
+      speechEnabled: JSON.parse(localStorage.getItem("neuronode-prototype-state-v4") || "{}")?.settings?.speechEnabled,
+      sinceClick: window.__colorClickAt ? Math.round(performance.now() - window.__colorClickAt) : null
     }));
-    assert(
-      false,
-      "アプリTTSが届かなかった: " + JSON.stringify(diagnosis)
-    );
+    assert(false, "アプリTTSが届かなかった: " + JSON.stringify(diagnosis));
   }
   const deliveredFeedback = await page.evaluate(() => ({
     speech: window.__colorSpeechCalls[0],
     clickAt: window.__colorClickAt,
     liveCount: window.__colorLiveEvents.length,
-    progressCount: window.__colorProgressEvents.length,
+    progressCount: window.__colorProgressEvents.length
   }));
   assert(
     deliveredFeedback.speech.text ===
@@ -542,7 +575,10 @@ async function checkStartToHomeToGameFlow(page) {
     `App TTS must name the animal and report the remaining presses, got ${JSON.stringify(deliveredFeedback.speech.text)}`
   );
   assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt >= 220, "App TTS started before the tone ended");
-  assert(deliveredFeedback.speech.at - deliveredFeedback.clickAt <= 600, "App TTS arrived too late for a short response");
+  assert(
+    deliveredFeedback.speech.at - deliveredFeedback.clickAt <= 600,
+    "App TTS arrived too late for a short response"
+  );
   assert(deliveredFeedback.speech.volume === 1, "Normal-mode TTS must retain the existing full-volume default");
   assert(deliveredFeedback.liveCount === 0, "App TTS ownership must suppress duplicate live-region speech");
   assert(deliveredFeedback.progressCount === 0, "Color feedback must not leak through polite progress");
@@ -559,7 +595,7 @@ async function checkStartToHomeToGameFlow(page) {
       before,
       after: window.__colorCancelCalls.length,
       speechBefore,
-      clickAt,
+      clickAt
     };
   });
   assert(
@@ -583,11 +619,9 @@ async function checkStartToHomeToGameFlow(page) {
   );
 
   // 出た動物はしばらく見せて、消えて真っ暗に戻る（「出て、消えて、次」）。
-  await page.waitForFunction(
-    () => !document.querySelector("#gameStageContent .pop-figure"),
-    null,
-    { timeout: POP_SHOW_MS + POP_FADE_MS + 3_000 }
-  );
+  await page.waitForFunction(() => !document.querySelector("#gameStageContent .pop-figure"), null, {
+    timeout: POP_SHOW_MS + POP_FADE_MS + 3_000
+  });
   const feedbackEndedAt = await page.evaluate(() => performance.now());
   assert(
     feedbackEndedAt - nextInputCancellation.clickAt >= POP_SHOW_MS,
@@ -664,7 +698,7 @@ async function checkStartToHomeToGameFlow(page) {
       secondAt,
       eventCount: events.length,
       liveText: live.textContent,
-      speechCount: window.__colorSpeechCalls.length,
+      speechCount: window.__colorSpeechCalls.length
     };
   });
   assert(rapidEarly.secondAt - rapidEarly.firstAt >= 150, "Rapid clicks must both pass shell dedupe");
@@ -679,11 +713,10 @@ async function checkStartToHomeToGameFlow(page) {
   const rapidDelivered = await page.evaluate(() => ({
     events: [...window.__rapidColorEvents],
     secondAt: window.__rapidSecondAt,
-    speechCount: window.__colorSpeechCalls.length,
+    speechCount: window.__colorSpeechCalls.length
   }));
   assert(
-    rapidDelivered.events[0].text ===
-      t("color.voice.progress", { name: t(`animal.${popAnimalFor(1).id}`), n: 3 }),
+    rapidDelivered.events[0].text === t("color.voice.progress", { name: t(`animal.${popAnimalFor(1).id}`), n: 3 }),
     "Last rapid click must own the remaining-count announcement"
   );
   assert(rapidDelivered.events[0].at - rapidDelivered.secondAt >= 220, "Rapid announcement started too early");
@@ -722,13 +755,9 @@ async function checkStartToHomeToGameFlow(page) {
   await page.waitForFunction(() => !document.body.classList.contains("game-mode"));
   await page.waitForTimeout(350);
   assert((await readLogCount(page)) === logsBeforeRepeatedKey + 1, "Space must record exactly one input");
-  const destroyEventTexts = await page.evaluate(() =>
-    window.__destroyColorEvents.map((event) => event.text)
-  );
+  const destroyEventTexts = await page.evaluate(() => window.__destroyColorEvents.map((event) => event.text));
   assert(
-    !destroyEventTexts.includes(
-      t("color.voice.progress", { name: t(`animal.${popAnimalFor(2).id}`), n: 2 })
-    ),
+    !destroyEventTexts.includes(t("color.voice.progress", { name: t(`animal.${popAnimalFor(2).id}`), n: 2 })),
     "destroy() must cancel the pending delayed color announcement"
   );
   assert(
@@ -759,6 +788,14 @@ async function checkColorCompletionFlow(page) {
     await page.waitForTimeout(200);
   }
 
+  // はじめの遊びには そくてい／れんしゅうの区別が無いので、上の帯に回の種類を出さない
+  // （出すと、設定を そくてい にしたとき「そくてい」と出て、測っていない遊びを取り違える）。
+  await waitForPrompt();
+  assert(
+    (await page.locator("#gameProgress .game-progress-mode").count()) === 0,
+    "A beginner game must not show a measure/practice label in the top bar"
+  );
+
   async function progressSnapshot() {
     return page.evaluate(() => {
       const plainText = (selector) => {
@@ -771,7 +808,7 @@ async function checkColorCompletionFlow(page) {
         total: document.querySelectorAll(".pop-dot").length,
         done: document.querySelectorAll(".pop-dot.is-done").length,
         word: plainText(".pop-word"),
-        animal: document.querySelector(".pop-figure")?.dataset.animal || "",
+        animal: document.querySelector(".pop-figure")?.dataset.animal || ""
       };
     });
   }
@@ -796,7 +833,9 @@ async function checkColorCompletionFlow(page) {
     const expectedWord =
       press < colorLegacyPreset.targetPresses ? t(`color.pop.${Math.min(press - 1, 3)}`) : t("color.pop.4");
     assert(snapshot.word === expectedWord, `Press ${press} must say "${expectedWord}", got "${snapshot.word}"`);
-    if (press < colorLegacyPreset.targetPresses) await page.waitForTimeout(170);
+    if (press < colorLegacyPreset.targetPresses) {
+      await page.waitForTimeout(170);
+    }
   }
   assert(
     (await readLogCount(page)) === logsBefore + colorLegacyPreset.targetPresses,
@@ -833,18 +872,16 @@ async function checkColorCompletionFlow(page) {
     (await plainOf(".completion-result-summary")) ===
       t("result.completion.summary", {
         n: colorLegacyPreset.targetPresses,
-        m: colorLegacyPreset.targetPresses,
+        m: colorLegacyPreset.targetPresses
       }),
     "The result must report how many times the child played and how many friends came out"
   );
-  const resultAnimals = await page.locator(".hk-result-item").evaluateAll((items) =>
-    items.map((item) => item.dataset.animal)
-  );
+  const resultAnimals = await page
+    .locator(".hk-result-item")
+    .evaluateAll((items) => items.map((item) => item.dataset.animal));
   assert(
     JSON.stringify(resultAnimals) ===
-      JSON.stringify(
-        Array.from({ length: colorLegacyPreset.targetPresses }, (_, index) => popAnimalFor(index).id)
-      ),
+      JSON.stringify(Array.from({ length: colorLegacyPreset.targetPresses }, (_, index) => popAnimalFor(index).id)),
     `The result must line up the animals that came out, got ${JSON.stringify(resultAnimals)}`
   );
   assert(
@@ -866,7 +903,9 @@ async function checkColorCompletionFlow(page) {
 
   for (let press = 0; press < colorLegacyPreset.targetPresses; press += 1) {
     await page.locator("#gameStage").click();
-    if (press < colorLegacyPreset.targetPresses - 1) await page.waitForTimeout(170);
+    if (press < colorLegacyPreset.targetPresses - 1) {
+      await page.waitForTimeout(170);
+    }
   }
   await waitForClass(page, "#resultView", "is-active");
   await page.locator("#resultHome").click();
@@ -883,8 +922,188 @@ async function checkColorCompletionFlow(page) {
  *   - その日にいっぱいにしたびんの数と服が保存される（研究の記録ではない）
  * 音楽の中身は Web Audio なので、デスクトップの Chromium だけで見る。
  */
+async function checkSharedBeginnerParty(page, project) {
+  if (project.name !== "chromium-desktop" && project.name !== "phone-landscape") {
+    return SKIPPED;
+  }
+  await (await import("node:fs/promises")).mkdir("test-results/party-live", { recursive: true });
+  for (const gameId of ["balloon", "coloring", "baseball"]) {
+    await page.evaluate(
+      ({ key }) => {
+        const saved = JSON.parse(localStorage.getItem(key) || "{}");
+        saved.settings = { ...saved.settings, fxLevel: "big", speechEnabled: false, autoScan: false };
+        delete saved.party;
+        localStorage.setItem(key, JSON.stringify(saved));
+      },
+      { key: storageKey }
+    );
+    await page.reload();
+    await page.locator("#startStage").click();
+    await openActivity(page, t(`tile.${gameId}.title`));
+    // 野球は投球前のやりかたを挟む。舞台は遊びを始めてから作られる。
+    if (gameId === "baseball") {
+      await page.locator(".game-ready").waitFor({ state: "visible" });
+      await page.locator("#gameStage").click();
+      await finishReady(page);
+    }
+    await page.locator(".party-otter").waitFor({ state: "visible" });
+    for (let press = 0; press < 5; press += 1) {
+      if (gameId === "baseball") {
+        await page.waitForFunction(() => document.querySelector(".bb-word")?.textContent === "", null, {
+          timeout: 6000
+        });
+        await page.waitForTimeout(350);
+      }
+      await page.locator("#gameStage").click();
+      if (press < 4) {
+        await page.waitForTimeout(800);
+      }
+      if (press === 2) {
+        await page.waitForTimeout(1200);
+        await page.screenshot({ path: `test-results/party-live/${project.name}-${gameId}-third.png` });
+        assert((await page.locator(".party-jar .party-item").count()) === 7, `${gameId}: 3回目ではんぶん`);
+        const overlaps = await page.evaluate(() => {
+          const visible = (element) => element.getClientRects().length && getComputedStyle(element).opacity !== "0";
+          // 割れたふうせんは、非表示のひもを含む箱ではなく実際の印を比べる。
+          const heroes = [
+            ...document.querySelectorAll(
+              ".balloon:not(.is-popped),.balloon.is-popped .balloon-mark,.coloring-card,.bb-ball,.bb-bat,.balloon-word,.coloring-word,.bb-word"
+            )
+          ].filter(visible);
+          return [
+            ...document.querySelectorAll(".party-fan.is-on,.party-otter,.party-jar,.party-bunting.is-on,.party-stamp")
+          ]
+            .filter(visible)
+            .flatMap((decoration) => {
+              const decorationBox = decoration.getBoundingClientRect();
+              return heroes
+                .filter((hero) => {
+                  const heroBox = hero.getBoundingClientRect();
+                  return (
+                    decorationBox.left < heroBox.right &&
+                    decorationBox.right > heroBox.left &&
+                    decorationBox.top < heroBox.bottom &&
+                    decorationBox.bottom > heroBox.top
+                  );
+                })
+                .map((hero) => `${decoration.className}/${hero.className}`);
+            });
+        });
+        assert(overlaps.length === 0, `${gameId}: 仲間・観客・旗・札を主役へ重ねない (${overlaps.join(", ")})`);
+      }
+    }
+    // 最後の見せ場は遊びごと（src/lib/partyThemes.js）。ふうせんは くす玉、ぬりえは額縁と「完成！」の名札、
+    // ボールは「ナイス バッティング！」。どれも遊びの言葉・割ったふうせんの印・打った数に かぶせない。
+    const show = { balloon: ".party-kusudama", coloring: ".party-frame", baseball: ".party-stamp.is-big" }[gameId];
+    await page.locator(show).waitFor({ state: "attached", timeout: 6000 });
+    await page.waitForTimeout(1600);
+    const finale = await page.evaluate(() => {
+      const box = (element) => element.getBoundingClientRect();
+      const overlap = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      const shows = [...document.querySelectorAll(".party-kusudama, .party-frame, .party-stamp")];
+      const keep = [...document.querySelectorAll(".balloon-word, .balloon.is-popped .balloon-mark, .coloring-word, .bb-word, .bb-slots")];
+      return {
+        // ふりがな（rt）を除いた字。
+        text: shows
+          .map((element) => {
+            const copy = element.cloneNode(true);
+            copy.querySelectorAll("rt").forEach((rt) => rt.remove());
+            return copy.textContent.trim();
+          })
+          .join(" "),
+        overlaps: shows.flatMap((element) =>
+          keep.filter((other) => overlap(box(element), box(other))).map((other) => `${element.className}/${other.className}`)
+        ),
+      };
+    });
+    const stampText = t(`party.stamp.${gameId}`);
+    assert(finale.text.includes(stampText.trim()), `${gameId}: 遊びの札（${stampText}）が出る: ${finale.text}`);
+    assert(!finale.text.includes(t("party.bigParty")), `${gameId}: 押すと 出てくる の「おおさわぎ！」ではない`);
+    assert(finale.overlaps.length === 0, `${gameId}: 見せ場を遊びの言葉・やったことへ重ねない (${finale.overlaps.join(", ")})`);
+    await page.waitForFunction(() => document.querySelector("#resultView")?.classList.contains("is-active"), null, {
+      timeout: PARTY_FINISH_DELAY_MS + 4000
+    });
+    const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}"), storageKey);
+    assert(saved.party?.outfits?.includes("hat"), `${gameId}: 終了で服をもらえる`);
+    assert((await page.locator(".party-result-jar .party-item").count()) === 15, `${gameId}: 5回でいっぱい`);
+    assert(
+      (await page.locator(".party-result .hk-result-title").textContent()).includes("できた"),
+      `${gameId}: お祝いにも一言を残す`
+    );
+    assert((await page.locator(".party-result .hk-result-medal").count()) === 1, `${gameId}: 完了の星を残す`);
+    assert(
+      !(saved.sessions || []).some((sessionRecord) => sessionRecord.summary?.party),
+      "お祝いを研究の記録に入れない"
+    );
+  }
+}
+
+async function checkTimingParty(page, project) {
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
+  await page.evaluate(
+    ({ key }) => {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      saved.settings = {
+        ...saved.settings,
+        fxLevel: "big",
+        difficultyMode: "practice",
+        targetBeats: 5,
+        rhythmBpm: 120,
+        speechEnabled: false,
+        autoScan: false
+      };
+      delete saved.party;
+      localStorage.setItem(key, JSON.stringify(saved));
+    },
+    { key: storageKey }
+  );
+  await page.reload();
+  await page.locator("#startStage").click();
+  await openActivity(page, t("tile.gonogo.title"));
+  await finishReady(page);
+  await page.waitForTimeout(300);
+  const waiting = await page.evaluate(() => ({
+    flyers: document.querySelectorAll(".party-item-flyer").length,
+    moving:
+      document
+        .querySelector(".party-layer")
+        ?.getAnimations({ subtree: true })
+        .filter((animation) => animation.playState === "running").length || 0,
+    crowd: document.querySelectorAll(".party-fan,.party-bunting").length
+  }));
+  assert(waiting.flyers === 0 && waiting.moving === 0 && waiting.crowd === 0, "合図の前に仲間を動かさない");
+  // 低い音を正しく見送る。高い音の見逃しには星を与えない。
+  await page.waitForFunction(() => document.querySelector("#resultView")?.classList.contains("is-active"), null, {
+    timeout: 25000
+  });
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}"), storageKey);
+  const session = saved.sessions.find((sessionRecord) => sessionRecord.gameId === "gonogo");
+  const successful = session.trials.filter(
+    (row) => row.judgment === "hit" || row.judgment === "correctRejection"
+  ).length;
+  const expected = Math.floor((successful * 15) / session.trials.length);
+  assert((await page.locator(".party-result-jar .party-item").count()) === expected, "成功したぶんだけ星を入れる");
+  const ratio = successful / session.trials.length;
+  const rating = ratio >= 0.8 ? 3 : ratio >= 0.5 ? 2 : 1;
+  const praise = ratio >= 0.8 ? "great" : ratio >= 0.5 ? "good" : "tried";
+  assert(
+    (await page.locator("#resultStats [data-praise]").getAttribute("data-praise")) === `result.praise.${praise}`,
+    "お祝いでも成績に応じた一言を残す"
+  );
+  assert(
+    (await page.locator("#resultStats .hk-star:not(.is-off)").count()) === rating,
+    "びんの星とは別に3つ星で評価する"
+  );
+  assert(!session.summary.party, "研究のsummaryとお祝いを分ける");
+  assert(saved.party?.outfits?.includes("hat"), "課題でも完走したら服をもらえる");
+}
+
 async function checkPartyAtmosphere(page, project) {
-  if (project.name !== "chromium-desktop") return SKIPPED;
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
   await page.evaluate(
     ({ key }) => {
       const saved = JSON.parse(localStorage.getItem(key) || "{}");
@@ -902,10 +1121,10 @@ async function checkPartyAtmosphere(page, project) {
   await page.locator("#gameStageContent.module-pop.is-party .party-otter").waitFor({ state: "attached" });
   const snapshot = () =>
     page.evaluate(() => ({
-      stars: document.querySelectorAll(".party-jar .party-star").length,
+      stars: document.querySelectorAll(".party-jar .party-item").length,
       fans: document.querySelectorAll(".party-fan.is-on").length,
       bunting: Boolean(document.querySelector(".party-bunting.is-on")),
-      sea: document.querySelector("#gameStageContent")?.classList.contains("is-sea") || false,
+      sea: document.querySelector("#gameStageContent")?.classList.contains("is-sea") || false
     }));
   const start = await snapshot();
   assert(start.sea, "The pop game must start in the sea by default");
@@ -919,7 +1138,10 @@ async function checkPartyAtmosphere(page, project) {
   // 星は出てきた動物から飛んでびんに入る（入りきるまで少しかかる）。
   await page.waitForTimeout(1200);
   const third = await snapshot();
-  assert(third.stars === PARTY_STARS[2], `After three presses the jar must hold ${PARTY_STARS[2]} stars, got ${third.stars}`);
+  assert(
+    third.stars === PARTY_STARS[2],
+    `After three presses the jar must hold ${PARTY_STARS[2]} stars, got ${third.stars}`
+  );
   assert(third.fans >= 4, "The crowd must grow with each press");
   assert(third.bunting, "The bunting must be up by the third press");
 
@@ -928,29 +1150,40 @@ async function checkPartyAtmosphere(page, project) {
   await page.locator("#gameStage").click();
   // フィナーレとパレードを見せてから けっかへ進む（PARTY_FINISH_DELAY_MS）。ふだんの待ち（5秒）より長い。
   await page.waitForFunction(() => document.querySelector("#resultView")?.classList.contains("is-active"), null, {
-    timeout: PARTY_FINISH_DELAY_MS + 4000,
+    timeout: PARTY_FINISH_DELAY_MS + 4000
   });
   const result = await page.evaluate(() => {
     const root = document.querySelector("#resultStats .party-result");
     return {
-      stars: root?.querySelectorAll(".party-result-jar .party-star").length || 0,
+      stars: root?.querySelectorAll(".party-result-jar .party-item").length || 0,
       jarsToday: root?.querySelectorAll(".party-today .party-mini-jar").length || 0,
       reward: root?.querySelector(".party-result-reward")?.textContent || "",
       hat: Boolean(root?.querySelector(".party-result-otter.has-hat")),
-      focus: Boolean(document.querySelector("#resultView .scan-focus")),
+      focus: Boolean(document.querySelector("#resultView .scan-focus"))
     };
   });
   assert(result.stars === PARTY_JAR_CAPACITY, `The result must show a full jar, got ${result.stars} stars`);
   assert(result.jarsToday === 1, "The first play of the day must show one jar for today");
-  assert(result.reward.includes(t("party.outfit.hat").replace(/\[.*?\]/g, "")), "The first finished play must give the party hat");
+  assert(
+    result.reward.includes(t("party.outfit.hat").replace(/\[.*?\]/g, "")),
+    "The first finished play must give the party hat"
+  );
   assert(result.hat, "The otter on the result must wear the new hat");
   assert(!result.focus, "The frame must wait until the celebration is over");
   await page.waitForTimeout(PARTY_RESULT_SCAN_DELAY_MS + 600);
   const scanning = await page.evaluate(() => Boolean(document.querySelector("#resultView .scan-focus")));
-  const autoScan = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").settings?.autoScan !== false, storageKey);
-  if (autoScan) assert(scanning, "The frame must move again after the celebration");
+  const autoScan = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key) || "{}").settings?.autoScan !== false,
+    storageKey
+  );
+  if (autoScan) {
+    assert(scanning, "The frame must move again after the celebration");
+  }
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").party, storageKey);
-  assert(saved?.jars === 1 && saved?.outfits?.join(",") === "hat", `The day's jars and the outfit must be saved, got ${JSON.stringify(saved)}`);
+  assert(
+    saved?.jars === 1 && saved?.outfits?.join(",") === "hat",
+    `The day's jars and the outfit must be saved, got ${JSON.stringify(saved)}`
+  );
 
   // 元の強さへ戻す（あとの確かめに持ち越さない）。
   await page.evaluate(
@@ -975,17 +1208,8 @@ async function checkPartyAtmosphere(page, project) {
  *     session.config.fxLevel は "none" と記録される
  */
 async function checkEffectsFollowSafetyRules(page) {
-  const emitted = () =>
-    page.evaluate(() => Number(document.querySelector("#fxLayer")?.dataset.emitted || 0));
-  const setSettings = (patch) =>
-    page.evaluate(
-      ({ key, patch }) => {
-        const saved = JSON.parse(localStorage.getItem(key) || "{}");
-        saved.settings = { ...(saved.settings || {}), ...patch };
-        localStorage.setItem(key, JSON.stringify(saved));
-      },
-      { key: storageKey, patch }
-    );
+  const emitted = () => page.evaluate(() => Number(document.querySelector("#fxLayer")?.dataset.emitted || 0));
+  const setSettings = (patch) => patchSettings(page, { ...patch }, { allowMissing: true, reload: false });
   const toHome = async () => {
     await page.reload();
     await page.locator("#startStage").click();
@@ -997,8 +1221,7 @@ async function checkEffectsFollowSafetyRules(page) {
     await page.locator("#gameStageContent.module-balloon .balloon-word").waitFor({ state: "visible" });
     await page.waitForTimeout(200);
   };
-  const gone = () =>
-    page.evaluate(() => document.querySelectorAll(".balloon.is-popping, .balloon.is-popped").length);
+  const gone = () => page.evaluate(() => document.querySelectorAll(".balloon.is-popping, .balloon.is-popped").length);
 
   // 1. ふつう: ふうせんを割ると粒が出る。キャンバスは入力をさえぎらない。
   await setSettings({ fxLevel: "normal" });
@@ -1006,17 +1229,18 @@ async function checkEffectsFollowSafetyRules(page) {
   await openBalloon();
   const before = await emitted();
   await page.locator("#gameStage").click();
-  await page.waitForFunction(
-    (n) => Number(document.querySelector("#fxLayer")?.dataset.emitted || 0) > n,
-    before,
-    { timeout: 3000 }
-  );
+  await page.waitForFunction((n) => Number(document.querySelector("#fxLayer")?.dataset.emitted || 0) > n, before, {
+    timeout: 3000
+  });
   const layer = await page.evaluate(() => {
     const el = document.querySelector("#fxLayer");
     const style = getComputedStyle(el);
     return { pointerEvents: style.pointerEvents, ariaHidden: el.getAttribute("aria-hidden"), position: style.position };
   });
-  assert(layer.pointerEvents === "none", `The effects canvas must never take input, got pointer-events: ${layer.pointerEvents}`);
+  assert(
+    layer.pointerEvents === "none",
+    `The effects canvas must never take input, got pointer-events: ${layer.pointerEvents}`
+  );
   assert(layer.ariaHidden === "true", "The effects canvas must stay out of the accessibility tree");
   assert(layer.position === "fixed", "The effects canvas must cover the viewport without moving the layout");
   // 粒が飛んでいる最中でも、次のひと押しはふうせんに届く。
@@ -1025,7 +1249,7 @@ async function checkEffectsFollowSafetyRules(page) {
   assert((await gone()) === 2, "A press during the effects must still pop the next balloon");
   // 動くものが無くなったら、キャンバスは描くのをやめる（遊んでいない時間に描き続けない）。
   await page.waitForFunction(() => document.querySelector("#fxLayer")?.dataset.active === "false", null, {
-    timeout: 8000,
+    timeout: 8000
   });
 
   // けっかの星は飛び込んでくる（見せ始めのアニメーション）。
@@ -1050,6 +1274,32 @@ async function checkEffectsFollowSafetyRules(page) {
   await page.waitForTimeout(450);
   assert((await gone()) === 1, "With effects off, the balloon must still pop");
   assert((await emitted()) === quietBefore, "With effects off, no particles may be drawn");
+
+  // 3. そくていの回: どの強さを選んでいても何も足さない。
+  await setSettings({ fxLevel: "big", difficultyMode: "measure" });
+  await toHome();
+  await openActivity(page, "さかなつり");
+  await openActivity(page, t("tile.fishing.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await finishReady(page);
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) {
+    return SKIPPED;
+  }
+  const measuredBefore = await emitted();
+  await page.locator(".fishing-scene.is-bite").waitFor({ timeout: 15000 });
+  await page.locator("#gameStage").click();
+  await page.waitForTimeout(600);
+  assert((await emitted()) === measuredBefore, "A measured run must not add any effects");
+  const recorded = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return (state.sessions || []).at(-1)?.config?.fxLevel ?? null;
+  }, storageKey);
+  assert(recorded === "none", `A measured run must record fxLevel "none", got ${JSON.stringify(recorded)}`);
+  await page.locator("#gameExit").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 /**
@@ -1074,8 +1324,7 @@ async function checkBeginnerGamesFlow(page) {
       clone.querySelectorAll("rt").forEach((reading) => reading.remove());
       return clone.textContent.trim();
     });
-  const savedState = () =>
-    page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}"), storageKey);
+  const savedState = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}"), storageKey);
   const option = (key, value) =>
     page.locator(`.gs-option[data-gs-key="${key}"][data-gs-value='${JSON.stringify(value)}']`);
 
@@ -1089,7 +1338,7 @@ async function checkBeginnerGamesFlow(page) {
     page.evaluate(() => ({
       total: document.querySelectorAll(".balloon").length,
       gone: document.querySelectorAll(".balloon.is-popping, .balloon.is-popped").length,
-      light: document.querySelector("#gameStageContent")?.classList.contains("is-light"),
+      light: document.querySelector("#gameStageContent")?.classList.contains("is-light")
     }));
   const fresh = await balloons();
   assert(fresh.total === presses, `The balloon game must float ${presses} balloons, got ${fresh.total}`);
@@ -1191,7 +1440,7 @@ async function checkBeginnerGamesFlow(page) {
         groups: sorted.map(([group]) => group),
         colored: sorted.filter(([, entry]) => entry.all).map(([group]) => group),
         partial: sorted.filter(([, entry]) => entry.any && !entry.all).map(([group]) => group),
-        complete: document.querySelector("#gameStageContent")?.classList.contains("is-complete"),
+        complete: document.querySelector("#gameStageContent")?.classList.contains("is-complete")
       };
     });
   const blank = await picture();
@@ -1214,15 +1463,16 @@ async function checkBeginnerGamesFlow(page) {
       (await plainOf(coloringWord)) === t(`coloring.word.${press - 1}`),
       `Press ${press} must say "${t(`coloring.word.${press - 1}`)}"`
     );
-    if (press < presses) await page.waitForTimeout(170);
+    if (press < presses) {
+      await page.waitForTimeout(170);
+    }
   }
   assert((await picture()).complete, "The finished picture must be marked complete before the result");
   await waitForClass(page, "#resultView", "is-active");
   const pictureId = await page.locator(".hk-result-picture").getAttribute("data-picture");
   assert(pictureId, "The colouring result must show the finished picture");
   assert(
-    (await plainOf(".completion-result-summary")) ===
-      t("result.coloring.summary", { name: t(`animal.${pictureId}`) }),
+    (await plainOf(".completion-result-summary")) === t("result.coloring.summary", { name: t(`animal.${pictureId}`) }),
     "The colouring result must name the picture that was finished"
   );
 
@@ -1254,6 +1504,7 @@ async function checkBaseballFlow(page) {
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await assertNoSplitRuby(page, "baseball how-to");
   await page.locator("#gameStage").click();
+  await finishReady(page);
   await page.locator("#gameStageContent.module-baseball .bb-field").waitFor({ state: "visible" });
 
   const state = () =>
@@ -1265,7 +1516,7 @@ async function checkBaseballFlow(page) {
       return {
         word,
         ballY: match ? Number(match[2]) : null,
-        filled: document.querySelectorAll(".bb-slot:not([class='bb-slot'])").length,
+        filled: document.querySelectorAll(".bb-slot:not([class='bb-slot'])").length
       };
     });
   const waitForPitch = () =>
@@ -1287,11 +1538,9 @@ async function checkBaseballFlow(page) {
   assert((await state()).filled === 0, "A swing before the pitch must not count as a hit");
 
   // 見送った球は数えず、もう一度投げる。
-  await page.waitForFunction(
-    () => document.querySelector(".bb-word")?.dataset.word === "baseball.word.again",
-    null,
-    { timeout: 10_000 }
-  );
+  await page.waitForFunction(() => document.querySelector(".bb-word")?.dataset.word === "baseball.word.again", null, {
+    timeout: 10_000
+  });
   assert((await state()).filled === 0, "A pitch that was let go must not count");
 
   const outcomes = [];
@@ -1345,9 +1594,13 @@ async function checkScanFeedbackSpeaksNames(page) {
     const synth = window.speechSynthesis || {};
     synth.speak = () => {};
     synth.cancel = () => {};
-    if (!window.speechSynthesis) Object.defineProperty(window, "speechSynthesis", { value: synth });
+    if (!window.speechSynthesis) {
+      Object.defineProperty(window, "speechSynthesis", { value: synth });
+    }
     window.addEventListener("neuronode:speech", (event) => {
-      if (event.detail.fallback) return;
+      if (event.detail.fallback) {
+        return;
+      }
       window.__spoken.push(event.detail.text);
       window.__spokenVia.push(event.detail.via);
     });
@@ -1358,10 +1611,13 @@ async function checkScanFeedbackSpeaksNames(page) {
     const before = await page.evaluate(() => window.__spoken.length);
     await page.keyboard.press("ArrowRight");
     await page.waitForTimeout(120);
-    return page.evaluate((from) => ({
-      said: window.__spoken.slice(from),
-      focused: document.querySelector("#gameTileGrid .scan-focus")?.getAttribute("aria-label") || null,
-    }), before);
+    return page.evaluate(
+      (from) => ({
+        said: window.__spoken.slice(from),
+        focused: document.querySelector("#gameTileGrid .scan-focus")?.getAttribute("aria-label") || null
+      }),
+      before
+    );
   };
 
   // 既定（なし）では、枠が動いても読まない。
@@ -1370,15 +1626,14 @@ async function checkScanFeedbackSpeaksNames(page) {
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 9);
   const quiet = await stepAndHear();
-  assert(quiet.said.length === 0, `With the default setting the scan must stay silent, but it said ${JSON.stringify(quiet.said)}`);
+  assert(
+    quiet.said.length === 0,
+    `With the default setting the scan must stay silent, but it said ${JSON.stringify(quiet.said)}`
+  );
 
   // 「名前を読む」にすると、動いた先の名前を読む。
-  await page.evaluate((key) => {
-    const saved = JSON.parse(localStorage.getItem(key) || "{}");
-    saved.settings = { ...(saved.settings || {}), scanFeedback: "speak", speechEnabled: true, autoScan: false };
-    localStorage.setItem(key, JSON.stringify(saved));
-  }, storageKey);
-  await page.reload();
+  await patchSettings(page, { scanFeedback: "speak", speechEnabled: true, autoScan: false }, { allowMissing: true });
+
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 9);
@@ -1408,7 +1663,9 @@ async function checkScanFeedbackSpeaksNames(page) {
  */
 async function checkAppVoiceSpeaks(page) {
   const canPlay = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
-  if (!canPlay) return SKIPPED;
+  if (!canPlay) {
+    return SKIPPED;
+  }
   await page.addInitScript(() => {
     window.__speech = [];
     window.__voiceSourcesStarted = 0;
@@ -1442,35 +1699,43 @@ async function checkAppVoiceSpeaks(page) {
     await page.waitForFunction(() => window.__speech.length > 0, null, { timeout: 3_000 });
     // 読み込み（はじめてのときはパックの取得）と音にするのを待つ。
     await page.waitForTimeout(1_200);
-    return page.evaluate((before) => ({
-      speech: window.__speech,
-      started: window.__voiceSourcesStarted - before,
-      packs: performance.getEntriesByType("resource").map((entry) => entry.name).filter((name) => /\.bin(\?|$)/.test(name)),
-    }), sourcesBefore);
+    return page.evaluate(
+      (before) => ({
+        speech: window.__speech,
+        started: window.__voiceSourcesStarted - before,
+        packs: performance
+          .getEntriesByType("resource")
+          .map((entry) => entry.name)
+          .filter((name) => /\.bin(\?|$)/.test(name))
+      }),
+      sourcesBefore
+    );
   };
   // 遊びの途中で書きかえると、遊びを閉じるときの保存で上書きされる。ホームへ戻ってから。
   const setSettings = async (settings) => {
     await page.keyboard.press("Escape");
     await waitForClass(page, "#homeView", "is-active");
-    await page.evaluate(
-      ({ key, settings }) => {
-        const saved = JSON.parse(localStorage.getItem(key) || "{}");
-        saved.settings = { ...(saved.settings || {}), ...settings };
-        localStorage.setItem(key, JSON.stringify(saved));
-      },
-      { key: storageKey, settings }
-    );
+    await patchSettings(page, { ...settings }, { allowMissing: true, reload: false });
   };
 
   const ja = await playFirstGame();
-  assert(ja.speech[0]?.via === "voice-pack", `Japanese speech must use the app voice, got ${JSON.stringify(ja.speech)}`);
-  assert(!ja.speech.some((detail) => detail.fallback), `The app voice fell back to the device voice: ${JSON.stringify(ja.speech)}`);
+  assert(
+    ja.speech[0]?.via === "voice-pack",
+    `Japanese speech must use the app voice, got ${JSON.stringify(ja.speech)}`
+  );
+  assert(
+    !ja.speech.some((detail) => detail.fallback),
+    `The app voice fell back to the device voice: ${JSON.stringify(ja.speech)}`
+  );
   assert(ja.started >= 1, "The app voice must actually start a sound");
   assert(ja.packs.length >= 1, "The voice pack must be loaded");
 
   await setSettings({ textMode: "en" });
   const en = await playFirstGame();
-  assert(en.speech[0]?.via === "voice-pack" && en.speech[0]?.lang === "en-US", `English speech must use the app voice, got ${JSON.stringify(en.speech)}`);
+  assert(
+    en.speech[0]?.via === "voice-pack" && en.speech[0]?.lang === "en-US",
+    `English speech must use the app voice, got ${JSON.stringify(en.speech)}`
+  );
   assert(!en.speech.some((detail) => detail.fallback), `The English app voice fell back: ${JSON.stringify(en.speech)}`);
   assert(en.started >= 1, "The English app voice must actually start a sound");
 
@@ -1480,9 +1745,12 @@ async function checkAppVoiceSpeaks(page) {
     () => typeof window.SpeechSynthesisUtterance === "function" && typeof window.speechSynthesis?.speak === "function"
   );
   if (deviceCapable) {
-    assert(device.speech[0]?.via === "device", `With "device voice" chosen, speech must use the device, got ${JSON.stringify(device.speech)}`);
+    assert(
+      device.speech[0]?.via === "device",
+      `With "device voice" chosen, speech must use the device, got ${JSON.stringify(device.speech)}`
+    );
   }
-  assert(device.started === 0, "With \"device voice\" chosen, the app voice must stay silent");
+  assert(device.started === 0, 'With "device voice" chosen, the app voice must stay silent');
 }
 
 /**
@@ -1491,8 +1759,9 @@ async function checkAppVoiceSpeaks(page) {
  * supporter's world (any tab), there was no way back to the user's world
  * short of force-quitting the app. #homeReturn ("← ホームへ") is the fix:
  * it must stay hidden while in the user's world (start/home/game/result) and
- * appear the moment a tab view is entered, and clicking/scanning to it must
- * take the user all the way back to #homeView and restart scanning there.
+ * appear the moment a tab view is entered. Supporter tabs require a tap;
+ * learning views also permit scanning. Both must take the user all the way
+ * back to #homeView and restart scanning there.
  */
 async function checkHomeReturnFromTabs(page) {
   await waitForClass(page, "#startView", "is-active");
@@ -1575,10 +1844,7 @@ async function checkAnyKeyWhileScanning(page) {
   await page.keyboard.press("F5");
   await page.waitForTimeout(600);
   const moved = await page.evaluate(() => document.querySelector(".view.is-active")?.id);
-  assert(
-    moved !== viewBefore,
-    `F5 while scanning must activate the highlighted item (view stayed ${moved})`
-  );
+  assert(moved !== viewBefore, `F5 while scanning must activate the highlighted item (view stayed ${moved})`);
 }
 
 /**
@@ -1610,49 +1876,6 @@ async function checkAnyKeyOnUserScreens(page) {
   assert(await samePage(), "F5 inside a game must act as the switch, not reload the page");
   await page.locator("#gameExit").click();
   await waitForClass(page, "#homeView", "is-active");
-}
-
-/**
- * 支援者の設定の並び。
- *   - よく使う設定（枠の速さ・声・効果音・雰囲気・文字など）が先に出て、
- *     残りは「くわしい設定」に畳んである
- *   - 設定の画面では枠が動かない。押せない入力ドックと「枠は…」の札を、
- *     項目に重ねて出さない
- *   - いま測定の回であることは、「くわしい設定」を閉じていても見出しで分かる
- *     （支援者が前の日の設定のまま測ってしまわないように）
- */
-async function checkSupporterSettingsLayout(page) {
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-  await page.locator("#homeSupporterMenu").click();
-  await waitForClass(page, "#settings", "is-active");
-
-  await page.locator(".settings-quick").waitFor({ state: "visible" });
-  assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "The detailed settings must start folded");
-  await page.locator(".switch-dock").waitFor({ state: "hidden" });
-  await page.locator(".status-pill").waitFor({ state: "hidden" });
-
-  // 研究（そくてい）と評価ログの画面は外した（2026-09-30）。
-  assert((await page.locator('.settings-tab[data-settings-tab="measure"]').count()) === 0, "The research tab must be gone");
-  assert((await page.locator("#difficultyMode, #researcherMode, #startCalibration").count()) === 0, "Research controls must be gone");
-  assert((await page.locator('.tab[data-view="log"], #log').count()) === 0, "The evaluation log must be gone");
-  await openSettingsMore(page);
-  await page.locator("#settingsMore > summary").click();
-  assert(!(await page.locator("#settingsMore").evaluate((details) => details.open)), "Clicking the heading must fold it again");
-
-  // 以前に「測定」を保存した端末でも、戻す画面が無いので練習に戻す。
-  await page.evaluate((key) => {
-    const saved = JSON.parse(localStorage.getItem(key) || "{}");
-    saved.settings = { ...(saved.settings || {}), difficultyMode: "measure", researcherMode: true };
-    localStorage.setItem(key, JSON.stringify(saved));
-  }, storageKey);
-  await page.reload();
-  await waitForClass(page, "#startView", "is-active");
-  await page.locator("#startStage").click();
-  await waitForClass(page, "#homeView", "is-active");
-  const settings = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").settings || {}, storageKey);
-  assert(settings.difficultyMode === "practice", `A saved measured mode must fall back to practice, got ${settings.difficultyMode}`);
-  assert(settings.researcherMode === false, "A saved researcher mode must be turned off");
 }
 
 async function checkKeyboardAndSwitchInput(page) {
@@ -1703,141 +1926,718 @@ async function checkKeyboardAndSwitchInput(page) {
 }
 
 /**
- * 設定はタブに分かれている（src/App.svelte の .settings-tab）。
+ * 書き出しボタンが本当に書き出すこと。
  *
- * 守りたいのは2つ:
- *   1. 開いていない面の操作子が走査の輪に残らないこと。効かない（届かない）
- *      操作子を輪に置くと、利用者がそこで止まって押しても何も起きない。
- *   2. 支援者編集ロックを廃止したあと、操作子がそのまま押せること。
- *      「無効化されているが輪には居る」状態を作り直さない。
+ * リールCSVのボタンは、押しても何も起きない状態で出荷されていた
+ * （2026-08-28に発見）。exportSlotCsv が exportRhythmCsv の内側に入り込んで
+ * いて、外側からは見えない——にもかかわらず例外は出なかった。`id` を持つ
+ * 要素は同名のグローバル変数になるので、`exportSlotCsv` はボタン要素自身に
+ * 解決され、addEventListener はそれを「handleEvent を持たないリスナ」として
+ * 黙って受け取っていた。エラーも警告も無く、押しても無反応になるだけ。
+ *
+ * 「押せる」「見える」を見ていたテストでは捕まらない。捕まえられるのは
+ * 「押した結果データが出てくるか」だけなので、Blob の生成を数える。
+ * ダウンロード自体はヘッドレスで止まるが、URL.createObjectURL まで届けば
+ * 行は組み上がっている。
  */
-async function checkSettingsTabs(page) {
+/**
+ * 参加者ひとりぶんを終えるとき、書き出す前には消させない。
+ *
+ * 想定運用は「1人終わったら書き出して、端末を空にして次の人へ」。消すのは
+ * 取り返しがつかず、書き出しは取り返しがつく——順番を守らせる。
+ *
+ * これまでどのボタンも state.sessions を消さなかったので、共用端末では前の
+ * 参加者の回が残りつづけ、推移も自己最高も混ざっていた（2026-08-29）。
+ */
+async function checkHandOverNeedsAnExportFirst(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
 
-  const tabs = page.locator(".settings-tab");
-  // 研究の面（そくてい）は 2026-09-30 に外した。スイッチ・見え方と音・むずかしさの3つ。
-  assert((await tabs.count()) === 3, `Expected three settings tabs, got ${await tabs.count()}`);
-  assert(
-    (await tabs.first().getAttribute("aria-selected")) === "true",
-    "The first settings tab must start selected"
-  );
-  // よく使う設定は、開いてすぐ見える。残りは「くわしい設定」に畳んである。
-  await page.locator("#scanInterval").waitFor({ state: "visible" });
-  await page.locator("#fxLevel").waitFor({ state: "visible" });
-  await page.locator("#autoScan").waitFor({ state: "hidden" });
-  await openSettingsMore(page);
-  // 最初の面の項目は見えていて、他の面の項目は見えていない。
-  await page.locator("#autoScan").waitFor({ state: "visible" });
-  await page.locator("#fishingLimitMs").waitFor({ state: "hidden" });
+  // 消す対象を作る（1件でも入っていれば導線は同じ）。
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    state.logs = [{ time: "2026-08-29T00:00:00.000Z", view: "home", type: "probe", label: "handover" }];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, storageKey);
+  await page.reload();
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
 
-  const hiddenScannable = async () =>
-    page.evaluate(
-      () =>
-        [...document.querySelectorAll(".settings-panel[hidden] [data-scan]")].filter(
-          (el) => el.getBoundingClientRect().width > 0
-        ).length
+  // 確認ダイアログが出たら必ず承諾する。それでも書き出し前は消えないこと。
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await page.locator("#handOverParticipant").click();
+  await page.waitForTimeout(150);
+  const blocked = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return (state.logs || []).length;
+  }, storageKey);
+  // 画面を行き来するあいだにも操作ログは増えるので、件数ではなく
+  // 「消えていない」ことだけを見る。
+  assert(blocked >= 1, `書き出す前に消えてしまった（logs=${blocked}）`);
+  const reason = ((await page.locator("#supporterMessage").textContent()) || "").trim();
+  assert(reason.includes("書き出"), `止めた理由が画面に出ていない: ${reason.slice(0, 60)}`);
+
+  // 書き出したあとなら消える。
+  await page.locator("#exportRawJson").click();
+  await page.waitForTimeout(200);
+  await page.locator("#handOverParticipant").click();
+  await page.waitForTimeout(300);
+  const cleared = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return {
+      logs: (state.logs || []).length,
+      sessions: (state.sessions || []).length,
+      participantId: state.evaluation?.participantId ?? null
+    };
+  }, storageKey);
+  assert(cleared.logs === 0 && cleared.sessions === 0, `消えていない: ${JSON.stringify(cleared)}`);
+  // 次の人のIDを入れ直させる（前の人のIDが残っていると取り違える）。
+  assert(cleared.participantId === "", `参加者IDが残っている: ${cleared.participantId}`);
+}
+
+async function checkExportButtonsAreWired(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  // 効果測定タブは研究者モードでのみ出る。
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
+
+  // データが1件も無い状態では「ありません」を出して書き出さないのが正しい
+  // 挙動なので、押して数える前に1回ぶんの記録を差し込む。
+  await page.evaluate(() => {
+    window.__blobCount = 0;
+    const original = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (blob) => {
+      window.__blobCount += 1;
+      window.__lastBlobType = blob.type;
+      return original(blob);
+    };
+  });
+
+  const buttons = [
+    "#exportRhythmCsv",
+    "#exportSlotCsv",
+    "#exportScanCsv",
+    "#exportRtCsv",
+    "#exportSessionLedgerCsv",
+    "#exportRawJson",
+    // 操作ログCSVもこの1枚に居る（効果測定タブを畳んだ 2026-08-29 以降）。
+    "#exportCsv"
+  ];
+  for (const selector of buttons) {
+    const count = await page.locator(selector).count();
+    assert(count === 1, `Export button ${selector} must exist exactly once, found ${count}`);
+    const before = await page.evaluate(() => window.__blobCount);
+    await page.locator(selector).click();
+    const after = await page.evaluate(() => window.__blobCount);
+    const explained = await page.evaluate(() =>
+      (document.querySelector("#supporterMessage")?.textContent || "").trim()
     );
+    // 書き出したか、書き出せない理由を出したか。無反応だけを落とす。
+    assert(
+      after > before || explained.length > 0,
+      `${selector} produced neither a download nor a visible reason (silent no-op)`
+    );
+    await page.evaluate(() => {
+      const message = document.querySelector("#supporterMessage");
+      if (message) {
+        message.textContent = "";
+        message.hidden = true;
+      }
+    });
+  }
+}
+
+/**
+ * 回ごとの推移を、あそびごとのタブで全部たどれること。
+ *
+ * 記録のあるあそびだけをタブに出すと、支援者は「まだ遊んでいない」のか
+ * 「表示が壊れている」のかを区別できない。全部並べて、記録の無いものは
+ * 「データがありません」と言う。
+ *
+ * タブに data-scan は付けない。ここは支援者がタップ／キーボードで使う面で、
+ * 利用者が走査で操作するものではない（ホームの支援者メニュー入口と同じ扱い）。
+ */
+async function checkTrendTabsCoverEveryGame(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
+
+  const tabs = page.locator(".trend-tab");
+  const tabCount = await tabs.count();
+  // 記録が1件も無い状態でも、あそびのぶんだけタブが出る。
+  assert(tabCount >= 5, `Expected a tab per game, got ${tabCount}`);
+
+  // 走査の輪には入れない（利用者が押しても意味のない項目を増やさない）。
   assert(
-    (await hiddenScannable()) === 0,
-    "Hidden settings panels must leave the scan ring"
+    (await page.locator(".trend-tab[data-scan]").count()) === 0,
+    "Trend tabs are supporter-only and must stay out of the scan ring"
   );
 
-  // 面を切り替えると入れ替わる。
-  await openSettingsTab(page, "play");
-  await page.locator("#fishingLimitMs").waitFor({ state: "visible" });
+  // どのタブを開いても、何かしら答えが出る（無反応の面を作らない）。
+  for (let index = 0; index < tabCount; index += 1) {
+    const tab = tabs.nth(index);
+    const name = ((await tab.textContent()) || "").replace(/\s+/g, " ").trim();
+    await tab.click();
+    await page.waitForTimeout(80);
+    assert((await tab.getAttribute("aria-selected")) === "true", `Tab "${name}" did not become the selected one`);
+    const panel = ((await page.locator("#sessionTrends").textContent()) || "").trim();
+    assert(panel.length > 0, `Tab "${name}" showed nothing at all`);
+    // 記録が無い回は、無いと言い切る（黙って空にしない）。
+    const hasCards = (await page.locator("#sessionTrends .trend-card").count()) > 0;
+    assert(
+      hasCards || panel.includes("データがありません"),
+      `Tab "${name}" is empty but does not say so: ${panel.slice(0, 60)}`
+    );
+  }
+}
+
+// 初期表示・ネイティブ開閉・ラベル・保存を通して検証する。表示定義をテストに複製しない。
+async function checkSettingsDetails(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  const savedSettings = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key)).settings, storageKey);
+  const original = await savedSettings();
+  const visibleIds = await page
+    .locator("#settings input:visible, #settings select:visible")
+    .evaluateAll((nodes) => nodes.map((node) => node.id).sort());
+  assert(
+    JSON.stringify(visibleIds) ===
+      JSON.stringify(
+        ["textMode", "fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"].sort()
+      ),
+    "Only the seven common settings (with the language) should be visible initially"
+  );
+  assert((await page.locator("#settings details[open]").count()) === 0, "Details should start collapsed");
+  // よく使う設定は囲んで先に出す。設定の画面では枠が動かないので、押せない入力ドックと
+  // 「枠は止まっています」の札を出さない（main の 9/30 の直し。theme-hakkiri.css の「支援者の世界」）。
+  await page.locator(".settings-quick #textMode").waitFor({ state: "visible" });
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await page.locator(".status-pill").waitFor({ state: "hidden" });
+  const summary = page.locator("#settingsSwitch > summary");
+  await page.locator("#hideVisualTasks").focus();
+  await page.keyboard.press("Tab");
+  assert(await summary.evaluate((node) => document.activeElement === node), "Tab must reach the next details summary");
+  await page.keyboard.press("Enter");
+  await page.locator("#autoScan").waitFor({ state: "visible" });
+  await page.keyboard.press("Space");
   await page.locator("#autoScan").waitFor({ state: "hidden" });
-  // よく使う設定は、どの面を開いていても見えたまま。
-  await page.locator("#scanInterval").waitFor({ state: "visible" });
   assert(
-    (await hiddenScannable()) === 0,
-    "Hidden settings panels must leave the scan ring after switching"
+    JSON.stringify(await savedSettings()) === JSON.stringify(original),
+    "Opening and closing must never change settings"
   );
+  for (const name of ["switch", "senses", "play", "research", "credits"]) {
+    await openSettingsDetails(page, name);
+  }
+  const unnamed = await page
+    .locator("#settings input, #settings select")
+    .evaluateAll((nodes) =>
+      nodes
+        .filter((node) => !node.labels?.length || ![...node.labels].some((label) => label.textContent.trim()))
+        .map((node) => node.id)
+    );
+  assert(unnamed.length === 0, "Every control must have a readable label: " + unnamed.join(", "));
+  assert(
+    (await page.locator("#settings input, #settings select").count()) === SETTINGS_FIELDS.length,
+    `All ${SETTINGS_FIELDS.length} settings must remain reachable`
+  );
+  assert(
+    (await page.locator("#researcherMode").count()) === 0,
+    "The dead researcher-mode switch must stay off the screen"
+  );
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  assert(overflow <= 2, `Expanded settings must stay within the viewport, overflow ${overflow}px`);
+  // 回の名前は「れんしゅう」「そくてい」にそろえる。押すタイミングの基準（キャリブレーション）は
+  // 別の言葉で呼ぶ（同じ言葉で別のものを指すと取り違える）。
+  const settingsText = await page.locator("#settings").innerText();
+  assert(!/練習|測定/.test(settingsText), "The settings screen must name the two runs れんしゅう／そくてい only");
+  assert(
+    !(await page.locator("#startCalibration").innerText()).includes("そくてい"),
+    "The calibration button must not reuse the run name"
+  );
+  await page.locator("#fxLevel").selectOption("subtle");
+  assert(
+    (await page.locator("#liveRegion").textContent()).includes("遊びの雰囲気"),
+    "The announcement must use the setting's own name"
+  );
+  await page.locator("#speechEnabled").uncheck();
+  await page.locator("#soundEnabled").uncheck();
+  await page.locator("#largeText").uncheck();
+  await page.locator("#hideVisualTasks").check();
+  for (const [id, value] of [
+    ["scanInterval", "2200"],
+    ["slotCycleMs", "4800"],
+    ["craneSweepMs", "3200"]
+  ]) {
+    await page.locator("#" + id).evaluate((node, next) => {
+      node.value = next;
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+    }, value);
+  }
+  await page.locator("#rhythmBpm").selectOption("40");
+  await page.locator("#rhythmTargetBeats").selectOption("10");
+  await page.locator("#fishingLimitMs").selectOption("3000");
+  await page.locator("#visualGuidance").uncheck();
+  await page.locator("#craneAudioGuidance").check();
+  const changed = await savedSettings();
+  assert(
+    changed.targetBeats === 10 && changed.craneSweepMs === 3200 && changed.fishingLimitMs === 3000,
+    "Typed values and the targetBeats alias must save correctly"
+  );
+  // VoiceOver はつまみの値を aria-valuetext で読む。画面の文（「2.2秒」）と同じで、生の値（2200）ではない。
+  for (const [id, text] of [
+    ["scanInterval", "2.2秒"],
+    ["slotCycleMs", "4.8秒"],
+    ["craneSweepMs", "3.2秒"]
+  ]) {
+    assert((await page.locator("#" + id).getAttribute("aria-valuetext")) === text, `${id} must read as ${text}`);
+    assert((await page.locator(`#${id}Value`).textContent()) === text, `${id} must show ${text}`);
+  }
+  // れんしゅうの回は、回の種類の1行を出さない（2026-10-03）。そくていの回だけ注意を出す。
+  assert(await page.locator("#settingsModeStatus").isHidden(), "Practice runs show no status line");
+  await page.locator("#difficultyMode").selectOption("measure");
+  await page.locator("#settingsResearch > summary").click();
+  assert(
+    (await page.locator("#settingsModeStatus").isVisible()) &&
+      (await page.locator("#settingsModeStatus").textContent()).includes("そくていの回"),
+    "Measurement status must remain visible with research collapsed"
+  );
+  assert(await page.locator("#slotCycleMs").isDisabled(), "Measured settings must remain locked");
+  // 灰色のつまみには れんしゅうの値（4.8秒）が残る。そくていで実際に使う値を同じ行に添える。
+  await page.locator("#slotCycleMsReason").waitFor({ state: "visible" });
+  assert(
+    (await page.locator("#slotCycleMsReason").textContent()).includes("そくていでは 3.2秒"),
+    "A locked row must show the protocol value"
+  );
+  assert(
+    (await page.locator("#slotCycleMs").getAttribute("aria-describedby")).includes("slotCycleMsReason"),
+    "The reason must be read with the control"
+  );
+  assert(
+    !(await page.locator("#scanInterval").isDisabled()),
+    "Settings that are not measured stay usable while measuring"
+  );
+  await openSettingsDetails(page, "research");
+  await page.locator("#readinessCheck").waitFor({ state: "visible" });
+  await page.locator("#difficultyMode").selectOption("practice");
+  assert(!(await page.locator("#slotCycleMs").isDisabled()), "Practice must unlock adjustments");
+  assert(await page.locator("#slotCycleMsReason").isHidden(), "The reason must go away with the lock");
+  assert(
+    !(await page.locator("#slotCycleMs").getAttribute("aria-describedby")).includes("Reason"),
+    "A usable control must not read a stale reason"
+  );
+  assert(
+    JSON.stringify(await savedSettings()) === JSON.stringify(changed),
+    "Measurement mode must preserve the saved practice values"
+  );
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await savedSettings();
+  for (const key of Object.keys(changed)) {
+    assert(
+      JSON.stringify(restored[key]) === JSON.stringify(changed[key]),
+      `Setting ${key} must survive reload: expected ${JSON.stringify(changed[key])}, got ${JSON.stringify(restored[key])}`
+    );
+  }
+  await page.locator("#startStage").click();
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  for (const [id, expected] of [
+    ["fxLevel", "subtle"],
+    ["scanInterval", "2200"]
+  ]) {
+    assert((await page.locator("#" + id).inputValue()) === expected, "Restored UI value for " + id);
+  }
+  assert(
+    (await page.locator("#settings details[open]").count()) === 0,
+    "Reload must collapse details without resetting values"
+  );
+  assert((await page.locator("#supporterEditToggle").count()) === 0, "The obsolete editing lock must be gone");
 
-  // 支援者編集ロックは廃止した（2026-08-17）。開いた面の操作子はそのまま押せる。
+  // iPad のスイッチコントロールを使うと「枠が動く速さ」（よく使う設定）が使えなくなる。
+  // 理由は閉じた「スイッチのくわしい設定」の中ではなく、その行に出る。
+  await openSettingsDetails(page, "switch");
+  await page.locator("#switchControlMode").click();
+  await page.locator("#settingsSwitch > summary").click();
+  assert(await page.locator("#scanInterval").isDisabled(), "Scan speed is locked while iPad Switch Control scans");
+  await page.locator("#scanIntervalReason").waitFor({ state: "visible" });
   assert(
-    !(await page.locator("#fishingLimitMs").isDisabled()),
-    "Settings controls must be usable without an editing lock"
+    (await page.locator("#scanIntervalReason").textContent()).includes("スイッチコントロール"),
+    "The scan speed row must say why"
   );
   assert(
-    (await page.locator("#supporterEditToggle").count()) === 0,
-    "The supporter editing lock must be gone, not merely hidden"
+    (await page.locator("#scanInterval").getAttribute("aria-describedby")).includes("scanIntervalReason"),
+    "VoiceOver must read the reason"
+  );
+  await openSettingsDetails(page, "senses");
+  await page.locator("#speechVolumeReason").waitFor({ state: "visible" });
+  await openSettingsDetails(page, "switch");
+  await page.locator("#switchControlMode").click();
+  assert(
+    !(await page.locator("#scanInterval").isDisabled()) && (await page.locator("#scanIntervalReason").isHidden()),
+    "Ending delegation unlocks the scan speed"
   );
 }
 
 /**
- * 支援者メニュー（設定画面）の操作子は走査の輪に入らない。
- *
- * ここを触るのは支援者で、スイッチ走査では操作しない（2026-08-28 合意）。
- * 輪に入れても利用者が選ぶ項目は1つもなく、待ち時間が延びるだけになる。
- *
- * 同時に守るのは逃げ道。面の中身は外すが #homeReturn とタブバーは輪に残す
- * ——利用者が誤って支援者の世界へ入ったとき、走査だけで home へ戻れなく
- * なると、実機確認2026-07-04の「強制終了以外に戻れない」欠落が戻る。
+ * 支援者向けの説明書。設定画面の「はじめての方へ」と、そこから開く印刷用（public/guide.html）が、
+ * 同じ中身（src/lib/supporterGuide.js）で、いまの設定画面の名前と道順を使っていること。
+ * 印刷用だけが消えた4つのタブで説明していた（2026-10-01 に見つかった）。
  */
-async function checkSupporterMenuStaysOutOfTheScanRing(page) {
+async function checkSupporterGuide(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
+  const guide = page.locator("#settingsGuide");
+  assert(!(await guide.evaluate((node) => node.open)), "The guide starts folded");
+  await guide.locator(":scope > summary").focus();
+  await page.keyboard.press("Enter");
+  assert(await guide.evaluate((node) => node.open), "Enter must open the guide");
+  const appText = await guide.innerText();
+  for (const expected of [
+    "よく使う設定",
+    "「スイッチのくわしい設定」→「枠を自動で動かす」",
+    "既定に戻す",
+    translate("party.atmosphere.big.description", "kanji")
+  ]) {
+    assert(appText.includes(expected), `The app guide must say: ${expected}`);
+  }
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  assert(overflow <= 2, `The open guide must stay within the viewport, overflow ${overflow}px`);
+  const appQuestions = await guide.locator(".qa dt").allInnerTexts();
 
-  // 走査間隔に依存しないよう、→ キーで輪を手で回して一周ぶん集める。
-  const walkRing = async (steps) => {
-    const seen = [];
-    for (let index = 0; index < steps; index += 1) {
-      await page.keyboard.press("ArrowRight");
-      const current = await page.evaluate(() => {
-        const focused = document.querySelector(".scan-focus");
-        if (!focused) return null;
-        return {
-          id: focused.id || null,
-          inSettings: Boolean(focused.closest("#settings")),
-          label: (focused.getAttribute("aria-label") || focused.textContent || "")
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 20),
-        };
-      });
-      if (current) seen.push(current);
+  const link = page.locator("#settingsGuidePrint a");
+  await link.waitFor({ state: "visible" });
+  const printable = await page.context().newPage();
+  try {
+    const response = await printable.goto(new URL(await link.getAttribute("href"), page.url()).href);
+    assert(response?.ok(), `The printable guide must load, got ${response?.status()}`);
+    const printText = await printable.locator("main").innerText();
+    for (const old of ["「スイッチ」→", "「見え方・音」→", "「むずかしさ」", "そくてい（研究）"]) {
+      assert(!printText.includes(old), `The printable guide still points through a removed tab: ${old}`);
     }
-    return seen;
-  };
+    assert(
+      printText.includes("「スイッチのくわしい設定」→「枠を自動で動かす」"),
+      "The printable guide uses the current path"
+    );
+    assert(
+      printText.includes(translate("party.atmosphere.subtle.description", "kanji")),
+      "The printable guide explains the atmospheres"
+    );
+    const printQuestions = (await printable.locator(".qa dt").allInnerTexts()).map((text) =>
+      text.replace(/^Q\.\s*/, "")
+    );
+    assert(
+      JSON.stringify(printQuestions) === JSON.stringify(appQuestions),
+      "The app and printable guides must answer the same questions"
+    );
+  } finally {
+    await printable.close();
+  }
+}
 
-  // 支援者メニューでは走査を一切動かさない（2026-09-14の指示。理由と代償は
-  // src/lib/scan.js の isSupporterMenu()）。面の中身だけでなく、タブバーも
-  // 走査ドックも輪から外れる。
-  const ring = await walkRing(45);
-  assert(
-    ring.length === 0,
-    `Supporter menu must not scan at all, found: ${ring.map((entry) => entry.label).join(", ")}`
+/**
+ * くわしい設定のまとまりごとの「既定に戻す」（確かめ表 B3）。
+ *
+ * 既定は state.js の既定値。キーボードだけで届いて押せること、押したら何を戻したかが
+ * ボタンのすぐ下と読み上げに出ること、そくていの回に固定される項目は戻さないこと、
+ * iPad 本体に合わせる「スイッチコントロールを使う」は戻さないことを見る。
+ */
+/**
+ * 言語は よく使う設定の いちばん上にあり、変えると支援者の画面（設定の名前・説明・状態・タブ・
+ * 枠の状態の札）もその場で同じ言語になる（2026-10-02、「言語が変わったら、支援者設定の名称も
+ * 変更されるように」）。日本語へ戻すと日本語に戻る。
+ */
+async function checkSupporterLanguage(page, project) {
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator("#textMode").waitFor({ state: "visible" });
+  const firstCommon = await page.locator("#settings .settings-grid").first().locator("select, input").first().getAttribute("id");
+  assert(firstCommon === "textMode", `The language must be the first common setting (saw ${firstCommon})`);
+
+  await page.locator("#textMode").selectOption("en");
+  await waitForText(page, 'label[for="fxLevel"]', "Play atmosphere");
+  await waitForText(page, "#settings-title", "Settings");
+  await waitForText(page, '.tab[data-view="settings"] .tab-full', "Settings");
+  await waitForText(page, "#scanState", "Highlight is stopped");
+  assert((await page.locator("#scanIntervalValue").textContent()).trim().endsWith(" s"), "Values are written in English");
+  const kana = await page.evaluate(() =>
+    (document.querySelector("#settings").innerText.replace(/Language \/ 言語|日本語/g, "").match(/[\u3040-\u30ff]/g) || []).join("")
   );
+  assert(kana === "", `The English settings screen still shows Japanese: ${kana}`);
+
+  await page.locator("#textMode").selectOption("ruby");
+  await waitForText(page, 'label[for="fxLevel"]', "遊びの雰囲気");
+  await waitForText(page, "#settings-title", "設定");
   await waitForText(page, "#scanState", "枠は止まっています");
+}
 
-  // 自動走査のタイマーも復活しない。手動の「走査開始」も効かない。
-  await page.locator("#toggleScan").evaluate((target) => target.click());
-  await page.waitForTimeout(1_900);
-  assert(
-    (await page.locator(".scan-focus").count()) === 0,
-    "No app scan focus may appear in the supporter menu"
-  );
-  await waitForText(page, "#scanState", "枠は止まっています");
-
-  // 効かない操作子は無効として見せる（押しても動かない理由が支援者に分かる）。
-  assert(await page.locator("#toggleScan").isDisabled(), "The dock scan toggle is dead here, so it must be disabled");
-  assert(await page.locator("#primarySwitch").isDisabled(), "The dock switch surrogate is dead here, so it must be disabled");
-
-  // スイッチ入力（キーボード相当）も何も起こさない——画面は設定のまま。
-  await page.keyboard.press("Space");
-  await page.waitForTimeout(200);
+async function checkSettingsReset(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
+  const savedSettings = () => page.evaluate((key) => JSON.parse(localStorage.getItem(key)).settings, storageKey);
+  const setRange = (id, value) =>
+    page.locator("#" + id).evaluate((node, next) => {
+      node.value = next;
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+    }, value);
 
-  // 走査で戻れなくなった代わりに、支援者のタップで戻る導線は生きている
-  // ことを固定する。ここが壊れると、この画面は本当に行き止まりになる。
+  // リール: 変えてから、最後の項目から Tab で「既定に戻す」へ届き、Enter で戻す。
+  await openSettingsDetails(page, "play");
+  await setRange("slotCycleMs", "4800");
+  await setRange("slotToleranceMs", "100");
+  await page.locator("#slotL2Rounds").focus();
+  await page.keyboard.press("Tab");
+  assert(
+    await page.locator("#slotReset").evaluate((node) => document.activeElement === node),
+    "Tab must reach the reset button of the group"
+  );
+  await page.keyboard.press("Enter");
+  let saved = await savedSettings();
+  assert(
+    saved.slotCycleMs === defaultState.settings.slotCycleMs &&
+      saved.slotToleranceMs === defaultState.settings.slotToleranceMs,
+    "Reset must restore the state.js defaults"
+  );
+  assert(
+    (await page.locator("#slotCycleMs").inputValue()) === String(defaultState.settings.slotCycleMs),
+    "The slider must show the restored value"
+  );
+  const status = page.locator("#slotResetStatus");
+  await status.waitFor({ state: "visible" });
+  assert(
+    (await status.textContent()).includes("絵が回る速さ（4.8秒 → 3.2秒）"),
+    "The supporter must see what was reset"
+  );
+  assert((await page.locator("#liveRegion").textContent()).includes("既定に戻しました"), "The reset must be announced");
+  await page.keyboard.press("Space");
+  assert(
+    (await status.textContent()).includes("もう既定のまま"),
+    "Pressing again must say nothing changed, not stay silent"
+  );
+  // 同じまとまりを手で変えたら、古い知らせは消す。
+  await setRange("slotL1Rounds", "10");
+  assert(await status.isHidden(), "A stale reset message must go away after a manual change");
+
+  // そくていの回: 固定される項目は戻さない。ボタンは押せず、理由をすぐ下に出す。
+  await setRange("craneSweepMs", "3200");
+  await openSettingsDetails(page, "research");
+  await page.locator("#difficultyMode").selectOption("measure");
+  assert(await page.locator("#craneReset").isDisabled(), "Reset of a measured group must be locked in a measured run");
+  assert(
+    (await page.locator("#craneResetStatus").textContent()).includes("そくていの回は固定"),
+    "The locked reset must say why"
+  );
+  assert((await savedSettings()).craneSweepMs === 3200, "A measured run must keep the practice value");
+  await page.locator("#difficultyMode").selectOption("practice");
+  await page.locator("#craneReset").click();
+  assert((await savedSettings()).craneSweepMs === null, "Practice reset returns to the game default (null)");
+
+  // スイッチ: iPad 本体に合わせるものは戻さない。
+  await openSettingsDetails(page, "switch");
+  await page.locator("#scanFeedback").selectOption("speak");
+  await page.locator("#showScreenSwitch").check();
+  await page.locator("#showScreenSwitch").focus();
+  await page.keyboard.press("Tab");
+  assert(
+    await page.locator("#switchReset").evaluate((node) => document.activeElement === node),
+    "Tab must reach the switch reset button"
+  );
+  await page.keyboard.press("Space");
+  saved = await savedSettings();
+  assert(
+    saved.scanFeedback === "none" && saved.showScreenSwitch === false && saved.switchControlMode === false,
+    "Switch reset restores the app-side switch settings"
+  );
+  assert(
+    !(await page.evaluate(() => document.body.classList.contains("screen-switch-on"))),
+    "Reset must reach the screen, not only the saved value"
+  );
+
+  // 見え方: くっきり表示を戻すと、画面にも戻る。言語は「よく使う設定」へ移したので（2026-10-02）、
+  // 見え方・声を既定に戻しても変わらない（英語で使っている人の画面を、日本語へ戻さない）。
+  await openSettingsDetails(page, "senses");
+  await page.locator("#textMode").selectOption("en");
+  await page.locator("#highContrast").click();
+  await page.locator("#sensesReset").click();
+  assert((await savedSettings()).highContrast === false, "Senses reset restores high contrast");
+  assert(
+    !(await page.evaluate(() => document.body.classList.contains("high-contrast"))),
+    "The restored contrast must reach the page"
+  );
+  assert((await savedSettings()).textMode === "en", "Senses reset keeps the chosen language");
+  await page.locator("#textMode").selectOption("ruby");
+  assert(
+    await page.evaluate(() => document.documentElement.classList.contains("text-ruby")),
+    "Choosing Japanese again must reach the page"
+  );
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  assert(overflow <= 2, `Reset buttons and messages must stay within the viewport, overflow ${overflow}px`);
+
+  // キーボード（Tab）だけで、開いたまとまりの使える項目と「既定に戻す」の全部に届く。
+  for (const name of ["switch", "senses", "play", "research"]) {
+    await openSettingsDetails(page, name);
+  }
+  const reachable = await page
+    .locator("#settings")
+    .evaluate((root) =>
+      [...root.querySelectorAll("input, select, button")]
+        .filter((node) => node.id && !node.disabled && node.getClientRects().length > 0)
+        .map((node) => node.id)
+    );
+  await page.locator("#settingsGuide > summary").focus();
+  const visited = new Set();
+  for (let index = 0; index < 150; index += 1) {
+    await page.keyboard.press("Tab");
+    const id = await page.evaluate(() =>
+      document.activeElement?.closest("#settings") ? document.activeElement.id : null
+    );
+    if (id === null) {
+      break;
+    }
+    if (id) {
+      visited.add(id);
+    }
+  }
+  const missed = reachable.filter((id) => !visited.has(id));
+  assert(missed.length === 0, `Tab must reach every usable setting and reset button: ${missed.join(", ")}`);
+  assert(
+    reachable.filter((id) => id.endsWith("Reset")).length === 6,
+    "All six reset buttons must be reachable in practice"
+  );
+}
+
+/**
+ * 支援者の世界は輪全体を止める。評価ログ・設定とも帰り道は支援者のタップ。
+ * 一瞬だけ枠が復活して消える事故も、class 変更を観測して拾う。
+ */
+async function assertSupporterScanStopped(page, view) {
+  await waitForClass(page, `#${view}`, "is-active");
+  await waitForText(page, "#scanState", "枠は止まっています");
+  for (const id of ["toggleScan", "primarySwitch"]) {
+    assert(await page.locator(`#${id}`).isDisabled(), `${view}: ${id} must be disabled`);
+    assert(
+      (await page.locator(`#${id}`).getAttribute("aria-disabled")) === "true",
+      `${view}: ${id} must expose its disabled state`
+    );
+  }
+  const savedState = await page.evaluate(() => JSON.stringify(localStorage));
+  await page.evaluate(() => {
+    document.activeElement?.blur(); // 通常のボタンの Enter 決定とは区別する。
+    const probe = { focusAppeared: false, clicks: 0 };
+    const observer = new MutationObserver((records) => {
+      if (document.querySelector(".scan-focus") || records.some((r) => r.oldValue?.includes("scan-focus"))) {
+        probe.focusAppeared = true;
+      }
+    });
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class"],
+      attributeOldValue: true
+    });
+    const countClick = () => {
+      probe.clicks += 1;
+    };
+    const surfaces = [document.querySelector(".tabbar"), document.querySelector(".view.is-active")];
+    surfaces.forEach((surface) => surface.addEventListener("click", countClick));
+    window.__supporterScanProbe = {
+      probe,
+      cleanup: () => {
+        observer.disconnect();
+        surfaces.forEach((surface) => surface.removeEventListener("click", countClick));
+      }
+    };
+    // disabled のネイティブ抑止を迂回しても、エンジン自身が止めること。
+    document.querySelector("#toggleScan").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const input = document.querySelector("#primarySwitch");
+    input.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, isPrimary: true, button: 0 }));
+    input.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    window.dispatchEvent(new Event("resize")); // refresh() の入口も確認する。
+  });
+  for (let index = 0; index < 45; index += 1) {
+    await page.keyboard.press("ArrowRight");
+    assert((await page.locator(".scan-focus").count()) === 0, `${view}: scan ring must be empty`);
+  }
+  for (const key of ["Space", "Enter", "a", "F8"]) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(170);
+  }
+  await page.waitForTimeout(1_900); // 既定の自動走査間隔を越えて待つ。
+  const probe = await page.evaluate(() => {
+    const { probe, cleanup } = window.__supporterScanProbe;
+    cleanup();
+    delete window.__supporterScanProbe;
+    return probe;
+  });
+  assert(!probe.focusAppeared, `${view}: timer and manual inputs must never create a frame`);
+  assert(probe.clicks === 0, `${view}: switch input must not activate any control`);
+  assert((await page.locator(".scan-focus").count()) === 0, `${view}: no frame may remain`);
+  assert(
+    (await page.evaluate(() => JSON.stringify(localStorage))) === savedState,
+    `${view}: switch input must not change saved state`
+  );
+  await waitForClass(page, `#${view}`, "is-active");
+  await waitForText(page, "#scanState", "枠は止まっています");
+}
+
+async function assertHomeScanResumed(page) {
   assert(!(await page.locator("#homeReturn").isHidden()), "The supporter must still see the way back");
   await page.locator("#homeReturn").click();
   await waitForClass(page, "#homeView", "is-active");
+  await waitForText(page, "#scanState", "枠が動いています");
+  assert(await page.locator("#toggleScan").isEnabled(), "Home must re-enable the scan toggle");
+  assert(await page.locator("#primarySwitch").isEnabled(), "Home must re-enable the switch");
+  await page.waitForFunction(() => Boolean(document.querySelector("#homeView .scan-focus")));
+  const first = await page.locator(".scan-focus").getAttribute("data-tile-id");
+  await page.waitForFunction((id) => {
+    const current = document.querySelector("#homeView .scan-focus");
+    return current && current.getAttribute("data-tile-id") !== id;
+  }, first);
+}
+
+async function checkSupporterMenuStaysOutOfTheScanRing(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  // 「はじめる」の粒が、支援者の画面の上に残らない（粒の層は画面全体を覆う固定の層）。
+  const particlesLeft = await page.evaluate(() => document.querySelector("#fxLayer")?.dataset.active === "true");
+  assert(!particlesLeft, "Particles from the user world must be cleared when the supporter world opens");
+  await assertSupporterScanStopped(page, "settings");
+  await assertHomeScanResumed(page);
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator('.tab[data-view="log"]').click();
+  await assertSupporterScanStopped(page, "log");
+  await assertHomeScanResumed(page);
 }
 
 /**
@@ -1846,26 +2646,28 @@ async function checkSupporterMenuStaysOutOfTheScanRing(page) {
  * アプリ側が完全に黙ることと、OS相当の直接clickでシェルを巡れることを固定する。
  */
 async function checkIpadSwitchControlMode(page, project) {
-  if (project.name !== "ipad-portrait") return SKIPPED;
+  if (project.name !== "ipad-portrait") {
+    return SKIPPED;
+  }
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
   // 支援者メニューへ入った時点で自前走査は止まる（scan.js の
-  // isSupporterMenu()）。委譲を用意する画面そのものが、もう走っていない。
+  // scanningIsOff()）。委譲を用意する画面そのものが、もう走っていない。
   await waitForText(page, "#scanState", "枠は止まっています");
 
+  await openSettingsDetails(page, "switch");
   const mode = page.locator("#switchControlMode");
   assert(!(await mode.isChecked()), "Switch Control mode must be explicit and default off");
   assert((await mode.getAttribute("data-scan")) === null, "App scan must not let a user disable their only scan owner");
   assert(
-    (await page.locator('#scanInterval[data-scan], #speechVolume[data-scan]').count()) === 0,
+    (await page.locator("#scanInterval[data-scan], #speechVolume[data-scan]").count()) === 0,
     "Click-only app scanning must not stop on range controls"
   );
   // Safe hand-off order: supporter stops app scanning, then enables iPad
   // Switch Control outside the app, then activates this native checkbox.
-  await openSettingsTab(page, "basic");
   await page.locator("#autoScan").click();
   await waitForText(page, "#scanState", "枠は止まっています");
   assert((await page.locator(".scan-focus").count()) === 0, "Stopping app scan must clear its yellow focus");
@@ -1920,10 +2722,7 @@ async function checkIpadSwitchControlMode(page, project) {
     fullLayout.pages.length === 1,
     `Delegated scanning must not hide choices behind a pager: ${JSON.stringify(fullLayout.pages)}`
   );
-  assert(
-    fullWidthTitles.length === 9,
-    "Expected all nine home choices, got " + fullWidthTitles.join(", ")
-  );
+  assert(fullWidthTitles.length === 9, "Expected all nine home choices, got " + fullWidthTitles.join(", "));
 
   await page.setViewportSize({ width: 507, height: 1194 });
   // Width breakpoints re-render the home list; wait until layout and bounding
@@ -1973,7 +2772,7 @@ async function checkIpadSwitchControlMode(page, project) {
   await waitForClass(page, "#settings", "is-active");
 
   // 2x2比較用に、モード中でも支援者がアプリTTSを明示的にONへ戻せる。
-  await openSettingsTab(page, "senses");
+  await openSettingsDetails(page, "senses");
   await page.locator("#speechEnabled").click();
   assert(await page.locator("#speechEnabled").isChecked(), "Supporter must be able to enable app TTS for A-B testing");
   assert(!(await page.locator("#speechVolume").isDisabled()), "TTS volume must unlock with app TTS");
@@ -1988,7 +2787,7 @@ async function checkIpadSwitchControlMode(page, project) {
   assert(speechVolume === 0.3, `Expected adjustable TTS volume 0.3, got ${speechVolume}`);
 
   // 解除しても自前走査を勝手に再開しない。支援者が明示的にONにしたときだけ再開。
-  await openSettingsTab(page, "basic");
+  await openSettingsDetails(page, "switch");
   await mode.click();
   await page.waitForFunction(() => !document.body.classList.contains("switch-control-mode"));
   // 設定の画面では、委譲していなくても入力ドックは出さない（押せないものを
@@ -2014,13 +2813,10 @@ async function checkIpadSwitchControlMode(page, project) {
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
   await waitForText(page, "#scanState", "枠は止まっています");
-  assert(
-    (await page.locator(".scan-focus").count()) === 0,
-    "Entering the supporter menu must clear the yellow focus"
-  );
+  assert((await page.locator(".scan-focus").count()) === 0, "Entering the supporter menu must clear the yellow focus");
 
   // autoScan=true を保ったまま委譲へ切り替えても、ハンドラは no-op にならない。
-  await openSettingsTab(page, "basic");
+  await openSettingsDetails(page, "switch");
   assert(await page.locator("#autoScan").isChecked(), "Auto scan must still be ON before forcing delegation");
   await mode.click();
   await page.waitForFunction(() => document.body.classList.contains("switch-control-mode"));
@@ -2028,10 +2824,7 @@ async function checkIpadSwitchControlMode(page, project) {
   assert(await page.locator("#autoScan").isDisabled(), "Forced delegation must lock the app scan control");
   assert((await page.locator(".scan-focus").count()) === 0, "Forced delegation must leave no yellow focus");
   await waitForText(page, "#scanState", "iPad で操作中");
-  const forcedSaved = await page.evaluate(
-    (key) => JSON.parse(localStorage.getItem(key)).settings,
-    storageKey
-  );
+  const forcedSaved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).settings, storageKey);
   assert(forcedSaved.switchControlMode === true, "Forced delegation must persist the mode");
   assert(forcedSaved.autoScan === false, "Forced delegation must persist app scanning off");
 }
@@ -2040,6 +2833,68 @@ async function checkIpadSwitchControlMode(page, project) {
  * slot-v1 L1 の実画面契約。生成画像が読み込まれ、1回の入力で1試行だけ
  * 記録されたあと、Esc 中断が partial session として失われず残ることを確認する。
  */
+/**
+ * れんしゅうの回の絵は、遊びの中の「この遊びの設定」の「絵」で選ぶ（settings.practiceArts。
+ * src/lib/artVersion.js）。「前の絵」を選ぶと、その回は はじめからやり直して、新しい絵の印
+ * （.has-world-art）も世界の絵も付けずに、前の版の れんしゅうの見た目（.is-practice）で遊び、
+ * 見せた絵の版 1 を記録に残す。選んだ絵は保存され、同じ絵の遊び（3つ止める）にも効く。
+ * そくていの回は どちらでも前の絵（compare-measure-screens.mjs が画素で見る）。
+ */
+async function checkPracticeArtChoice(page, project) {
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
+  const lookOf = () =>
+    page.evaluate(() => {
+      const stage = document.querySelector("#gameStageContent");
+      return {
+        practice: stage.classList.contains("is-practice"),
+        world: stage.classList.contains("has-world-art"),
+        worldNodes: document.querySelectorAll(".slot-world, .slot-world-symbol").length,
+      };
+    });
+  await patchSettings(page, { difficultyMode: "practice", autoScan: false, speechEnabled: false });
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, t("tile.slot-corner.title"));
+  await openActivity(page, t("tile.slot-l1.title"));
+  await finishReady(page);
+  await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
+  const before = await lookOf();
+  assert(before.practice && before.world && before.worldNodes > 0, `The new pictures are the default: ${JSON.stringify(before)}`);
+
+  // この遊びの設定 → 絵の かんじ → シンプル → この設定で はじめる
+  await page.locator("#gameSettings").click();
+  await page.locator('.gs-option[data-gs-key="practiceArts.slot"][data-gs-value=\'"classic"\']').click();
+  await page.locator('[data-gs-action="apply"]').click();
+  await finishReady(page);
+  await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
+  const classic = await lookOf();
+  assert(classic.practice, "The practice run keeps its practice look");
+  assert(!classic.world && classic.worldNodes === 0, `The old pictures must not draw the new world: ${JSON.stringify(classic)}`);
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).settings.practiceArts, storageKey);
+  assert(saved.slot === "classic", "The chosen pictures are saved for the reel games");
+  assert(saved.crane === "world", "Other games keep their own pictures");
+
+  await page.locator("#gameStage").dispatchEvent("click");
+  await page.waitForTimeout(200);
+  await page.keyboard.press("Escape");
+  await waitForClass(page, "#homeView", "is-active");
+  const artVersion = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)).sessions.filter((item) => item.gameId === "slot-l1").at(-1)?.config?.artVersion,
+    storageKey
+  );
+  assert(artVersion === 1, `The record keeps the version of the pictures that were shown, got ${artVersion}`);
+
+  // 同じリールの絵を使う「3つ止める」も前の絵になる。
+  await openActivity(page, t("tile.slot-corner.title"));
+  await openActivity(page, t("tile.slot-l2.title"));
+  await finishReady(page);
+  await page.locator(".slot-task[data-game-id='slot-l2']").waitFor({ state: "visible" });
+  const sibling = await lookOf();
+  assert(!sibling.world, "The other reel game shares the chosen pictures");
+}
+
 async function checkSlotL1GameFlow(page) {
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
@@ -2058,11 +2913,13 @@ async function checkSlotL1GameFlow(page) {
   await assertNoSplitRuby(page, "slot-l1 how-to");
 
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
+  assert((await page.locator(".slot-reel").count()) === 1, "slot-l1 must render exactly one reel");
+  // れんしゅうの回には、回の種類の札を出さない（2026-10-01、ユーザーの判断）。
   assert(
-    (await page.locator(".slot-reel").count()) === 1,
-    "slot-l1 must render exactly one reel"
+    (await page.locator("#gameProgress .game-progress-mode, #gameStageContent .session-mode").count()) === 0,
+    "A practice run must not show a practice label"
   );
 
   // 6つの絵の一覧は、そくていの回にだけ出す（れんしゅうでは「リールの周りの
@@ -2093,9 +2950,9 @@ async function checkSlotL1GameFlow(page) {
   //
   // 確かめたいのは「動くこと」であって「140ms以内に動くこと」ではない。
   // 待ち合わせにすれば、遅い機械でも意味を変えずに済む。
-  const beforeOffset = await page.locator(".slot-reel-track").evaluate(
-    (track) => track.style.getPropertyValue("--slot-track-offset")
-  );
+  const beforeOffset = await page
+    .locator(".slot-reel-track")
+    .evaluate((track) => track.style.getPropertyValue("--slot-track-offset"));
   await page.waitForFunction(
     (previous) => {
       const track = document.querySelector(".slot-reel-track");
@@ -2116,9 +2973,7 @@ async function checkSlotL1GameFlow(page) {
   await page.waitForFunction(
     ({ key }) => {
       const state = JSON.parse(localStorage.getItem(key) || "{}");
-      const session = [...(state.sessions || [])]
-        .reverse()
-        .find((item) => item.gameId === "slot-l1");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l1");
       return session?.trials?.length === 1;
     },
     { key: storageKey }
@@ -2130,9 +2985,7 @@ async function checkSlotL1GameFlow(page) {
 
   const session = await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || "{}");
-    return [...(state.sessions || [])]
-      .reverse()
-      .find((item) => item.gameId === "slot-l1") || null;
+    return [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l1") || null;
   }, storageKey);
 
   assert(session?.taskType === "slot", "slot-l1 must persist taskType=slot");
@@ -2169,14 +3022,17 @@ async function checkPracticeReelsFillTheScreen(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 9);
-  for (const [tileKey, reels] of [["tile.slot-l2.title", 3], ["tile.slot-l1.title", 1]]) {
+  for (const [tileKey, reels] of [
+    ["tile.slot-l2.title", 3],
+    ["tile.slot-l1.title", 1]
+  ]) {
     await openActivity(page, t("tile.slot-corner.title"));
     await waitForActivityChoices(page, 3);
     await openActivity(page, t(tileKey));
     await waitForClass(page, "#gameView", "is-active");
     await page.locator(".game-ready").waitFor({ state: "visible" });
     await page.locator("#gameStage").click();
-    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await finishReady(page);
     await page.locator(".slot-task[data-difficulty-mode='practice']").waitFor({ state: "visible" });
     await page.waitForTimeout(150);
     const fit = await page.evaluate(() => {
@@ -2190,13 +3046,17 @@ async function checkPracticeReelsFillTheScreen(page) {
       return {
         supportsContainerUnits: CSS.supports("height", "1cqh"),
         scrolls: stage.scrollHeight > stage.clientHeight + 1 || stage.scrollWidth > stage.clientWidth + 1,
-        outside: reels.filter((r) => r.left < -1 || r.top < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1).length,
+        outside: reels.filter(
+          (r) => r.left < -1 || r.top < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1
+        ).length,
         usedWidth: (right - left) / innerWidth,
         usedHeight: (bottom - top) / innerHeight,
-        count: windows.length,
+        count: windows.length
       };
     });
-    if (!fit.supportsContainerUnits) return SKIPPED;
+    if (!fit.supportsContainerUnits) {
+      return SKIPPED;
+    }
     assert(fit.count === reels, `Expected ${reels} reel(s), found ${fit.count}`);
     assert(!fit.scrolls, "The practice reels must fit the screen without scrolling");
     assert(fit.outside === 0, `${fit.outside} reel(s) spill off the screen`);
@@ -2204,6 +3064,119 @@ async function checkPracticeReelsFillTheScreen(page) {
     assert(
       fit.usedHeight >= 0.5 || fit.usedWidth >= 0.7,
       `The practice reels must fill the screen, used ${Math.round(fit.usedWidth * 100)}% x ${Math.round(fit.usedHeight * 100)}%`
+    );
+    await page.locator("#gameExit").click();
+    await waitForClass(page, "#homeView", "is-active");
+  }
+}
+
+/**
+ * そくていの回のリールは、決まった大きさ（1コマ 94px、幅 620px 以下は 82px）で出し、
+ * 画面に入りきらないときだけ縮めて収める（games/slotFit.js、engineVersion 5）。
+ *
+ * 直す前は、入りきらない分が上下へはみ出し、上の分はスクロールしても戻せなかった
+ * （2026-09-28 に実測: スマホの横向きで目標の札が丸ごと画面の外、縦向きで札が
+ * 上の帯の裏）。
+ *
+ * 見ること: 目標の札・ことば・リール・6つの絵が、どれも画面の中にあって上の帯の
+ * 裏に入っていない / 収めたときはスクロールしない / 収めていないときの1コマは
+ * 決まった大きさのまま（iPad などの見え方を変えていない）/ 収めたときも決まった
+ * 大きさより大きくしない / 画面に出した1コマの高さが回の記録と、止めた1回ごとの
+ * 記録に残る。
+ */
+async function checkMeasuredReelsStayOnScreen(page) {
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    saved.settings = { ...(saved.settings || {}), difficultyMode: "measure" };
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, storageKey);
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  for (const tileKey of ["tile.slot-l2.title", "tile.slot-l1.title"]) {
+    await openActivity(page, t("tile.slot-corner.title"));
+    await waitForActivityChoices(page, 3);
+    await openActivity(page, t(tileKey));
+    await waitForClass(page, "#gameView", "is-active");
+    await page.locator(".game-ready").waitFor({ state: "visible" });
+    await page.locator("#gameStage").click();
+    await finishReady(page);
+    await page.locator(".slot-task[data-difficulty-mode='measure']").waitFor({ state: "visible" });
+    // そくていの回は、上の帯に「そくてい」と出す（支援者が ふだんの回と取り違えないように）。
+    assert(
+      (await page.locator("#gameProgress .game-progress-mode").textContent())?.trim() === t("session.measureShort"),
+      "A measured run must say so in the top bar"
+    );
+    await page.waitForTimeout(150);
+    const seen = await page.evaluate((key) => {
+      const stage = document.querySelector("#gameStageContent");
+      const bars = [...document.querySelectorAll(".game-progress, .game-actions > :not([hidden])")]
+        .map((el) => el.getBoundingClientRect())
+        .filter((b) => b.width > 0 && b.height > 0);
+      const parts = [".slot-target", ".slot-status", ".slot-reel", ".slot-symbol-guide"]
+        .flatMap((selector) => [...document.querySelectorAll(selector)])
+        .map((el) => ({ name: el.className, b: el.getBoundingClientRect() }))
+        .filter(({ b }) => b.width > 0 && b.height > 0);
+      const outside = parts.filter(
+        ({ b }) => b.left < -1 || b.top < -1 || b.right > innerWidth + 1 || b.bottom > innerHeight + 1
+      );
+      const underBar = parts.filter(({ b }) =>
+        bars.some(
+          (bar) => b.left < bar.right - 1 && bar.left < b.right - 1 && b.top < bar.bottom - 1 && bar.top < b.bottom - 1
+        )
+      );
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = (saved.sessions || []).filter((item) => item.taskType === "slot").at(-1);
+      return {
+        supportsContainerUnits: CSS.supports("height", "1cqh"),
+        fitted: stage.classList.contains("is-fitted"),
+        scrolls: stage.scrollHeight > stage.clientHeight + 1 || stage.scrollWidth > stage.clientWidth + 1,
+        outside: outside.map(({ name }) => name),
+        underBar: underBar.map(({ name }) => name),
+        cell: document.querySelector(".slot-reel-window").getBoundingClientRect().height / 3,
+        fixedCell: innerWidth <= 620 ? 82 : 94,
+        recordedCellPx: session?.config?.reelCellPx ?? null
+      };
+    }, storageKey);
+    if (!seen.supportsContainerUnits) {
+      return SKIPPED;
+    }
+    assert(seen.outside.length === 0, `Measured reels: ${seen.outside.join(", ")} must stay on the screen`);
+    assert(seen.underBar.length === 0, `Measured reels: ${seen.underBar.join(", ")} must not hide under the top bar`);
+    if (seen.fitted) {
+      assert(!seen.scrolls, "The fitted measured reels must not need scrolling");
+      assert(
+        seen.cell <= seen.fixedCell + 0.5,
+        `A fitted reel cell must never grow past ${seen.fixedCell}px, got ${seen.cell}`
+      );
+    } else {
+      assert(
+        Math.abs(seen.cell - seen.fixedCell) < 0.5,
+        `Where the reels fit, the cell must stay ${seen.fixedCell}px, got ${seen.cell}`
+      );
+    }
+    assert(
+      typeof seen.recordedCellPx === "number" && Math.abs(seen.recordedCellPx - seen.cell) <= 0.1,
+      `The run must record the shown cell size (${seen.cell}), got ${JSON.stringify(seen.recordedCellPx)}`
+    );
+    // 止めた1回ごとにも、そのとき出ていた大きさが残る（途中で向きを変えると変わる）。
+    await page.waitForTimeout(400);
+    await page.locator("#gameStage").click();
+    const stopped = await page.waitForFunction(
+      (key) => {
+        const saved = JSON.parse(localStorage.getItem(key) || "{}");
+        const session = (saved.sessions || []).filter((item) => item.taskType === "slot").at(-1);
+        return session?.trials?.length ? (session.trials.at(-1).reelCellPx ?? "missing") : null;
+      },
+      storageKey,
+      { timeout: 4000 }
+    );
+    const trialCellPx = await stopped.jsonValue();
+    assert(
+      typeof trialCellPx === "number" && Math.abs(trialCellPx - seen.cell) <= 0.1,
+      `Each stop must record the shown cell size (${seen.cell}), got ${JSON.stringify(trialCellPx)}`
     );
     await page.locator("#gameExit").click();
     await waitForClass(page, "#homeView", "is-active");
@@ -2223,43 +3196,42 @@ async function checkSlotSequentialFlow(page) {
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   await page.locator(".slot-task[data-game-id='slot-l2']").waitFor({ state: "visible" });
-  assert(
-    (await page.locator(".slot-reel").count()) === 3,
-    "slot-l2 must render exactly three reels"
-  );
+  assert((await page.locator(".slot-reel").count()) === 3, "slot-l2 must render exactly three reels");
 
   // slot-l1 と同じ理由で待ち合わせにする（時間の仮定を置かない）。
-  const beforeOffsets = await page.locator(".slot-reel-track").evaluateAll((tracks) =>
-    tracks.map((track) => track.style.getPropertyValue("--slot-track-offset"))
-  );
+  const beforeOffsets = await page
+    .locator(".slot-reel-track")
+    .evaluateAll((tracks) => tracks.map((track) => track.style.getPropertyValue("--slot-track-offset")));
   await page.waitForFunction(
     (previous) => {
       const tracks = [...document.querySelectorAll(".slot-reel-track")];
-      if (tracks.length !== previous.length) return false;
-      return tracks.every(
-        (track, index) => track.style.getPropertyValue("--slot-track-offset") !== previous[index]
-      );
+      if (tracks.length !== previous.length) {
+        return false;
+      }
+      return tracks.every((track, index) => track.style.getPropertyValue("--slot-track-offset") !== previous[index]);
     },
     beforeOffsets,
     { timeout: 5_000 }
   );
-  const afterOffsets = await page.locator(".slot-reel-track").evaluateAll((tracks) =>
-    tracks.map((track) => track.style.getPropertyValue("--slot-track-offset"))
-  );
+  const afterOffsets = await page
+    .locator(".slot-reel-track")
+    .evaluateAll((tracks) => tracks.map((track) => track.style.getPropertyValue("--slot-track-offset")));
   assert(
     afterOffsets.every((offset, index) => offset !== beforeOffsets[index]),
     "All three reels must move before sequential stopping (" +
-      beforeOffsets.join(", ") + " -> " + afterOffsets.join(", ") + ")"
+      beforeOffsets.join(", ") +
+      " -> " +
+      afterOffsets.join(", ") +
+      ")"
   );
 
   const totalStops = 12;
   for (let expected = 0; expected < totalStops; expected += 1) {
     const expectedReel = expected % 3;
     await page.waitForFunction(
-      (reelIndex) =>
-        Number(document.querySelector(".slot-reel.is-active")?.dataset.slotReel) === reelIndex,
+      (reelIndex) => Number(document.querySelector(".slot-reel.is-active")?.dataset.slotReel) === reelIndex,
       expectedReel
     );
 
@@ -2270,9 +3242,7 @@ async function checkSlotSequentialFlow(page) {
     await page.waitForFunction(
       ({ key, count }) => {
         const state = JSON.parse(localStorage.getItem(key) || "{}");
-        const session = [...(state.sessions || [])]
-          .reverse()
-          .find((item) => item.gameId === "slot-l2");
+        const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l2");
         return session?.trials?.length === count;
       },
       { key: storageKey, count: expected + 1 }
@@ -2288,18 +3258,10 @@ async function checkSlotSequentialFlow(page) {
       await page.waitForTimeout(80);
       const duplicateState = await page.evaluate((key) => {
         const state = JSON.parse(localStorage.getItem(key) || "{}");
-        return [...(state.sessions || [])]
-          .reverse()
-          .find((item) => item.gameId === "slot-l2") || null;
+        return [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l2") || null;
       }, storageKey);
-      assert(
-        duplicateState?.trials?.length === 1,
-        "A guarded duplicate must not stop the next reel"
-      );
-      assert(
-        duplicateState?.summary?.extraInputCount >= 1,
-        "A guarded duplicate must be counted explicitly"
-      );
+      assert(duplicateState?.trials?.length === 1, "A guarded duplicate must not stop the next reel");
+      assert(duplicateState?.summary?.extraInputCount >= 1, "A guarded duplicate must be counted explicitly");
     }
   }
 
@@ -2315,9 +3277,7 @@ async function checkSlotSequentialFlow(page) {
 
   const session = await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || "{}");
-    return [...(state.sessions || [])]
-      .reverse()
-      .find((item) => item.gameId === "slot-l2") || null;
+    return [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l2") || null;
   }, storageKey);
 
   assert(session?.taskType === "slot", "slot-l2 must persist taskType=slot");
@@ -2326,9 +3286,7 @@ async function checkSlotSequentialFlow(page) {
   assert(session?.trials?.length === totalStops, "Expected " + totalStops + " stop rows");
   assert(session?.config?.rounds === 4 && session?.config?.reelCount === 3, "slot-l2 must keep the 4x3 protocol");
 
-  const positions = (session?.trials || []).map(
-    (trial) => trial.roundIndex + ":" + trial.reelIndex
-  );
+  const positions = (session?.trials || []).map((trial) => trial.roundIndex + ":" + trial.reelIndex);
   assert(
     new Set(positions).size === totalStops,
     "Every round/reel position must be unique, got " + positions.join(", ")
@@ -2340,10 +3298,7 @@ async function checkSlotSequentialFlow(page) {
       "Stops must stay left-to-right; expected " + expectedPosition + ", got " + position
     );
   });
-  assert(
-    session?.summary?.extraInputCount >= 1,
-    "Completed summary must retain the guarded extra input"
-  );
+  assert(session?.summary?.extraInputCount >= 1, "Completed summary must retain the guarded extra input");
 }
 
 /**
@@ -2360,9 +3315,10 @@ async function checkRhythmL1GameFlow(page) {
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 9);
 
-  await openActivity(page, "リズム");
-  await waitForActivityChoices(page, 4);
-  await openActivity(page, "リズム 練習");
+  // rhythm-l1 は履歴互換だけ。ホームにある gonogo で同じ中断契約を検査する。
+  // rhythm.js の destroy() は全プリセット共通で aborted:true を保存する。
+  await waitForText(page, "#scanState", "枠が動いています");
+  await openActivity(page, t("tile.gonogo.title"));
 
   await waitForClass(page, "#gameView", "is-active");
   await page.waitForFunction(() => document.body.classList.contains("game-mode"));
@@ -2377,8 +3333,9 @@ async function checkRhythmL1GameFlow(page) {
   // from here would leave no session at all, so start the session before
   // testing the abort path below.
   await page.locator(".game-ready").waitFor({ state: "visible" });
-  await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
+  await waitForText(page, "#scanState", "枠は止まっています");
+  assert((await page.locator(".scan-focus").count()) === 0, "Playing gonogo must clear scan focus");
 
   // Let the countdown/first beat render a moment before aborting.
   await page.waitForTimeout(500);
@@ -2396,9 +3353,7 @@ async function checkRhythmL1GameFlow(page) {
   // Both branches are real behaviour, so assert whichever this browser is
   // in rather than hardcoding browser names: if WebKit ever ships
   // AudioContext in headless, this check follows it instead of going stale.
-  const audioAvailable = await page.evaluate(
-    () => Boolean(window.AudioContext || window.webkitAudioContext)
-  );
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
 
   if (!audioAvailable) {
     // No audio: the task must explain itself rather than hang. The cue is
@@ -2410,10 +3365,7 @@ async function checkRhythmL1GameFlow(page) {
       const raw = localStorage.getItem(key);
       return raw ? (JSON.parse(raw).sessions || []).length : 0;
     }, storageKey);
-    assert(
-      sessions === 0,
-      `Expected no session to be opened when the task cannot run, found ${sessions}`
-    );
+    assert(sessions === 0, `Expected no session to be opened when the task cannot run, found ${sessions}`);
     return;
   }
 
@@ -2426,18 +3378,21 @@ async function checkRhythmL1GameFlow(page) {
   await page.locator("#homeSupporterMenu").waitFor({ state: "visible" });
 
   // The abort path (games/rhythm.js destroy(), gameHost.js persistSession)
-  // must still have written an aborted session for rhythm-l1 (detailed-design.md
+  // must still have written an aborted session for gonogo (detailed-design.md
   // §7.3 MUST: trials recorded so far are confirmed with aborted:true, no
   // silent data loss on early exit).
   const hasAbortedSession = await page.evaluate((key) => {
     const raw = localStorage.getItem(key);
-    if (!raw) return false;
+    if (!raw) {
+      return false;
+    }
     const state = JSON.parse(raw);
     return (state.sessions || []).some(
-      (session) => session.gameId === "rhythm-l1" && session.aborted === true
+      (session) => session.gameId === "gonogo" && session.taskType === "gonogo" &&
+        session.aborted === true && session.finished === false
     );
   }, storageKey);
-  assert(hasAbortedSession, "Expected an aborted rhythm-l1 session in state.sessions");
+  assert(hasAbortedSession, "Expected an aborted gonogo session in state.sessions");
 }
 
 /**
@@ -2449,19 +3404,32 @@ async function checkRhythmL1GameFlow(page) {
  * 作らないことまで確認する。
  */
 async function checkRhythmVisualProfiles(page, project) {
-  if (project.name !== "chromium-desktop") return SKIPPED;
-  const audioAvailable = await page.evaluate(
-    () => Boolean(window.AudioContext || window.webkitAudioContext)
-  );
-  if (!audioAvailable) return SKIPPED;
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) {
+    return SKIPPED;
+  }
 
   const practiceThemes = [];
+  const layoutFailures = [];
+  async function inspectLayout(check, ...size) {
+    try {
+      await check(...size);
+    } catch (error) {
+      // 版面の欠陥があっても、測定の予告禁止・基準の版面まで検査する。
+      // 失敗は最後に必ず投げ直す。srcを直さず再現画面とともに報告する。
+      layoutFailures.push(`${check.name}(${size.join(", ")}): ${error.message}`);
+      await mkdir("test-results/rhythm-layout", { recursive: true });
+      await page.screenshot({ path: `test-results/rhythm-layout/${check.name}-${size.join("x")}.png` });
+    }
+  }
 
-  async function launchPracticeTask(name) {
+  async function launchGonogo() {
     await waitForClass(page, "#homeView", "is-active");
-    await openActivity(page, t("tile.rhythm-corner.title"));
-    await waitForActivityChoices(page, 4);
-    await openActivity(page, name);
+    // 現行の gonogo は利用者と同じホームタイルから開く。
+    await openActivity(page, t("tile.gonogo.title"));
     await startReadyRhythm();
   }
 
@@ -2470,12 +3438,15 @@ async function checkRhythmVisualProfiles(page, project) {
     await page.locator(".game-ready").waitFor({ state: "visible" });
     // タイルを選んだ物理入力と、開始のひと押しを同じ入力としてdedupeしない。
     await page.waitForTimeout(180);
-    await page.locator("#gameStage").click();
-    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await finishReady(page);
     await page.locator("#gameStageContent[data-rhythm-profile]").waitFor({ state: "visible" });
   }
 
-  async function rhythmSnapshot(expectedProfile, expectedTheme) {
+  async function rhythmSnapshot(
+    expectedProfile,
+    expectedTheme,
+    concert = expectedTheme === "gonogo" && expectedProfile === "lane"
+  ) {
     const stage = page.locator("#gameStageContent");
     await page.waitForFunction(
       ({ profile, theme }) => {
@@ -2487,9 +3458,7 @@ async function checkRhythmVisualProfiles(page, project) {
     await page.locator(".rhythm-note-layer").waitFor({ state: "attached" });
 
     if (expectedProfile === "lane") {
-      await page.waitForFunction(
-        () => document.querySelectorAll(".rhythm-note-layer .rhythm-note").length > 0
-      );
+      await page.waitForFunction(() => document.querySelectorAll(".rhythm-note-layer .rhythm-note").length > 0);
       await page.waitForFunction(() =>
         [...document.querySelectorAll(".rhythm-note-layer .rhythm-note")].some((note) => {
           const rect = note.getBoundingClientRect();
@@ -2499,9 +3468,7 @@ async function checkRhythmVisualProfiles(page, project) {
     } else {
       // mount直後の最初のrAFで静止値を書き込む。空のstyleを先に読むと、
       // 実装ではなくテストの競合で不安定になる。
-      await page.waitForFunction(
-        () => document.querySelector(".rhythm-pulse")?.style.transform === "scale(0.93)"
-      );
+      await page.waitForFunction(() => document.querySelector(".rhythm-pulse")?.style.transform === "scale(0.93)");
     }
 
     const snapshot = await stage.evaluate((target) => {
@@ -2522,7 +3489,10 @@ async function checkRhythmVisualProfiles(page, project) {
       return {
         profile: target.dataset.rhythmProfile,
         theme: target.dataset.rhythmTheme,
-        icon: target.querySelector(".rhythm-cabinet-icon i")?.getAttribute("class") || "",
+        // gonogo 練習は2026-10-01からSVGの音楽会。iのclassだけでは絵を検査できない。
+        icon: target.querySelector(".rhythm-cabinet-icon")?.innerHTML.trim() || "",
+        svgIconCount: target.querySelectorAll(".rhythm-cabinet-icon svg").length,
+        sceneryCount: target.querySelectorAll(".gonogo-scenery").length,
         background: world ? getComputedStyle(world).backgroundImage : "",
         noteLayerCount: target.querySelectorAll(".rhythm-note-layer").length,
         noteCount: notes.length,
@@ -2531,16 +3501,22 @@ async function checkRhythmVisualProfiles(page, project) {
         pulseInlineTransform: target.querySelector(".rhythm-pulse")?.style.transform || "",
         instrumentVisible: Boolean(
           instrument &&
-          getComputedStyle(instrument).display !== "none" &&
-          instrumentRect &&
-          instrumentRect.width > 0 &&
-          instrumentRect.height > 0
-        ),
+            getComputedStyle(instrument).display !== "none" &&
+            instrumentRect &&
+            instrumentRect.width > 0 &&
+            instrumentRect.height > 0
+        )
       };
     });
 
-    assert(snapshot.profile === expectedProfile, `${expectedTheme}: expected ${expectedProfile}, got ${snapshot.profile}`);
+    assert(
+      snapshot.profile === expectedProfile,
+      `${expectedTheme}: expected ${expectedProfile}, got ${snapshot.profile}`
+    );
     assert(snapshot.theme === expectedTheme, `Expected rhythm theme ${expectedTheme}, got ${snapshot.theme}`);
+    assert(snapshot.icon.length > 0, `${expectedTheme}: the cabinet icon must contain artwork`);
+    assert(snapshot.svgIconCount === (concert ? 1 : 0), `${expectedTheme}: unexpected icon skin`);
+    assert(snapshot.sceneryCount === (concert ? 1 : 0), `${expectedTheme}: concert scenery must stay in practice`);
     assert(snapshot.noteLayerCount === 1, `${expectedTheme}: expected exactly one persistent note layer`);
     assert(
       snapshot.paintedHiddenNoteCount === 0,
@@ -2577,7 +3553,7 @@ async function checkRhythmVisualProfiles(page, project) {
         "#gameExit",
         ".rhythm-cabinet",
         ".rhythm-main-display",
-        ".rhythm-console",
+        ".rhythm-console"
       ];
       const boxes = Object.fromEntries(
         selectors.map((selector) => {
@@ -2585,8 +3561,15 @@ async function checkRhythmVisualProfiles(page, project) {
           return [
             selector,
             rect
-              ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
-              : null,
+              ? {
+                  left: rect.left,
+                  top: rect.top,
+                  right: rect.right,
+                  bottom: rect.bottom,
+                  width: rect.width,
+                  height: rect.height
+                }
+              : null
           ];
         })
       );
@@ -2594,7 +3577,7 @@ async function checkRhythmVisualProfiles(page, project) {
         width: window.innerWidth,
         height: window.innerHeight,
         scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
-        boxes,
+        boxes
       };
     });
     assert(
@@ -2627,7 +3610,7 @@ async function checkRhythmVisualProfiles(page, project) {
               display: getComputedStyle(child).display,
               left: rect.left,
               right: rect.right,
-              width: rect.width,
+              width: rect.width
             };
           })
         : [];
@@ -2636,12 +3619,17 @@ async function checkRhythmVisualProfiles(page, project) {
         consoleRect: consoleRect
           ? { left: consoleRect.left, right: consoleRect.right, width: consoleRect.width }
           : null,
-        children,
+        children
       };
     });
     assert(layout.consoleRect, `Rhythm console must exist at ${width}px`);
-    assert(layout.children.length === 3, `Rhythm console must keep all three panels at ${width}px`);
+    assert(layout.children.length === 3, `Rhythm console must keep all three panel elements at ${width}px`);
     layout.children.forEach((child) => {
+      // theme-hakkiri.css は練習の冗長な版面ラベルを隠す。得点と目盛りは可視のまま。
+      if (String(child.className).includes("rhythm-profile-panel")) {
+        assert(child.display === "none" && child.width === 0, `Practice must hide its redundant profile panel at ${width}px`);
+        return;
+      }
       assert(child.display !== "none" && child.width > 0, `${child.className} disappeared at ${width}px`);
       assert(
         child.left >= layout.consoleRect.left - 2 && child.right <= layout.consoleRect.right + 2,
@@ -2667,7 +3655,7 @@ async function checkRhythmVisualProfiles(page, project) {
               right: rect.right,
               bottom: rect.bottom,
               width: rect.width,
-              height: rect.height,
+              height: rect.height
             }
           : null;
       };
@@ -2686,9 +3674,15 @@ async function checkRhythmVisualProfiles(page, project) {
         consoleChildren: consoleEl
           ? [...consoleEl.children].map((child) => {
               const rect = child.getBoundingClientRect();
-              return { left: rect.left, right: rect.right, width: rect.width };
+              return {
+                className: child.className,
+                display: getComputedStyle(child).display,
+                left: rect.left,
+                right: rect.right,
+                width: rect.width
+              };
             })
-          : [],
+          : []
       };
     });
     const { cabinet, header, playfield, main, console: consoleBox, instruction } = layout;
@@ -2712,6 +3706,11 @@ async function checkRhythmVisualProfiles(page, project) {
     }
     assert(layout.consoleChildren.length === 3, `Console lost a panel at ${width}x${height}`);
     layout.consoleChildren.forEach((child) => {
+      // 練習では版面ラベルだけを意図して隠す（theme-hakkiri.css）。他の2枚は収める。
+      if (String(child.className).includes("rhythm-profile-panel")) {
+        assert(child.display === "none" && child.width === 0, `Practice profile panel must be hidden at ${width}x${height}`);
+        return;
+      }
       assert(child.width > 0, `Console child disappeared at ${width}x${height}`);
       assert(
         child.left >= consoleBox.left - 2 && child.right <= consoleBox.right + 2,
@@ -2727,16 +3726,23 @@ async function checkRhythmVisualProfiles(page, project) {
       const rectOf = (selector) => {
         const rect = document.querySelector(selector)?.getBoundingClientRect();
         return rect
-          ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }
+          ? {
+              left: rect.left,
+              top: rect.top,
+              right: rect.right,
+              bottom: rect.bottom,
+              width: rect.width,
+              height: rect.height
+            }
           : null;
       };
       return {
-        chip: rectOf(".color-chip"),
-        progress: rectOf(".color-session-progress"),
-        hud: rectOf(".color-stage-hud"),
+        chip: rectOf(".pop-stage"),
+        progress: rectOf(".pop-dots"),
+        hud: rectOf("#gameSettings"),
         exit: rectOf("#gameExit"),
         gameProgress: rectOf("#gameProgress"),
-        scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+        scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)
       };
     });
     assert(layout.scrollWidth <= width + 2, `Colour stage must not overflow at ${width}x${height}`);
@@ -2749,7 +3755,7 @@ async function checkRhythmVisualProfiles(page, project) {
     });
     assert(
       layout.chip.bottom <= layout.progress.top + 2,
-      `Colour prism overlaps progress at ${width}x${height}: ${JSON.stringify(layout)}`
+      `Pop stage overlaps progress at ${width}x${height}: ${JSON.stringify(layout)}`
     );
   }
 
@@ -2764,67 +3770,70 @@ async function checkRhythmVisualProfiles(page, project) {
   assert(freshSettings.visualGuidance === true, "Fresh practice must default visualGuidance to true");
   assert(freshSettings.difficultyMode === "practice", "Fresh state must begin in practice mode");
 
-  await launchPracticeTask(t("tile.rhythm-l1.title"));
-  practiceThemes.push(await rhythmSnapshot("lane", "rhythm-l1"));
-  await assertLandscapeCabinetFits();
-  await assertNarrowConsoleFits(390);
-  await assertNarrowConsoleFits(507);
-  await assertShortRhythmComposition(619, 390);
-  await assertShortRhythmComposition(568, 320);
-  await assertShortRhythmComposition(422, 195);
+  // 旧2種は registry.gameModules にも無く launch が何もしない。現行課題を検査する。
+  await launchGonogo();
+  practiceThemes.push(await rhythmSnapshot("lane", "gonogo"));
+  await inspectLayout(assertLandscapeCabinetFits);
+  await inspectLayout(assertNarrowConsoleFits, 390);
+  await inspectLayout(assertNarrowConsoleFits, 507);
+  await inspectLayout(assertShortRhythmComposition, 619, 390);
+  await inspectLayout(assertShortRhythmComposition, 568, 320);
+  await inspectLayout(assertShortRhythmComposition, 422, 195);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForTimeout(120);
   await abortToLobby();
 
   await openActivity(page, t("tile.color-legacy.title"));
   await waitForClass(page, "#gameView", "is-active");
-  await page.locator(".game-ready").waitFor({ state: "visible" });
-  await page.waitForTimeout(180);
-  await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
-  await page.locator("#gameStageContent.module-color").waitFor({ state: "visible" });
-  await assertShortColorComposition(619, 390);
-  await assertShortColorComposition(568, 320);
-  await assertShortColorComposition(422, 195);
+  // 「押すと 出てくる」は説明なしの module-pop。旧色プリズム・HUDを
+  // 現行の舞台・進みの点・設定ボタンへ置き換え、収まりと非重複を保つ。
+  await page.locator("#gameStageContent.module-pop").waitFor({ state: "visible" });
+  await inspectLayout(assertShortColorComposition, 619, 390);
+  await inspectLayout(assertShortColorComposition, 568, 320);
+  await inspectLayout(assertShortColorComposition, 422, 195);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForTimeout(120);
   await abortToLobby();
 
-  await launchPracticeTask(t("tile.rhythm-l2.title"));
-  practiceThemes.push(await rhythmSnapshot("lane", "rhythm-l2"));
-  await abortToLobby();
-
-  await launchPracticeTask(t("tile.gonogo.title"));
-  practiceThemes.push(await rhythmSnapshot("lane", "gonogo"));
+  // 予告なし練習でも音楽会の絵を保ち、未来ノートは作らない。
+  await patchSettings(page, { visualGuidance: false });
+  await page.locator("#startStage").click();
+  await launchGonogo();
+  practiceThemes.push(await rhythmSnapshot("instrument", "gonogo", true));
   await abortToLobby();
 
   // 保存値がONのままでも、measureは実効値をOFFへ固定して計器盤にする。
-  await page.evaluate((key) => {
-    const state = JSON.parse(localStorage.getItem(key));
-    state.settings.difficultyMode = "measure";
-    state.settings.visualGuidance = true;
-    localStorage.setItem(key, JSON.stringify(state));
-  }, storageKey);
-  await page.reload();
+  await patchSettings(page, { difficultyMode: "measure", visualGuidance: true }, { allowMissing: false });
+
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await launchPracticeTask(t("tile.rhythm-l1.title"));
-  await rhythmSnapshot("instrument", "rhythm-l1");
+  // gonogo も測定では音楽会を出さず、元の予告なし計器盤を保つ。
+  await launchGonogo();
+  const measuredTheme = await rhythmSnapshot("instrument", "gonogo");
   await abortToLobby();
 
   // calibrationは支援者画面から起動する専用手順。設定値に関係なくinstrument。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await openSettingsTab(page, "measure");
+  await openSettingsDetails(page, "research");
   await page.locator("#startCalibration").click();
   await startReadyRhythm();
   const calibrationTheme = await rhythmSnapshot("instrument", "calibration");
 
-  const allThemes = [...practiceThemes, calibrationTheme];
-  assert(new Set(allThemes.map((item) => item.theme)).size === 4, "All four rhythm games need distinct theme identifiers");
-  assert(new Set(allThemes.map((item) => item.icon)).size === 4, "All four rhythm games need distinct cabinet icons");
-  assert(new Set(allThemes.map((item) => item.background)).size === 4, "All four rhythm games need distinct rendered worlds");
+  const allThemes = [...practiceThemes, measuredTheme, calibrationTheme];
+  // 現行は gonogo / calibration の2課題。練習のSVG・測定の盾・基準の時計の
+  // 3つの絵を区別する。架空の旧4課題を数えず、各モードの版面も上で固定する。
+  assert(
+    new Set(allThemes.map((item) => item.theme)).size === 2,
+    "The two current auditory tasks need distinct theme identifiers"
+  );
+  assert(new Set(allThemes.map((item) => item.icon)).size === 3, "Practice, measurement, and calibration need distinct cabinet artwork");
+  assert(
+    new Set(allThemes.map((item) => item.background)).size === 3,
+    "Practice, measurement, and calibration need distinct rendered worlds"
+  );
+  assert(layoutFailures.length === 0, `Rhythm visual layout failures:\n${layoutFailures.join("\n")}`);
 }
 
 /**
@@ -2853,11 +3862,9 @@ async function checkEndlessFishingHasNoClock(page) {
   );
 
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
 
-  const audioAvailable = await page.evaluate(
-    () => Boolean(window.AudioContext || window.webkitAudioContext)
-  );
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
   if (!audioAvailable) {
     // 音が出せない端末ではセッションを開かない（checkFishingGameFlow と同じ）。
     await page.locator(".game-unavailable").waitFor({ state: "visible" });
@@ -2870,10 +3877,7 @@ async function checkEndlessFishingHasNoClock(page) {
     !progress.includes("のこり") && !progress.includes("残り"),
     `Endless fishing must not show a countdown, got "${progress}"`
   );
-  assert(
-    /\d/.test(progress),
-    `Endless fishing should show how far the run has got, got "${progress}"`
-  );
+  assert(/\d/.test(progress), `Endless fishing should show how far the run has got, got "${progress}"`);
   assert(
     (await page.locator(".fishing-scene.is-dusk").count()) === 0,
     "Endless fishing must not show the dusk cue that means the run is nearly over"
@@ -2890,13 +3894,13 @@ async function checkFishingGameFlow(page) {
   // fishing（純粋な単純反応時間）と fishing-gonogo（抑制つき）に分けたのは、
   // taskType "rt" なのに No-Go 刺激が混ざっていた食い違いを解くため。
   await openActivity(page, "さかなつり");
-  await openActivity(page, "アタリで釣る");
+  await openActivity(page, t("tile.fishing.title"));
   await waitForClass(page, "#gameView", "is-active");
   // さかなつりも content.js の gameHowTo を持つようになったので、レディ画面を
   // ひと押しで抜けてからでないとセッションが始まらない。
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   await page.waitForTimeout(220);
 
   // 音が鳴らせない端末では、そもそもセッションを開かない。
@@ -2909,9 +3913,7 @@ async function checkFishingGameFlow(page) {
   //
   // リズムと同じ扱いで、始められない理由を出して止める。両方の分岐が
   // 実際の振る舞いなので、ブラウザ名ではなく AudioContext の有無で分ける。
-  const audioAvailable = await page.evaluate(
-    () => Boolean(window.AudioContext || window.webkitAudioContext)
-  );
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
   if (!audioAvailable) {
     await page.locator(".game-unavailable").waitFor({ state: "visible" });
     await page.locator("#gameStage").click();
@@ -2920,26 +3922,17 @@ async function checkFishingGameFlow(page) {
       const state = JSON.parse(localStorage.getItem(key) || "{}");
       return (state.sessions || []).length;
     }, storageKey);
-    assert(
-      sessions === 0,
-      `A task that never presented a cue must not record trials, found ${sessions} session(s)`
-    );
-    await page.locator("#gameExit").click();
+    assert(sessions === 0, `A task that never presented a cue must not record trials, found ${sessions} session(s)`);
     await waitForClass(page, "#homeView", "is-active");
     return;
   }
 
   // 前刺激区間の入力も falseStart / commission として1試行に確定する。
   await page.locator("#gameStage").click();
-  await page.waitForFunction(
-    (key) => {
-      const state = JSON.parse(localStorage.getItem(key) || "{}");
-      return (state.sessions || []).some(
-        (session) => session.gameId === "fishing" && session.trials?.length === 1
-      );
-    },
-    storageKey
-  );
+  await page.waitForFunction((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return (state.sessions || []).some((session) => session.gameId === "fishing" && session.trials?.length === 1);
+  }, storageKey);
   await page.locator("#gameExit").click();
   await waitForClass(page, "#homeView", "is-active");
   const session = await page.evaluate((key) => {
@@ -2950,31 +3943,18 @@ async function checkFishingGameFlow(page) {
   assert(session?.aborted === true, "Expected fishing exit to persist aborted=true");
 }
 
-// 関数宣言にしているのは、このファイルがトップレベル await でテスト本体を
-/**
- * 設定の指定タブを開く。
- *
- * 設定は4つの面に分かれている（src/App.svelte の .settings-tab）。全部を
- * 1ページに並べると 3.4画面ぶんになり、目的の項目を毎回スクロールで探す
- * ことになるため。研究者モードなどは「そくてい」の面にある。
- *
- * 見えていない面の操作子は走査の輪からも外れる（scan.js は rect.width > 0 で
- * 絞る）ので、テストも支援者と同じくまず面を開く。
- */
-async function openSettingsTab(page, name) {
-  // タブは「くわしい設定」（ふだんは閉じている）の中にある。
-  await openSettingsMore(page);
-  const tab = page.locator(`.settings-tab[data-settings-tab="${name}"]`);
-  await tab.click();
-  await page.locator(`.settings-panel[data-settings-panel="${name}"]`).waitFor({ state: "visible" });
-}
-
-/** 設定の「くわしい設定」を開く（開いていればそのまま）。 */
-async function openSettingsMore(page) {
-  // 中に別の畳み（音の素材のクレジット）があるので、直下の見出しだけを押す。
-  const more = page.locator("#settingsMore");
-  if (!(await more.evaluate((details) => details.open))) {
-    await page.locator("#settingsMore > summary").click();
+// 畳まれた設定は、支援者と同じく見出しから開く。値に影響せず複数開ける。
+async function openSettingsDetails(page, name) {
+  const ids = {
+    switch: "settingsSwitch",
+    senses: "settingsSenses",
+    play: "settingsPlay",
+    research: "settingsResearch",
+    credits: "soundCredits"
+  };
+  const details = page.locator("#" + ids[name]);
+  if (!(await details.evaluate((node) => node.open))) {
+    await details.locator(":scope > summary").click();
   }
 }
 
@@ -2987,12 +3967,16 @@ async function waitForCraneStatus(page, text, timeoutMs = 10_000) {
     // 画面に「本文として」出ている文字だけを読む。
     seen = await page.evaluate(() => {
       const el = document.querySelector(".crane-status");
-      if (!el) return null;
+      if (!el) {
+        return null;
+      }
       const copy = el.cloneNode(true);
       copy.querySelectorAll("rt").forEach((rt) => rt.remove());
       return copy.textContent;
     });
-    if (seen === text) return;
+    if (seen === text) {
+      return;
+    }
     await delay(80);
   }
   throw new Error(`crane status never became "${text}" (last seen: "${seen}")`);
@@ -3012,7 +3996,7 @@ async function checkEndlessEndsOnFailure(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await openActivity(page, t("tile.crane-corner.title"));
-  await openActivity(page, "ずっと止める");
+  await openActivity(page, t("tile.crane-endless.title"));
   await waitForClass(page, "#gameView", "is-active");
 
   // レディ画面の文言が、エンドレスの約束（終わり方）に差し替わっていること。
@@ -3025,7 +4009,7 @@ async function checkEndlessEndsOnFailure(page) {
   );
 
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
 
   // わざと外す。ガードを抜けた直後（掃引の約18%）で止める作りにしていたが、
   // 狙いは craneGeometry.pickTarget が x∈[20,80] / y∈[22,78] に置くので、
@@ -3044,7 +4028,10 @@ async function checkEndlessEndsOnFailure(page) {
 
   // 1試行で結果画面へ抜けること。回数で終わるゲームなら5回続くので、
   // ここで結果が出れば「失敗で終わった」ことの証拠になる。
-  await waitForClass(page, "#resultView", "is-active");
+  // けっかへ移るまでに、おいわいの待ち（雰囲気「にぎやか」で 1.6 秒。atmosphere.js の
+  // finaleWaitMs）とアームの終わりの動きが入る。ほかの重い検査と並んだとき 5 秒を越えて
+  // 落ちたので、ここは 15 秒まで待つ。終わり方の判定は下の assert が見る（緩めていない）。
+  await waitForClass(page, "#resultView", "is-active", { timeout: 15_000 });
 
   const session = await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || "{}");
@@ -3070,13 +4057,13 @@ async function checkCraneGameFlow(page) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await openActivity(page, t("tile.crane-corner.title"));
-  await openActivity(page, "アームを止める");
+  await openActivity(page, t("tile.crane.title"));
   await waitForClass(page, "#gameView", "is-active");
   // crane も content.js の gameHowTo を持つようになったので、レディ画面を
   // ひと押しで抜けてからでないとセッションが始まらない。
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
   // カウントインの長さを固定の待ち時間で当てにいくと、AudioContext の
   // 立ち上がりが遅い環境（WebKit系）で走査開始前に押してしまう。
   // 走査が始まったことを状態表示で確かめてから押す。
@@ -3099,9 +4086,7 @@ async function checkCraneGameFlow(page) {
   await page.waitForFunction(
     (key) => {
       const state = JSON.parse(localStorage.getItem(key) || "{}");
-      return (state.sessions || []).some(
-        (session) => session.gameId === "crane" && session.trials?.length === 1
-      );
+      return (state.sessions || []).some((session) => session.gameId === "crane" && session.trials?.length === 1);
     },
     storageKey,
     { timeout: 5_000 }
@@ -3146,26 +4131,23 @@ async function checkResultScreenStaysInTheUserWorld(page) {
   // evaluate で書いてから reload すると、その消去に巻き込まれて設定が
   // 消える。初期化スクリプトは登録順に走るため、あとから足せば消去の後に
   // 書き込める。
-  await page.context().addInitScript(
-    ({ key, value }) => localStorage.setItem(key, value),
-    {
-      key: storageKey,
-      value: JSON.stringify({
-        version: 3,
-        settings: { craneTargetTrials: 3, craneSweepMs: 800 },
-      }),
-    }
-  );
+  await page.context().addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: storageKey,
+    value: JSON.stringify({
+      version: 3,
+      settings: { craneTargetTrials: 3, craneSweepMs: 800 }
+    })
+  });
   await page.reload();
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await openActivity(page, t("tile.crane-corner.title"));
-  await openActivity(page, "アームを止める");
+  await openActivity(page, t("tile.crane.title"));
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
+  await finishReady(page);
 
   // 1試行 = 横で1回・奥で1回。あとは掴みの演出が終わると次の試行へ進む。
   for (let trial = 0; trial < 3; trial += 1) {
@@ -3208,7 +4190,9 @@ async function checkResultScreenStaysInTheUserWorld(page) {
  */
 async function checkScanFocusStaysVisible(page, project) {
   // 画面が短いほど起きやすい。iPad では起きないので、モバイル系だけ見る。
-  if (project.name === "chromium-desktop") return SKIPPED;
+  if (project.name === "chromium-desktop") {
+    return SKIPPED;
+  }
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -3221,17 +4205,18 @@ async function checkScanFocusStaysVisible(page, project) {
     // 遅い環境でも揺れない。
     const seen = await page.evaluate((position) => {
       const tile = document.querySelectorAll("#gameTileGrid .game-tile")[position];
-      if (!tile) return null;
+      if (!tile) {
+        return null;
+      }
       tile.scrollIntoView({ block: "nearest", inline: "nearest" });
       const dock = document.querySelector(".switch-dock");
       const rect = tile.getBoundingClientRect();
-      const dockRect =
-        dock && getComputedStyle(dock).display !== "none" ? dock.getBoundingClientRect() : null;
+      const dockRect = dock && getComputedStyle(dock).display !== "none" ? dock.getBoundingClientRect() : null;
       return {
         label: (tile.textContent || "").replace(/\s+/g, " ").trim().slice(0, 12),
         hiddenByDock: dockRect ? Math.round(rect.bottom - dockRect.top) : 0,
         offScreenAbove: Math.round(-rect.top),
-        offScreenBelow: Math.round(rect.bottom - document.documentElement.clientHeight),
+        offScreenBelow: Math.round(rect.bottom - document.documentElement.clientHeight)
       };
     }, index);
     assert(seen, `Expected activity tile #${index + 1} to exist`);
@@ -3262,17 +4247,21 @@ async function checkScanFocusStaysVisible(page, project) {
  * ヘッドレス WebKit には AudioContext が無いので Chromium でだけ走らせる。
  */
 async function checkEffectSoundsFollowTheSetting(page, project) {
-  if (project.name !== "chromium-desktop") return SKIPPED;
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
   // AudioContext が無ければ、鳴る/鳴らないを数えようがない。ブラウザ名で
   // 決め打ちせず実際の有無で見る（CI のランナーは手元と同じとは限らない）。
-  const audioAvailable = await page.evaluate(
-    () => Boolean(window.AudioContext || window.webkitAudioContext)
-  );
-  if (!audioAvailable) return SKIPPED;
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) {
+    return SKIPPED;
+  }
 
   await page.context().addInitScript(() => {
     const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
+    if (!Ctx) {
+      return;
+    }
     window.__soundCounts = { noise: 0, filter: 0, tone: 0 };
     const count = (name, key) => {
       const original = Ctx.prototype[name];
@@ -3288,24 +4277,21 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
 
   /** クレーンを1試行だけ進めて、そのあいだに作られたノードを数える。 */
   async function playOneTrial(soundEnabled) {
-    await page.context().addInitScript(
-      ({ key, value }) => localStorage.setItem(key, value),
-      {
-        key: storageKey,
-        // 読み上げは切っておく。読み上げはアプリに入れた声（声のパック）を
-        // createBufferSource で鳴らすので、効果音と同じ数え方に入ってしまう。
-        // 読み上げは「声で読み上げる」の設定で切るもので、効果音の設定とは別。
-        value: JSON.stringify({
-          version: 3,
-          settings: { soundEnabled, speechEnabled: false, craneTargetTrials: 3, craneSweepMs: 800 },
-        }),
-      }
-    );
+    await page.context().addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+      key: storageKey,
+      // 読み上げは切っておく。読み上げはアプリに入れた声（声のパック）を
+      // createBufferSource で鳴らすので、効果音と同じ数え方に入ってしまう。
+      // 読み上げは「声で読み上げる」の設定で切るもので、効果音の設定とは別。
+      value: JSON.stringify({
+        version: 3,
+        settings: { soundEnabled, speechEnabled: false, craneTargetTrials: 3, craneSweepMs: 800 }
+      })
+    });
     await page.reload();
     await page.locator("#startStage").click();
     await waitForClass(page, "#homeView", "is-active");
     await openActivity(page, t("tile.crane-corner.title"));
-    await openActivity(page, "アームを止める");
+    await openActivity(page, t("tile.crane.title"));
     await page.locator(".game-ready").waitFor({ state: "visible" });
     // タイルを押した直後のこの押下は、入力ファネルの多重発火除去
     // （SWITCH_INPUT_DEDUPE_MS = 150ms）に飲まれることがある。飲まれると
@@ -3321,7 +4307,7 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
         // まだレディ画面のまま。もう一度押す。
       }
     }
-    await page.locator(".game-ready").waitFor({ state: "detached" });
+    await finishReady(page);
     const before = await page.evaluate(() => ({ ...window.__soundCounts }));
     await waitForCraneStatus(page, "横に動きます");
     await page.waitForTimeout(400);
@@ -3349,7 +4335,7 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
     return {
       noise: after.noise - before.noise,
       filter: after.filter - before.filter,
-      tone: after.tone - before.tone,
+      tone: after.tone - before.tone
     };
   }
 
@@ -3364,9 +4350,52 @@ async function checkEffectSoundsFollowTheSetting(page, project) {
     withoutSound.noise === 0 && withoutSound.filter === 0,
     `Effect sounds must be silent when the sound setting is off, got ${JSON.stringify(withoutSound)}`
   );
+  assert(withoutSound.tone > 0, "The measurement cue must keep sounding even with effects off (basic-design.md §6)");
+}
+
+/**
+ * 支援者が文字を入力しているあいだ、入力ドックが可視領域を食わない。
+ *
+ * ドックは画面下に position:fixed で居座る。スマホでソフトキーボードが出ると
+ * その上へ持ち上がり、いま打っている欄が見えなくなる（実測: iPhone SE では
+ * フォームの可視領域がほぼ消える）。ドックは利用者がスイッチで操作する
+ * ためのものなので、支援者がキーボードを使っている最中に要る場面がない。
+ *
+ * 焦点が外れたら必ず戻ることまで見る。戻らないと、走査で操作する手段が
+ * 画面から消えたままになる——利用者にとっては操作不能と同じ。
+ *
+ * ドックは、画面の「おす」ボタンを出す設定のときだけ出る（評価ログも本人の
+ * 画面と同じ）。設定の画面では出さない（押せないものを項目に重ねない）。
+ */
+async function checkDockStepsAsideForTextEntry(page) {
+  await enableScreenSwitch(page);
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // 支援者が文字を打つ欄は、いまは評価ログの参加者IDだけ（観察メモは
+  // 効果測定セッションごと別紙へ移した。2026-08-29）。評価ログも支援者の世界
+  // なので、ドックは最初から出ていない（走査を動かさない。2026-09-30）。
+  // 打っている最中も、打ち終えたあとも出てこないこと。
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  await page.locator("#participantId").focus();
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+  await page.locator("#participantId").evaluate((el) => el.blur());
+  await page.waitForTimeout(150);
+  await page.locator(".switch-dock").waitFor({ state: "hidden" });
+
+  // 利用者の世界へ戻ったら、支援者の世界の印（ドックを隠す class）は外れる。
+  // ドックを出すかどうかは、利用者の世界の決まり（画面の「おす」ボタンの設定）に戻る。
+  await page.locator("#homeReturn").click();
+  await waitForClass(page, "#homeView", "is-active");
   assert(
-    withoutSound.tone > 0,
-    "The measurement cue must keep sounding even with effects off (basic-design.md §6)"
+    !(await page.evaluate(() => document.body.classList.contains("supporter-menu-mode"))),
+    "ホームへ戻ったら supporter-menu-mode は外れる"
   );
 }
 
@@ -3432,7 +4461,7 @@ async function checkCueTasksWaitForSuspendedSound(page, project) {
   // 1. 押した直後は止まっていて、0.3秒後に戻る（iOS のふつうの戻り方）。どちらの課題も始まる。
   for (const [corner, task, moduleClass] of [
     [null, t("tile.gonogo.title"), "module-rhythm"],
-    ["さかなつり", "アタリで釣る", "module-fishing"],
+    ["さかなつり", t("tile.fishing.title"), "module-fishing"],
   ]) {
     await open(corner, task);
     await page.evaluate(() => {
@@ -3465,6 +4494,21 @@ async function checkCueTasksWaitForSuspendedSound(page, project) {
   assert(retried.running && !retried.unavailable, `Pressing again after fixing the sound must start the task, got ${JSON.stringify(retried)}`);
   await page.locator("#gameExit").click();
   await waitForClass(page, "#homeView", "is-active");
+  await page.reload();
+
+  // 3. ためし直しても鳴らなければ、次のひと押しでホームへ戻れる（スイッチだけの人を、この画面に
+  //    閉じ込めない。games/unavailableScreen.js）。ためし直しは1回だけ。
+  await open(null, t("tile.gonogo.title"));
+  await page.evaluate(() => {
+    window.__fakeAudio.state = "suspended";
+    window.__fakeAudio.resumeWorks = false;
+  });
+  await passReady();
+  await page.locator('.game-unavailable[data-retry="true"]').waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await page.locator('.game-unavailable[data-retry="false"]').waitFor({ state: "visible", timeout: 5000 });
+  await page.locator("#gameStage").click();
+  await waitForClass(page, "#homeView", "is-active");
 }
 
 /**
@@ -3482,18 +4526,22 @@ async function checkCueTasksWaitForSuspendedSound(page, project) {
  * という契約は同じ経路で確かめられる。
  */
 async function checkSilentAudioDoesNotProduceData(page, project) {
-  if (project.name !== "chromium-desktop") return SKIPPED;
-  const audioAvailable = await page.evaluate(
-    () => Boolean(window.AudioContext || window.webkitAudioContext)
-  );
-  if (!audioAvailable) return SKIPPED;
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) {
+    return SKIPPED;
+  }
 
   // 生成された AudioContext を、resume() を無効化したうえで suspended に保つ。
   // アプリ側は unlock() で resume を試みるので、無効化しないと running へ
   // 戻ってしまい、止まった状態を再現できない。
   await page.context().addInitScript(() => {
     const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
+    if (!Ctx) {
+      return;
+    }
     Ctx.prototype.resume = function stubbedResume() {
       return Promise.resolve();
     };
@@ -3505,7 +4553,7 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
       configurable: true,
       get() {
         return window.__forceSuspended ? "suspended" : "running";
-      },
+      }
     });
     void suspend;
     void original;
@@ -3514,7 +4562,7 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
 
   for (const [corner, task] of [
     [null, t("tile.gonogo.title")],
-    ["さかなつり", "アタリで釣る"],
+    ["さかなつり", t("tile.fishing.title")]
   ]) {
     await page.locator("#startStage").click();
     await waitForClass(page, "#homeView", "is-active");
@@ -3526,33 +4574,26 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
     }
     await waitForClass(page, "#gameView", "is-active");
 
-    // レディ画面をひと押しで抜けると、そこで始められないと分かる。
-    if ((await page.locator(".game-ready").count()) > 0) {
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        await page.waitForTimeout(250);
-        await page.locator("#gameStage").click();
-        if ((await page.locator(".game-ready").count()) === 0) break;
-      }
-    }
+    await finishReady(page);
     await page.locator(".game-unavailable").waitFor({ state: "visible" });
-    // 「止まっている」ときは、端末を変えろではなく直せる案内を出す。
-    const text = await page.locator(".game-unavailable").innerText();
-    assert(
-      text.includes("音が止まっている"),
-      `Expected the stopped-audio wording, got: ${text.replace(/\s+/g, " ")}`
-    );
+    // 「止まっている」ときは、端末を変えろではなく直せる案内を出す（文は表記で変わるので、
+    // 理由の印で見る。games/unavailableScreen.js）。
+    const reason = await page.locator(".game-unavailable").getAttribute("data-reason");
+    assert(reason === "stopped", `Expected the stopped-audio wording, got reason: ${reason}`);
 
+    // 止まっていただけなら、最初のひと押しは もう一度ためす（1回だけ）。鳴らないままなので、
+    // もう一度 同じ画面になり、次のひと押しで既存の安全な出口からホームへ戻る。
+    await page.waitForTimeout(200);
+    await page.locator("#gameStage").click();
+    await page.locator('.game-unavailable[data-retry="false"]').waitFor({ state: "visible", timeout: 5000 });
+    await page.waitForTimeout(200);
     await page.locator("#gameStage").click();
     await page.waitForTimeout(300);
     const sessions = await page.evaluate((key) => {
       const state = JSON.parse(localStorage.getItem(key) || "{}");
       return (state.sessions || []).length;
     }, storageKey);
-    assert(
-      sessions === 0,
-      `A task whose cue never sounds must not record trials, found ${sessions} session(s)`
-    );
-    await page.locator("#gameExit").click();
+    assert(sessions === 0, `A task whose cue never sounds must not record trials, found ${sessions} session(s)`);
     await waitForClass(page, "#homeView", "is-active");
     await page.reload();
   }
@@ -3572,52 +4613,62 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
  * 見ているのはスケジューラと判定の計算であって、可聴の開始時刻ではない。
  */
 async function checkRhythmRecordsRealOffsets(page, project) {
-  if (project.name !== "chromium-desktop") return SKIPPED;
-  const audioAvailable = await page.evaluate(
-    () => Boolean(window.AudioContext || window.webkitAudioContext)
-  );
-  if (!audioAvailable) return SKIPPED;
+  if (project.name !== "chromium-desktop") {
+    return SKIPPED;
+  }
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) {
+    return SKIPPED;
+  }
 
-  // 支援者が設定できる範囲で短くする（bpm 80 / 5拍）。押しどころの時刻は
-  // プリセットから導く——カウントイン拍数を決め打ちすると、練習の既定値を
-  // 調整したときに黙ってずれる（実際 countInBeats を 3→2 にして落ちた）。
-  await page.context().addInitScript(
-    ({ key, value }) => localStorage.setItem(key, value),
-    {
-      key: storageKey,
-      // 基準オフセットを 0 以外にしておく。0 だと「生値を記録する」規則を
-      // 壊しても値が変わらず、検査が素通りする（実際そうなった）。
-      value: JSON.stringify({
-        version: 3,
-        settings: { rhythmBpm: 80, targetBeats: 5, baselineOffsetMs: 60 },
-      }),
-    }
-  );
-  await page.reload();
-
+  // 現行ホームの gonogo（共通 rhythm.js）を最後まで通す。8拍中Goは5拍。
+  // 音の計画を観測して押しどころを導き、ランダムなGo/No-Go順に依存しない。
+  // 現行の保存形式は patchSettings に任せ、v3のテスト用保存を作らない。
+  // 0では補正を誤って記録から引いても検出できないので、基準を60msにする。
+  await exposePresentationContext(page);
+  await patchSettings(page, { rhythmBpm: 80, targetBeats: 8, baselineOffsetMs: 60 });
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, "リズム");
-  await openActivity(page, "リズム 練習");
+  await openActivity(page, t("tile.gonogo.title"));
   await page.locator(".game-ready").waitFor({ state: "visible" });
-  await page.locator("#gameStage").click();
-  await page.locator(".game-ready").waitFor({ state: "detached" });
-  const startedAt = Date.now();
+  // 実際のstartを呼び、返った音時計とperformance時計の対応・配信する拍を読むだけ。
+  // 入力はシェルへの物理クリックで行い、judge / logTrial / 保存には差し込まない。
+  await page.evaluate(() => {
+    const scheduler = window.__presentationCtx.audio.scheduler;
+    const start = scheduler.start.bind(scheduler);
+    scheduler.start = (plan) => {
+      const perfMs = performance.now();
+      const startAt = start(plan);
+      window.__rhythmSchedule = {
+        beats: plan.beats,
+        startPerfMs: perfMs + (startAt - scheduler.now()) * 1000
+      };
+      return startAt;
+    };
+  });
+  await finishReady(page);
+  const schedule = await page.evaluate(() => window.__rhythmSchedule);
 
   // わざと早い側・遅い側へずらして押す。どちらの符号も出ることを見たいので、
   // 全部を「ぴったり」に寄せない。
-  const beatMs = 60000 / 80;
-  const countIn = rhythmPresets["rhythm-l1"].countInBeats;
-  const trialPeriodMs = (countIn + 1.5) * beatMs; // TRIAL_GAP_BEATS = 1.5
-  const cueOffsetMs = countIn * beatMs;
+  const goBeats = schedule.beats.filter((beat) => beat.tone === cueTones.high);
   const intended = [-180, 120, -60, 200, 40];
+  assert(goBeats.length === intended.length, "The current eight-beat gonogo plan must contain five Go cues");
   for (let index = 0; index < intended.length; index += 1) {
-    const wait = index * trialPeriodMs + cueOffsetMs + intended[index] - (Date.now() - startedAt);
-    if (wait > 0) await page.waitForTimeout(wait);
+    const now = await page.evaluate(() => performance.now());
+    const wait = schedule.startPerfMs + goBeats[index].timeS * 1000 + intended[index] - now;
+    if (wait > 0) {
+      await page.waitForTimeout(wait);
+    }
     await page.locator("#gameStage").click({ position: { x: 400, y: 300 } });
   }
 
   // 最後の判定も、同じJSタスク内で結果へ消さず、利用者が読める時間を残す。
+  // 最後がNo-Goでも、全拍が確定してからのフィードバック時間を検査する。
+  await page.waitForFunction((key) =>
+    JSON.parse(localStorage.getItem(key) || "{}").sessions?.at(-1)?.finished === true,
+    storageKey
+  );
   await page.waitForFunction(
     () => (document.querySelector(".rhythm-judgment strong")?.textContent || "").trim().length > 0
   );
@@ -3634,10 +4685,16 @@ async function checkRhythmRecordsRealOffsets(page, project) {
   await waitForClass(page, "#resultView", "is-active");
   const session = await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || "{}");
-    return (state.sessions || []).findLast((item) => item.gameId === "rhythm-l1") || null;
+    return (state.sessions || []).findLast((item) => item.gameId === "gonogo") || null;
   }, storageKey);
 
-  assert(session, "Expected a recorded rhythm-l1 session");
+  assert(session, "Expected a recorded gonogo session");
+  assert(session.taskType === "gonogo" && session.config.targetBeats === 8, "The current auditory task must record its actual protocol");
+  assert(session.trials.length === 8, "All eight Go/No-Go beats must be recorded");
+  assert(
+    session.trials.filter((trial) => trial.judgment === "correctRejection").length === 3,
+    "All three unpressed No-Go beats must be recorded as correct rejections"
+  );
   assert(session.finished === true && session.aborted === false, "Expected a completed session");
 
   const hits = (session.trials || []).filter((trial) => trial.judgment === "hit");
@@ -3650,9 +4707,9 @@ async function checkRhythmRecordsRealOffsets(page, project) {
     );
     // 判定窓の外の値が hit として記録されていたら、判定か時刻変換が壊れている。
     assert(
-      Math.abs(trial.rawOffsetMs) <= session.config.effectiveWindowMs,
-      `hit offset ${trial.rawOffsetMs}ms lies outside the judgment window ` +
-        `(±${session.config.effectiveWindowMs}ms)`
+      // 判定窓の中心は基準Cだけ移動する。生値を中心0で検査するのは誤り。
+      Math.abs(trial.rawOffsetMs - trial.appliedBaselineMs) <= session.config.effectiveWindowMs,
+      `hit offset ${trial.rawOffsetMs}ms lies outside the judgment window ` + `(±${session.config.effectiveWindowMs}ms)`
     );
     // 記録は生値のまま。基準を差し引いていれば、この等式が基準のぶん崩れる。
     assert(
@@ -3701,6 +4758,141 @@ async function checkRhythmRecordsRealOffsets(page, project) {
   );
 }
 
+async function checkFeatureTabs(page) {
+  // The start screen hides the whole shell (topbar/tabbar, body.start-mode)
+  // since the design pass, so enter the home screen first to make the tabs
+  // clickable — same as a real supporter would.
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
+  // matching/voca/letters are user-facing activities and now live on the
+  // home screen under the "まなぶ・つたえる" second level, not as tabs.
+  // Each visit returns home via #homeReturn, the same path a switch user
+  // would scan to.
+  // 二階層目もページに分かれることがある（画面が短いと1ページ2〜3件）。
+  // 直に click すると、2ページ目に居る項目に届かない——利用者と同じく
+  // 「つぎのページ」を辿ってから押す。
+  const activityTargets = [
+    ["matching", t("tile.matching.title")],
+    ["voca", t("tile.voca.title")],
+    ["letters", t("tile.letters.title")]
+  ];
+  for (const [target, name] of activityTargets) {
+    await openActivity(page, "学ぶ・伝える");
+    await openActivity(page, name);
+    await waitForClass(page, `#${target}`, "is-active");
+    await page.locator("#homeReturn").click();
+    await waitForClass(page, "#homeView", "is-active");
+  }
+
+  // 支援者タブは評価ログと設定。旧研究者タブは削除済み。
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  const tabTargets = ["log", "settings"];
+  for (const target of tabTargets) {
+    await page.locator(`.tab[data-view="${target}"]`).click();
+    await waitForClass(page, `#${target}`, "is-active");
+  }
+}
+
+/**
+ * 書き出すデータが1件も無いとき、押した支援者に理由が見えること。
+ *
+ * 以前は announce() だけを出していたが、その出力先 #liveRegion は .sr-only
+ * なので、読み上げを使わない支援者には何も届かなかった。研究データの
+ * 書き出し導線が「押しても無反応」に見え、壊れていると受け取られる。
+ */
+async function checkEmptyExportIsExplained(page) {
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
+
+  // まだ1回も遊んでいないので走査課題データは0件。
+  const message = page.locator("#supporterMessage");
+  assert(await message.isHidden(), "The supporter message must stay out of the way until needed");
+  await page.locator("#exportScanCsv").click();
+  await message.waitFor({ state: "visible" });
+
+  const text = await message.innerText();
+  assert(text.includes("ありません"), `Expected the message to say what is missing, got "${text}"`);
+  // 理由だけでなく、どうすれば書き出せるようになるかまで伝える。
+  assert(text.includes("1回終える"), `Expected the message to say how to produce data, got "${text}"`);
+}
+
+async function checkResearcherDataOnOneScreen(page) {
+  // The tabbar is hidden on the start screen (body.start-mode, design pass);
+  // go through home first.
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+
+  await page.locator("#homeSupporterMenu").click();
+  await waitForClass(page, "#settings", "is-active");
+
+  // 研究者モードは、押しても何も変わらない操作子になっていたので画面から外した
+  // （2026-10-01。効果測定・操作訓練・研究の3タブは 2026-08-29 に消えていた）。
+  // 効かない操作子を黙って置かない。保存のキーは残す（state.js）。
+  await openSettingsDetails(page, "research");
+  assert((await page.locator("#researcherMode").count()) === 0, "The dead researcher-mode switch must be gone");
+  assert(
+    !(await page.evaluate(() => document.body.classList.contains("researcher-mode"))),
+    "Nothing may add the dead researcher-mode class"
+  );
+
+  await page.locator('.tab[data-view="log"]').click();
+  await waitForClass(page, "#log", "is-active");
+  await assertSupporterScanStopped(page, "log");
+  // 参加者IDと書き出しは、すべてこの1枚に居る。
+  await page.locator("#participantId").waitFor({ state: "visible" });
+  for (const selector of [
+    "#exportSessionLedgerCsv",
+    "#exportRhythmCsv",
+    "#exportSlotCsv",
+    "#exportScanCsv",
+    "#exportRtCsv",
+    "#exportRawJson",
+    "#exportCsv",
+    "#handOverParticipant"
+  ]) {
+    await page.locator(selector).waitFor({ state: "visible" });
+  }
+
+  // 消した画面が本当に消えていること。マークアップに残したまま到達できない
+  // 状態にすると、次に触る人が「動かない画面」を直そうとする。
+  for (const gone of ["#evaluation", "#operation", "#research"]) {
+    assert((await page.locator(gone).count()) === 0, `${gone} must be gone, not hidden`);
+  }
+  const tabs = await page.locator(".tabbar button").allTextContents();
+  assert(tabs.length === 3, `Expected three shell tabs (home / log / settings), got ${tabs.length}: ${tabs.join(" ")}`);
+
+  // 評価ログから設定へ戻っても、研究の欄は使える（走査は止まったまま）。
+  await page.locator('.tab[data-view="settings"]').click();
+  await waitForClass(page, "#settings", "is-active");
+  await openSettingsDetails(page, "research");
+  await page.locator("#difficultyMode").waitFor({ state: "visible" });
+  await assertSupporterScanStopped(page, "settings");
+  // ホームに出す遊びは、常設の「よく使う設定」で調整する。
+  await openSettingsDetails(page, "switch");
+  await page.locator("#hideVisualTasks").click();
+
+  await page.locator("#homeReturn").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 7);
+  // 1ページだけ見て判定すると、ページ分割の入る画面では「2ページ目に居る」
+  // だけの項目を「隠れている」と読んでしまう。全ページを巡って確かめる。
+  const lobbyTitles = await collectActivityTitles(page);
+  assert(
+    !lobbyTitles.includes(t("tile.crane-corner.title")),
+    `Visual-task setting must remove the claw corner from the lobby (saw: ${lobbyTitles.join(", ")})`
+  );
+  assert(
+    lobbyTitles.length === 7,
+    `Expected seven remaining activities after hiding the claw, got ${lobbyTitles.length}`
+  );
+}
+
 async function checkPwaDelivery(page, project) {
   const manifestHref = await page.locator('link[rel="manifest"]').getAttribute("href");
   assert(manifestHref, "Expected a manifest link in the built page");
@@ -3718,7 +4910,7 @@ async function checkPwaDelivery(page, project) {
       status: response.status,
       contentType: response.headers.get("content-type") || "",
       text,
-      body,
+      body
     };
   }, manifestUrl);
   assert(manifestResult.status === 200, `Expected manifest to return 200, got ${manifestResult.status}`);
@@ -3726,51 +4918,78 @@ async function checkPwaDelivery(page, project) {
     manifestResult.contentType.includes("application/manifest+json"),
     `Expected manifest Content-Type, got ${manifestResult.contentType || "(missing)"}`
   );
-  assert(manifestResult.body && typeof manifestResult.body === "object", `Expected valid manifest JSON from ${manifestUrl}`);
+  assert(
+    manifestResult.body && typeof manifestResult.body === "object",
+    `Expected valid manifest JSON from ${manifestUrl}`
+  );
   assert(typeof manifestResult.body.start_url === "string", "Expected manifest start_url to be a string");
   assert(typeof manifestResult.body.icons?.[0]?.src === "string", "Expected manifest icon src to be a string");
 
   const startUrl = new URL(manifestResult.body.start_url, manifestUrl).href;
   const iconUrl = new URL(manifestResult.body.icons?.[0]?.src, manifestUrl).href;
   const missingAssetUrl = new URL("assets/__definitely_missing__.js", page.url()).href;
-  const assetResults = await page.evaluate(async ([start, icon, missingAsset]) => {
-    const [startResponse, iconResponse, missingResponse] = await Promise.all([
-      fetch(start, { cache: "no-store" }),
-      fetch(icon, { cache: "no-store" }),
-      fetch(missingAsset, { cache: "no-store" }),
-    ]);
-    const [startBody, iconBody, missingBody] = await Promise.all([
-      startResponse.text(),
-      iconResponse.text(),
-      missingResponse.text(),
-    ]);
-    return {
-      start: {
-        status: startResponse.status,
-        contentType: startResponse.headers.get("content-type") || "",
-        body: startBody,
-      },
-      icon: {
-        status: iconResponse.status,
-        contentType: iconResponse.headers.get("content-type") || "",
-        body: iconBody,
-      },
-      missing: {
-        status: missingResponse.status,
-        contentType: missingResponse.headers.get("content-type") || "",
-        body: missingBody,
-      },
-    };
-  }, [startUrl, iconUrl, missingAssetUrl]);
-  assert(assetResults.start.status === 200, `Expected manifest start_url to return 200, got ${assetResults.start.status}`);
-  assert(assetResults.start.contentType.includes("text/html"), `Expected HTML start_url, got ${assetResults.start.contentType}`);
-  assert(assetResults.start.body.includes('<div id="app"></div>'), "Expected start_url body to contain the app mount point");
+  const assetResults = await page.evaluate(
+    async ([start, icon, missingAsset]) => {
+      const [startResponse, iconResponse, missingResponse] = await Promise.all([
+        fetch(start, { cache: "no-store" }),
+        fetch(icon, { cache: "no-store" }),
+        fetch(missingAsset, { cache: "no-store" })
+      ]);
+      const [startBody, iconBody, missingBody] = await Promise.all([
+        startResponse.text(),
+        iconResponse.text(),
+        missingResponse.text()
+      ]);
+      return {
+        start: {
+          status: startResponse.status,
+          contentType: startResponse.headers.get("content-type") || "",
+          body: startBody
+        },
+        icon: {
+          status: iconResponse.status,
+          contentType: iconResponse.headers.get("content-type") || "",
+          body: iconBody
+        },
+        missing: {
+          status: missingResponse.status,
+          contentType: missingResponse.headers.get("content-type") || "",
+          body: missingBody
+        }
+      };
+    },
+    [startUrl, iconUrl, missingAssetUrl]
+  );
+  assert(
+    assetResults.start.status === 200,
+    `Expected manifest start_url to return 200, got ${assetResults.start.status}`
+  );
+  assert(
+    assetResults.start.contentType.includes("text/html"),
+    `Expected HTML start_url, got ${assetResults.start.contentType}`
+  );
+  assert(
+    assetResults.start.body.includes('<div id="app"></div>'),
+    "Expected start_url body to contain the app mount point"
+  );
   assert(assetResults.icon.status === 200, `Expected manifest icon to return 200, got ${assetResults.icon.status}`);
-  assert(assetResults.icon.contentType.includes("image/svg+xml"), `Expected SVG icon, got ${assetResults.icon.contentType}`);
+  assert(
+    assetResults.icon.contentType.includes("image/svg+xml"),
+    `Expected SVG icon, got ${assetResults.icon.contentType}`
+  );
   assert(/<svg[\s>]/i.test(assetResults.icon.body), "Expected icon response to contain SVG markup");
-  assert(assetResults.missing.status === 404, `Expected a missing JS asset to return 404, got ${assetResults.missing.status}`);
-  assert(!assetResults.missing.contentType.includes("text/html"), "Missing assets must not receive the SPA HTML fallback");
-  assert(!assetResults.missing.body.includes('<div id="app"></div>'), "Missing assets must not receive the app shell body");
+  assert(
+    assetResults.missing.status === 404,
+    `Expected a missing JS asset to return 404, got ${assetResults.missing.status}`
+  );
+  assert(
+    !assetResults.missing.contentType.includes("text/html"),
+    "Missing assets must not receive the SPA HTML fallback"
+  );
+  assert(
+    !assetResults.missing.body.includes('<div id="app"></div>'),
+    "Missing assets must not receive the app shell body"
+  );
 
   // Playwright WebKit does not reliably expose service-worker control in an
   // ephemeral context. Chromium verifies the complete first load -> install
@@ -3779,7 +4998,9 @@ async function checkPwaDelivery(page, project) {
   //
   // SKIPPED は返さない。ここまでで WebKit も実際に検査を済ませているので、
   // 「何も見ていない」と報告するのは実態と逆になる。
-  if (project.name !== "chromium-desktop") return undefined;
+  if (project.name !== "chromium-desktop") {
+    return undefined;
+  }
 
   await page.waitForFunction(async () => (await navigator.serviceWorker.getRegistrations()).length === 1);
   await page.evaluate(async () => navigator.serviceWorker.ready);
@@ -3787,17 +5008,20 @@ async function checkPwaDelivery(page, project) {
 
   const precachedUrls = await page.evaluate(() => [
     new URL("index.html", location.href).href,
-    ...Array.from(document.querySelectorAll("script[src], link[rel='stylesheet'][href]"), (element) =>
-      new URL(element.src || element.href, location.href).href
+    ...Array.from(
+      document.querySelectorAll("script[src], link[rel='stylesheet'][href]"),
+      (element) => new URL(element.src || element.href, location.href).href
     ),
     new URL(document.querySelector('link[rel="manifest"]').href, location.href).href,
-    new URL(document.querySelector('link[rel="icon"]').href, location.href).href,
+    new URL(document.querySelector('link[rel="icon"]').href, location.href).href
   ]);
   const cacheState = await page.evaluate(async (urls) => {
     const names = await caches.keys();
     const missing = [];
     for (const url of urls) {
-      if (!(await caches.match(url))) missing.push(url);
+      if (!(await caches.match(url))) {
+        missing.push(url);
+      }
     }
     return { names, missing };
   }, precachedUrls);
@@ -3805,7 +5029,10 @@ async function checkPwaDelivery(page, project) {
     cacheState.names.some((name) => name.startsWith("neuro-precache:") && /:[a-f0-9]{16}$/.test(name)),
     `Expected a versioned neuro precache, got ${cacheState.names.join(", ") || "none"}`
   );
-  assert(cacheState.missing.length === 0, `Expected install-time precache entries, missing: ${cacheState.missing.join(", ")}`);
+  assert(
+    cacheState.missing.length === 0,
+    `Expected install-time precache entries, missing: ${cacheState.missing.join(", ")}`
+  );
 
   await page.context().setOffline(true);
   try {
@@ -3860,12 +5087,8 @@ async function checkMobileLayout(page) {
 
 /** 利用者の画面に「おす」ボタン（画面のスイッチ）を出す設定を入れて読み直す。 */
 async function enableScreenSwitch(page) {
-  await page.evaluate((key) => {
-    const saved = JSON.parse(localStorage.getItem(key) || "{}");
-    saved.settings = { ...(saved.settings || {}), showScreenSwitch: true };
-    localStorage.setItem(key, JSON.stringify(saved));
-  }, storageKey);
-  await page.reload();
+  await patchSettings(page, { showScreenSwitch: true }, { allowMissing: true });
+
   await waitForClass(page, "#startView", "is-active");
 }
 
@@ -3890,9 +5113,7 @@ async function checkLayoutInvariants(page) {
     const found = await page.evaluate(() => {
       const doc = document.documentElement;
       const visible = (el) => el.getClientRects().length > 0;
-      const controls = [...document.querySelectorAll("button, select, input, [data-scan]")].filter(
-        visible
-      );
+      const controls = [...document.querySelectorAll("button, select, input, summary, [data-scan]")].filter(visible);
       const describe = (el) => {
         const rect = el.getBoundingClientRect();
         const id = el.id || el.className.toString().split(" ")[0] || el.tagName.toLowerCase();
@@ -3916,17 +5137,14 @@ async function checkLayoutInvariants(page) {
             return rect.height < 43 || rect.width < 43;
           })
           .map(describe)
-          .slice(0, 8),
+          .slice(0, 8)
       };
     });
     assert(
       found.overflow <= 2,
       `${where}: horizontal overflow ${found.overflow}px — a scanning user cannot reach controls off screen`
     );
-    assert(
-      found.tooSmall.length === 0,
-      `${where}: touch targets below 44px — ${found.tooSmall.join(", ")}`
-    );
+    assert(found.tooSmall.length === 0, `${where}: touch targets below 44px — ${found.tooSmall.join(", ")}`);
   };
 
   await page.locator("#startStage").click();
@@ -3950,7 +5168,7 @@ async function checkLayoutInvariants(page) {
         textWidth: text ? text.getBoundingClientRect().width : 0,
         headingHeight: heading ? heading.getBoundingClientRect().height : 0,
         lineHeight: heading ? parseFloat(getComputedStyle(heading).lineHeight) || 0 : 0,
-        tileHeight: tile.getBoundingClientRect().height,
+        tileHeight: tile.getBoundingClientRect().height
       };
     })
   );
@@ -3963,21 +5181,25 @@ async function checkLayoutInvariants(page) {
     // 見出しは2行までに収まること（3行以上は、幅が足りずに折り返している）。
     if (tile.lineHeight > 0) {
       const lines = tile.headingHeight / tile.lineHeight;
-      assert(
-        lines <= 2.2,
-        `Activity "${tile.label}" wraps its name over ${lines.toFixed(1)} lines`
-      );
+      assert(lines <= 2.2, `Activity "${tile.label}" wraps its name over ${lines.toFixed(1)} lines`);
     }
   });
 
-  // 支援者の世界は設定だけになった（評価ログと研究の面は 2026-09-30 に外した）。
-  // よく使う設定と、「くわしい設定」の3つの面を1つずつ見る。
+  // 支援者の世界。くわしい設定を開けて、列の多い画面まで含めて見る。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  await inspect("settings");
-  for (const name of ["basic", "senses", "play"]) {
-    await openSettingsTab(page, name);
-    await inspect(`settings (${name})`);
+  await inspect("settings (collapsed)");
+
+  await openSettingsDetails(page, "research");
+  await inspect("settings (research open)");
+
+  // 支援者が見る面は評価ログと設定の2つだけになった（2026-08-29）。
+  // 評価ログは列の多い画面（書き出し9個・推移のタブ・セッション一覧）なので、
+  // はみ出しが出るならここに出る。
+  for (const view of ["log"]) {
+    await page.locator(`.tab[data-view="${view}"]`).click();
+    await waitForClass(page, `#${view}`, "is-active");
+    await inspect(view);
   }
 }
 
@@ -4002,20 +5224,19 @@ async function checkHiddenAttributeIsRespected(page) {
       total: hidden.length,
       leaks: hidden
         .filter((element) => getComputedStyle(element).display !== "none")
-        .map((element) => element.id || element.className || element.tagName),
+        .map((element) => element.id || element.className || element.tagName)
     };
   });
   // 対象が0件だと、この検査は何も見ずに通ってしまう。
-  // calibrationOffer や、閉じている設定の面など、常設の hidden 要素がある前提。
+  // calibrationOffer / measureModeNotice など常設の hidden 要素がある前提。
   assert(total >= 3, `Expected several [hidden] elements to inspect, found ${total}`);
-  assert(
-    leaks.length === 0,
-    `These elements have the hidden attribute but are still displayed: ${leaks.join(", ")}`
-  );
+  assert(leaks.length === 0, `These elements have the hidden attribute but are still displayed: ${leaks.join(", ")}`);
 }
 
 async function checkIpadAccessibilityLayout(page, project) {
-  if (project.name !== "ipad-portrait") return SKIPPED;
+  if (project.name !== "ipad-portrait") {
+    return SKIPPED;
+  }
 
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -4028,11 +5249,13 @@ async function checkIpadAccessibilityLayout(page, project) {
   // 既定は ON（state.js）なので、クリックは OFF にする操作だった——
   // 「大きい文字で読めること」を確かめる検査が、大きい文字を切った状態を
   // 見ていた。検査名と中身が逆を向いていても、テストは緑のまま通る。
-  // 「見え方」は senses の面にある（設定はタブ分けされている）。
-  await openSettingsTab(page, "senses");
+  // 見え方と声の詳細を見出しから開く。
+  await openSettingsDetails(page, "senses");
   const ensureChecked = async (id) => {
     const box = page.locator(`#${id}`);
-    if (!(await box.isChecked())) await box.click();
+    if (!(await box.isChecked())) {
+      await box.click();
+    }
     assert(await box.isChecked(), `Expected #${id} to be on for this check`);
   };
   await ensureChecked("largeText");
@@ -4052,14 +5275,11 @@ async function checkIpadAccessibilityLayout(page, project) {
   const applied = await page.evaluate(() => ({
     largeText: document.body.classList.contains("large-text"),
     highContrast: document.body.classList.contains("high-contrast"),
-    rootFontPx: parseFloat(getComputedStyle(document.body).fontSize),
+    rootFontPx: parseFloat(getComputedStyle(document.body).fontSize)
   }));
   assert(applied.largeText, "Expected body.large-text while checking the large-text layout");
   assert(applied.highContrast, "Expected body.high-contrast while checking the layout");
-  assert(
-    applied.rootFontPx > 16,
-    `Expected large text to raise the base font above 16px, got ${applied.rootFontPx}px`
-  );
+  assert(applied.rootFontPx > 16, `Expected large text to raise the base font above 16px, got ${applied.rootFontPx}px`);
 
   const layout = await page.evaluate(() => {
     const rows = [...document.querySelectorAll("#gameTileGrid .game-tile")];
@@ -4072,7 +5292,7 @@ async function checkIpadAccessibilityLayout(page, project) {
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       rowWritingModes: rows.map((row) => getComputedStyle(row).writingMode),
       lastBottom: bottoms.length ? Math.max(...bottoms) : null,
-      dockTop: dockShown ? dockEl.getBoundingClientRect().top : window.innerHeight,
+      dockTop: dockShown ? dockEl.getBoundingClientRect().top : window.innerHeight
     };
   });
 
@@ -4108,7 +5328,9 @@ async function checkIpadAccessibilityLayout(page, project) {
       // 出ている文字」なので、rt を落としてから読む。読み上げ名（aria-label）は
       // 最初からプレーン文なので、この2つが一致することを下で確かめている。
       const baseText = (el) => {
-        if (!el) return "";
+        if (!el) {
+          return "";
+        }
         const copy = el.cloneNode(true);
         copy.querySelectorAll("rt").forEach((rt) => rt.remove());
         return copy.textContent.trim();
@@ -4123,12 +5345,10 @@ async function checkIpadAccessibilityLayout(page, project) {
         })(),
         heading: baseText(heading),
         description: baseText(description),
-        descriptionIsVisible: description
-          ? description.getBoundingClientRect().width > 2
-          : false,
+        descriptionIsVisible: description ? description.getBoundingClientRect().width > 2 : false,
         headingFontPx: px(heading),
         descriptionFontPx: px(description),
-        rowHeight: tile.getBoundingClientRect().height,
+        rowHeight: tile.getBoundingClientRect().height
       };
     })
   );
@@ -4136,8 +5356,7 @@ async function checkIpadAccessibilityLayout(page, project) {
   const firstPageActivities = tileNaming.filter((tile) => !tile.isPager);
   assert(
     firstPageActivities.length === homeLayout.pages[0].length,
-    "Expected " + homeLayout.pages[0].length +
-      " activities on the first page, got " + firstPageActivities.length
+    "Expected " + homeLayout.pages[0].length + " activities on the first page, got " + firstPageActivities.length
   );
   assert(
     tileNaming.filter((tile) => tile.isPager).length === (homeLayout.pages.length > 1 ? 1 : 0),
@@ -4153,10 +5372,7 @@ async function checkIpadAccessibilityLayout(page, project) {
     assert(tile.name === tile.heading, `Tile "${tile.name}" name must stay the short heading, got "${tile.heading}"`);
     assert(tile.description.length > 0, `Tile "${tile.name}" must expose its description to AT`);
     if (tile.isHero) {
-      assert(
-        tile.descriptionIsVisible,
-        `The first (easiest) tile "${tile.name}" must show its description on screen`
-      );
+      assert(tile.descriptionIsVisible, `The first (easiest) tile "${tile.name}" must show its description on screen`);
     }
     if (tile.badgeVisible !== null) {
       assert(tile.badgeVisible, `Tile "${tile.name}" must show how hard it is (its level badge) on screen`);
@@ -4185,9 +5401,7 @@ async function checkIpadAccessibilityLayout(page, project) {
   // 必ず全体が見える。
   const OVERLAP_TOLERANCE_PX = 24;
   assert(
-    layout.lastBottom !== null &&
-      layout.dockTop !== null &&
-      layout.lastBottom - layout.dockTop <= OVERLAP_TOLERANCE_PX,
+    layout.lastBottom !== null && layout.dockTop !== null && layout.lastBottom - layout.dockTop <= OVERLAP_TOLERANCE_PX,
     `Expected every control on the current page within reach of the dock, got lastBottom=${layout.lastBottom} dockTop=${layout.dockTop}`
   );
 }
@@ -4216,27 +5430,351 @@ async function checkIpadAccessibilityLayout(page, project) {
  * やめた）とたんにガード内で押すようになり、一斉に落ちた——テストが人間より
  * 速いだけで、アプリは壊れていない。人が押せる速さに合わせる。
  */
-async function settleStartGuard(page) {
-  await page.waitForTimeout(550);
+
+// 配信応答だけで共有 ctx を公開する。製品コードに障害注入用の入口は作らない。
+async function exposePresentationContext(page) {
+  await page.route("**/assets/*.js", async (route) => {
+    const response = await route.fetch();
+    let body = await response.text();
+    let exposed = false;
+    // 縮めた名前には $ が入りうる（$m など。どの名前になるかはバンドルの中身しだい）。
+    body = body.replace(/(?<![\w$])([\w$]+)\.scan\s*=\s*[\w$]+\(\1\)([,;])/, (source, name, end) => {
+      exposed = true;
+      return source + `window.__presentationCtx=${name}${end}`;
+    });
+    // 世界の絵の関数にも、応答内だけで例外を差し込む。
+    const brokenWorld = 'window.__breakWorld?(()=>{throw Error("SMOKE_WORLD_ART")})():';
+    body = body.replace(
+      /return(`\s*\$\{[\w$]+\}\s*<span class="sea-spot")/,
+      (_, template) => `return ${brokenWorld}${template}`
+    );
+    body = body.replace('return`<div class="slot-world"', `return ${brokenWorld}\`<div class="slot-world"`);
+    assert(exposed, "The response injection must expose the actual app context");
+    await route.fulfill({ response, body });
+  });
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__presentationCtx));
 }
 
-async function openActivity(page, name) {
-  await settleStartGuard(page);
-  const target = page.getByRole("button", { name, exact: true });
-  const pager = page.locator(".game-tile.scan-pager");
-  for (let hop = 0; hop < 6; hop += 1) {
-    if ((await target.count()) > 0) {
-      await target.click();
+async function checkPresentationFaults(page) {
+  const diagnostics = [];
+  page.on("console", (message) => {
+    if (message.type() === "warning") {
+      diagnostics.push(message.text());
+    }
+  });
+  await exposePresentationContext(page);
+  for (const fault of ["press", "finale", "music", "voice", "party", "world"]) {
+    await patchSettings(page, {
+      autoScan: false,
+      speechEnabled: false,
+      fxLevel: fault === "party" ? "big" : "normal",
+      slotL1Rounds: 3
+    });
+    await page.locator("#startStage").click();
+    await page.evaluate((fault) => {
+      const ctx = window.__presentationCtx;
+      const broken = () => {
+        throw Error(`SMOKE_PRESENTATION_${fault}`);
+      };
+      if (fault === "press") {
+        ctx.fx.popAppear = broken;
+      }
+      if (fault === "finale") {
+        ctx.fx.finale = broken;
+      }
+      if (fault === "music") {
+        ctx.audio.music.stop = broken;
+      }
+      if (fault === "voice") {
+        ctx.voiceFeedback = broken;
+      }
+      if (fault === "party") {
+        ctx.fx.partyPress = broken;
+        ctx.fx.partyFinale = broken;
+      }
+      if (fault === "world") {
+        window.__breakWorld = true;
+      }
+    }, fault);
+    // 声を壊すのは説明を終えたあと。説明画面の担当範囲には触れない。
+    await openActivity(page, t("tile.color-legacy.title"));
+    const before = await readLogCount(page);
+    for (let i = 0; i < 5; i++) {
+      await page.locator("#gameStage").dispatchEvent("click");
+      await page.waitForTimeout(200);
+    }
+    await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, {
+      timeout: 12000
+    });
+    assert((await readLogCount(page)) === before + 5, `${fault}: every beginner press must remain recorded`);
+    await page.evaluate(() => {
+      window.__presentationCtx.voiceFeedback = () => {};
+    });
+    await page.locator("#resultHome").click();
+    await openActivity(page, t("tile.slot-corner.title"));
+    await openActivity(page, t("tile.slot-l1.title"));
+    // 説明の声はこの検査の対象外なので、開始時だけ通常の声へ戻す。
+    await page.evaluate(() => {
+      window.__presentationCtx.voiceFeedback = () => {};
+    });
+    await finishReady(page);
+    await page.evaluate(() => {
+      const broken = () => {
+        throw Error("SMOKE_TIMING_PRESENTATION");
+      };
+      window.__presentationCtx.voiceFeedback = broken;
+      window.__presentationCtx.fx.finale = broken;
+      window.__presentationCtx.fx.partyFinale = broken;
+    });
+    for (let i = 0; i < 3; i++) {
+      await page.waitForTimeout(1000);
+      await page.locator("#gameStage").dispatchEvent("click");
+    }
+    await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, {
+      timeout: 12000
+    });
+    const session = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).sessions.at(-1), storageKey);
+    assert(
+      session.finished === true && session.trials.length === 3,
+      "Timing faults must preserve completion and all trial records"
+    );
+    if (fault === "world") {
+      assert(
+        diagnostics.some((message) => message.includes("world.sea")),
+        "The sea art fault must actually reach the boundary"
+      );
+      assert(
+        diagnostics.some((message) => message.includes("world.slot")),
+        "The reel world fault must actually reach the boundary"
+      );
+    }
+  }
+}
+
+async function checkDecorationMotion(page, project) {
+  const output = "output/playwright/ud2-motion";
+  await mkdir(output, { recursive: true });
+  await exposePresentationContext(page);
+  for (const reduced of [false, true]) {
+    for (const level of ["none", "subtle", "normal", "big"]) {
+      await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
+      await patchSettings(page, { fxLevel: level, autoScan: false, speechEnabled: false, difficultyMode: "practice" });
+      await page.locator("#startStage").click();
+      await openActivity(page, t("tile.balloon.title"));
+      await page.locator("#gameStage").dispatchEvent("click");
+      await page.waitForTimeout(120);
+      // 数えるのは「いま動いているもの」だけ（終わった遷移は止まっているので数えない。
+      // さかなつりの世界の検査と同じ数え方）。
+      const balloon = await page.evaluate(() => {
+        const moving = document
+          .querySelector("#gameStageContent")
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.playState === "running");
+        return {
+          animations: moving.length,
+          // 落ちたときに、何が動いていたかを書き出す（どの規則が効いていないかを探すため）。
+          running: moving.map((animation) => ({
+            name: animation.animationName || animation.transitionProperty || animation.id || animation.constructor.name,
+            target: String(animation.effect?.target?.className?.baseVal ?? animation.effect?.target?.className ?? "")
+          })),
+          motion: { deco: document.body.dataset.decorationMotion, world: document.body.dataset.worldMotion },
+          particles: Number(document.querySelector("#fxLayer")?.dataset.emitted || 0),
+          mark: getComputedStyle(document.querySelector(".balloon.is-popping .balloon-mark")).opacity
+        };
+      });
+      // 端末の「動きを減らす」は見ない（2026-10-01、ユーザーの判断。fx/fxSafety.js）。
+      // どちらでも、決めるのは支援者の設定「遊びの雰囲気」だけ。
+      if (level === "none") {
+        assert(
+          balloon.animations === 0 && balloon.particles === 0,
+          `${level}/${reduced}: balloon decorations must remain still: ${JSON.stringify(balloon)}`
+        );
+        assert(balloon.mark === "1", "A press must show a static burst shape immediately");
+      } else {
+        assert(balloon.particles > 0, `${level}/${reduced}: enabled effects must work whatever the device says`);
+      }
+      await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-balloon.png` });
+      await page.locator("#gameExit").click();
+      await openActivity(page, t("tile.fishing-corner.title"));
+      await openActivity(page, t("tile.fishing.title"));
+      if (project.browserType === webkit) {
+        // Windows の WebKit は音課題を開始できない場合がある。ここは装飾検査なので
+        // 合図時計だけを代用する。実際の音の確認は Chromium と実機の担当範囲。
+        await page.evaluate(() => {
+          const scheduler = window.__presentationCtx.audio.scheduler;
+          scheduler.canSound = () => true;
+          scheduler.now = () => performance.now() / 1000;
+          scheduler.start = () => performance.now() / 1000 + 0.3;
+          scheduler.stop = () => {};
+        });
+      }
+      // 説明の画面を抜けてから数える（短い画面では説明が1手順ずつに分かれ、抜けないまま
+      // 数えると、世界の部品が0個のまま「止まっている」と合格してしまう）。
+      await finishReady(page);
+      await page.waitForTimeout(400);
+      const world = await page.evaluate(() => {
+        const nodes = [...document.querySelectorAll(".fishing-cloud, .fishing-sea *, .fishing-otter-eyes")];
+        return {
+          nodes: nodes.length,
+          running: nodes
+            .flatMap((node) => node.getAnimations())
+            .filter((animation) => animation.playState === "running").length,
+          names: nodes.map((node) => getComputedStyle(node).animationName).filter((name) => name !== "none"),
+          policy: window.__presentationCtx.fx.policy(),
+          ready: Boolean(document.querySelector(".game-ready"))
+        };
+      });
+      assert(
+        world.nodes > 0 && !world.ready,
+        `${level}/${reduced}: the fishing world must be on screen before counting: ${JSON.stringify(world)}`
+      );
+      assert(
+        world.names.length > 0 === ["normal", "big"].includes(level),
+        `${level}/${reduced}: the fishing world must follow the shared policy: ${JSON.stringify(world)}`
+      );
+      if (["none", "subtle"].includes(level)) {
+        assert(world.running === 0, "A quiet world has no running CSS animations");
+      }
+      await page.screenshot({ path: `${output}/${project.name}-${level}-${reduced}-fishing.png` });
+      await page.locator("#gameExit").click();
+    }
+  }
+}
+
+async function checkAtmosphereDescriptions(page) {
+  await page.locator("#startStage").click();
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator(".tab[data-view='settings']").click();
+  for (const level of ["none", "subtle", "normal", "big"]) {
+    await page.locator("#fxLevel").selectOption(level);
+    const description = await page.locator("#fxLevelDescription").textContent();
+    assert(
+      description === translate(`party.atmosphere.${level}.description`, "kanji"),
+      "The setting must use the atmosphere's own description"
+    );
+    assert(
+      (await page.locator(`#fxLevel option[value='${level}']`).textContent()) ===
+        translate(`party.atmosphere.${level}.label`, "kanji"),
+      "The setting must use the shared Japanese label"
+    );
+  }
+  // 言語を English にすると、支援者の画面の雰囲気の名前と説明も英語（2026-10-02。以前は日本語のままにしていた）。
+  // 読み込み直しても、保存した言語のまま描く。
+  await page.locator("#textMode").selectOption("en");
+  await page.reload();
+  await page.locator("#startStage").click();
+  await page.locator("#homeSupporterMenu").click();
+  await page.locator(".tab[data-view='settings']").click();
+  assert(
+    (await page.locator("#fxLevelDescription").textContent()) === translate("party.atmosphere.big.description", "en"),
+    "The supporter description follows the chosen language after reload"
+  );
+  assert(
+    (await page.locator("#fxLevel option[value='big']").textContent()) === translate("party.atmosphere.big.label", "en"),
+    "The atmosphere names follow the chosen language"
+  );
+  assert(
+    (await page.locator("#fxLevel").getAttribute("aria-describedby")).includes("fxLevelDescription"),
+    "The selected description must be accessible"
+  );
+}
+
+async function checkPresentationCleanup(page) {
+  await page.addInitScript(() => {
+    window.__soundNodes = [];
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) {
       return;
     }
-    assert(
-      (await pager.count()) > 0,
-      `Activity "${name}" is not on this page and there is no way to page forward`
+    for (const name of ["createOscillator", "createBufferSource"]) {
+      const original = Context.prototype[name];
+      Context.prototype[name] = function (...args) {
+        const source = original.apply(this, args);
+        const record = { active: false, hiddenStart: false };
+        window.__soundNodes.push(record);
+        const start = source.start.bind(source);
+        const stop = source.stop.bind(source);
+        source.start = (...args) => {
+          record.active = true;
+          record.hiddenStart = document.hidden;
+          return start(...args);
+        };
+        source.stop = (...args) => {
+          if (!args.length || args[0] === 0) {
+            record.active = false;
+          }
+          return stop(...args);
+        };
+        source.addEventListener("ended", () => {
+          record.active = false;
+        });
+        return source;
+      };
+    }
+  });
+  await exposePresentationContext(page);
+  const prepare = async (level) => {
+    await page.evaluate(
+      ({ key, level }) => {
+        const saved = JSON.parse(localStorage.getItem(key));
+        saved.settings = {
+          ...saved.settings,
+          fxLevel: level,
+          autoScan: false,
+          speechEnabled: false,
+          playPrefs: { ...saved.settings.playPrefs, balloon: { background: "light", sound: "pop", cheer: "both" } }
+        };
+        localStorage.setItem(key, JSON.stringify(saved));
+      },
+      { key: storageKey, level }
     );
-    await pager.click();
-    await page.waitForTimeout(120);
-  }
-  assert(false, `Activity "${name}" never appeared while paging through the scan list`);
+    await page.reload();
+    await page.locator("#startStage").click();
+    await openActivity(page, t("tile.balloon.title"));
+    for (let i = 0; i < 5; i++) {
+      await page.locator("#gameStage").dispatchEvent("click");
+      if (i < 4) {
+        await page.waitForTimeout(200);
+      }
+    }
+  };
+  const hide = () =>
+    page.evaluate(() => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+  const silence = async () => {
+    await page.waitForTimeout(700);
+    const status = await page.evaluate(() => ({
+      active: window.__soundNodes.filter((node) => node.active).length,
+      hiddenStarts: window.__soundNodes.filter((node) => node.hiddenStart).length,
+      music: window.__presentationCtx.audio.music.isPlaying()
+    }));
+    assert(
+      status.active === 0 && status.hiddenStarts === 0 && !status.music,
+      `Interruption must silence every source and reservation: ${JSON.stringify(status)}`
+    );
+  };
+  await prepare("normal");
+  await page.waitForTimeout(5);
+  await hide();
+  await waitForClass(page, "#homeView", "is-active");
+  await silence();
+  await prepare("big");
+  await page.waitForFunction(() => document.querySelector("#resultView").classList.contains("is-active"), null, {
+    timeout: 12000
+  });
+  await hide();
+  assert(
+    await page.evaluate(() => !window.__presentationCtx.audio.music.isPlaying()),
+    "Result music must stop immediately"
+  );
+  await silence();
+  // 通常の終了操作も、非表示と同じ片づけへ通す。
+  await prepare("normal");
+  await page.locator("#gameExit").click();
+  await silence();
 }
 
 /**
@@ -4282,10 +5820,7 @@ async function collectActivityLayout(page, { checkViewport = false, checkScrollR
     });
     assert(snapshot.shown.length > 0, "Activity page must contain at least one choice");
     if (checkViewport) {
-      assert(
-        snapshot.outside.length === 0,
-        `Activity controls left the viewport: ${snapshot.outside.join(", ")}`
-      );
+      assert(snapshot.outside.length === 0, `Activity controls left the viewport: ${snapshot.outside.join(", ")}`);
     }
     if (checkScrollReach) {
       // iPad Switch Control へ委譲しているあいだは、一覧をページに分けない
@@ -4321,28 +5856,28 @@ async function collectActivityLayout(page, { checkViewport = false, checkScrollR
         window.scrollTo(0, startY);
         return bad;
       });
-      assert(
-        unreachable.length === 0,
-        `Delegated scanning cannot reach every activity: ${unreachable.join("; ")}`
-      );
+      assert(unreachable.length === 0, `Delegated scanning cannot reach every activity: ${unreachable.join("; ")}`);
     }
     pages.push(snapshot.shown);
     snapshot.shown.forEach((title) => {
-      if (!titles.includes(title)) titles.push(title);
+      if (!titles.includes(title)) {
+        titles.push(title);
+      }
     });
-    if ((await pager.count()) === 0) break;
+    if ((await pager.count()) === 0) {
+      break;
+    }
     await pager.evaluate((target) => {
       target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
     });
     await page.waitForTimeout(120);
     // 一周して先頭へ戻ったら終わり。
     const firstOfPage = await page.evaluate(
-      () =>
-        document
-          .querySelector("#gameTileGrid .game-tile:not(.scan-pager)")
-          ?.getAttribute("aria-label") || ""
+      () => document.querySelector("#gameTileGrid .game-tile:not(.scan-pager)")?.getAttribute("aria-label") || ""
     );
-    if (titles[0] === firstOfPage) break;
+    if (titles[0] === firstOfPage) {
+      break;
+    }
   }
   return { titles, pages };
 }
@@ -4364,9 +5899,13 @@ async function waitForActivityChoices(page, total) {
   await page.waitForFunction(
     (expectedTotal) => {
       const grid = document.querySelector("#gameTileGrid");
-      if (!grid) return false;
+      if (!grid) {
+        return false;
+      }
       const tiles = grid.querySelectorAll(".game-tile:not(.scan-pager)").length;
-      if (tiles === 0) return false;
+      if (tiles === 0) {
+        return false;
+      }
       const hasPager = grid.querySelectorAll(".scan-pager").length > 0;
       return hasPager ? tiles < expectedTotal : tiles === expectedTotal;
     },
@@ -4374,9 +5913,7 @@ async function waitForActivityChoices(page, total) {
     { timeout: 5_000 }
   );
   await settleStartGuard(page);
-  return page.evaluate(
-    () => document.querySelectorAll("#gameTileGrid .game-tile:not(.scan-pager)").length
-  );
+  return page.evaluate(() => document.querySelectorAll("#gameTileGrid .game-tile:not(.scan-pager)").length);
 }
 
 async function waitForText(page, selector, expected) {
@@ -4395,12 +5932,12 @@ async function waitForCount(page, selector, expected) {
   );
 }
 
-async function waitForClass(page, selector, className) {
+async function waitForClass(page, selector, className, { timeout = 5_000 } = {}) {
   await page.waitForFunction(
     ({ selector: target, className: expectedClass }) =>
       document.querySelector(target)?.classList.contains(expectedClass),
     { selector, className },
-    { timeout: 5_000 }
+    { timeout }
   );
 }
 
@@ -4416,12 +5953,18 @@ async function assertNoSplitRuby(page, where) {
     const found = [];
     document.querySelectorAll("ruby").forEach((ruby) => {
       const parent = ruby.parentElement;
-      if (!parent || parent.getClientRects().length === 0) return;
-      if (!/flex|grid/.test(getComputedStyle(parent).display)) return;
+      if (!parent || parent.getClientRects().length === 0) {
+        return;
+      }
+      if (!/flex|grid/.test(getComputedStyle(parent).display)) {
+        return;
+      }
       const others = [...parent.childNodes].filter(
         (node) => node !== ruby && (node.nodeType === 1 ? node.tagName !== "RT" : node.textContent.trim())
       );
-      if (others.length) found.push(parent.id || parent.className || parent.tagName);
+      if (others.length) {
+        found.push(parent.id || parent.className || parent.tagName);
+      }
     });
     return [...new Set(found)];
   });
@@ -4431,11 +5974,340 @@ async function assertNoSplitRuby(page, where) {
 async function readLogCount(page) {
   return page.evaluate((key) => {
     const raw = localStorage.getItem(key);
-    if (!raw) return 0;
+    if (!raw) {
+      return 0;
+    }
     return JSON.parse(raw).logs?.length || 0;
   }, storageKey);
 }
 
 function assert(condition, message) {
-  if (!condition) throw new Error(message);
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+async function checkBackupRevision(page) {
+  await page.locator("#startStage").click();
+  await openSupporterLog(page);
+  await page.locator("#participantId").fill("P:01/test");
+  const download = page.waitForEvent("download");
+  await page.locator("#exportRawJson").click();
+  await download;
+  await page.locator("#homeReturn").click();
+  await openActivity(page, t("tile.color-legacy.title"));
+  await page.waitForTimeout(200);
+  await page.locator("#gameStage").click();
+  await page.keyboard.press("Escape");
+  await openSupporterLog(page);
+  const count = await readLogCount(page);
+  assert(count > 0, "The new game must add records");
+  let dialogs = 0;
+  page.on("dialog", (dialog) => {
+    dialogs++;
+    return dialog.accept();
+  });
+  await page.locator("#handOverParticipant").click();
+  assert(dialogs === 0, "New records must require another export before confirmation");
+  assert((await readLogCount(page)) === count, "Unexported records were deleted");
+  await page.locator("#clearLog").click();
+  assert(dialogs === 0, "Log deletion also requires a current export");
+  await page.locator("#exportCsv").click();
+  await page.locator("#clearLog").click();
+  assert(dialogs === 1, "Current log CSV permits clearing only the logs");
+}
+
+async function checkStorageRecovery(page) {
+  for (const name of ["QuotaExceededError", "SecurityError"]) {
+    await patchSettings(page, { speechEnabled: false });
+
+    await page.evaluate((name) => {
+      const original = Storage.prototype.setItem;
+      window.__storageBlocked = true;
+      Storage.prototype.setItem = function (...args) {
+        if (window.__storageBlocked) {
+          throw new DOMException("test storage failure", name);
+        }
+        return original.apply(this, args);
+      };
+    }, name);
+    await page.locator("#startStage").click();
+    await page.locator("#storageWarning").waitFor({ state: "visible" });
+    await page.waitForTimeout(6200);
+    assert(await page.locator("#storageWarning").isVisible(), "Warning must survive normal notices");
+    await openActivity(page, t("tile.color-legacy.title"));
+    assert(await page.locator("#storageWarning").isHidden(), "Warning must not cover a game");
+    for (let i = 0; i < BEGINNER_TARGET_PRESSES; i++) {
+      await page.waitForTimeout(200);
+      await page.locator("#gameStage").click();
+    }
+    await waitForClass(page, "#resultView", "is-active");
+    await page.locator("#storageWarning").waitFor({ state: "visible" });
+    await page.evaluate(() => {
+      const original = URL.createObjectURL;
+      URL.createObjectURL = (blob) => {
+        window.__recoveryBlob = blob;
+        return original(blob);
+      };
+    });
+    const downloaded = page.waitForEvent("download");
+    await page.locator("#storageExport").click();
+    await downloaded;
+    const payload = await page.evaluate(async () => JSON.parse(await window.__recoveryBlob.text()));
+    assert(
+      payload.state.logs.some((log) => log.view === "game"),
+      "Unsaved game records must be recoverable"
+    );
+    await page.evaluate(() => {
+      window.__storageBlocked = false;
+    });
+    await page.locator("#storageRetry").click();
+    assert(await page.locator("#storageWarning").isHidden(), "Successful save clears the warning");
+    assert((await readLogCount(page)) === payload.state.logs.length, "Recovered state must be persisted");
+  }
+}
+
+async function checkDoubleVoiceFailure(page) {
+  await page.addInitScript(() => {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (url, ...args) =>
+      /\.bin(?:\?|$)/.test(String(url))
+        ? Promise.reject(new Error("test voice pack unavailable"))
+        : nativeFetch(url, ...args);
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: undefined });
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: undefined });
+  });
+  await patchSettings(page, { speechEnabled: true, speechVoice: "app" });
+
+  await page.locator("#startStage").click();
+  await openActivity(page, t("tile.slot-corner.title"));
+  await openActivity(page, t("tile.slot-l1.title"));
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.waitForFunction(
+    (text) => document.querySelector("#liveRegion").textContent.includes(text),
+    t("howto.slot-l1.1")
+  );
+}
+
+/** 1人ぶんの記録（中断した回1つ）を端末に入れて読み込み直す。書き出しの名前と切り替えの検査用。 */
+async function seedOneParticipantSession(page, participantId) {
+  await page.evaluate(
+    ({ key, participantId }) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      state.sessions = [
+        {
+          sessionId: `smoke-${participantId}`,
+          taskType: "rt",
+          gameId: "fishing",
+          participantId,
+          startedAtIso: "2026-10-01T00:00:00.000Z",
+          aborted: true,
+          finished: false,
+          trials: []
+        }
+      ];
+      localStorage.setItem(key, JSON.stringify(state));
+    },
+    { key: storageKey, participantId }
+  );
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+}
+
+async function checkExportFileName(page) {
+  // 名前の参加者は、書き出す記録に入っている参加者。欄に次の人のIDを入れてあっても、
+  // 中身が前の人の記録なら前の人の名前で出す（以前は欄の値で、中身と食い違った）。
+  await seedOneParticipantSession(page, "P:01/test");
+  await page.locator("#startStage").click();
+  await openSupporterLog(page);
+  await page.locator("#participantId").fill("P02");
+  for (const [selector, pattern] of [
+    ["#exportRawJson", /^neuronode-raw-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.json$/],
+    ["#exportRtCsv", /^neuronode-rt-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/],
+    ["#exportSessionLedgerCsv", /^neuronode-sessions-P_01_test-\d{4}-\d{2}-\d{2}-\d{6}\.csv$/]
+  ]) {
+    const download = page.waitForEvent("download");
+    await page.locator(selector).click();
+    const file = await download;
+    assert(
+      pattern.test(file.suggestedFilename()),
+      `Participant and time must come from the records: ${file.suggestedFilename()}`
+    );
+  }
+}
+
+/**
+ * 書き出したあとに次の人のIDを入れてから「参加者を切り替える」を押しても、拒まれない
+ * （記録そのものは書き出したものと同じ）。入れた次の人のIDは消さずに残す。
+ */
+async function checkHandOverAfterExport(page) {
+  await seedOneParticipantSession(page, "P001");
+  await page.locator("#startStage").click();
+  await openSupporterLog(page);
+  await page.locator("#participantId").fill("P001");
+  const download = page.waitForEvent("download");
+  await page.locator("#exportRawJson").click();
+  await download;
+  await page.locator("#participantId").fill("P002");
+  let dialogs = 0;
+  page.on("dialog", (dialog) => {
+    dialogs += 1;
+    return dialog.accept();
+  });
+  await page.locator("#handOverParticipant").click();
+  await page.waitForTimeout(200);
+  assert(dialogs === 1, "Typing the next ID after an export must not block the hand-over");
+  const after = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) || "{}");
+    return { sessions: (state.sessions || []).length, participantId: state.evaluation?.participantId };
+  }, storageKey);
+  assert(after.sessions === 0, `The exported records must be cleared: ${JSON.stringify(after)}`);
+  assert(
+    after.participantId === "P002",
+    `The next participant typed after the export must stay: ${JSON.stringify(after)}`
+  );
+  assert((await page.locator("#participantId").inputValue()) === "P002", "The field must keep the next ID");
+  assert(
+    (await page.locator("#supporterMessage").textContent()).includes("P002"),
+    "The supporter must see who is next"
+  );
+}
+
+// スイッチ1つの利用者と同じ手順で、目的のものまで枠を送って選ぶ。
+// ホームがページに分かれる画面（スマホ横など）では、目的のタイルが今のページに
+// 無いあいだは「つぎ」（scan-next-page）を選んでページを送る——利用者もそうする。
+async function scanTo(page, selector) {
+  for (let i = 0; i < 160; i++) {
+    if (await page.locator(selector + ".scan-focus").count()) {
+      await page.keyboard.press("Space");
+      await page.clock.runFor(200);
+      return;
+    }
+    const onThisPage = await page.locator(selector).count();
+    if (!onThisPage && (await page.locator('[data-tile-id="scan-next-page"].scan-focus').count())) {
+      await page.keyboard.press("Space");
+      await page.clock.runFor(200);
+      continue;
+    }
+    await page.clock.runFor(800);
+  }
+  assert(false, `Single-switch scan cannot reach ${selector}`);
+}
+
+// 画面の大きさは検査の中で変えるので、エンジンごとに1実寸だけで回す（5実寸で同じ仕事を
+// 5回しない）。
+async function checkResponsiveScreensOncePerEngine(page, project) {
+  if (project.name !== "chromium-desktop" && project.name !== "phone-landscape") {
+    return SKIPPED;
+  }
+  return checkResponsiveScreens(page);
+}
+
+// スイッチのひと押しで説明の画面を抜ける。説明の画面は走査しない（ひと押し＝声を止める／
+// 始める。games/readyScreen.js）。読み上げは切ってあるので、押下を受けない時間
+// （READY_GUARD_MS）を過ぎれば、ひと押しで始まる。
+async function scanReady(page) {
+  await finishReady(page, {
+    virtualClock: true,
+    waitMs: 500,
+    recheck: false,
+    press: () => page.keyboard.press("Space")
+  });
+}
+
+async function checkSwitchEndlessExit(page) {
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  for (const game of ["crane", "fishing"]) {
+    await patchSettings(
+      page,
+      { autoScan: true, scanInterval: 800, speechEnabled: false, difficultyMode: "practice" },
+      { allowMissing: false }
+    );
+
+    await page.keyboard.press("Space");
+    await page.clock.runFor(500);
+    await scanTo(page, `[data-tile-id="${game}-corner"]`);
+    await scanTo(page, `[data-tile-id="${game}-endless"]`);
+    await scanReady(page);
+    if (await page.locator(".game-unavailable").count()) {
+      await page.clock.runFor(200);
+      await page.keyboard.press("Space");
+      await page.clock.runFor(200);
+      assert(
+        (await page.locator("#homeView.is-active").count()) === 1,
+        "Unavailable endless fishing returns with one switch"
+      );
+      continue;
+    }
+    await page.clock.runFor(21_000);
+    if (game === "fishing" && (await page.locator("#resultView.is-active").count())) {
+      // アタリを見送った場合は既存のfailure終了から結果へ進む。そこも1スイッチで抜ける。
+      await scanTo(page, "#resultHome");
+    } else {
+      assert(await page.locator("#gameSwitchMenu").isVisible(), `${game} needs an exit choice`);
+      const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), storageKey);
+      const run = saved.sessions.filter((s) => s.gameId === game).at(-1);
+      assert(run?.endReason === "manual", "Waiting uses the existing manual end record");
+      if (game === "crane") {
+        await scanTo(page, "#gameSwitchAgain");
+        assert(await page.locator(".game-ready").isVisible(), "Again starts a new ready screen");
+        await scanReady(page);
+        await page.clock.runFor(21_000);
+      }
+      await scanTo(page, "#gameSwitchEnd");
+    }
+    assert((await page.locator("#homeView.is-active").count()) === 1, "One switch returns home");
+  }
+}
+
+async function checkSwitchUnavailableExit(page) {
+  await page.addInitScript(() => {
+    const NativeAudio = window.AudioContext || window.webkitAudioContext;
+    if (sessionStorage.getItem("audio-fault") === "suspended" && NativeAudio) {
+      window.AudioContext = class extends NativeAudio {
+        get state() {
+          return "suspended";
+        }
+        resume() {
+          return Promise.resolve();
+        }
+      };
+      window.webkitAudioContext = window.AudioContext;
+    } else {
+      window.AudioContext = undefined;
+      window.webkitAudioContext = undefined;
+    }
+  });
+  for (const fault of ["missing", "suspended"]) {
+    for (const game of ["fishing", "gonogo"]) {
+      await page.evaluate((fault) => sessionStorage.setItem("audio-fault", fault), fault);
+      await page.reload();
+      await page.keyboard.press("Space");
+      if (game === "fishing") {
+        await openActivity(page, t("tile.fishing-corner.title"));
+      }
+      await openActivity(page, t(`tile.${game}.title`));
+      await page.waitForTimeout(180);
+      await page.keyboard.press("Space");
+      await finishReady(page);
+      await page.locator(".game-unavailable").waitFor({ state: "visible" });
+      // 音が止まっていただけなら、最初のひと押しは もう一度ためす（1回だけ）。それでも鳴らなければ、
+      // 次のひと押しで戻れる（games/unavailableScreen.js）。ためし直せるかは画面が言う（data-retry）:
+      // AudioContext の無いブラウザ（Windows の WebKit）では「止まっていた」を作れず、鳴らせない端末と
+      // 同じ画面になるので、ひと押しで戻る。
+      const retries = (await page.locator(".game-unavailable").getAttribute("data-retry")) === "true";
+      assert(fault === "suspended" || !retries, "A device that cannot sound at all must not offer a retry");
+      await page.waitForTimeout(180);
+      await page.keyboard.press("Space");
+      if (retries) {
+        await page.locator('.game-unavailable[data-retry="false"]').waitFor({ state: "visible", timeout: 5000 });
+        await page.waitForTimeout(180);
+        await page.keyboard.press("Space");
+      }
+      await waitForClass(page, "#homeView", "is-active");
+      const count = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)).sessions.length, storageKey);
+      assert(count === 0, "Unavailable audio must not create a measurement session");
+    }
+  }
 }

@@ -846,6 +846,11 @@ body.user-world #gameTileGrid[data-paged="true"] .hk-tile .hk-tile-badge {
    ゲーム画面の上の帯（進みぐあい・この遊びの設定・おわる）
    --------------------------------------------------------------------- */
 
+/* 回の種類とのこりの区切り（狭い画面では2段に積むので出さない）。 */
+.game-progress-mode::after {
+  content: " · ";
+}
+
 body.game-mode.user-world .game-progress {
   top: max(16px, env(safe-area-inset-top));
   left: max(16px, env(safe-area-inset-left));
@@ -899,8 +904,19 @@ body.game-mode .game-actions .game-exit {
   font-weight: 900;
 }
 
-/* 暗いボタンの上では、ふりがなの既定の色（--muted）が沈んで読めない。 */
-.game-settings rt {
+/* 色の濃いボタン・札の上では、ふりがなの既定の色（--muted、灰色）が沈んで読めない。
+   字と同じ色を少し薄くして使う。濃い地の部品を足したら、ここに足す（以前はこの規則が
+   3か所に分かれていて、説明の画面の「始める」とけっかの「もういちど」が漏れていた）。 */
+:is(
+  .game-settings,
+  #gameReadyStart,
+  #gameSwitchAgain,
+  body.user-world #resultRetry,
+  body.user-world #nextMatching,
+  body.user-world #nextLetter,
+  body.user-world #repeatPhrase,
+  body.user-world .category-button.is-active
+) rt {
   color: inherit;
   opacity: 0.85;
 }
@@ -924,11 +940,23 @@ body.game-mode .game-actions .game-exit {
     font-size: 1.15rem;
   }
 
+  /* 狭い画面では回の種類を上の段に小さく、のこりを下の段に。どちらも切らない。 */
   body.game-mode.user-world .game-progress {
+    display: flex;
+    flex-direction: column;
     max-width: calc(100vw - 212px);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    padding-block: 4px;
+    line-height: 1.15;
     white-space: nowrap;
+  }
+
+  body.game-mode.user-world .game-progress-mode {
+    font-size: 0.72em;
+    opacity: 0.85;
+  }
+
+  body.game-mode.user-world .game-progress-mode::after {
+    content: none;
   }
 
   /* さかなつりの点数（「0 cm」）が、上の帯の「のこり」とぶつかっていた（390px）。
@@ -1167,31 +1195,6 @@ body.user-world .game-exit::before {
   border: 2px solid #005aff;
   background: #005aff;
   color: #ffffff;
-}
-
-/* --- やりかた（レディ画面） -------------------------------------------
-   まだ計測が始まっていない画面なので、色も絵も自由に使える
-   （detailed-design.md §2.4）。選んだタイルと同じ絵を出して、
-   「さっき押した遊び」だと分かるようにする。 */
-body.user-world .game-stage-content.is-ready {
-  background: #0b1a33;
-  background-image: none;
-}
-
-.game-ready-art {
-  display: block;
-  width: min(360px, 62vw);
-  aspect-ratio: 360 / 176;
-  overflow: hidden;
-  border: 3px solid #ffffff;
-  border-radius: 18px;
-  background: var(--tile-thumb, #12305e);
-}
-
-.game-ready-art svg {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 /* ---------------------------------------------------------------------
@@ -1535,6 +1538,31 @@ body.user-world .game-stage-content.is-ready {
   font-family: var(--font-round);
 }
 
+/* 主役の版面を維持するため、追加の遊びでは角の仲間を小さくする。 */
+.party-layer.is-beginner .party-otter { width: clamp(64px, 12vmin, 110px); bottom: 12px; left: 14px; }
+.party-layer.is-beginner .party-jar { width: clamp(54px, 10vmin, 90px); top: 70px; right: 14px; }
+.party-layer.is-beginner .party-fan { width: clamp(34px, 6vmin, 58px); right: 14px !important; bottom: calc(12px + var(--fan-i) * clamp(28px, 5vmin, 46px)) !important; }
+.party-layer.is-beginner .party-bunting { top: 56px; height: 10px; }
+.party-layer.is-timing .party-otter { width: 64px; bottom: 12px; }
+.party-layer.is-timing .party-jar { width: 64px; top: auto; bottom: 12px; right: auto; }
+.party-layer.is-timing .o-all { animation: none; }
+.party-layer.is-timing .party-stamp.is-short { padding: 1px 5px; border-width: 2px; font-size: 14px; }
+.party-layer.is-hidden-live:not(.is-finale) { display: none; }
+.party-layer.is-timing.is-finale .party-otter { left: 20px !important; width: 100px; }
+.party-layer.is-timing.is-finale .party-jar { left: auto !important; right: 18px; top: 76px; bottom: auto; width: 90px; }
+
+/* 世界の動き（海・ふうせんの浮遊）を止める決まりは src/decoration-motion.css の1か所。 */
+.party-result[data-level="normal"] .o-all { animation: none; }
+
+@media (max-height: 500px) {
+  .party-layer.is-beginner .party-jar { top: 52px; width: 48px; }
+  .party-layer.is-beginner .party-otter { width: 56px; }
+  .party-layer.is-beginner .party-stamp:not(.is-big) { font-size: 1.4rem; padding: 2px 10px; border-width: 4px; }
+  .party-result .party-result-otter { width: 68px; }
+  .party-result .party-result-jar { width: 64px; }
+  .party-result .party-result-side { max-width: 45vw; }
+}
+
 .party-otter {
   position: absolute;
   left: max(3vw, env(safe-area-inset-left));
@@ -1673,8 +1701,8 @@ body.user-world .game-stage-content.is-ready {
 .party-jar svg,
 .party-result-jar svg,
 .party-mini-jar svg,
-.party-star svg,
-.party-star-flyer svg {
+.party-item svg,
+.party-item-flyer svg {
   display: block;
   width: 100%;
   height: 100%;
@@ -1685,12 +1713,12 @@ body.user-world .game-stage-content.is-ready {
   transform-origin: 50% 50%;
 }
 
-.party-jar-stars {
+.party-jar-items {
   position: absolute;
   inset: 0;
 }
 
-.party-star {
+.party-item {
   position: absolute;
   width: 17%;
   aspect-ratio: 1;
@@ -1698,7 +1726,7 @@ body.user-world .game-stage-content.is-ready {
 }
 
 /* 飛んでいる星。translate はアニメーションが使うので、真ん中合わせは margin で。 */
-.party-star-flyer {
+.party-item-flyer {
   position: absolute;
   width: 28px;
   height: 28px;
@@ -1849,21 +1877,20 @@ body.user-world .game-stage-content.is-ready {
   width: clamp(64px, 9vw, 96px);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pop-sea .sea-rays i,
-  .pop-sea .sea-surface,
-  .pop-sea .sea-weed,
-  .party-otter-svg .o-all,
-  .party-fan.is-on,
-  .party-bunting.is-on,
-  .party-parade-item {
-    animation: none;
-  }
-
-  .pop-sea .sea-bubbles {
-    display: none;
-  }
+/* 一言と星を先頭に保ち、仲間は小さく下へ添える。既存のポップの版面には適用しない。 */
+.party-result.is-added {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
 }
+.party-result.is-added .party-result-main { gap: 14px; }
+.party-result.is-added .hk-result-items { align-items: center; }
+.party-result.is-added .party-result-otter { width: 76px; }
+.party-result.is-added .party-result-jar { width: 68px; }
+.party-result.is-added .party-result-label,
+.party-result.is-added .party-result-reward { font-size: 1rem; }
+.party-result.is-added .party-mini-jar { width: 26px; }
 
 /* ---------------------------------------------------------------------
    はじめの遊び「ふうせん わり」（games/balloon.js）
@@ -2040,11 +2067,6 @@ body.user-world :is(#nextMatching, #nextLetter, #repeatPhrase) {
   box-shadow: none;
 }
 
-body.user-world :is(#nextMatching, #nextLetter, #repeatPhrase) rt {
-  color: inherit;
-  opacity: 0.85;
-}
-
 /* 問い・伝えたいことばの札 */
 body.user-world :is(#matching, #letters) .question-board,
 body.user-world #voca .message-board {
@@ -2130,11 +2152,6 @@ body.user-world .category-button.is-active {
   border-color: var(--hk-blue);
   background: var(--hk-blue);
   color: #ffffff;
-}
-
-body.user-world .category-button.is-active rt {
-  color: inherit;
-  opacity: 0.85;
 }
 
 @media (max-width: 699px) {
@@ -2417,23 +2434,7 @@ body.result-mode.user-world #resultView .section-head {
   white-space: nowrap;
 }
 
-body.result-mode.user-world #resultView {
-  display: grid;
-  min-height: calc(100dvh - 120px);
-  align-content: center;
-  justify-items: center;
-  gap: 18px;
-}
-
-body.result-mode.user-world .result-stats {
-  width: min(960px, 100%);
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
+/* けっかの器と割り付けは responsive.css にまとめる。 */
 
 .hk-result {
   display: flex;
@@ -3151,6 +3152,39 @@ body.result-mode.user-world #resultHome::before {
   }
 }
 
+/* 200% に拡大したスマホの横（422x195 相当）。上の余白 64px と下 48px のあいだは 83px しか無く、
+   120px の輪と言葉が入らずに、舞台が画面の下へ 45px 出ていた（2026-10-01、一度も回っていなかった
+   検査を向け直して見つけた）。輪・絵・字を詰め、上の帯（下端 55px）のすぐ下から置く。 */
+@media (max-height: 240px) {
+  .game-stage-content.module-pop {
+    padding: 56px 16px 40px;
+  }
+
+  .pop-stage {
+    min-height: 0;
+  }
+
+  .pop-prompt,
+  .pop-figure {
+    gap: 4px;
+  }
+
+  .pop-prompt-ring {
+    width: 56px;
+    height: 56px;
+    border-width: 3px;
+    font-size: 1.6rem;
+  }
+
+  .pop-figure svg {
+    max-height: 30vh;
+  }
+
+  .pop-word {
+    font-size: 1.1rem;
+  }
+}
+
 /* ---------------------------------------------------------------------
    タイミングの遊び（れんしゅうの回だけ）の見た目
    打ち合わせで「仕様はそのままでいい。イラスト（見た目）を変えるくらいで」
@@ -3160,32 +3194,75 @@ body.result-mode.user-world #resultHome::before {
    そくていの回は今までの見た目のまま（§3.3）。
    --------------------------------------------------------------------- */
 
+/* 新しい絵（世界つき）の台・枠・色は world-<遊び>.css の持ち物（.has-world-art の下）。
+   ここは「前の絵」（支援者の設定「タイミングの遊びの絵」）を選んだ れんしゅうの回の見た目で、
+   2026-09-30 より前の版と同じ規則（a7ee704 の theme-hakkiri.css から戻した）。 */
+
 /* リール: 明るい台に、紫の枠（ホームのタイルと同じ色）。 */
-.slot-stage.is-practice {
+.slot-stage.is-practice:not(.has-world-art) {
   background: linear-gradient(180deg, #ffe5da 0%, #ffd0bd 100%);
   color: #1a1a1a;
 }
 
-.slot-stage.is-practice .slot-status {
+.slot-stage.is-practice:not(.has-world-art) .slot-status {
   color: #1a1a1a;
 }
 
-.slot-stage.is-practice .slot-reel {
+.slot-stage.is-practice:not(.has-world-art) .slot-reel {
   border: 4px solid #1a1a1a;
   background: #6f5bb8;
   color: #ffffff;
   box-shadow: 0 8px 0 #4a3a8a;
 }
 
-.slot-stage.is-practice .slot-reel.is-active {
+.slot-stage.is-practice:not(.has-world-art) .slot-reel.is-active {
   border-color: #1a1a1a;
   box-shadow:
     0 0 0 6px #ffc83d,
     0 8px 0 #4a3a8a;
 }
 
-.slot-stage.is-practice .slot-reel.is-stopped {
+.slot-stage.is-practice:not(.has-world-art) .slot-reel.is-stopped {
   background: #8a79cc;
+}
+
+/* アームでつかむ: 明るい床（地）と、茶色の台（ホームのタイルと同じ色）。
+   ガラスの箱の中（床・景品・狙いの輪・アーム）は、そくていの回と同じ。 */
+.game-stage-content.module-crane.is-practice:not(.has-world-art) {
+  background: linear-gradient(180deg, #f3e4d6 0%, #e9cfb6 100%);
+}
+
+.module-crane.is-practice:not(.has-world-art) .crane-marquee,
+.module-crane.is-practice:not(.has-world-art) .crane-console {
+  border-color: #1a1a1a;
+  background: #804000;
+  box-shadow: none;
+}
+
+.module-crane.is-practice:not(.has-world-art) .crane-marquee-title {
+  color: #ffffff;
+}
+
+/* 高い音だけ: 紫と黄色の明るい台。音符と判定の丸はそのまま。 */
+.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"]:not(.has-world-art) {
+  --rhythm-panel: #5a2a80;
+  --rhythm-panel-deep: #3b1757;
+  --rhythm-accent: #ffc83d;
+  --rhythm-accent-strong: #f6aa00;
+}
+
+.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"]:not(.has-world-art) .rhythm-world {
+  background: linear-gradient(180deg, #f6ddf6 0%, #e7b8ea 100%);
+}
+
+.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"]:not(.has-world-art) .rhythm-grid-floor {
+  display: none;
+}
+
+.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"]:not(.has-world-art) .rhythm-cabinet {
+  border-color: #1a1a1a;
+  background: linear-gradient(160deg, #990099, #5a1a6e);
+  box-shadow: 0 10px 0 #4a0f5c;
 }
 
 /* 外したときの「おしい！」は、白い札で控えめに。 */
@@ -3193,8 +3270,8 @@ body.result-mode.user-world #resultHome::before {
   background: #ffffff;
 }
 
-/* 高い音だけ: 飾り（両脇のスピーカー・上のランプ・「ゲーム」の札）を外し、
-   紫と黄色の明るい台にする。音符と判定の丸はそのまま。 */
+/* リズムの遊び（れんしゅうの回）: 飾り（両脇のスピーカー・上のランプ・「ゲーム」の札）を外す。
+   高い音だけの新しい絵は world-gonogo.css（夕方の丘の音楽会）、前の絵の色は上。 */
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-speaker-bank,
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-cabinet-lamps,
 .game-stage-content[data-rhythm-mode="practice"] .rhythm-profile-panel {
@@ -3209,49 +3286,7 @@ body.result-mode.user-world #resultHome::before {
   grid-template-columns: auto minmax(0, 1fr);
 }
 
-.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"] {
-  --rhythm-panel: #5a2a80;
-  --rhythm-panel-deep: #3b1757;
-  --rhythm-accent: #ffc83d;
-  --rhythm-accent-strong: #f6aa00;
-}
-
-.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"] .rhythm-world {
-  background: linear-gradient(180deg, #f6ddf6 0%, #e7b8ea 100%);
-}
-
-.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"] .rhythm-grid-floor {
-  display: none;
-}
-
-.game-stage-content[data-rhythm-theme="gonogo"][data-rhythm-mode="practice"] .rhythm-cabinet {
-  border-color: #1a1a1a;
-  background: linear-gradient(160deg, #990099, #5a1a6e);
-  box-shadow: 0 10px 0 #4a0f5c;
-}
-
-/* アームでつかむ: 明るい床（地）と、茶色の台（ホームのタイルと同じ色）。
-   ガラスの箱の中（床・景品・狙いの輪・アーム）は、そくていの回と同じ。 */
-.game-stage-content.module-crane.is-practice {
-  background: linear-gradient(180deg, #f3e4d6 0%, #e9cfb6 100%);
-}
-
-.module-crane.is-practice .crane-marquee,
-.module-crane.is-practice .crane-console {
-  border-color: #1a1a1a;
-  background: #804000;
-  box-shadow: none;
-}
-
-.module-crane.is-practice .crane-marquee-title {
-  color: #ffffff;
-}
-
-/* 取れた景品の受け口の字が、暗い地に薄い字で読みにくかった（どちらの回も）。 */
-.crane-tray-label {
-  color: rgba(255, 255, 255, 0.92);
-  font-size: clamp(0.9rem, 1.8vw, 1.05rem);
-}
+/* アームのれんしゅうの世界は world-crane.css、両方の回の受け口の字は styles.css。 */
 
 /* ---------------------------------------------------------------------
    演出のキャンバス（src/lib/fx/fxEngine.js）。画面いっぱいに1枚。入力と読み上げには
@@ -3282,62 +3317,54 @@ body.result-mode.user-world #resultHome::before {
   pointer-events: none;
 }
 
-/* ---------------------------------------------------------------------
-   動きを減らす設定
-   --------------------------------------------------------------------- */
-
-@media (prefers-reduced-motion: reduce) {
-  .pop-figure,
-  .pop-figure.is-gone {
-    animation: none;
+/* 横向きスマホでは、作品とびんを縦に積むと操作ボタンを押し出す。
+   お祝いのあるけっかだけを横に並べ、測定のけっかの版面を変えない。 */
+@media (max-height: 500px) {
+  .result-stats[data-atmosphere] .hk-result { gap: 6px; }
+  .result-stats[data-atmosphere] .hk-result-picture { width: 100px; }
+  .result-stats[data-atmosphere] .hk-result-title { font-size: 1.8rem; }
+  .result-stats[data-atmosphere] .hk-result-summary { margin: 0; }
+  .result-stats[data-atmosphere] .result-details > summary { padding-block: 4px; min-height: 28px; }
+  body.result-mode.user-world #resultView:has(.result-stats[data-atmosphere]) { gap: 8px; }
+  body.result-mode.user-world #resultView:has(.result-stats[data-atmosphere]) .action-row button { min-height: 64px; padding-block: 6px; }
+  body.user-world .hk-result.party-result {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas: "main items" "title title" "summary summary";
+    align-items: center;
+    justify-content: center;
+    gap: 4px 16px;
   }
-
-  body.user-world .start-stage-label {
-    animation: none;
+  .party-result .party-result-main { grid-area: main; flex-wrap: nowrap; gap: 10px; }
+  .party-result .hk-result-items { grid-area: items; margin: 0; gap: 5px; }
+  .party-result .hk-result-items:empty { display: none; }
+  .party-result .hk-result-title { grid-area: title; margin: 0; font-size: 1.8rem; line-height: 1.1; }
+  .party-result .hk-result-summary { grid-area: summary; margin: 0; font-size: 1rem; line-height: 1.2; }
+  .party-result .hk-result-picture { width: 100px; padding: 4px; border-radius: 12px; }
+  .party-result .hk-result-item { width: 42px; }
+  .party-result .party-result-label { font-size: 1rem; }
+  .party-result .party-result-reward { font-size: 1rem; padding: 2px 8px; }
+  .party-result .party-mini-jar { width: 22px; }
+  .has-party-result .result-details { margin-top: 2px; }
+  .has-party-result .result-details > summary { padding-block: 4px; min-height: 28px; }
+  body.result-mode.user-world #resultView:has(.has-party-result) { gap: 8px; }
+  body.result-mode.user-world #resultView:has(.has-party-result) .action-row button { min-height: 64px; padding-block: 6px; }
+  .party-result.is-added {
+    flex-direction: row;
+    justify-content: center;
+    gap: 24px;
   }
-
-  /* 「！」は動かさずに出すだけにする（出ること自体が手がかりなので消さない）。 */
-  .fishing-scene.is-bite .fishing-bite-mark {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-
-  /* ボールを打つ遊び: ボールは動かす（遊びそのもの）。バットは振りを一瞬で、
-     はなびと言葉のはずみは出さない。 */
-  .bb-bat,
-  .bb-bat.is-swinging {
-    transition: none;
-  }
-
-  .bb-word[data-word] {
-    animation: none;
-  }
-
-  /* 「ぴったり！」は動かさずに出す（星は演出エンジンが「動きを減らす」を見て減らす）。 */
-  .slot-cheer-word,
-  .slot-cheer-streak {
-    animation: none;
-  }
-
-  /* ふうせんは浮かばせず、割れたら動かずに消える。ぬりえは色がすぐ変わる。 */
-  .balloon,
-  .balloon.is-popping .balloon-svg,
-  .module-coloring.is-complete .coloring-card {
-    animation: none;
-  }
-
-  .balloon.is-popped .balloon-mark {
-    animation: none;
-  }
-
-  .coloring-art .cl-part {
-    transition: none;
-  }
+  .party-result.is-added > .hk-result { min-width: 0; }
+  .party-result.is-added .party-result-main { flex-shrink: 0; gap: 8px; }
+  .party-result.is-added .party-result-otter { width: 52px; }
+  .party-result.is-added .party-result-jar { width: 46px; }
+  .party-result.is-added .party-result-side { max-width: 160px; }
+  .party-result.is-added .party-today { max-width: 160px; }
+  .party-result.is-added .party-mini-jar { width: 20px; }
 }
 
 /* =====================================================================
-   支援者の世界（設定）
+   支援者の世界（評価ログ・設定）
 
    以前は業務画面（ティール）のまま残していた。ホームの「支援者の設定」から
    入ると、色も形も別のアプリに見えた。ホームと同じ「はっきりした色」に
@@ -3403,7 +3430,8 @@ body:not(.user-world) .topbar-actions {
 }
 
 /* 入力ドック。設定の画面では枠が動かず、ドックも押せない（neuronodeApp.js）
-   のに、項目の上に重ねて出していた。 */
+   のに、項目の上に重ねて出していた。評価ログはホームと同じく、「おす」ボタンを
+   出す設定のときだけ出す。 */
 body.supporter-menu-mode .switch-dock,
 body:not(.user-world):not(.screen-switch-on) .switch-dock {
   display: none;
@@ -3455,11 +3483,7 @@ body:not(.user-world) .setting-row strong {
   color: var(--ink);
 }
 
-body:not(.user-world) .settings-tab.is-active {
-  border-color: var(--ink);
-}
-
-/* よく使う設定。ここだけで用が済むように、先頭に囲んで置く。 */
+/* よく使う設定。ここだけで用が済むように、先頭に囲んで置く（views/SettingsView.svelte）。 */
 .settings-quick {
   margin: 0 0 18px;
   padding: 16px 16px 18px;
@@ -3474,65 +3498,27 @@ body:not(.user-world) .settings-tab.is-active {
   }
 }
 
-.settings-quick-title {
+.settings-quick > .settings-group-title {
   margin: 0 0 12px;
-  color: var(--ink);
-  font-family: var(--font-round);
   font-size: 1.25rem;
-  font-weight: 800;
 }
 
-/* くわしい設定（ふだんは閉じる）。見出し全体を押せる大きさにする。 */
-.settings-more {
-  margin: 0 0 24px;
-}
-
-.settings-more > summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 14px;
-  min-height: 56px;
-  padding: 12px 18px;
+/* くわしい設定（ふだんは閉じる）。見出し全体を押せる大きさにし、ホームと同じ黒い2pxの枠にする。 */
+body:not(.user-world) .settings-details {
   border: 2px solid var(--ink);
   border-radius: 14px;
   background: #ffffff;
+}
+
+body:not(.user-world) .settings-details > summary {
+  min-height: 56px;
   color: var(--ink);
-  cursor: pointer;
-  list-style: none;
-}
-
-.settings-more > summary::-webkit-details-marker {
-  display: none;
-}
-
-.settings-more > summary::before {
-  content: "▶";
-  font-size: 0.8em;
-  transition: transform 0.15s ease;
-}
-
-.settings-more[open] > summary {
-  margin-bottom: 16px;
-}
-
-.settings-more[open] > summary::before {
-  transform: rotate(90deg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .settings-more > summary::before {
-    transition: none;
-  }
-}
-
-.settings-more-title {
   font-family: var(--font-round);
-  font-size: 1.15rem;
   font-weight: 800;
 }
 
-.settings-more-note {
-  color: var(--muted);
-  font-size: 0.9rem;
+body:not(.user-world) .settings-guide {
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--surface-soft);
 }

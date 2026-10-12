@@ -1,6 +1,11 @@
 <script>
   import { onMount } from "svelte";
+  import SettingsView from "./lib/views/SettingsView.svelte";
   import { initNeuroNodeApp } from "./lib/neuronodeApp.js";
+  import { say, supporterLanguage } from "./lib/supporterText.js";
+
+  // 支援者の入口とタブの言葉は、支援者の画面の言語（利用者の「言語」に合わせる。supporterText.js）。
+  $: t = (text) => say(text, $supporterLanguage);
 
   // P0-0（起動経路の一本化）: このファイルはマークアップ骨格のみを持ち、
   // 状態管理・走査・音声・各画面のロジックはすべて src/lib 配下（分割版）に
@@ -27,7 +32,7 @@
       -->
       <button class="home-supporter-menu" id="homeSupporterMenu" type="button" hidden>
         <i class="fa-solid fa-sliders" aria-hidden="true"></i>
-        <span>支援者の設定</span>
+        <span>{t({ ja: "支援者の設定", en: "Supporter settings" })}</span>
       </button>
     </div>
   </header>
@@ -57,17 +62,20 @@
       id="homeReturn"
       type="button"
       data-scan
-      aria-label="ホームへもどる"
+      aria-label={t({ ja: "ホームへもどる", en: "Back to home" })}
     >
-      <span class="tab-full">← ホームへもどる</span><span class="tab-short">ホーム</span>
+      <span class="tab-full">{t({ ja: "← ホームへもどる", en: "← Back to home" })}</span><span class="tab-short">{t({ ja: "ホーム", en: "Home" })}</span>
     </button>
     <!--
       マッチング・VOCA・文字学習は利用者向けアクティビティなので、タブでは
       なくホームの「まなぶ・つたえる」二階層から入る。
-      タブバーに残るのは設定だけ（評価ログと研究の画面は 2026-09-30 に外した）。
+      タブバーに残るのは支援者機能（評価ログ・設定）のみ。
     -->
-    <button class="tab" data-view="settings" data-scan aria-label="設定">
-      <span class="tab-full">設定</span><span class="tab-short">設定</span>
+    <button class="tab" data-view="log" data-scan aria-label={t({ ja: "評価ログ", en: "Records" })}>
+      <span class="tab-full">{t({ ja: "評価ログ", en: "Records" })}</span><span class="tab-short">{t({ ja: "ログ", en: "Records" })}</span>
+    </button>
+    <button class="tab" data-view="settings" data-scan aria-label={t({ ja: "設定", en: "Settings" })}>
+      <span class="tab-full">{t({ ja: "設定", en: "Settings" })}</span><span class="tab-short">{t({ ja: "設定", en: "Settings" })}</span>
     </button>
   </nav>
 
@@ -77,6 +85,14 @@
     読み上げ側は従来どおり #liveRegion が担当する。
   -->
   <p class="supporter-message" id="supporterMessage" role="status" hidden></p>
+
+  <aside id="storageWarning" class="storage-warning" role="status" hidden>
+    <p>記録を端末に保存できません。読み込み直す前に生データを書き出してください。</p>
+    <div class="action-row wrap">
+      <button id="storageExport" class="secondary" type="button">未保存の記録をJSONで書き出す</button>
+      <button id="storageRetry" class="secondary" type="button">保存をやり直す</button>
+    </div>
+  </aside>
 
   <main>
     <!--
@@ -133,6 +149,19 @@
       </div>
       <div class="game-progress" id="gameProgress" aria-live="polite"></div>
       <!--
+        遊ぶ前の説明の画面の操作（games/readyScreen.js）。自前の走査では回さない（スイッチの
+        ひと押しが「声を止める／始める」）。どれも本物のボタンなので、タップと iPad の
+        スイッチコントロールからは届く。前後の説明は支援者のタップ用。
+      -->
+      <div id="gameReadyControls" class="game-ready-controls" hidden>
+        <span class="game-ready-pager">
+          <button id="gameReadyPrevious" type="button" hidden>前の説明</button>
+          <span id="gameReadyPage" aria-live="polite"></span>
+          <button id="gameReadyForward" type="button" hidden>次の説明</button>
+        </span>
+        <button id="gameReadyStart" type="button">はじめる</button>
+      </div>
+      <!--
         この遊びの設定（支援者がその場で変える。docs/design-renewal-2026-09-25.md §1.8）。
         「おわる」と同じく #gameStage の兄弟に置く——入れ子にすると
         role="button" の子孫として AT から見えなくなる（上のコメント参照）。
@@ -141,6 +170,11 @@
       <div class="game-actions">
         <button class="game-settings" id="gameSettings" type="button" hidden>この遊びの設定</button>
         <button class="game-exit" id="gameExit" type="button">おわる</button>
+      </div>
+      <div id="gameSwitchMenu" class="game-switch-menu" role="dialog" aria-labelledby="gameSwitchMenuTitle" hidden>
+        <strong id="gameSwitchMenuTitle"></strong>
+        <button id="gameSwitchAgain" class="primary-small" type="button" data-scan>もういちど</button>
+        <button id="gameSwitchEnd" class="secondary" type="button" data-scan>おわる</button>
       </div>
       <div
         class="game-settings-dialog"
@@ -153,6 +187,7 @@
     </section>
 
     <section class="view" id="resultView" aria-labelledby="result-title">
+      <span id="resultMode" class="session-mode"></span>
       <div class="section-head">
         <div>
           <p class="eyebrow">Result</p>
@@ -232,485 +267,107 @@
       <div class="letter-grid" id="letterGrid" aria-label="文字選択肢"></div>
     </section>
 
-    <section class="view" id="settings" aria-labelledby="settings-title">
+    <section class="view" id="log" aria-labelledby="log-title">
       <div class="section-head">
         <div>
-          <p class="eyebrow">支援者の方へ</p>
-          <h2 id="settings-title">設定</h2>
+          <p class="eyebrow">Evaluation</p>
+          <h2 id="log-title">評価ログ</h2>
+        </div>
+        <!--
+          支援者が使うデータ画面はここ1枚にまとめる（2026-08-29）。
+          測定手順のUI（効果測定セッション）・操作訓練・研究メモの3画面は
+          別紙の手順書に置き換えて削除した。アプリに残すのは、記録を取り出す
+          手段と、取り違えを防ぐ手当てだけ。
+        -->
+        <div class="action-row">
+          <button class="secondary" id="exportSessionLedgerCsv" data-scan>セッション台帳</button>
+          <button class="secondary" id="exportRhythmCsv" data-scan>リズムCSV</button>
+          <button class="secondary" id="exportSlotCsv" data-scan>リールCSV</button>
+          <button class="secondary" id="exportScanCsv" data-scan>走査CSV</button>
+          <button class="secondary" id="exportRtCsv" data-scan>反応CSV</button>
+          <button class="secondary" id="exportRawJson" data-scan>生データ(JSON)</button>
+          <button class="secondary" id="exportCsv" data-scan>操作ログCSV</button>
+          <button class="danger" id="clearLog" data-scan>ログ削除</button>
+          <button class="danger" id="handOverParticipant" data-scan>参加者を切り替える</button>
         </div>
       </div>
 
       <!--
-        はじめての支援者向けの説明（つかいかた）。打ち合わせで「最初の画面だけでも、
-        どのボタンが何をするのか支援者向けに書いてあれば解決しそう」「お母さんに
-        渡す簡単な説明書がほしい」と言われた（docs/design-renewal-2026-09-25.md §1.8）。
-        いちばん詰まったのは、iPad 本体のスイッチコントロールとこのアプリの関係だった。
-
-        ふだんは閉じておく。開くとタブの面が下へずれるだけで、設定の操作子の数や
-        走査（この画面では動かない）には関わらない。
+        参加者ID。全セッションにこの値が焼き付き、成立確認もこれで絞る。
+        書き出しの前に必ず目に入る位置へ置く——切り替え忘れは記録から
+        見分けられないので、気づける場所に出しておくしかない。
       -->
-      <details class="settings-guide" id="settingsGuide">
-        <summary>はじめての方へ：つかいかた</summary>
-        <ol class="settings-guide-steps">
-          <li>
-            <strong>つなぐ</strong>
-            NeuroNode を iPad にキーボードとしてつなぎます。スイッチを押すと、画面の遊びが進みます。
-          </li>
-          <li>
-            <strong>スイッチコントロールは、ふつうはオフ</strong>
-            NeuroNode をそのまま使うときは、iPad 本体の「スイッチコントロール」も、下の「くわしい設定」の
-            「iPad のスイッチコントロールを使う」もオフのままにします（このアプリの黄色い枠で選びます）。
-            iPad 本体のスイッチコントロールで操作するときだけ、両方をオンにします。
-            iPad 本体だけをオンにすると、黄色い枠と iPad の枠が両方出て、うまく選べません。
-          </li>
-          <li>
-            <strong>はじめる</strong>
-            最初の画面は「はじめる」だけです。スイッチを1回押すと、遊びを選ぶ画面になります。
-          </li>
-          <li>
-            <strong>遊びを選ぶ</strong>
-            黄色い枠が順番に動きます。やりたい遊びに枠が来たら押します。①がいちばんかんたんで、
-            番号が大きいほどむずかしくなります。画面を直接さわっても選べます。
-          </li>
-          <li>
-            <strong>遊んでいるとき</strong>
-            右上の「この遊びの設定」で、音や速さをその場で変えられます（変えられる遊びだけ）。
-            やめるときは「おわる」です。
-          </li>
-          <li>
-            <strong>この画面に来るには</strong>
-            遊びを選ぶ画面の右上「支援者の設定」を、指でさわります（スイッチでは来られません）。
-            戻るときは「← ホームへもどる」です。
-          </li>
-        </ol>
-        <!-- 同じ内容を絵つきで、印刷して渡せる形にしたもの（public/guide.html）。
-             iPad のアプリ版では別の画面を開けないので、settings.js が隠す。 -->
-        <p class="settings-guide-print" id="settingsGuidePrint">
-          <a href="./guide.html" target="_blank" rel="noopener">印刷用の説明書（A4・絵つき）を開く</a>
-        </p>
-      </details>
+      <div class="supporter-fields">
+          <label class="field-row">
+            <span>参加者ID</span>
+            <input id="participantId" type="text" inputmode="text" placeholder="例: P001" />
+          </label>
+      </div>
 
       <!--
-        よく使う設定。支援者がふだん触るのは、枠の速さ・声・効果音・遊びの雰囲気・
-        文字・見続ける遊びの7つ。ここを先に出し、残りは「くわしい設定」に畳む
-        （2026-09-30 の打ち合わせで「項目とボタンが多い」と話に出た）。
-        項目そのものは減らしていない。id も変えていない（settings.js・テストが引く）。
+        保存上限（MAX_SESSIONS）の警告。研究データ本体は古い順に消える。
       -->
-      <section class="settings-quick" aria-labelledby="settingsQuickTitle">
-        <h3 class="settings-quick-title" id="settingsQuickTitle">よく使う設定</h3>
-        <div class="settings-grid">
-        <label class="setting-row">
-          <span>
-            <strong>枠が動く速さ</strong>
-            <small>黄色い枠が次へ動くまでの時間。長くすると、選ぶ時間に余裕ができます</small>
-          </span>
-          <input id="scanInterval" type="range" min="800" max="3200" step="100" />
-          <output id="scanIntervalValue" for="scanInterval">1.6秒</output>
-        </label>
+      <p class="empty-state" id="sessionRetentionWarning" hidden></p>
 
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>声で読み上げる</strong>
-            <small>説明やほめ言葉（「やったー」など）を声で読み上げます</small>
-          </span>
-          <input id="speechEnabled" type="checkbox" role="switch" data-scan />
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>読み上げの声の大きさ</strong>
-            <small>このアプリの声だけの大きさです（iPad 全体の音量とは別）</small>
-          </span>
-          <input id="speechVolume" type="range" min="0.2" max="1" step="0.1" />
-          <output id="speechVolumeValue" for="speechVolume">100%</output>
-        </label>
-
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>効果音</strong>
-            <small>
-              押したときの音や拍手を鳴らします。切っても、遊びの合図の音（音あそびの音、
-              さかなつりのアタリの音など）は鳴ります。合図が無いと遊べないためです
-            </small>
-          </span>
-          <input id="soundEnabled" type="checkbox" role="switch" data-scan />
-        </label>
-
-        <!-- 遊びの雰囲気（settings.fxLevel。docs/overall-design-2026-09-28.md §4、
-             docs/party-mode-2026-09-29.md）。値は演出の強さのまま——session.config.fxLevel が
-             記録に残るので、どの雰囲気で遊んだかが研究の記録から分かる。
-             光の点滅・揺れ・粒の数の上限は、どの雰囲気でも同じ。 -->
-        <label class="setting-row">
-          <span>
-            <strong>遊びの雰囲気</strong>
-            <small>できたときの紙吹雪や星の量です。「おおさわぎ」は、いないいない ばあ で、なかまのラッコ・押すたびに重なる音楽・大きな数・観客まで出ます。光の点滅は、どの雰囲気でも1秒に3回までです。刺激に弱い人は「すっきり」か「なし」に</small>
-          </span>
-          <select id="fxLevel" data-scan>
-            <option value="none">なし</option>
-            <option value="subtle">すっきり</option>
-            <option value="normal">にぎやか</option>
-            <option value="big">おおさわぎ</option>
-          </select>
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>文字づかい</strong>
-            <small>
-              遊びの画面の文字と読み上げ。漢字にはふりがなを付けます。支援者の画面（設定）は日本語のままです
-            </small>
-          </span>
-          <select id="textMode" data-scan>
-            <option value="ruby">漢字＋ふりがな</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>画面をよく見る遊びを隠す</strong>
-            <small>「絵あわせ」と「クレーンゲーム」は画面を見続ける遊びです。見るのが難しい人のときは、ホームから外せます</small>
-          </span>
-          <input id="hideVisualTasks" type="checkbox" role="switch" data-scan />
-        </label>
+      <div class="summary-grid">
+        <div class="summary-tile">
+          <span class="metric-label">総入力</span>
+          <strong id="totalInputs">0</strong>
         </div>
-      </section>
-
-      <!--
-        くわしい設定。ふだんは閉じておく。
-      -->
-      <details class="settings-more" id="settingsMore">
-        <summary>
-          <span class="settings-more-title">くわしい設定</span>
-          <small class="settings-more-note">スイッチ・見え方と音・遊びごとのむずかしさ</small>
-        </summary>
-
-      <!--
-        設定をタブに分ける。
-        全部を1ページに並べると 3.4画面ぶん（実測2438px / 720px）になり、
-        目的の項目を毎回スクロールして探すことになる。畳む方式も試したが、
-        「開いてから探す」が残るので、はじめから面を分ける。
-
-        分けかたは支援者の目的順:
-          スイッチ … 利用者が何をどう選ぶか（枠の速さ・ホームに出す遊び）
-          見え方・音 … 感覚まわり
-          むずかしさ … あそびごとの難易度
-        （研究者向けの「そくてい（研究）」は 2026-09-30 に外した）
-
-        1面が1画面に収まることを基準に配分した（iPad 実測）。収まっていれば
-        探す動作が要らない——タブに分けても面が長ければ、結局スクロールで
-        探すことになる。
-
-        タブ自体は何も変更しないので、走査の輪には入れる（利用者が誤って
-        押しても設定は変わらず、面が切り替わるだけ）。
-      -->
-      <div class="settings-tabs" role="tablist" aria-label="設定の分類">
-        <button class="settings-tab" role="tab" data-settings-tab="basic" aria-selected="true" data-scan>
-          スイッチ
-        </button>
-        <button class="settings-tab" role="tab" data-settings-tab="senses" aria-selected="false" data-scan>
-          見え方・音
-        </button>
-        <button class="settings-tab" role="tab" data-settings-tab="play" aria-selected="false" data-scan>
-          むずかしさ
-        </button>
+        <div class="summary-tile">
+          <span class="metric-label">正答率</span>
+          <strong id="accuracyRate">--</strong>
+        </div>
+        <div class="summary-tile">
+          <span class="metric-label">誤選択</span>
+          <strong id="mistakeCount">0</strong>
+        </div>
       </div>
 
-      <div class="settings-panel" data-settings-panel="basic">
       <!--
-        設定は長らく「トグル8個が1つのグリッドに並ぶ」形だった。走査の速さも
-        画面の見え方もあそびの出し分けも同じ面に並ぶので、支援者は目的の項目を
-        毎回さがすことになる（スマホでは縦3000px超）。あそびごとの難易度は
-        既に見出しで囲ってあるので、全体設定側も同じ規則へ揃える。
-        並べ替えているだけで、項目そのものは足しても引いてもいない。
+        記録済みセッションと、その回に効いていた条件。
+        難易度を設定画面から変えられるようにしたので、回ごとに条件が違いうる。
+        値は session.config に残るが、これまで state.sessions は CSV 書き出し
+        からしか読まれておらず、画面には一度も出ていなかった。
       -->
-      <h3 class="settings-group-title">スイッチで選ぶとき</h3>
+      <!--
+        回を並べた推移。このアプリの目的のひとつが「訓練前後の比較」
+        （README）なのに、画面に出ていたのは1回ごとの記録だけで、良く
+        なっているかどうかは支援者が数字を目で追って比べるしかなかった。
+
+        条件（テンポ・拍数・つかめる広さ・画面の手がかり）が違う回は別の線に
+        する。同じ指標でも測っているものが変わるので、1本にまとめると
+        比較にならない（src/lib/sessionTrend.js）。
+      -->
+      <h3 class="settings-group-title">回ごとの推移</h3>
       <p class="settings-group-note">
-        黄色い枠が順番に動き、枠がある遊びをスイッチで選びます。合う速さは人によって大きく違います。
+        同じ あそび・同じ条件で完走した回だけを、古い順に並べています。
+        条件を変えた回は別の線になります。中断した回は含みません。
       </p>
+      <!--
+        あそびごとのタブ。記録のあるあそびだけを出すと「無い」ことが見えず、
+        支援者は「まだ遊んでいない」のか「表示が壊れている」のか分からない。
+        全部のあそびを出し、記録が無い回は「データがありません」と言う。
 
-      <div class="settings-grid">
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>iPad のスイッチコントロールを使う</strong>
-            <small>ふつうはオフのまま。iPad 本体のスイッチコントロールで操作するときだけオンにします（アプリの黄色い枠は止まります）</small>
-          </span>
-          <input
-            id="switchControlMode"
-            type="checkbox"
-            role="switch"
-            aria-describedby="switchControlModeNotice"
-          />
-        </label>
+        data-scan は付けない。ここは支援者がタップ／キーボードで使う面で、
+        利用者が走査で操作するものではない（ホームの支援者メニュー入口と
+        同じ扱い）。走査の輪に入れると、押しても利用者に関係のない項目が
+        並ぶだけ増える。
+      -->
+      <div class="trend-tabs" id="trendTabs" role="tablist" aria-label="あそびを えらぶ"></div>
+      <div id="sessionTrends" aria-label="セッションの推移"></div>
 
-        <p class="settings-mode-notice" id="switchControlModeNotice" hidden>
-          iPad の「設定」→「アクセシビリティ」→「スイッチコントロール」もオンにしてください。
-          このアプリの読み上げは、ここでいったんオフになります（「見え方・音」でオンに戻せます）。
-        </p>
-
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>枠を自動で動かす</strong>
-            <small>画面が変わると、黄色い枠が自動で動き出します。オフにすると枠は止まったままです</small>
-          </span>
-          <input id="autoScan" type="checkbox" role="switch" data-scan />
-        </label>
-
-        <!--
-          利用者の画面の下の「おす」ボタン（画面のスイッチ）。既定は出さない
-          （docs/design-renewal-2026-09-25.md §3.5）。画面のどこかを押して
-          「いまの枠」を決めたい人のためのもの。
-        -->
-        <!--
-          枠が動いたときの音（settings.scanFeedback）。画面を見続けるのが難しい人は、
-          音や名前の読み上げで、いまどこに枠があるかが分かる（打ち合わせ §1.7）。
-        -->
-        <label class="setting-row">
-          <span>
-            <strong>枠が動いたときの音</strong>
-            <small>画面を見るのが難しい人のために、黄色い枠が次へ動くたびに小さな音を出したり、名前を読んだりします</small>
-          </span>
-          <select id="scanFeedback" data-scan>
-            <option value="none">なし</option>
-            <option value="tick">小さな音</option>
-            <option value="speak">名前を読む</option>
-          </select>
-        </label>
-
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>画面に「おす」ボタンを出す</strong>
-            <small>画面のボタンをスイッチのかわりに使う人のためのものです。ふだんは出しません</small>
-          </span>
-          <input id="showScreenSwitch" type="checkbox" role="switch" data-scan />
-        </label>
-      </div>
-
-      </div>
-
-      <div class="settings-panel" data-settings-panel="senses" hidden>
-      <h3 class="settings-group-title">読み上げの声</h3>
-
-      <div class="settings-grid">
-        <!-- 読み上げの声（settings.speechVoice。src/lib/voicePack.js）。 -->
-        <label class="setting-row">
-          <span>
-            <strong>読み上げの声</strong>
-            <small>
-              「アプリの声」は、このアプリに入れた自然な声です（日本語・英語とも、ネットが無くても同じ声）。
-              「端末の声」は、iPad の設定「読み上げコンテンツ」の声です
-            </small>
-          </span>
-          <select id="speechVoice" data-scan>
-            <option value="app">アプリの声</option>
-            <option value="device">端末の声</option>
-          </select>
-        </label>
-
-      </div>
-
-      <h3 class="settings-group-title">見え方</h3>
-
-      <div class="settings-grid">
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>大きい文字</strong>
-            <small>文字を大きくします</small>
-          </span>
-          <input id="largeText" type="checkbox" role="switch" data-scan />
-        </label>
-
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>くっきり表示</strong>
-            <small>枠と文字の色の差を強くします</small>
-          </span>
-          <input id="highContrast" type="checkbox" role="switch" data-scan />
-        </label>
-
-      </div>
-
-      <!-- 録音の素材のクレジット（src/lib/soundCredits.js。views/settings.js が中を描く）。
-           CC BY の素材は、アプリの中で見られるところに作者と出典を出すのが使う条件。 -->
-      <details class="settings-guide settings-credits" id="soundCredits">
-        <summary>このアプリで使っている音の素材</summary>
-        <p class="settings-credits-note">
-          読み上げの「アプリの声」も、ここにある声で作っています。
-          ほかの効果音は、このアプリの中で作っています（録音ではありません）。
-        </p>
-        <ul class="settings-credits-list" id="soundCreditsList"></ul>
-      </details>
-
-      </div>
-
-      <div class="settings-panel" data-settings-panel="play" hidden>
-      <h3 class="settings-group-title">絵あわせ</h3>
-
-      <div class="settings-grid">
-        <label class="setting-row">
-          <span>
-            <strong>リールの速さ</strong>
-            <small>絵が1周する時間。短いほど速くなります</small>
-          </span>
-          <input id="slotCycleMs" type="range" min="2800" max="6000" step="100" data-scan />
-          <output id="slotCycleMsValue" for="slotCycleMs">3.2秒</output>
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>「合った」にする広さ</strong>
-            <small>目標の真ん中から前後どれくらいまでを「合った」にするか。広いほどやさしくなります</small>
-          </span>
-          <input id="slotToleranceMs" type="range" min="60" max="220" step="10" data-scan />
-          <output id="slotToleranceMsValue" for="slotToleranceMs">0.22秒</output>
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>「ひとつ止める」の回数</strong>
-            <small>1本のリールを止める回数です</small>
-          </span>
-          <input id="slotL1Rounds" type="range" min="3" max="20" step="1" data-scan />
-          <output id="slotL1RoundsValue" for="slotL1Rounds">8</output>
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>「3つ止める」の回数</strong>
-            <small>1回ごとに、3本を左から順に止めます</small>
-          </span>
-          <input id="slotL2Rounds" type="range" min="2" max="12" step="1" data-scan />
-          <output id="slotL2RoundsValue" for="slotL2Rounds">4</output>
-        </label>
-      </div>
-
-      <h3 class="settings-group-title">音あそび</h3>
-
-      <div class="settings-grid">
-        <label class="setting-row">
-          <span>
-            <strong>音の速さ（テンポ）</strong>
-            <small>1分に鳴る音の数。ゆっくりなほど、やさしくなります</small>
-          </span>
-          <select id="rhythmBpm" data-scan>
-            <option value="">あそびごとの既定</option>
-            <option value="30">30（とてもゆっくり）</option>
-            <option value="40">40</option>
-            <option value="50">50</option>
-            <option value="60">60</option>
-            <option value="80">80（はやめ）</option>
-          </select>
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>1回に鳴る音の数</strong>
-            <small>1回の遊びで鳴る音の数。長くも短くもできます</small>
-          </span>
-          <select id="rhythmTargetBeats" data-scan>
-            <option value="">あそびごとの既定</option>
-            <option value="5">5</option>
-            <option value="10">10</option>
-            <option value="20">20</option>
-            <option value="30">30</option>
-          </select>
-        </label>
-
-        <!--
-          通常練習で流れるノートを出すか。ONが制御するのは、ノートが
-          判定面へ流れる「次の拍の予告」だけ。押したあとのずれ目盛り（KR）は、
-          ON/OFFどちらの版面にも残り、未来の拍は示さない。
-
-          既定ON。ふだんの練習は本格的なリズムゲームとして取り組めるようにする。
-          OFFの練習と measure / calibration は、未来ノートを作らない予告なし計器盤。
-          実際に効いた visualGuidance / visualPresentation はセッションごとに記録され、
-          visualGuidance と difficultyMode はリズムCSVにも出る。
-        -->
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>次の音が来る場所を画面に出す</strong>
-            <small>
-              次の音が来る場所を画面に出します（既定）。切ると、
-              押したあとの「はやい／おそい」だけを出します
-            </small>
-          </span>
-          <input id="visualGuidance" type="checkbox" role="switch" data-scan />
-        </label>
-      </div>
-
-      <h3 class="settings-group-title">クレーンゲーム</h3>
+      <h3 class="settings-group-title">遊びの記録</h3>
       <p class="settings-group-note">
-        変えた値は、次に始めるときから効きます。どの設定で遊んだかは記録に残ります。
+        1回ごとの条件です。設定を変えた回は、ここの値も変わります。
       </p>
+      <div class="log-list" id="sessionList" aria-label="記録済みのセッション"></div>
 
-      <div class="settings-grid">
-        <label class="setting-row">
-          <span>
-            <strong>アームの速さ</strong>
-            <small>アームが端から端まで動く時間。短いほど速く、狙うのが難しくなります</small>
-          </span>
-          <input id="craneSweepMs" type="range" min="800" max="6000" step="100" data-scan />
-          <output id="craneSweepMsValue" for="craneSweepMs">2.2秒</output>
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>つかめる広さ</strong>
-            <small>景品からどれだけずれても掴めるか。大きいほどやさしくなります</small>
-          </span>
-          <input id="craneToleranceR" type="range" min="4" max="40" step="1" data-scan />
-          <output id="craneToleranceRValue" for="craneToleranceR">15</output>
-        </label>
-
-        <label class="setting-row">
-          <span>
-            <strong>1回にアームを下ろす回数</strong>
-            <small>1回の遊びでアームを下ろす回数。短くも長くもできます</small>
-          </span>
-          <input id="craneTargetTrials" type="range" min="3" max="15" step="1" data-scan />
-          <output id="craneTargetTrialsValue" for="craneTargetTrials">5</output>
-        </label>
-
-        <!--
-          目標を通過したときの音。既定OFF。
-
-          ONだと、目標の座標そのものが音になるので、画面を見ずに「音が鳴ったら
-          押す」だけで成立する——このあそびが「画面を見る必要がある唯一の課題」
-          である前提が崩れる。視覚追従が難しい利用者への配慮としては正当なので
-          残してあるが、支援者が必要な回だけ入れる。効いた値は記録に残る。
-        -->
-        <label class="setting-row toggle-row">
-          <span>
-            <strong>ねらいの上で音を鳴らす</strong>
-            <small>
-              アームがねらいの上を通ったとき、小さい音で知らせます。画面を見続けるのが
-              難しいときに。入れると耳だけでも遊べるぶん、目で追う練習にはなりません
-            </small>
-          </span>
-          <input id="craneAudioGuidance" type="checkbox" role="switch" data-scan />
-        </label>
-      </div>
-
-      <h3 class="settings-group-title">さかなつり</h3>
-
-      <div class="settings-grid">
-        <label class="setting-row">
-          <span>
-            <strong>アタリが続く長さ</strong>
-            <small>魚が食いついてから逃げるまでの時間。長いほど、ゆっくり押しても釣れます</small>
-          </span>
-          <select id="fishingLimitMs" data-scan>
-            <option value="">ふつう（2秒）</option>
-            <option value="3000">ながい（3秒）</option>
-            <option value="4000">とても ながい（4秒）</option>
-            <option value="1400">みじかい（1.4秒）</option>
-          </select>
-        </label>
-      </div>
-      </div>
-
-      </details>
+      <h3 class="settings-group-title">操作ログ</h3>
+      <div class="log-list" id="logList" aria-label="直近の操作ログ"></div>
     </section>
+
+    <SettingsView />
   </main>
 
   <footer class="switch-dock">

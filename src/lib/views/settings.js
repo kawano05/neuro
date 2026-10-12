@@ -1,30 +1,43 @@
 // =====================================================================
-// views/settings.js — 設定画面（走査間隔・音・表示の設定）
+// views/settings.js — 項目定義から値を描画・保存する支援者設定
+// UIの型・キーは settingsFields.js と共有。開閉では値を変えない。
+// 保存・測定条件の解決は従来のまま（docs/rules/supporter-settings.md）。
+//
+// 設定画面は支援者の世界なので、走査（黄色い枠）はここでは動かない（src/lib/viewWorld.js。
+// scan.js が支援者の画面では輪を空にする）。操作はタップとキーボードだけ。
+// 走査の設定を変えても、ここで走査を始め直さない——ホームへ戻ったときに scan.js が読む。
 // =====================================================================
 
-import { cranePresets, slotPresets } from "../content.js";
+import {
+  SETTINGS_FIELDS,
+  SETTINGS_GROUPS,
+  describeReset,
+  describedByIds,
+  fieldValue,
+  formatFieldValue,
+  readFieldValue,
+  resetPlan,
+  unavailableReason,
+} from "../settingsFields.js";
+import { isMeasurementMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
+import { evaluateReadiness } from "../readinessCheck.js";
 import { SOUND_CREDITS } from "../soundCredits.js";
-
-/**
- * ミリ秒を「秒」で見せる（1600 → 1.6秒、220 → 0.22秒）。打ち合わせで設定の言葉を
- * 「小学校高学年が読んで分かる」ようにと言われた（docs/design-renewal-2026-09-25.md
- * §1.8）。「ms」はその外にある。保存する値はミリ秒のまま。
- */
-export function formatSeconds(ms) {
-  return `${Number((ms / 1000).toFixed(2))}秒`;
-}
+import { say, supporterLang, supporterLanguage } from "../supporterText.js";
 
 /** 音の素材のクレジットを描く。中身は固定の表なので、字はそのまま入れる。 */
-export function renderSoundCredits(listEl, { links = true } = {}) {
+export function renderSoundCredits(listEl, { links = true, lang = "ja" } = {}) {
   if (!listEl) return;
+  const en = lang === "en";
   listEl.replaceChildren(
     ...SOUND_CREDITS.map((credit) => {
       const item = document.createElement("li");
       const use = document.createElement("strong");
-      use.textContent = credit.use;
+      use.textContent = en ? credit.useEn || credit.use : credit.use;
       const line = document.createElement("span");
-      line.textContent = `「${credit.title}」 ${credit.author}。${credit.changes}。 `;
+      line.textContent = en
+        ? ` “${credit.title}” ${credit.author}. ${credit.changesEn || credit.changes}. `
+        : `「${credit.title}」 ${credit.author}。${credit.changes}。 `;
       // CC BY はライセンスの場所（URL）も示すのが条件。
       const address = (text, href) => {
         const node = links ? document.createElement("a") : document.createElement("span");
@@ -49,144 +62,152 @@ export function renderSoundCredits(listEl, { links = true } = {}) {
 }
 
 export function initSettings(ctx) {
-  const { state, elements, save, scan, announce, audio } = ctx;
+  const { state, elements, save, scan, announce, logEvent, audio } = ctx;
 
   // 印刷用の説明書（public/guide.html）へのリンクは、iPad のアプリ版では隠す。
   // アプリの中から別の画面を開けず、開けても戻る手段が無いため。ウェブ版だけ。
-  const guidePrint = document.querySelector("#settingsGuidePrint");
-  if (guidePrint && globalThis.Capacitor?.isNativePlatform?.()) guidePrint.hidden = true;
+  if (elements.settingsGuidePrint && globalThis.Capacitor?.isNativePlatform?.()) {
+    elements.settingsGuidePrint.hidden = true;
+  }
+
+  /** 支援者の画面の言語（利用者の「言語」に合わせる。src/lib/supporterText.js）。 */
+  const lang = () => supporterLang(state.settings);
+  /** {ja, en} の文を、いまの言語で。 */
+  const tr = (text) => say(text, lang());
 
   // 音の素材のクレジット（src/lib/soundCredits.js）。アプリ版では、上の説明書と
   // 同じ理由でリンクにしない（アドレスは字で出す）。
-  renderSoundCredits(document.querySelector("#soundCreditsList"), {
-    links: !globalThis.Capacitor?.isNativePlatform?.(),
-  });
+  const renderCredits = () =>
+    renderSoundCredits(elements.soundCreditsList, {
+      links: !globalThis.Capacitor?.isNativePlatform?.(),
+      lang: lang(),
+    });
+  renderCredits();
+  supporterLanguage.set(lang());
 
-  // UFOキャッチャーの難易度。設定側が null のあいだは cranePresets の値を
-  // 使うので、スライダーにもその既定値を映す（games/crane.js の
-  // resolveCraneConfig と同じ優先順位）。
-  const craneSliders = [
-    {
-      key: "craneSweepMs",
-      input: elements.craneSweepMs,
-      output: elements.craneSweepMsValue,
-      fallback: cranePresets.sweepMs,
-      format: formatSeconds,
-    },
-    {
-      key: "craneToleranceR",
-      input: elements.craneToleranceR,
-      output: elements.craneToleranceRValue,
-      fallback: cranePresets.toleranceR,
-      format: (value) => String(value),
-    },
-    {
-      key: "craneTargetTrials",
-      input: elements.craneTargetTrials,
-      output: elements.craneTargetTrialsValue,
-      fallback: cranePresets.targetTrials,
-      format: (value) => String(value),
-    },
-  ];
+  // 同じ定義からUIと入力配線を作り、手書きの型・キーの重複を持たない。
+  const fields = SETTINGS_FIELDS.map(field => ({
+    ...field,
+    control: elements[field.id],
+    output: elements[`${field.id}Value`],
+    // 選んだものの説明（雰囲気）。field.description は説明文を作る関数。
+    descriptionOutput: elements[`${field.id}Description`],
+    reasonOutput: elements[`${field.id}Reason`],
+  }));
 
-  const slotSliders = [
-    {
-      key: "slotCycleMs",
-      input: elements.slotCycleMs,
-      output: elements.slotCycleMsValue,
-      fallback: slotPresets["slot-l1"].cycleMs,
-      format: formatSeconds,
-    },
-    {
-      key: "slotToleranceMs",
-      input: elements.slotToleranceMs,
-      output: elements.slotToleranceMsValue,
-      fallback: slotPresets["slot-l1"].toleranceMs,
-      format: formatSeconds,
-    },
-    {
-      key: "slotL1Rounds",
-      input: elements.slotL1Rounds,
-      output: elements.slotL1RoundsValue,
-      fallback: slotPresets["slot-l1"].rounds,
-      format: String,
-    },
-    {
-      key: "slotL2Rounds",
-      input: elements.slotL2Rounds,
-      output: elements.slotL2RoundsValue,
-      fallback: slotPresets["slot-l2"].rounds,
-      format: String,
-    },
-  ];
-  const difficultySliders = [...slotSliders, ...craneSliders];
+  /**
+   * つまみの値を字で出す。画面の数字と読み上げ（aria-valuetext）に同じ文を使う。
+   * aria-valuetext が無いと、VoiceOver は枠の速さを「1600」と生の値で読む。
+   */
+  function showRangeValue(field, value) {
+    if (!field.output) return;
+    const text = formatFieldValue(field, value, lang());
+    field.output.value = text;
+    field.control.setAttribute("aria-valuetext", text);
+  }
 
-  // リズム系の難易度。値を持たない（null）＝「あそびごとの既定を使う」を
-  // 選択肢として表せる必要があるのでプルダウンにしてある。空文字が null。
-  const rhythmChoices = [
-    { key: "rhythmBpm", select: elements.rhythmBpm },
-    { key: "targetBeats", select: elements.rhythmTargetBeats },
-    // さかなつりの、アタリが続く長さ（空文字は既定の2秒）。
-    { key: "fishingLimitMs", select: elements.fishingLimitMs },
-  ].filter(({ select }) => select);
-
-  /** 設定UIへ現在値を反映する */
   function render() {
-    const settings = state.settings;
-    rhythmChoices.forEach(({ key, select }) => {
-      select.value = settings[key] === null ? "" : String(settings[key]);
+    // 記録の読み込みなどで設定ごと入れ替わったときも、画面の言語を合わせる。
+    supporterLanguage.set(lang());
+    fields.forEach(field => {
+      const value = fieldValue(field, state.settings);
+      if (field.type === "checkbox") field.control.checked = value;
+      else field.control.value = value === null ? "" : String(value);
+      showRangeValue(field, value);
+      if (field.description) field.descriptionOutput.textContent = field.description(value, lang());
     });
-    elements.scanInterval.value = settings.scanInterval;
-    elements.scanIntervalValue.value = formatSeconds(settings.scanInterval);
-    difficultySliders.forEach(({ key, input, output, fallback, format }) => {
-      const value = settings[key] ?? fallback;
-      input.value = value;
-      output.value = format(value);
+    applyAvailability();
+  }
+
+  /**
+   * いま変えられない項目を使えなくし、その理由を行に出して読み上げにも渡す（ただ1つの道）。
+   *
+   * 理由は settingsFields.js の unavailableReason が決める（そくていで固定・iPad の
+   * スイッチコントロール中・読み上げがオフ）。効かない操作子を黙って置いておくのは、この
+   * アプリが何度も直してきた「動くが伝わらない」欠陥そのものなので、触れないことと、その
+   * 理由を同じ行で同時に見せる。まとまりの注記は、どちらの回か・何をすれば戻るかの案内。
+   */
+  function applyAvailability() {
+    fields.forEach((field) => {
+      const reason = unavailableReason(field, state.settings);
+      field.control.disabled = Boolean(reason);
+      field.control.setAttribute("aria-disabled", String(Boolean(reason)));
+      field.control.setAttribute("aria-describedby", describedByIds(field, state.settings));
+      field.control.closest(".setting-row")?.classList.toggle("is-setting-disabled", Boolean(reason));
+      field.reasonOutput.textContent = reason;
+      field.reasonOutput.hidden = !reason;
     });
-    elements.switchControlMode.checked = settings.switchControlMode;
-    elements.autoScan.checked = settings.autoScan;
-    elements.showScreenSwitch.checked = settings.showScreenSwitch;
-    if (elements.scanFeedback) elements.scanFeedback.value = settings.scanFeedback;
-    if (elements.fxLevel) elements.fxLevel.value = settings.fxLevel;
-    elements.speechEnabled.checked = settings.speechEnabled;
-    elements.speechVolume.value = settings.speechVolume;
-    elements.speechVolumeValue.value = `${Math.round(settings.speechVolume * 100)}%`;
-    if (elements.speechVoice) elements.speechVoice.value = settings.speechVoice;
-    elements.soundEnabled.checked = settings.soundEnabled;
-    elements.largeText.checked = settings.largeText;
-    elements.highContrast.checked = settings.highContrast;
-    elements.hideVisualTasks.checked = settings.hideVisualTasks;
-    elements.visualGuidance.checked = settings.visualGuidance;
-    elements.craneAudioGuidance.checked = settings.craneAudioGuidance;
-    elements.textMode.value = resolveTextMode(settings);
-    applySwitchControlMode();
-    applySpeechSettings();
+    const measuring = isMeasurementMode(state.settings);
+    elements.switchControlModeNotice.hidden = !state.settings.switchControlMode;
+    elements.measureModeNotice.hidden = !measuring;
+    renderReadiness(measuring);
+    updateModeStatus(measuring);
+    renderResets();
   }
 
-  /** 使えない操作子を無効化し、自前走査の輪からも外す。 */
-  function setControlAvailable(control, available) {
-    if (!control) return;
-    control.disabled = !available;
-    control.setAttribute("aria-disabled", String(!available));
-    const row = control.closest(".setting-row");
-    if (row) row.classList.toggle("is-setting-disabled", !available);
+  /**
+   * 研究欄を畳んでも、前の回から残ったそくていの回を見落とさない（そくていの回のときだけ出す）。
+   * れんしゅうの回の「れんしゅうの回です。変更は自動で保存されます。」は出さない（2026-10-03、
+   * ユーザーの判断「消していい」）。自動で保存されることは、はじめての方への説明に書いてある。
+   */
+  function updateModeStatus(measuring) {
+    const status = elements.settingsModeStatus;
+    status.textContent = measuring
+      ? tr({
+          ja: "そくていの回です。遊びごとの難しさは固定です。",
+          en: "Measured runs. The difficulty of each game is fixed.",
+        })
+      : "";
+    status.hidden = !measuring;
+    status.classList.toggle("is-measuring", measuring);
   }
 
-  /** iPad Switch Controlへ委譲中は自前走査の設定自体を操作不能にする。 */
-  function applySwitchControlMode() {
-    const delegated = Boolean(state.settings.switchControlMode);
-    elements.switchControlModeNotice.hidden = !delegated;
-    setControlAvailable(elements.scanInterval, !delegated);
-    setControlAvailable(elements.autoScan, !delegated);
+  /**
+   * そくていに入る前の成立確認（src/lib/readinessCheck.js）を描く。
+   *
+   * 測定を止めない。止めるかどうかは支援者と研究者の判断で、アプリが決める
+   * ことではない——代わりに「何が確かめられていないか」をその場で出し、
+   * 通っていない状態で測った回には readiness="overridden" を残す
+   * （測定条件は禁止せず記録する、という全体の方針）。
+   */
+  function renderReadiness(measuring) {
+    const box = elements.readinessCheck;
+    if (!box) return;
+    // れんしゅうの回には関係がない。常設すると設定画面が長くなるだけ。
+    box.hidden = !measuring;
+    if (!measuring) return;
+
+    const { checks, allMet } = evaluateReadiness(
+      state.sessions || [],
+      state.evaluation?.participantId || ""
+    );
+    elements.readinessLead.textContent = allMet
+      ? tr({ ja: "3つとも れんしゅうの記録から確認できています。", en: "All three are confirmed from the practice records." })
+      : tr({
+          ja: "確認できていない項目があります。このまま測ることもできますが、その回の記録には「成立確認なし」が残ります。",
+          en: "Some items are not confirmed yet. You can still measure, but that run will be recorded as “not confirmed”.",
+        });
+    elements.readinessLead.classList.toggle("is-unmet", !allMet);
+
+    elements.readinessList.innerHTML = "";
+    checks.forEach((check) => {
+      const item = document.createElement("li");
+      item.className = `readiness-item ${check.met ? "is-met" : "is-unmet"}`;
+      const icon = document.createElement("i");
+      // アイコンだけで意味を運ばない（色覚・読み上げ）。文言側にも理由を出す。
+      icon.className = check.met ? "fa-solid fa-circle-check" : "fa-regular fa-circle";
+      icon.setAttribute("aria-hidden", "true");
+      const label = document.createElement("span");
+      label.className = "readiness-label";
+      const name = lang() === "en" ? check.labelEn || check.label : check.label;
+      const reason = lang() === "en" ? check.reasonEn || check.reason : check.reason;
+      label.textContent = check.met ? name : lang() === "en" ? `${name} (${reason})` : `${name}（${reason}）`;
+      item.append(icon, label);
+      elements.readinessList.append(item);
+    });
   }
 
-  /** アプリTTSがOFFなら、効かない音量つまみ・声の選択を走査対象に残さない。 */
-  function applySpeechSettings() {
-    setControlAvailable(elements.speechVolume, Boolean(state.settings.speechEnabled));
-    setControlAvailable(elements.speechVoice, Boolean(state.settings.speechEnabled));
-  }
-
-  /** body へ表示系クラス（大きい文字・高コントラスト など）を反映する */
+  /** body へ表示系クラス（大きい文字・くっきり表示・スイッチコントロール・「おす」ボタン）を反映する */
   function applyClasses() {
     document.body.classList.toggle("large-text", state.settings.largeText);
     document.body.classList.toggle("high-contrast", state.settings.highContrast);
@@ -210,27 +231,88 @@ export function initSettings(ctx) {
     root.classList.toggle("text-ruby", resolveTextMode(state.settings) === "ruby");
   }
 
-  elements.scanInterval.addEventListener("input", (event) => {
-    if (state.settings.switchControlMode) return;
-    state.settings.scanInterval = Number(event.target.value);
-    elements.scanIntervalValue.value = formatSeconds(state.settings.scanInterval);
-    save();
-    if (scan.isRunning()) scan.start();
-  });
+  /**
+   * 値を変えたあとに、設定画面の外へ伝えること（項目ごと）。手で変えたときも「既定に戻す」でも
+   * 同じ道を通す（戻したのにホームの文字づかいが変わらない、を作らない）。
+   */
+  const AFTER_CHANGE = {
+    // 利用者の世界の文言が全部変わる。表記は定数として持てない——描画のたびに引き直す。
+    // 支援者の画面も同じ言語へ（名前・説明・選択肢は Svelte が、数値・理由・状態はここで描き直す）。
+    // 前の言語で出した「既定に戻しました」の知らせは消す。
+    textMode: () => {
+      supporterLanguage.set(lang());
+      resets.forEach((entry) => {
+        entry.message = "";
+      });
+      renderCredits();
+      render();
+      scan.renderStatus?.();
+      ctx.views.home.render();
+    },
+    // ホームに出す遊びが変わる。走査の輪はホームへ戻ったときに作り直される。
+    hideVisualTasks: () => ctx.views.home.render(),
+    speechEnabled: () => {
+      if (!state.settings.speechEnabled) audio.stopSpeech();
+    },
+    speechVoice: () => audio.prefetchVoice?.(),
+    fxLevel: () => ctx.fx.syncPolicy(),
+  };
 
-  elements.speechVolume.addEventListener("input", (event) => {
-    state.settings.speechVolume = Number(event.target.value);
-    elements.speechVolumeValue.value = `${Math.round(state.settings.speechVolume * 100)}%`;
-    save();
-  });
+  function afterChange(keys) {
+    applyClasses();
+    keys.forEach((key) => AFTER_CHANGE[key]?.());
+    applyAvailability();
+  }
 
-  // 読み上げの声を替えたら、その声で一言読む（支援者が聞いて選べるように）。
-  elements.speechVoice?.addEventListener("change", () => {
-    state.settings.speechVoice = elements.speechVoice.value === "device" ? "device" : "app";
-    save();
-    audio.prefetchVoice?.();
-    audio.speak(ctx.t("color.voice.cheer"));
-  });
+  /** 手で変えたときだけの返事（「既定に戻す」はまとめて1つの文で知らせる）。 */
+  const FEEDBACK = {
+    scanFeedback: () => announce(tr({ ja: "枠が動いたときの音を変えました", en: "Changed the sound when the highlight moves" })),
+    // 選んだ言語で知らせる。
+    textMode: () => announce(tr({ ja: "言語を日本語にしました", en: "Language set to English" })),
+    // 読み上げの声を替えたら、その声で一言読む（支援者が聞いて選べるように）。
+    speechVoice: () => audio.speak(ctx.t("color.voice.cheer")),
+    fxLevel: () => {
+      // 画面の名前は「遊びの雰囲気」。読み上げだけ古い名前（演出の強さ）だった。
+      const chosen = formatFieldValue(fieldOf("fxLevel"), state.settings.fxLevel, lang());
+      announce(tr({ ja: `遊びの雰囲気を「${chosen}」にしました`, en: `Play atmosphere set to “${chosen}”` }));
+      // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
+      ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });
+      ctx.fx?.engine.burst({
+        ...ctx.fx.engine.pointOf(elements.fxLevel),
+        count: 12,
+        shapes: ["sparkle", "star"],
+        colors: ["#FFC83D", "#4DC4FF", "#FFFFFF"],
+        gravity: 120,
+      });
+    },
+  };
+
+  function fieldOf(key) {
+    return fields.find((field) => field.key === key);
+  }
+
+  // 1つの項目の値を、入力から保存へ。iPad のスイッチコントロールと、れんしゅう／そくていの
+  // 切り替えは、ほかの項目も一緒に変わるので下で別に扱う。
+  const SEPARATELY_HANDLED = new Set(["switchControlMode", "difficultyMode"]);
+  fields
+    .filter((field) => !SEPARATELY_HANDLED.has(field.key))
+    .forEach((field) => {
+      field.control.addEventListener(field.type === "range" ? "input" : "change", () => {
+        // 使えない項目は変えない（操作子は使えなくしてあるが、保存の側でも守る。
+        // たとえばスイッチコントロール中に枠を自動で動かすと、枠が2つ出る）。
+        if (unavailableReason(field, state.settings)) {
+          render();
+          return;
+        }
+        state.settings[field.key] = readFieldValue(field, field.control);
+        showRangeValue(field, state.settings[field.key]);
+        if (field.description) field.descriptionOutput.textContent = field.description(state.settings[field.key], lang());
+        save();
+        forgetReset(field.group);
+        afterChange([field.key]);
+        FEEDBACK[field.key]?.();
+      });
+    });
 
   elements.switchControlMode.addEventListener("change", () => {
     const delegated = elements.switchControlMode.checked;
@@ -243,135 +325,86 @@ export function initSettings(ctx) {
       audio.stopSpeech();
     }
     save();
+    forgetReset("switch");
     render();
-    applyClasses();
+    afterChange(["switchControlMode", "autoScan", "speechEnabled"]);
+    // 枠の状態の表示（「iPad で操作中」）を直す。走査そのものは支援者の画面では動かない。
     scan.stop(true);
-    scan.refresh();
     announce(
       delegated
-        ? "iPad のスイッチコントロールで選ぶようにしました。このアプリの黄色い枠と読み上げは止めました"
-        : "iPad のスイッチコントロールを使うのをやめました。黄色い枠は止まったままです"
+        ? tr({
+            ja: "iPad のスイッチコントロールで選ぶようにしました。このアプリの黄色い枠と読み上げは止めました",
+            en: "Now choosing with iPad Switch Control. The app's yellow highlight and voice are stopped",
+          })
+        : tr({
+            ja: "iPad のスイッチコントロールを使うのをやめました。黄色い枠は止まったままです",
+            en: "Stopped using iPad Switch Control. The yellow highlight stays stopped",
+          })
     );
   });
 
-  rhythmChoices.forEach(({ key, select }) => {
-    select.addEventListener("change", () => {
-      // 空文字は「あそびごとの既定」。null で保存すると games/rhythm.js の
-      // resolveParams が rhythmPresets 側を使う。
-      state.settings[key] = select.value === "" ? null : Number(select.value);
-      save();
-    });
-  });
-
-  difficultySliders.forEach(({ key, input, output, format }) => {
-    input.addEventListener("input", (event) => {
-      const value = Number(event.target.value);
-      state.settings[key] = value;
-      output.value = format(value);
-      save();
-    });
-  });
-
-  [
-    ["autoScan", elements.autoScan],
-    ["showScreenSwitch", elements.showScreenSwitch],
-    ["speechEnabled", elements.speechEnabled],
-    ["soundEnabled", elements.soundEnabled],
-    ["largeText", elements.largeText],
-    ["highContrast", elements.highContrast],
-    ["hideVisualTasks", elements.hideVisualTasks],
-    ["visualGuidance", elements.visualGuidance],
-    ["craneAudioGuidance", elements.craneAudioGuidance],
-  ].forEach(([key, element]) => {
-    element.addEventListener("change", () => {
-      state.settings[key] = element.checked;
-      save();
-      applyClasses();
-      if (key === "autoScan") {
-        if (state.settings.switchControlMode) {
-          state.settings.autoScan = false;
-          element.checked = false;
-          save();
-          scan.stop(true);
-          return;
-        }
-        // restartIfNeeded() はON時だけ再始動する。OFFへ切り替えた
-        // ときは既存の interval を明示的に止める必要がある。
-        if (element.checked) scan.restartIfNeeded();
-        else scan.stop(true);
-      }
-      if (key === "speechEnabled") {
-        if (!element.checked) audio.stopSpeech();
-        applySpeechSettings();
-        scan.refresh();
-      }
-      if (key === "hideVisualTasks") {
-        ctx.views.home.render();
-        scan.restartIfNeeded();
-      }
-    });
-  });
-
-  elements.scanFeedback?.addEventListener("change", () => {
-    state.settings.scanFeedback = elements.scanFeedback.value;
+  elements.difficultyMode.addEventListener("change", () => {
+    state.settings.difficultyMode = elements.difficultyMode.value;
     save();
-    announce("枠が動いたときの音を変えました");
-  });
-
-  elements.fxLevel?.addEventListener("change", () => {
-    state.settings.fxLevel = elements.fxLevel.value;
-    save();
-    announce("演出の強さを変えました");
-    // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
-    ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });
-    ctx.fx?.engine.burst({
-      ...ctx.fx.engine.pointOf(elements.fxLevel),
-      count: 12,
-      shapes: ["sparkle", "star"],
-      colors: ["#FFC83D", "#4DC4FF", "#FFFFFF"],
-      gravity: 120,
+    afterChange(["difficultyMode"]);
+    announce(
+      isMeasurementMode(state.settings)
+        ? tr({ ja: "そくていの回にしました。むずかしさは固定されます", en: "Switched to measured runs. The difficulty is fixed" })
+        : tr({ ja: "れんしゅうの回にしました。むずかしさを調整できます", en: "Switched to practice runs. The difficulty can be adjusted" })
+    );
+    logEvent({
+      type: "measurement",
+      label: `難易度モードを ${state.settings.difficultyMode} に変更`,
+      skipEvaluation: true,
     });
-  });
-
-  elements.textMode.addEventListener("change", () => {
-    state.settings.textMode = elements.textMode.value;
-    save();
-    // 利用者の世界の文言が全部変わるので、ホームを描き直す。
-    // 表記は定数として持てない——描画のたびに引き直す必要がある。
-    ctx.views.home.render();
-    scan.restartIfNeeded();
-    announce("文字づかいを変えました");
   });
 
   /**
-   * 設定のタブを切り替える。
+   * くわしい設定のまとまりごとの「既定に戻す」（確かめ表 B3）。
    *
-   * 面を hidden にするだけ。中の操作子は走査の輪から自動的に外れる
-   * （scan.js は [data-scan] を rect.width > 0 で絞るので、hidden の中は
-   * 対象外になる）——「見えていないのに走査で止まる」を作らない。
-   *
-   * どのタブを開いていたかは保存しない。設定を開くたび「スイッチ」から
-   * 始まるほうが、いちばんよく使う面が毎回すぐ出る。
+   * 既定は state.js の既定値。いま変えられない項目（そくていで固定・スイッチコントロール中）と
+   * iPad 本体に合わせる項目は戻さない（settingsFields.js の resetPlan）。押したら、何を戻して
+   * 何を残したかをボタンのすぐ下に字で出し、同じ文を読み上げる。その知らせは、同じまとまりの
+   * 項目を手で変えたら消す（古い知らせが今の値と食い違わないように）。
    */
-  function showSettingsTab(name) {
-    (elements.settingsPanels || []).forEach((panel) => {
-      panel.hidden = panel.dataset.settingsPanel !== name;
+  const resets = SETTINGS_GROUPS.filter((group) => group.reset).map((group) => ({
+    group,
+    button: elements[`${group.id}Reset`],
+    status: elements[`${group.id}ResetStatus`],
+    message: "",
+  }));
+
+  function renderResets() {
+    resets.forEach((entry) => {
+      const { blockedReason } = resetPlan(entry.group, state.settings);
+      entry.button.disabled = Boolean(blockedReason);
+      const text = blockedReason || entry.message;
+      entry.status.textContent = text;
+      entry.status.hidden = !text;
     });
-    (elements.settingsTabs || []).forEach((tab) => {
-      const active = tab.dataset.settingsTab === name;
-      tab.setAttribute("aria-selected", String(active));
-      tab.classList.toggle("is-active", active);
-    });
-    // タブを替えると輪の長さが変わる。走査中に切り替えても現在位置が
-    // 消えた面に取り残されないよう、refresh を明示的に呼ぶ。
-    scan.refresh();
   }
 
-  (elements.settingsTabs || []).forEach((tab) => {
-    tab.addEventListener("click", () => {
-      showSettingsTab(tab.dataset.settingsTab);
-      announce(`${tab.textContent.trim()}の設定`);
+  function forgetReset(groupId) {
+    const entry = resets.find((item) => item.group.id === groupId);
+    if (entry) entry.message = "";
+  }
+
+  resets.forEach((entry) => {
+    entry.button.addEventListener("click", () => {
+      const plan = resetPlan(entry.group, state.settings);
+      plan.changes.forEach(({ field, to }) => {
+        state.settings[field.key] = to;
+      });
+      if (plan.changes.length) save();
+      entry.message = describeReset(entry.group, plan, lang());
+      render();
+      afterChange(plan.changes.map(({ field }) => field.key));
+      announce(entry.message);
     });
+  });
+
+  elements.startCalibration.addEventListener("click", () => {
+    ctx.gameHost.launch("calibration");
   });
 
   return { render, applyClasses };

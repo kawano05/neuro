@@ -11,7 +11,7 @@ on:
       preview_branch:
         description: "/preview/ に同居させるブランチ"
         required: false
-        default: design/hakkiri
+        default: design/sekai
 
 permissions:
   contents: read
@@ -25,7 +25,8 @@ concurrency:
 env:
   # 本番（main）と同じサイトの /preview/ に出す、デザイン改修中のブランチ。
   # ブランチが無くなれば、本番だけを出す（下の Preview の段）。
-  PREVIEW_BRANCH: ${{ github.event.inputs.preview_branch || 'design/hakkiri' }}
+  # design/hakkiri の続きが design/sekai（2026-10-12 に main へまとめた）。次の直しもここで見せる。
+  PREVIEW_BRANCH: ${{ github.event.inputs.preview_branch || 'design/sekai' }}
 
 jobs:
   build:

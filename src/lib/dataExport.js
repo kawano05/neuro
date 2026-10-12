@@ -1,10 +1,5 @@
 // =====================================================================
-// dataExport.js — 記録を CSV の行にする関数（画面は持たない）
-//
-// 評価ログの画面（書き出しボタン・参加者ID・切り替え）は、2026-09-30 に
-// 支援者の画面から外した。記録（state.sessions / state.logs）は今までどおり
-// 端末に残る。ここには、それを CSV の行にする純粋な関数だけを残す
-// （tests/data-integrity.test.mjs と scripts/probes/ が使う）。
+// dataExport.js — 支援者が記録を取り出すための面（評価ログの中に置く）
 //
 // もとは「効果測定セッション」画面（views/evaluation.js）だった。手順を
 // 画面で案内し、支援者が成功／失敗やカウンタを手で押していく作りだったが、
@@ -20,7 +15,10 @@
 // この面は書き出すだけ。
 // =====================================================================
 
-import { toLocalIso } from "./utils.js";
+import { createRecordBackup } from "./recordBackup.js";
+import { cloneDefaultState, MAX_SESSIONS } from "./state.js";
+import { escapeCsv, exportFileStamp, toLocalIso } from "./utils.js";
+import { storageKey } from "./content.js";
 import { buildSlotCsvRows } from "./slotCsv.js";
 export { buildSlotCsvRows };
 
@@ -109,6 +107,9 @@ export const SESSION_LEDGER_HEADERS = Object.freeze([
   // 演出の強さ（src/lib/fx/）。configJson の中にもあるが、層別にすぐ使えるよう列にも出す。
   // 末尾に足す（列位置を動かさない）。演出エンジンより前の記録は空欄。
   "fxLevel",
+  // 見え方の版（config.artVersion。その回に画面へ出した絵の版、src/lib/artVersion.js）。
+  // fxLevel の後ろに足す。版を持たない課題と、この列より前の記録は空欄。
+  "artVersion",
 ]);
 
 function deviceColumns(session) {
@@ -185,6 +186,10 @@ export function buildRhythmCsvRows(sessions) {
       // 当たったときの星や紙吹雪が成績に効きうる。末尾に足す（列位置を動かさない）。
       // 演出エンジンより前の記録は空欄。
       "fxLevel",
+      // 見え方の版（その回に画面へ出した絵の版。src/lib/artVersion.js）。高い音だけの
+      // れんしゅうの回は絵を作り直したので、変わる前後の回を分ける。そくていの回はいつでも 1。
+      // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
+      "artVersion",
     ],
   ];
   sessions.forEach((session) => {
@@ -214,6 +219,7 @@ export function buildRhythmCsvRows(sessions) {
         ...deviceColumns(session),
         config.measurementReadiness ?? "n/a",
         config.fxLevel ?? "",
+        config.artVersion ?? "",
       ]);
     });
   });
@@ -251,6 +257,7 @@ export function buildSessionLedgerRows(sessions) {
       JSON.stringify(session.config ?? {}),
       JSON.stringify(session.summary ?? {}),
       session.config?.fxLevel ?? "",
+      session.config?.artVersion ?? "",
     ]);
   });
   return rows;
@@ -297,6 +304,9 @@ export function buildTaskCsvRows(sessions, taskType) {
         // 当たったときの星や紙吹雪が成績に効きうる。末尾に足す（列位置を動かさない）。
         // 演出エンジンより前の記録は空欄。
         "fxLevel",
+        // 見え方の版（config.artVersion）。れんしゅうの回の絵が変わった前後を分ける。
+        // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
+        "artVersion",
       ],
     ];
     sessions
@@ -331,6 +341,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.config?.endlessProtocolVersion ?? "",
             session.endReason ?? "",
             session.config?.fxLevel ?? "",
+            session.config?.artVersion ?? "",
           ]);
         });
       });
@@ -364,6 +375,9 @@ export function buildTaskCsvRows(sessions, taskType) {
         // 当たったときの星や紙吹雪が成績に効きうる。末尾に足す（列位置を動かさない）。
         // 演出エンジンより前の記録は空欄。
         "fxLevel",
+        // 見え方の版（config.artVersion）。れんしゅうの回の絵が変わった前後を分ける。
+        // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
+        "artVersion",
       ],
     ];
     sessions
@@ -393,6 +407,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.config?.endlessProtocolVersion ?? "",
             session.endReason ?? "",
             session.config?.fxLevel ?? "",
+            session.config?.artVersion ?? "",
           ]);
         });
       });
@@ -402,59 +417,261 @@ export function buildTaskCsvRows(sessions, taskType) {
 }
 
 /**
- * 操作ログCSVの行を作る（1エントリ1行）。
- *
- * 純粋関数として切り出してあるのは、DOMの中に埋めたままだと列をテストで
- * 固定できないから。ロング形式の課題CSVと同じ理由で、ここも解析側と
- * 静かに食い違いうる出力になっている（tests/data-integrity.test.mjs）。
- *
- * @param {Array<object>} logs state.logs（配列先頭が最新）
- * @param {string} [participantId] 書き出した時点の参加者ID
+ * 書き出す記録に入っている参加者（"" は参加者IDを入れずに記録した回）。
+ * 並びは記録の順（はじめて出てきた順）。
  */
-export function buildLogCsvRows(logs, participantId) {
-  const rows = [
-    [
-      // 端末のローカル時刻（オフセット付き）。名前も time から time_local にする。
-      "time_local",
-      "view",
-      "type",
-      "label",
-      "correct",
-      // 以下は末尾に追加した列（既存4列の位置は動かさない）。
-      //
-      // success / skipEvaluation / distance は sanitizeLogEntry がずっと
-      // 保持していたのに、どのCSVにも出していなかった。保存されているだけの
-      // 値は解析に使えないので、実質「記録していない」のと同じ——端末情報を
-      // 記録しながら書き出していなかったときと同じ型の穴。
-      "success",
-      "skip_evaluation",
-      "distance",
-      // 書き出した時点で設定されていた参加者ID。
-      //
-      // 名前が重要。ログは参加者をまたいで最大300件たまるので、この値を
-      // participant_id という名前で出すと、別の参加者の回に付いた行まで
-      // 「この人の行」として読めてしまう——列名が行ごとの真実を主張して
-      // しまい、ログには行ごとの参加者IDが無い。
-      //
-      // 突き合わせは時刻で行う（セッションCSVの startedAtIso / endedAtIso と
-      // このログの time を突き合わせる）。この列はその作業の入口を示すだけの
-      // 補助であって、行の帰属ではない。
-      "exported_participant_id",
-    ],
-  ];
-  (Array.isArray(logs) ? logs : []).forEach((entry) => {
-    if (!entry || typeof entry !== "object") return;
-    rows.push([
-      toLocalIso(entry.time),
-      entry.view,
-      entry.type,
-      entry.label || "",
-      entry.correct ?? "",
-      entry.success ?? "",
-      entry.skipEvaluation ?? "",
-      entry.distance ?? "",
-      participantId || "",
-    ]);
+export function recordedParticipants(sessions) {
+  return [...new Set((Array.isArray(sessions) ? sessions : []).map((session) => session?.participantId || ""))];
+}
+
+/**
+ * 書き出しの名前に入れる参加者。
+ *
+ * 以前は「いま欄に入っている参加者ID」を使っていたので、次の人のIDを入れてから前の人の記録を
+ * 書き出すと、名前と中身の参加者が食い違った（確かめ表 B4）。名前は中身から決める:
+ * 記録の参加者が1人ならそのID（IDなしの回だけなら no-id）、2人以上（IDなしの回が混ざる場合も）
+ * なら multi。記録が1件も無いもの（操作ログだけ）は no-id。
+ */
+export function exportParticipantLabel(sessions) {
+  const participants = recordedParticipants(sessions);
+  if (participants.length > 1) return "multi";
+  return participants[0] || "";
+}
+
+/**
+ * 参加者を切り替えて記録を消したあと、欄に残す参加者ID。
+ *
+ * 書き出したあとに入れた次の人のIDなら残す（消してから入れ直させない）。前の人のIDが
+ * 残っていると、次の人の回に前の人のIDが焼き付く（取り違え。確かめ表 B4）ので、消す記録の
+ * 参加者か、書き出したときに欄にあったIDなら空にする。
+ */
+export function nextParticipantAfterHandOver(typed, sessions, participantAtExport) {
+  const id = typed || "";
+  if (!id || id === participantAtExport || recordedParticipants(sessions).includes(id)) return "";
+  return id;
+}
+
+/** 書き出しのファイル名（neuronode-slot-P001-2026-10-01-153000.csv）。 */
+export function exportFileName(stem, sessions, extension, date = new Date()) {
+  return `${stem}-${exportFileStamp(exportParticipantLabel(sessions), date)}.${extension}`;
+}
+
+/** CSV の本文（Excel が UTF-8 と分かるよう、先頭に BOM を付けるのは download の側）。 */
+export function csvText(rows) {
+  return rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+}
+
+/**
+ * 課題ごとの書き出し。押したボタン・名前・記録の選び方・列・無いときの知らせを1か所に持つ。
+ * kind は控え（recordBackup.js）の種類。消す前に、記録に入っている課題の種類がすべて
+ * 書き出してあるかをこの名前で確かめる。
+ */
+const TASK_EXPORTS = [
+  {
+    button: "exportRhythmCsv",
+    kind: "rhythm",
+    stem: "neuronode-rhythm",
+    select: (session) => session.taskType === "sms" || session.taskType === "gonogo",
+    rows: buildRhythmCsvRows,
+    empty: "書き出すリズム計測データがありません",
+    how: "リズムまたはGo/No-Goを1回終えると記録されます。",
+  },
+  {
+    button: "exportSlotCsv",
+    kind: "slot",
+    stem: "neuronode-slot",
+    select: (session) => session.taskType === "slot",
+    rows: buildSlotCsvRows,
+    empty: "書き出すリール停止データがありません",
+    how: "L1またはL2を1回終えると記録されます。",
+  },
+  {
+    button: "exportScanCsv",
+    kind: "scan",
+    stem: "neuronode-scan",
+    select: (session) => session.taskType === "scan",
+    rows: (sessions) => buildTaskCsvRows(sessions, "scan"),
+    empty: "書き出す走査課題データがありません",
+    how: "利用者が該当のあそびを1回終えると記録されます。",
+  },
+  {
+    button: "exportRtCsv",
+    kind: "rt",
+    stem: "neuronode-rt",
+    select: (session) => session.taskType === "rt",
+    rows: (sessions) => buildTaskCsvRows(sessions, "rt"),
+    empty: "書き出す反応課題データがありません",
+    how: "利用者が該当のあそびを1回終えると記録されます。",
+  },
+  {
+    button: "exportSessionLedgerCsv",
+    kind: "ledger",
+    stem: "neuronode-sessions",
+    select: () => true,
+    rows: buildSessionLedgerRows,
+    empty: "書き出すセッションがありません",
+    how: "あそびを1回終えると1行ぶん記録されます。",
+  },
+];
+
+export function initDataExport(ctx) {
+  const { state, elements, save, announce, notifySupporter } = ctx;
+
+  const backup = createRecordBackup(state);
+  ctx.recordBackup = backup;
+
+  /**
+   * 記録を1つのファイルにして渡す（ただ1つの道）。
+   *
+   * rows（表）なら BOM 付きの CSV、それ以外は JSON。名前は書き出す記録の参加者と時刻から
+   * 決め（exportFileName）、書き出したことを控え（kind）に残す。評価ログの操作ログCSVも
+   * ここを通る（ctx.downloadRecords）。
+   *
+   * @param {Array<Array>|object} content
+   * @param {string} stem ファイル名の頭（neuronode-slot など）
+   * @param {string} kind 控えの種類（recordBackup.js）
+   * @param {Array<object>} sessions 名前の参加者を決める記録（既定は端末の全セッション）
+   * @returns {string} 付けたファイル名
+   */
+  function download(content, stem, kind, sessions = state.sessions) {
+    const isCsv = Array.isArray(content);
+    const blob = isCsv
+      ? new Blob([`﻿${csvText(content)}`], { type: "text/csv;charset=utf-8" })
+      : new Blob([JSON.stringify(content, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = exportFileName(stem, sessions, isCsv ? "csv" : "json");
+    link.click();
+    backup.mark(kind);
+    URL.revokeObjectURL(url);
+    return link.download;
+  }
+  ctx.downloadRecords = download;
+
+  function exportTask(definition) {
+    const sessions = state.sessions.filter(definition.select);
+    if (!sessions.length) {
+      // announce の出力先 #liveRegion は .sr-only なので、読み上げを使わない支援者には
+      // 何も届かない——押しても無反応に見え、壊れていると受け取られる。画面にも出す。
+      announce(definition.empty);
+      notifySupporter(`${definition.empty}。${definition.how}`);
+      return;
+    }
+    download(definition.rows(sessions), definition.stem, definition.kind, sessions);
+  }
+
+  function exportRawJson() {
+    const payload = {
+      // 控えの中身は state そのまま（保存はUTC）。読む人のために、
+      // 書き出した時刻だけ日本時間も併記する。
+      exportedAtIso: new Date().toISOString(),
+      exportedAtLocal: toLocalIso(new Date().toISOString()),
+      storageKey,
+      // CSVの列は増えるが、この控えは state の形そのもの。読む側が形を
+      // 判別できるように、書き出し時のキー名を添える。
+      sessionCount: state.sessions.length,
+      logCount: state.logs.length,
+      state,
+    };
+    download(payload, "neuronode-raw", "raw");
+    notifySupporter(
+      `生データを書き出しました（セッション${state.sessions.length}件、ログ${state.logs.length}件）。`
+    );
+  }
+
+  function renderSessionRetention() {
+    const warning = elements.sessionRetentionWarning;
+    if (!warning) return;
+    const count = state.sessions.length;
+    const remaining = MAX_SESSIONS - count;
+    if (remaining > 5) {
+      warning.hidden = true;
+      warning.textContent = "";
+      return;
+    }
+    warning.hidden = false;
+    warning.textContent =
+      remaining > 0
+        ? `セッションの保存上限（${MAX_SESSIONS}件）まであと${remaining}件です。` +
+          "上限を超えると古い回から消えるので、先に「セッション台帳」と各CSV、" +
+          "または「生データ(JSON)」を書き出してください。"
+        : `セッションの保存上限（${MAX_SESSIONS}件）に達しています。` +
+          "次の回を記録すると最も古い回が消えます。今すぐ書き出してください。";
+  }
+
+  function handOverToNextParticipant() {
+    const sessionCount = state.sessions.length;
+    const logCount = state.logs.length;
+    if (sessionCount === 0 && logCount === 0) {
+      notifySupporter("消すものがありません。この端末にはまだ記録が入っていません。");
+      announce("消すものがありません");
+      return;
+    }
+    if (!backup.canClear()) {
+      notifySupporter(
+        `現在の記録はまだすべて書き出していません。セッション${sessionCount}件・ログ${logCount}件が消えます。` +
+          "先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。"
+      );
+      announce("先に書き出してください");
+      return;
+    }
+    if (!window.confirm(
+      `この端末の記録を消します。\n\n` +
+        `　セッション ${sessionCount}件\n` +
+        `　操作ログ ${logCount}件\n` +
+        `　測定結果と観察メモ\n\n` +
+        "書き出したファイルは消えません。消した記録は元に戻せません。"
+    )) {
+      announce("消すのをやめました");
+      return;
+    }
+
+    const nextParticipant = nextParticipantAfterHandOver(
+      state.evaluation.participantId,
+      state.sessions,
+      backup.participantAtExport()
+    );
+    const fresh = cloneDefaultState();
+    state.sessions = [];
+    state.logs = [];
+    state.evaluation = { ...fresh.evaluation, participantId: nextParticipant };
+    state.arcade = { ...fresh.arcade };
+    backup.reset();
+    save();
+    ctx.renderAll();
+    if (nextParticipant) {
+      notifySupporter(
+        `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。` +
+          `次の参加者「${nextParticipant}」で始められます。`
+      );
+      announce(`記録を消しました。次の参加者は${nextParticipant}です`);
+    } else {
+      notifySupporter(
+        `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。` +
+          "次の参加者IDを入れてから始めてください。"
+      );
+      announce("記録を消しました。次の参加者IDを入れてください");
+    }
+  }
+
+  /** 参加者IDと保存上限の警告を画面へ反映する。 */
+  function render() {
+    if (elements.participantId) {
+      elements.participantId.value = state.evaluation.participantId;
+    }
+    renderSessionRetention();
+  }
+
+  elements.participantId?.addEventListener("input", (event) => {
+    state.evaluation.participantId = event.target.value;
+    save();
   });
-  return rows;
+  TASK_EXPORTS.forEach((definition) => {
+    elements[definition.button]?.addEventListener("click", () => exportTask(definition));
+  });
+  elements.exportRawJson?.addEventListener("click", exportRawJson);
+  elements.handOverParticipant?.addEventListener("click", handOverToNextParticipant);
+
+  return { render, exportRawJson };
 }

@@ -10,9 +10,12 @@
 //   - Web上の自前走査とiOS実機のSwitch Controlは同時に動かさない。
 //     settings.switchControlMode=true のときは、このエンジンの全入口を
 //     停止し、OS側だけへ走査所有権を委譲する。
-//   - 支援者メニュー（設定画面）でも全入口を停止する。理由と、その代償
-//     （利用者が迷い込むと自力で戻れない）は isSupporterMenu() に書いた。
+//   - 支援者の世界（評価ログ・設定）でも全入口を停止する。理由と、その代償
+//     （利用者が迷い込むと自力で戻れない）は scanningIsOff() に書いた。
 // =====================================================================
+
+import { isSupporterView } from "./viewWorld.js";
+import { say, supporterLang } from "./supporterText.js";
 
 /**
  * @param {object} ctx - アプリ共有コンテキスト
@@ -31,9 +34,9 @@ export function createScanEngine(ctx) {
   }
 
   /**
-   * 支援者メニュー（設定画面）を開いているか。
+   * この画面では自前走査を動かさないか。
    *
-   * この画面では自前走査を**一切**動かさない（2026-09-14の指示）。ここの
+   * 支援者の世界（評価ログ・設定）では自前走査を**一切**動かさない。ここの
    * 操作子は支援者がタップ／キーボードで触るもので、走査で回しても利用者が
    * 選ぶ項目は1つもない。輪が伸びるだけで、黄色い枠が支援者の操作の上を
    * うろつく。
@@ -42,26 +45,16 @@ export function createScanEngine(ctx) {
    * タブバー（#homeReturn を含む）と #toggleScan は輪に残していた。
    * それは、スイッチだけの利用者が誤って支援者の世界へ入ったときの
    * 唯一の帰り道だったから——ここを断つと、実機確認2026-07-04で見つけた
-   * 「強制終了以外に戻れない」状態（basic-design.md §3.2）がこの画面に
-   * 限って戻る。支援者が画面をタップして戻す運用で引き受ける、という
+   * 「強制終了以外に戻れない」状態（basic-design.md §3.2）が評価ログにも
+   * 広がる。支援者が「ホームへ」をタップして戻す運用で引き受ける、という
    * 判断のうえで断っている。緩めるときは運用ごと見直すこと。
    *
-   * なお評価ログ（log）は従来どおり走査するので、タブ世界すべてが
-   * 行き止まりになるわけではない。
-   */
-  function isSupporterMenu() {
-    return state.currentView === "settings";
-  }
-
-  /**
-   * この画面では自前走査を動かさないか。
-   *
-   * 委譲中（iPad Switch Control）と支援者メニューは、理由は違うが結論が
+   * 委譲中（iPad Switch Control）と支援者の世界は、理由は違うが結論が
    * 同じ——タイマーも黄色い枠もスイッチ入力の受理も止める。入口ごとに
    * 条件を書き分けると、どこか1つ書き忘れて枠だけが生き残る。
    */
   function scanningIsOff() {
-    return usesNativeSwitchControl() || isSupporterMenu();
+    return usesNativeSwitchControl() || isSupporterView(state.currentView);
   }
 
   /** 残っている黄色い枠を消し、自前走査の位置を破棄する。 */
@@ -70,15 +63,48 @@ export function createScanEngine(ctx) {
     document.querySelectorAll(".scan-focus").forEach((target) => target.classList.remove("scan-focus"));
   }
 
+  /**
+   * 遊びの画面のうち、走査してよい範囲（セレクタ）。null なら走査しない。
+   * 決めるのは gameHost（いまどの段階か）。遊んでいる最中・遊ぶ前の説明の画面は
+   * null（スイッチの押下は課題の入力か「はじめる」。games/readyScreen.js）。
+   */
+  function gameScope() {
+    return ctx.gameHost?.scanScope?.() ?? null;
+  }
+
+  /**
+   * いまの画面では走査しないか（遊びの画面で走査の範囲が無い・スタート画面）。
+   * gameHost.launch() の scan.stop(true) が一次防御、これは二次防御
+   * （detailed-design.md §8.4 を start にも広げた。§2.1）。
+   */
+  function screenHasNoScan() {
+    return (state.currentView === "game" && !gameScope()) || state.currentView === "start";
+  }
+
   /** 現在のアクティブビューから走査対象を再収集する */
   function refresh() {
     if (scanningIsOff()) {
       scanTargets = [];
-      clearScanFocus();
+      stop(true);
       return;
     }
+    // 輪が変わっても、枠のあった要素に枠を残す（番号のままだと、見えている枠と
+    // 押して選ばれるものが食い違う）。
+    const focused = scanTargets[scanIndex] || null;
+    scanTargets = collectTargets();
+    const kept = focused ? scanTargets.indexOf(focused) : -1;
+    if (kept >= 0) scanIndex = kept;
+    else if (scanIndex >= scanTargets.length) scanIndex = scanTargets.length ? 0 : -1;
+    if (scanIndex >= 0) updateFocus();
+  }
+
+  function collectTargets() {
+    if (state.currentView === "game") {
+      const scope = gameScope();
+      return scope ? [...document.querySelectorAll(`${scope} [data-scan]`)].filter(isShown) : [];
+    }
     const activeView = document.querySelector(".view.is-active");
-    scanTargets = [
+    return [
       ...document.querySelectorAll(".tabbar [data-scan]"),
       ...(activeView ? [...activeView.querySelectorAll("[data-scan]")] : []),
       elements.toggleScan,
@@ -89,8 +115,11 @@ export function createScanEngine(ctx) {
       const isCurrentTab = target.matches?.(".tab.is-active");
       return !target.disabled && !isCurrentTab && rect.width > 0 && rect.height > 0;
     });
-    if (scanIndex >= scanTargets.length) scanIndex = 0;
-    updateFocus();
+  }
+
+  function isShown(target) {
+    const rect = target.getBoundingClientRect();
+    return !target.hidden && !target.disabled && rect.width > 0 && rect.height > 0;
   }
 
   /** 走査フォーカスの見た目を現在の index に同期する */
@@ -144,27 +173,39 @@ export function createScanEngine(ctx) {
 
   /** 走査を開始する（既に動いていれば作り直す） */
   function start() {
-    // 委譲中と支援者メニューでは、手動ボタンや将来の呼び出し元からも
+    // 委譲中と支援者の世界では、手動ボタンや将来の呼び出し元からも
     // 再開させない。
     if (scanningIsOff()) {
       stop(true);
       return;
     }
-    // ゲーム中・スタート画面中は絶対に走査しない（不変条件、
-    // detailed-design.md §8.4の二重防御をstartにも拡張）。
-    // gameHost.launch() の scan.stop(true) が一次防御、これは二次防御。
-    // start は「走査対象なし・全画面が入力」（detailed-design.md §2.1）のため、
-    // タブバー等が誤って走査され続ける事故を防ぐ。
-    if (state.currentView === "game" || state.currentView === "start") return;
+    if (screenHasNoScan()) return;
     stop(false);
     refresh();
     scanIndex = scanTargets.length ? Math.max(0, scanIndex) : -1;
     updateFocus();
     scanTimer = window.setInterval(step, state.settings.scanInterval);
-    // 画面に出る言葉は「走査」を使わない（打ち合わせで、ふだん目にしない言葉は
-    // 難しく感じると言われた。docs/design-renewal-2026-09-25.md §1.2）。
-    elements.scanState.textContent = "枠が動いています";
-    elements.toggleScanLabel.textContent = "枠を止める";
+    renderStatus();
+  }
+
+  /**
+   * 枠の状態の札（上の帯）と、枠を動かす・止めるボタンの字。支援者の画面の言語で
+   * （supporterText.js。言語を変えたときは views/settings.js が呼び直す）。
+   * 画面に出る言葉は「走査」を使わない（打ち合わせで、ふだん目にしない言葉は
+   * 難しく感じると言われた。docs/design-renewal-2026-09-25.md §1.2）。
+   */
+  function renderStatus() {
+    const lang = supporterLang(state.settings);
+    const status = scanTimer
+      ? { ja: "枠が動いています", en: "Highlight is moving" }
+      : usesNativeSwitchControl()
+        ? { ja: "iPad で操作中", en: "Using iPad Switch Control" }
+        : { ja: "枠は止まっています", en: "Highlight is stopped" };
+    elements.scanState.textContent = say(status, lang);
+    elements.toggleScanLabel.textContent = say(
+      scanTimer ? { ja: "枠を止める", en: "Stop the highlight" } : { ja: "枠を動かす", en: "Move the highlight" },
+      lang
+    );
   }
 
   /** 走査を停止する。clearFocus=false ならハイライト位置を保持する。 */
@@ -173,8 +214,7 @@ export function createScanEngine(ctx) {
       window.clearInterval(scanTimer);
       scanTimer = null;
     }
-    elements.scanState.textContent = usesNativeSwitchControl() ? "iPad で操作中" : "枠は止まっています";
-    elements.toggleScanLabel.textContent = "枠を動かす";
+    renderStatus();
     if (clearFocus) {
       clearScanFocus();
     }
@@ -189,9 +229,7 @@ export function createScanEngine(ctx) {
       stop(true);
       return;
     }
-    // ゲーム中・スタート画面中は絶対に走査しない（不変条件、
-    // detailed-design.md §8.4の二重防御をstartにも拡張、§2.1）。
-    if (state.currentView === "game" || state.currentView === "start") return;
+    if (screenHasNoScan()) return;
     window.setTimeout(() => {
       refresh();
       if (state.settings.autoScan) start();
@@ -204,7 +242,7 @@ export function createScanEngine(ctx) {
    * 現在のビューに応じた既定アクションへフォールバックする。
    */
   function activate() {
-    // 支援者メニューでは輪が空なので、押しても何も起きない。ここで先に
+    // 支援者の世界では輪が空なので、押しても何も起きない。ここで先に
     // 返すのは、refresh() を通して黄色い枠を触らせないため。
     if (scanningIsOff()) return;
     refresh();
@@ -252,5 +290,5 @@ export function createScanEngine(ctx) {
     return Boolean(scanTimer);
   }
 
-  return { refresh, step, start, stop, restartIfNeeded, activate, toggle, isRunning };
+  return { refresh, step, start, stop, restartIfNeeded, activate, toggle, isRunning, renderStatus };
 }

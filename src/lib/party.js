@@ -1,12 +1,10 @@
 // =====================================================================
 // party.js — 遊びの雰囲気「おおさわぎ」の決まり（DOM に触れない純粋関数）
 //
-// 遊びの雰囲気は、演出の強さ（settings.fxLevel）の見せ方を変えたもの:
-//   subtle … すっきり / normal … にぎやか（既定）/ big … おおさわぎ / none … なし
-// 新しい設定を足さず fxLevel に乗せたのは、session.config.fxLevel が CSV まで
-// 残っているから。どの雰囲気で遊んだかが、研究の記録からそのまま分かる。
-//
-// おおさわぎは「押すと 出てくる」で、押すたびに次のものが重なっていく
+// 遊びの雰囲気（なし・すっきり・にぎやか・おおさわぎ）の段ごとの中身は
+// src/lib/atmosphere.js の表がただ1つの持ち主。ここはおおさわぎの「たまるもの」
+// （びんの星・服・その日のびん）の決まりだけを持つ。研究の summary とは別に扱う。
+// おおさわぎでは、押すたびに次のものが重なっていく
 // （docs/party-mode-2026-09-29.md）:
 //   なかま（ラッコ）・音楽（楽器が1つずつ重なる）・キラキラびん（星がたまる）・
 //   観客・旗・最後のパレード、遊ぶたびにもらえるラッコの服。
@@ -34,9 +32,20 @@ export const MAX_PARTY_JARS = 9999;
 
 export const DEFAULT_PARTY = Object.freeze({ day: "", jars: 0, outfits: Object.freeze([]) });
 
-/** 演出の強さが「おおさわぎ」か。 */
-export function isPartyLevel(level) {
-  return level === "big";
+/**
+ * タイミングの遊びで、成功したぶんだけ星をためる。全部成功で 15（いっぱい）。
+ * エンドレスは成功1回で星1つ、15個ごとに次のびんへ進む。
+ */
+export function timingStars(successes, total, endless = false) {
+  const clamped = Math.max(0, Math.min(successes, total));
+  const earned = endless
+    ? Math.max(0, Math.floor(successes))
+    : Math.floor((clamped * PARTY_JAR_CAPACITY) / Math.max(1, total));
+  return {
+    earned,
+    jars: Math.floor(earned / PARTY_JAR_CAPACITY),
+    stars: earned > 0 ? earned % PARTY_JAR_CAPACITY || PARTY_JAR_CAPACITY : 0,
+  };
 }
 
 /** 押した回（0 から）のあとの、びんの中の星の数。 */
@@ -76,10 +85,10 @@ export function sanitizeParty(candidate) {
  * 日付が変わっていれば数え直す（服は取り上げない）。
  * @returns {{party: {day: string, jars: number, outfits: string[]}, unlocked: string|null, jarsToday: number}}
  */
-export function applyPartyResult(party, dayKey = localDayKey()) {
+export function applyPartyResult(party, dayKey = localDayKey(), jarCount = 1) {
   const current = sanitizeParty(party);
   const base = current.day === dayKey ? current.jars : 0;
-  const jarsToday = Math.min(base + 1, MAX_PARTY_JARS);
+  const jarsToday = Math.min(base + Math.max(0, Math.floor(jarCount)), MAX_PARTY_JARS);
   const unlocked = nextOutfit(current.outfits);
   const outfits = unlocked ? PARTY_OUTFITS.filter((id) => id === unlocked || current.outfits.includes(id)) : current.outfits;
   return { party: { day: dayKey, jars: jarsToday, outfits }, unlocked, jarsToday };

@@ -16,6 +16,15 @@ import {
   project,
 } from "../src/lib/games/craneGeometry.js";
 import { endlessSweepMs, endlessToleranceR } from "../src/lib/games/crane.js";
+import { cranePrizes } from "../src/lib/content.js";
+import {
+  CRANE_PRIZE_ART,
+  clawHtml,
+  craneMatHtml,
+  craneRoomHtml,
+  craneWorldHtml,
+  cranePrizeSvg,
+} from "../src/lib/art/craneWorldArt.js";
 
 let passed = 0;
 let failed = 0;
@@ -262,6 +271,57 @@ test("endless never makes the run easier than the setting it started from", () =
   // 下限より厳しい設定で始めた回は、そのまま据え置く（緩めない・締めない）。
   assert.equal(endlessToleranceR(4, 30), 4);
   assert.equal(endlessSweepMs(800, 30), 800);
+});
+
+// --- れんしゅうの回の世界の絵（art/craneWorldArt.js） -----------------------
+// そくていの回は PNG のまま。ここで固定するのは、絵を替えても「置き場所・大きさ・
+// つかむ点」が動かないこと（見え方の検査は、画面を撮って前後で比べる）。
+
+test("world prize art has the same box as the PNGs, so the feet stay where they were", () => {
+  // src/assets/crane/prize-*.png の大きさ。景品は幅の％で置き、足元を下端にそろえるので、
+  // 縦横比が違うと足元の位置と大きさが変わる。
+  const pngSize = { "prize-bear": "0 0 220 230", "prize-rabbit": "0 0 210 250", "prize-star": "0 0 230 230" };
+  cranePrizes.forEach((prize) => {
+    const art = CRANE_PRIZE_ART[prize.asset];
+    assert.ok(art, `${prize.asset} に世界の絵が無い`);
+    assert.equal(art.viewBox, pngSize[prize.asset]);
+    assert.ok(cranePrizeSvg(prize.asset).includes('aria-hidden="true"'), "飾りは読み上げに乗せない");
+  });
+});
+
+test("world claw art: open and closed share the box and the tip of the centre finger", () => {
+  const [open, closed] = clawHtml().split("</svg>").filter(Boolean).map((part) => `${part}</svg>`);
+  assert.ok(open.includes("claw-open") && closed.includes("claw-closed"));
+  // PNG（claw-open.png / claw-closed.png）と同じ 240x280。
+  assert.ok(open.includes('viewBox="0 0 240 280"') && closed.includes('viewBox="0 0 240 280"'));
+  // つかむ点＝アームの下端は、中央の指の先。開いた絵と閉じた絵で同じ形を使うので、
+  // 切り替えてもアームは跳ねない（昔、PNG の下の余白が 34px ずれて跳ねた）。
+  const centre = (svg) => svg.match(/<path d="M101 150[^"]*"/)?.[0];
+  assert.ok(centre(open), "中央の指が見つからない");
+  assert.equal(centre(open), centre(closed));
+  // 閉じた絵は、左右の指だけが違う（付け根の関節を軸に回してある）。
+  assert.notEqual(open, closed);
+});
+
+test("world art keeps to the rules of the palette (no scan-frame yellow) and never draws a PNG", () => {
+  const all = [
+    clawHtml(),
+    craneRoomHtml(),
+    craneMatHtml(),
+    craneWorldHtml(),
+    ...cranePrizes.map((prize) => cranePrizeSvg(prize.asset)),
+  ].join("\n");
+  assert.ok(!/#FFC83D/i.test(all), "黄色（#FFC83D）は走査の枠の色");
+  assert.ok(!/<image|href=|\.png/i.test(all), "素材は SVG の文字列（PNG を足さない）");
+});
+
+test("world mat is drawn on the same floor trapezoid as the hit test", () => {
+  const corner = (p) => `${p.left.toFixed(2)} ${p.top.toFixed(2)}`;
+  // 市松の外周は床の4隅（craneGeometry.js の project）そのもの。
+  const outline = `M${corner(project(0, 0))} L${corner(project(100, 0))} L${corner(project(100, 100))} L${corner(project(0, 100))} Z`;
+  assert.ok(craneMatHtml().includes(outline), `床の台形とずれている: ${outline}`);
+  // 奥の壁の下端は、床の奥の端の高さ。
+  assert.ok(craneRoomHtml().includes(`${CRANE_GEOM.farTop.toFixed(2)}%`), "奥の壁の下端が床の奥の端と合っていない");
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

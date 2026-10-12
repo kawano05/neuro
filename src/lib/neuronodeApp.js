@@ -27,16 +27,20 @@ import { resolveTextMode, translate, translateHtml } from "./i18n.js";
 import { loadState, createStateSaver, MAX_LOG_ENTRIES } from "./state.js";
 import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
+import { presentation } from "./presentation.js";
 import { createFxSystem } from "./fx/index.js";
 import { SOUND_SAMPLE_URLS } from "./soundAssets.js";
 import { VOICE_PACK } from "./voiceAssets.js";
 import { createScanEngine } from "./scan.js";
+import { USER_ACTIVITY_VIEWS, USER_WORLD_VIEWS, isSupporterView } from "./viewWorld.js";
 import { createInputDeduper } from "./utils.js";
 import { createGameHost } from "./games/gameHost.js";
 import { initHome } from "./views/home.js";
 import { initMatching } from "./views/matching.js";
 import { initVoca } from "./views/voca.js";
 import { initLetters } from "./views/letters.js";
+import { initDataExport } from "./dataExport.js";
+import { initLog } from "./views/log.js";
 import { initSettings } from "./views/settings.js";
 
 // 同一物理入力（pointerdown → click 等）の多重発火を1入力に畳む閾値
@@ -54,7 +58,7 @@ const VIEW_ELEMENT_IDS = {
   result: "resultView",
 };
 
-// 支援者の世界（タブ群）を構成するビュー名（basic-design.md §3.2）。
+// 「ホームへ」を表示する学習画面と支援者の世界のビュー名（basic-design.md §3.2）。
 // #homeReturn（「← ホームへ」導線）はこの集合に属するビューでだけ表示する。
 // 利用者の世界（start/home/game/result）では、home 自体も含めて非表示にする
 // （実機確認2026-07-04：タブビューから戻れない導線欠落の修正、detailed-design.md §10）。
@@ -62,6 +66,7 @@ const TAB_WORLD_VIEWS = new Set([
   "matching",
   "voca",
   "letters",
+  "log",
   "settings",
 ]);
 
@@ -82,13 +87,6 @@ const TAB_WORLD_VIEWS = new Set([
 //
 // 代わりに残っているもの: 支援者の世界への入口がタップ専用であること、
 // 破壊的な操作（記録の消去・候補値の保存）が走査対象外であること。
-const USER_ACTIVITY_VIEWS = new Set(["matching", "voca", "letters"]);
-/**
- * 利用者の世界（デザイン「はっきりした色」を当てる画面。src/theme-hakkiri.css）。
- * 支援者の世界（設定）は、色と形だけをそろえ、字は漢字かな混じりのまま
- * （theme-hakkiri.css の「支援者の世界」）。
- */
-const USER_WORLD_VIEWS = new Set(["start", "home", "game", "result", ...USER_ACTIVITY_VIEWS]);
 
 export function initNeuroNodeApp() {
   // --- 状態と要素 ---
@@ -140,20 +138,38 @@ export function initNeuroNodeApp() {
     }, 6000);
   };
 
-  ctx.save = createStateSaver(state, () =>
+  const saveState = createStateSaver(state, () =>
     ctx.announce("データの保存に失敗しました。端末の空き容量を確認してください。")
   );
+
+  // 警告は通常の案内や6秒の支援者メッセージとは別に保持する。
+  // 測定中の入力面には出さず、ホーム・結果・支援者の面で読み上げOFFでも見える。
+  let storageFailed = false;
+  function renderStorageWarning() {
+    elements.storageWarning.hidden = !storageFailed ||
+      !["home", "result", "settings", "log"].includes(state.currentView);
+  }
+  ctx.save = () => {
+    const saved = saveState();
+    storageFailed = !saved;
+    renderStorageWarning();
+    return saved;
+  };
+  elements.storageRetry.addEventListener("click", () => ctx.save());
+  elements.storageExport.addEventListener("click", () => ctx.views.dataExport.exportRawJson());
 
   const audio = createAudio(() => state.settings, ctx.announce, {
     sampleUrls: SOUND_SAMPLE_URLS,
     voicePack: VOICE_PACK,
   });
-  ctx.audio = audio;
-  // 演出（粒・光・弾み）。docs/overall-design-2026-09-28.md。強さは設定と端末の
-  // 「動きを減らす」で毎回決まり、そくていの回の遊びでは何も足さない。
-  ctx.fx = createFxSystem({ getSettings: () => state.settings });
-  ctx.speak = audio.speak;
-  ctx.voiceFeedback = audio.speakOrAnnounce;
+  // 合図のスケジューラと研究用の時刻・端末情報は演出として握りつぶさない。
+  ctx.audio = presentation.protect(audio, "audio", { passThrough: ["scheduler", "playToneAt", "getDeviceInfo", "unlock"] });
+  // 演出（粒・光・弾み）。docs/overall-design-2026-09-28.md。強さは設定「遊びの雰囲気」で
+  // 毎回決まり、そくていの回の遊びでは何も足さない。強さが読めないときは「なし」
+  // （何も足さない側。docs/rules/ud-checklist.md の C2）。
+  ctx.fx = presentation.protect(createFxSystem({ getSettings: () => state.settings }), "fx", { fallbacks: { level: "none" } });
+  ctx.speak = (...args) => presentation.run("voice.speak", () => audio.speak(...args));
+  ctx.voiceFeedback = (...args) => presentation.run("voice.feedback", () => audio.speakOrAnnounce(...args));
   ctx.playTone = audio.playTone;
 
   ctx.scan = createScanEngine(ctx);
@@ -170,11 +186,15 @@ export function initNeuroNodeApp() {
     });
     state.logs = state.logs.slice(0, MAX_LOG_ENTRIES);
     ctx.save();
+    ctx.views.log.render();
   };
 
   /** 画面の切り替え。visibleViews にない画面は start へフォールバックする。 */
   ctx.switchView = function switchView(viewName) {
     const nextView = visibleViews.has(viewName) ? viewName : "start";
+    // 支援者の世界へ入るときは、利用者の世界で出た粒を消す（「はじめる」の粒が設定画面の上に
+    // 残っていた。粒の層は画面全体を覆う固定の層なので、画面を替えても自然には消えない）。
+    if (isSupporterView(nextView) && !isSupporterView(state.currentView)) ctx.fx.clear();
     state.currentView = nextView;
     ctx.save();
     ctx.renderAll();
@@ -191,8 +211,9 @@ export function initNeuroNodeApp() {
   ctx.views.matching = initMatching(ctx);
   ctx.views.voca = initVoca(ctx);
   ctx.views.letters = initLetters(ctx);
-  // 評価ログ（書き出し・参加者ID・切り替え）の画面は、2026-09-30 に外した。
-  // 記録（state.sessions / state.logs）は今までどおり残る（src/lib/dataExport.js）。
+  // 支援者のデータ画面（書き出し・参加者ID・切り替え）は評価ログの中に置く。
+  ctx.views.dataExport = initDataExport(ctx);
+  ctx.views.log = initLog(ctx);
   ctx.views.settings = initSettings(ctx);
 
   /**
@@ -211,6 +232,7 @@ export function initNeuroNodeApp() {
    * 読み上げ名（sr-only の見出し）はプレーン文、目で読む文字はルビ付き。
    */
   function renderUserWorldText() {
+    ctx.fx.syncPolicy();
     const set = (el, key, html = true) => {
       if (!el) return;
       if (html) el.innerHTML = ctx.tHtml(key);
@@ -271,12 +293,14 @@ export function initNeuroNodeApp() {
     // 「せってい」があると、先に設定しないといけないと思われた
     // （docs/design-renewal-2026-09-25.md §1.2）。
     document.body.classList.toggle("start-mode", nextView === "start");
-    // 支援者メニューでは自前走査を動かさない（scan.js の isSupporterMenu()）。
-    // ドックの2つは、そこでは押しても何も起きない操作子になるので無効化する
-    // ——効かない操作子を黙って置いておくと、支援者は「押したのに動かない」を
-    // 不具合として報告するしかない。消さずに無効化するのは、下端の版面が
-    // 画面遷移のたびに伸び縮みするのを避けるため。
-    const supporterMenu = nextView === "settings";
+    // 支援者の世界（評価ログ・設定）では自前走査を動かさない（scan.js の scanningIsOff()）。
+    // ドックの2つは、そこでは押しても何も起きない操作子になるので、無効化したうえで
+    // ドックごと隠す（styles.css の body.supporter-menu-mode）。効かない操作子を置いて
+    // おくと、支援者は「押したのに動かない」を不具合として報告するしかなく、設定の
+    // タップ標的も覆う。以前は下端の版面の伸び縮みを避けて見せたまま無効化していたが、
+    // 支援者の世界の画面はどれも縦に流れる業務画面なので、伸び縮みは問題にならない。
+    // 無効化も残すのは、CSS が読めない状態でもスイッチ入力が走査を動かさないため。
+    const supporterMenu = isSupporterView(nextView);
     document.body.classList.toggle("supporter-menu-mode", supporterMenu);
     [elements.toggleScan, elements.primarySwitch].forEach((control) => {
       if (!control) return;
@@ -294,9 +318,12 @@ export function initNeuroNodeApp() {
     ctx.views.matching.render();
     ctx.views.voca.render();
     ctx.views.letters.render();
+    ctx.views.dataExport.render();
     ctx.views.settings.render();
+    ctx.views.log.render();
     ctx.gameHost.render();
     ctx.views.settings.applyClasses();
+    renderStorageWarning();
   };
 
   // --- 入力ファネル（シェル側一元計時、detailed-design.md §3.3） ---
@@ -327,11 +354,10 @@ export function initNeuroNodeApp() {
     tab.addEventListener("click", () => ctx.switchView(tab.dataset.view));
   });
 
-  // 「← ホームへ」: 支援者の世界（タブ群）から利用者の世界（home）へ戻る唯一の
-  // 導線。data-scan を付けているため、スイッチ利用者が誤って評価ログへ入っても
-  // 走査で自力到達できる（実機確認2026-07-04で発覚した欠落の修正）。
-  // 設定画面だけは走査そのものを止めるので、そこからの復帰は支援者のタップに
-  // なる（理由と代償は scan.js の isSupporterMenu()）。
+  // 「← ホームへ」: 学習画面と支援者の世界から利用者のホームへ戻る唯一の
+  // 導線。利用者の学習画面では data-scan によりスイッチでも戻れる。
+  // 支援者の世界（評価ログ・設定）では走査そのものを止めるため、復帰は
+  // 支援者のタップで行う（理由と代償は scan.js の scanningIsOff()）。
   elements.homeReturn.addEventListener("click", () => {
     ctx.views.home.showLobby();
     ctx.switchView("home");
@@ -484,7 +510,8 @@ export function initNeuroNodeApp() {
       if (event.repeat) return; // 押しっぱなしの連続 keydown は無視する（MUST, §3.3）
       acceptSwitchEvent("keyboard");
     }
-    if (event.key === "ArrowRight" && state.currentView !== "game") {
+    // 遊びの画面では、ホストが走査してよい範囲を持つときだけ（エンドレスの終わりの選択）。
+    if (event.key === "ArrowRight" && (state.currentView !== "game" || ctx.gameHost.scanScope())) {
       event.preventDefault();
       ctx.scan.step();
     }
@@ -493,8 +520,12 @@ export function initNeuroNodeApp() {
   // ゲーム中にタブが非アクティブ化したらセッションを中断して home へ直帰する
   // （detailed-design.md §2.4 終了条件3。計時汚染防止のため再開はしない）。
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && state.currentView === "game") {
-      ctx.gameHost.abort();
+    if (document.hidden) {
+      if (state.currentView === "game") ctx.gameHost.abort();
+      else ctx.gameHost.stopPresentation();
+      ctx.scan.stop(true);
+    } else {
+      ctx.scan.restartIfNeeded();
     }
   });
 

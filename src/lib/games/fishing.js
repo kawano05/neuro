@@ -26,6 +26,7 @@
 // 渡すため（sanitizer を通らない）、その場では合計スコアを表示できる。
 // =====================================================================
 
+import { presentation } from "../presentation.js";
 import { cueTones, fishingPresets, fishingSpecies } from "../content.js";
 import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
@@ -35,8 +36,11 @@ import {
   resolveEndlessMode,
   resolveFishingDifficulty,
 } from "../difficultyMode.js";
+import { FISHING_ART_VERSION, fishingBoatSvg, fishingCatchSvg, fishingSeaHtml, fishingSkyHtml } from "../art/fishingWorldArt.js";
 import { generateGoNoGoSequence } from "./judge.js";
 import { generateForeperiods, judgeReaction } from "./reaction.js";
+import { renderAudioUnavailable } from "./unavailableScreen.js";
+import { practiceArtFor, showsWorldArt, shownArtVersion } from "../artVersion.js";
 
 // 素材の URL。`import boat from "...png"` ではなく new URL(...) を使う。
 // 前者だと Vite は解決できるが、素の Node が .png を読めずに落ちる
@@ -266,6 +270,13 @@ export function createFishingGame(gameId) {
   //   - fishing-gonogo には出さない。長靴のときに出さず魚のときだけ出すと、
   //     「！を見たら押す」だけで解けてしまい、見送る練習にならない。
   const showBiteMark = gameId === "fishing" && resolveDifficultyMode(ctx.settings) !== "measure";
+  // れんしゅうの回か。
+  const practice = resolveDifficultyMode(ctx.settings) !== "measure";
+  // 新しい絵（押すと 出てくる とつながる海と、ラッコの舟・色つきの魚。src/world-fishing.css、
+  // art/fishingWorldArt.js）を出すか。れんしゅうの回だけで、遊びの中の「この遊びの設定」で
+  // 前の絵も選べる（artVersion.js）。動くもの・合図の位置・大きさ・時刻は変えず、描いてある絵だけを
+  // 替える。そくていの回は、いまの絵（PNG）のまま1pxも変えない。
+  const worldArt = showsWorldArt(resolveDifficultyMode(ctx.settings), practiceArtFor(ctx.settings, gameId));
   // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
   // 返すので、測る回の長さは protocol のまま動かない。
   config.endless = resolveEndlessMode(ctx.settings, ctx.endless);
@@ -298,6 +309,9 @@ export function createFishingGame(gameId) {
   let preparedPlan = null;
   let soundUnavailable = false;
   let waitingForSound = false;
+  // 「音が鳴らせません」を出したときの音の状態と、ためし直しを済ませたか（1回だけ）。
+  let unavailableState = null;
+  let retriedSound = false;
   let finished = false;
   let sessionStartAudioMs = 0;
   let anchorPerfMs = 0;
@@ -357,24 +371,14 @@ export function createFishingGame(gameId) {
    * 音が出せない端末で、課題を始められない理由を画面に出す。
    * 読む相手は支援者なので、原因と次の手を書く（games/rhythm.js と同型）。
    */
+  /** 音が止まっていただけ（iOS の suspended / interrupted）で、まだ ためし直していないか。 */
+  function canRetrySound() {
+    return !retriedSound && (unavailableState === "suspended" || unavailableState === "interrupted");
+  }
+
   function renderUnavailable(audioState) {
-    if (!stageEl) return;
-    const stopped = audioState === "suspended" || audioState === "interrupted";
-    const why = stopped
-      ? "音が止まっているため、さかなつりは始められません。ほかのアプリの音や着信、消音スイッチ、音量を確認してください。画面を押すと、もう一度ためします。"
-      : "この端末では音を鳴らす機能が使えないため、さかなつりは始められません。";
-    stageEl.innerHTML = `
-      <div class="game-unavailable">
-        <strong>おとが ならせません</strong>
-        <p>${why} アタリの合図が音なので、続けても はやさの記録になりません。</p>
-        <p class="game-unavailable-hint">
-          右上の「おわる」で もどれます。${
-            stopped ? "直したあと、もう一度えらんでください。" : "音の出る端末で もう一度おためしください。"
-          }
-        </p>
-      </div>
-    `;
-    announce("音が鳴らせないため、さかなつりを始められません");
+    unavailableState = audioState;
+    renderAudioUnavailable(stageEl, ctx, "fishing", audioState, { canRetry: canRetrySound() });
   }
 
   function renderMarkup() {
@@ -440,6 +444,23 @@ export function createFishingGame(gameId) {
     catchEl = stageEl.querySelector(".fishing-catch");
     scoreEl = stageEl.querySelector(".fishing-score");
     streakEl = stageEl.querySelector(".fishing-streak");
+  }
+
+  /**
+   * れんしゅうの回の世界に差し替える。組み立ては renderMarkup のまま（要素と class は
+   * 同じ）で、中の絵だけを替える——判定・位置・時刻を動かす要素には触らない。
+   * 世界は遊びの始めに1回だけ作る（試行ごとには作り直さない）。
+   */
+  function decoratePractice() {
+    sceneEl.querySelector(".fishing-sky").innerHTML = presentation.run("world.sky", fishingSkyHtml, "");
+    const deepEl = sceneEl.querySelector(".fishing-deep");
+    deepEl.innerHTML = presentation.run("world.deep", fishingSeaHtml, "");
+    // 夕暮れ（is-dusk）は、光の変化だけで伝える合図。れんしゅうの回は滑らかに重ねる。
+    deepEl.insertAdjacentHTML("afterend", '<div class="fishing-dusk"></div>');
+    sceneEl.querySelector(".fishing-boat").outerHTML = presentation.run("world.boat", fishingBoatSvg, sceneEl.querySelector(".fishing-boat").outerHTML);
+    // 魚・長靴は、試行ごとに updateVisual が SVG を入れる。
+    sceneEl.querySelector(".fishing-swimmer-art").outerHTML = '<span class="fishing-swimmer-art"></span>';
+    swimmerArtEl = stageEl.querySelector(".fishing-swimmer-art");
   }
 
   function updateProgress(nowRelativeMs) {
@@ -576,6 +597,7 @@ export function createFishingGame(gameId) {
     logTrial(session);
 
     // エンドレスは1回でも失敗したところで終わり（crane と同じ規則）。
+    ctx.party?.react({ success: judgment === "hit" || judgment === "correctRejection", source: swimmerEl, total: trialsPlan.length, endless: config.endless });
     //
     // correctRejection は「押してはいけない合図で押さなかった」で、正しく
     // できた回。失敗に数えない——長靴で待てたことを失敗にすると、抑制の
@@ -752,7 +774,8 @@ export function createFishingGame(gameId) {
     } else {
       if (swimmerArtEl && swimmerArtEl.dataset.index !== String(planned.index)) {
         swimmerArtEl.dataset.index = String(planned.index);
-        swimmerArtEl.src = planned.kind === "fake" ? bootUrl : FISH_ART[planned.species];
+        if (worldArt) swimmerArtEl.innerHTML = presentation.run("world.fishing.catch", () => fishingCatchSvg(planned.kind === "fake" ? "boot" : planned.species), `<img src="${planned.kind === "fake" ? bootUrl : FISH_ART[planned.species]}" alt="" style="width:100%;height:100%;object-fit:contain" />`);
+        else swimmerArtEl.src = planned.kind === "fake" ? bootUrl : FISH_ART[planned.species];
         swimmerEl.classList.toggle("is-boot", planned.kind === "fake");
         // 画面上の大きさを魚種に合わせる（styles.css の
         // .fishing-swimmer[data-species]）。長さを cm で見せる以上、
@@ -813,12 +836,6 @@ export function createFishingGame(gameId) {
   }
 
   function handleInput(perfMs) {
-    // 「おとが ならせません」の画面で押したら、もう一度ためす（押した操作の中で
-    // 止まった音を戻せる。neuronodeApp.js の resumeIfSuspended）。記録はしない。
-    if (!destroyed && !session && soundUnavailable) {
-      waitForSound({ remount: true });
-      return;
-    }
     if (destroyed || finished || !session) return;
     pullLine();
     const inputMs = toSessionRelativeMs(toAudioAbsMs(perfMs));
@@ -917,7 +934,11 @@ export function createFishingGame(gameId) {
   function mount(el) {
     stageEl = el;
     stageEl.classList.add("module-fishing");
+    stageEl.classList.toggle("is-practice", practice);
+    // 新しい絵の印。world-fishing.css はすべてこの下に書く（前の絵を選んだ回には付けない）。
+    stageEl.classList.toggle("has-world-art", worldArt);
     renderMarkup();
+    if (worldArt) decoratePractice();
     preparedPlan = buildPlan();
 
     // 音が止まっていたら（iOS のスリープ・ほかのアプリ・読み上げのあと）、戻るのを
@@ -925,6 +946,22 @@ export function createFishingGame(gameId) {
     // （audio.js の waitUntilRunning。games/rhythm.js と同じ）。
     if (audio.scheduler.canSound()) beginSession();
     else waitForSound();
+  }
+
+  /**
+   * 「音が鳴らせません」の画面でのひと押し（gameHost の段階 "unavailable" から呼ばれる）。
+   * 音が止まっていただけなら、押した操作の中で音を戻せるので（neuronodeApp.js の
+   * resumeIfSuspended）、1回だけ もう一度ためして true を返す。ためしても鳴らない・鳴らせない
+   * 端末のときは false（ホストがホームへ戻す。スイッチだけの人を、この画面に閉じ込めない）。
+   * 記録はしない。
+   */
+  function retryUnavailable() {
+    if (destroyed || session) return false;
+    if (waitingForSound) return true;
+    if (!soundUnavailable || !canRetrySound()) return false;
+    retriedSound = true;
+    waitForSound({ remount: true });
+    return true;
   }
 
   /** 音が鳴るようになるのを待って始める。鳴らないままなら「おとが ならせません」。 */
@@ -946,6 +983,7 @@ export function createFishingGame(gameId) {
       if (remount && stageEl) {
         stageEl.classList.add("module-fishing");
         renderMarkup();
+        if (worldArt) decoratePractice();
       }
       beginSession();
     });
@@ -1048,6 +1086,9 @@ export function createFishingGame(gameId) {
         difficultyMode: resolveDifficultyMode(ctx.settings),
         // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
         fxLevel: ctx.fx?.level() ?? null,
+        // 見え方の版（art/fishingWorldArt.js）。れんしゅうの回の釣り人・魚・長靴の絵が
+        // 変わった前後を分けるため。
+        artVersion: shownArtVersion(resolveDifficultyMode(ctx.settings), FISHING_ART_VERSION, practiceArtFor(ctx.settings, gameId)),
         // 成立確認の状態（met / overridden / n/a）。他の課題と同じ意味。
         measurementReadiness: ctx.readiness || "n/a",
       },
@@ -1097,7 +1138,7 @@ export function createFishingGame(gameId) {
       logTrial(session);
     }
     if (stageEl) {
-      stageEl.classList.remove("module-fishing");
+      stageEl.classList.remove("module-fishing", "is-practice", "has-world-art");
       stageEl.innerHTML = "";
     }
     stageEl = null;
@@ -1111,6 +1152,6 @@ export function createFishingGame(gameId) {
     streakEl = null;
   }
 
-    return { mount, handleInput, destroy };
+    return { mount, handleInput, destroy, retryUnavailable };
   };
 }

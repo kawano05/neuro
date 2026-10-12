@@ -98,6 +98,8 @@ export function spokenTexts(mode) {
   howtoKeys.forEach((key) => join([t(key)], key));
 
   // --- 遊びの中の声
+  // しばらく押さないと出る「もういちど／おわる」の問い（gameHost の openExitChoice）。
+  say(t("game.switchMenuTitle"), "game.switchMenuTitle");
   const cheer = t("color.voice.cheer");
   const celebrateWith = (doneText, from) => {
     // celebrate（beginnerKit.js）: おいわいが「なし」なら done の文だけ、それ以外は「やったー！」から。

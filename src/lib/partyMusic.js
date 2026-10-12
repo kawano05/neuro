@@ -66,6 +66,9 @@ const TICK_MS = 25;
  */
 export function createPartyMusic({ getContext, getOutput, enabled }) {
   let bus = null;
+  // bus → compressor → 効果音の出口。止めるときは両方を外す（compressor を残すと、
+  // おおさわぎで遊ぶたびに1つずつ出口につながったまま増えていく）。
+  let compressor = null;
   let noise = null;
   let timer = null;
   let playing = false;
@@ -74,21 +77,28 @@ export function createPartyMusic({ getContext, getOutput, enabled }) {
   let tempo = 112;
   let step = 0;
   let next = 0;
+  const sources = new Set();
+  const fades = new Map();
+  const own = source => {
+    sources.add(source);
+    source.addEventListener?.("ended", () => sources.delete(source), { once: true });
+    return source;
+  };
 
   function ensure() {
     if (!enabled()) return null;
     const ctx = getContext();
     if (!ctx) return null;
     if (!bus) {
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -12;
-      comp.ratio.value = 8;
-      comp.attack.value = 0.003;
-      comp.release.value = 0.2;
+      compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = -12;
+      compressor.ratio.value = 8;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.2;
       bus = ctx.createGain();
       bus.gain.value = 0.0001;
-      bus.connect(comp);
-      comp.connect(getOutput(ctx));
+      bus.connect(compressor);
+      compressor.connect(getOutput(ctx));
     }
     if (!noise) {
       noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -99,7 +109,7 @@ export function createPartyMusic({ getContext, getOutput, enabled }) {
   }
 
   function osc(ctx, type, frequency, at, peak, { attack = 0.005, decay = 0.2 } = {}) {
-    const o = ctx.createOscillator();
+    const o = own(ctx.createOscillator());
     const g = ctx.createGain();
     o.type = type;
     o.frequency.setValueAtTime(frequency, at);
@@ -114,7 +124,7 @@ export function createPartyMusic({ getContext, getOutput, enabled }) {
   }
 
   function hiss(ctx, at, durationS, peak, { type = "highpass", frequency = 6000, q = 0.7 } = {}) {
-    const src = ctx.createBufferSource();
+    const src = own(ctx.createBufferSource());
     const filter = ctx.createBiquadFilter();
     const g = ctx.createGain();
     src.buffer = noise;
@@ -191,6 +201,25 @@ export function createPartyMusic({ getContext, getOutput, enabled }) {
   }
 
   return {
+    /** 中断はフェードを待たず、先読みの音と古いフェード時計もすべて止める。 */
+    hush() {
+      playing = false;
+      clearTimer();
+      fades.forEach((interval, timeout) => {
+        window.clearTimeout(timeout);
+        window.clearInterval(interval);
+      });
+      fades.clear();
+      for (const source of sources) {
+        try { source.stop(); } catch { /* 終了済みでも次の音を止める。 */ }
+        try { source.disconnect(); } catch { /* 接続がなければ何もしない。 */ }
+      }
+      sources.clear();
+      bus?.disconnect();
+      compressor?.disconnect();
+      bus = null;
+      compressor = null;
+    },
     /** 最初の段で鳴らしはじめる（鳴っていれば頭から）。 */
     start(startLevel = 0) {
       const ctx = ensure();
@@ -231,10 +260,12 @@ export function createPartyMusic({ getContext, getOutput, enabled }) {
       bus.gain.exponentialRampToValueAtTime(0.0001, t + fade);
       const ending = timer;
       timer = null;
-      window.setTimeout(() => {
+      const timeout = window.setTimeout(() => {
         // フェードのあいだに start() が呼ばれていれば、その新しい時計は止めない。
         if (ending !== null) window.clearInterval(ending);
+        fades.delete(timeout);
       }, fade * 1000 + 150);
+      fades.set(timeout, ending);
     },
     /** 声が出るあいだ下げる。 */
     duck(seconds) {

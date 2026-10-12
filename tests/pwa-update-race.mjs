@@ -1,13 +1,13 @@
+// PWA 更新の途中でも、旧版と新版の資産を混ぜずにオフラインへ戻れることを確かめる。
+
 import { chromium } from "@playwright/test";
 import { execFile, spawn } from "node:child_process";
-import { once } from "node:events";
 import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { setTimeout as delay } from "node:timers/promises";
+import { findAvailablePort, waitForServer, stopServer } from "./helpers.mjs";
 
 const runFile = promisify(execFile);
 // import.meta.dirname は Node 20.11 以降にしか無く、それより古い Node では
@@ -44,7 +44,7 @@ let context;
 let failure;
 
 try {
-  await waitForServer();
+  await waitForServer(baseUrl, { intervalMs: 250 });
   browser = await chromium.launch({ headless: !headed });
   context = await browser.newContext();
   const page = await context.newPage();
@@ -172,7 +172,7 @@ try {
 } finally {
   await context?.close().catch(() => {});
   await browser?.close().catch(() => {});
-  await stopServer();
+  await stopServer(server);
   await rm(tempRoot, { recursive: true, force: true });
 }
 
@@ -212,44 +212,6 @@ async function deployFixture(source, destination) {
   await rename(destination, previous);
   await rename(next, destination);
   await rm(previous, { recursive: true, force: true });
-}
-
-async function findAvailablePort() {
-  const probe = createNetServer();
-  probe.unref();
-  await new Promise((resolveProbe, rejectProbe) => {
-    probe.once("error", rejectProbe);
-    probe.listen(0, "127.0.0.1", resolveProbe);
-  });
-  const address = probe.address();
-  const selectedPort = typeof address === "object" && address ? address.port : null;
-  await new Promise((resolveClose, rejectClose) => probe.close((error) => (error ? rejectClose(error) : resolveClose())));
-  if (!selectedPort) throw new Error("Could not allocate an available PWA test port");
-  return selectedPort;
-}
-
-async function waitForServer() {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    try {
-      const response = await fetch(baseUrl);
-      if (response.ok) return;
-    } catch {
-      // Server is still starting.
-    }
-    await delay(250);
-  }
-  throw new Error(`Timed out waiting for ${baseUrl}`);
-}
-
-async function stopServer() {
-  if (server.exitCode !== null || server.signalCode !== null) return;
-  server.kill("SIGTERM");
-  await Promise.race([
-    once(server, "exit"),
-    delay(2_000).then(() => {
-      if (server.exitCode === null && server.signalCode === null) server.kill("SIGKILL");
-    }),
-  ]);
 }
 
 function assert(condition, message) {

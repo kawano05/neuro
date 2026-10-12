@@ -32,6 +32,8 @@ export const SLOT_PROTOCOL_VERSION = "slot-v1";
 //       残し、リールCSVの最後の列に出す。あわせて、背の低い横向き（スマホ）では
 //       上の帯を上へ寄せた（16px → 6px）ので、れんしゅうの回のリールもそのぶん
 //       大きい。
+// 絵だけの変更は engineVersion を上げず、art/slotWorldArt.js の SLOT_ART_VERSION で残す。
+// 版を上げると前の回が legacyVersion になって表から外れるため。
 export const SLOT_ENGINE_VERSION = 5;
 
 export const SLOT_SYMBOL_IDS = Object.freeze([

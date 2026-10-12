@@ -8,7 +8,6 @@
 
 import assert from "node:assert/strict";
 import {
-  DEFAULT_FX_LEVEL,
   FX_LEVELS,
   MAX_GLOWS_PER_SECOND,
   MAX_GLOW_ALPHA,
@@ -21,6 +20,7 @@ import {
   escalation,
   fxScale,
   resolveFxLevel,
+  resolveDecorationPolicy,
 } from "../src/lib/fx/fxSafety.js";
 import {
   alphaOf,
@@ -29,7 +29,8 @@ import {
   spawnConfettiRain,
   stepParticle,
 } from "../src/lib/fx/fxParticles.js";
-import { colorsForPress, PALETTES } from "../src/lib/fx/fxPresets.js";
+import { colorsForPress, createFxPresets, PALETTES } from "../src/lib/fx/fxPresets.js";
+import { createFxEngine } from "../src/lib/fx/fxEngine.js";
 
 let passed = 0;
 let failed = 0;
@@ -58,23 +59,43 @@ function seeded(seed = 1) {
 test("the chosen strength is respected, and a measured run adds nothing", () => {
   assert.equal(resolveFxLevel({ fxLevel: "big" }), "big");
   assert.equal(resolveFxLevel({ fxLevel: "subtle" }), "subtle");
-  assert.equal(resolveFxLevel({}), DEFAULT_FX_LEVEL);
-  assert.equal(resolveFxLevel({ fxLevel: "nonsense" }), DEFAULT_FX_LEVEL);
+  assert.equal(resolveFxLevel({}), "none");
+  for (const value of ["nonsense", null, {}, "toString"]) {
+    assert.equal(resolveFxLevel({ fxLevel: value }), "none");
+    assert.equal(fxScale(value), fxScale("none"));
+  }
   // そくていの回は何も足さない（どの強さを選んでいても）。
   for (const level of FX_LEVELS) assert.equal(resolveFxLevel({ fxLevel: level }, { measurement: true }), "none");
 });
 
-test("the device's reduce-motion setting caps the strength at subtle", () => {
-  assert.equal(resolveFxLevel({ fxLevel: "big" }, { reducedMotion: true }), "subtle");
-  assert.equal(resolveFxLevel({ fxLevel: "normal" }, { reducedMotion: true }), "subtle");
-  assert.equal(resolveFxLevel({ fxLevel: "none" }, { reducedMotion: true }), "none");
-  // ひかえめ以下では、揺らさない・寄らない。
+test("the device's reduce-motion setting is not used: the supporter's atmosphere decides", () => {
+  // 端末の「動きを減らす」（prefers-reduced-motion）は見ない（2026-10-01、ユーザーの判断）。
+  // 渡されても段は変わらない（以前は すっきり に下げ、9/30 からは全部止めていた）。
+  for (const level of FX_LEVELS) {
+    assert.equal(resolveFxLevel({ fxLevel: level }, { reducedMotion: true }), level);
+  }
+  // すっきり 以下では、揺らさない・寄らない（揺れや光が苦手な人には支援者がこの段を選ぶ）。
   for (const level of ["none", "subtle"]) {
     assert.equal(fxScale(level).shake, false);
     assert.equal(fxScale(level).camera, false);
   }
   assert.equal(fxScale("none").particles, 0, "なし では粒を出さない");
   assert.equal(fxScale("none").finale, "none");
+});
+
+test("decorative motion is separate from the recorded level and task motion", () => {
+  for (const fxLevel of FX_LEVELS) {
+    const policy = resolveDecorationPolicy({ fxLevel });
+    assert.equal(policy.level, resolveFxLevel({ fxLevel }));
+    assert.equal(policy.motion, fxLevel !== "none");
+    assert.equal(policy.worldMotion, ["normal", "big"].includes(fxLevel));
+    assert.equal(policy.scale, fxScale(policy.motion ? fxLevel : "none"));
+    assert.deepEqual(resolveDecorationPolicy({ fxLevel }, { reducedMotion: true }), policy, "端末の設定では変わらない");
+    const measured = resolveDecorationPolicy({ fxLevel }, { measurement: true });
+    assert.equal(measured.motion, false, "そくていの回は演出を出さない");
+    assert.equal(measured.worldMotion, false);
+    assert.equal(measured.scale, fxScale("none"));
+  }
 });
 
 test("shakes and glows stay inside the safety limits", () => {
@@ -167,6 +188,136 @@ test("confetti rain starts above the screen and falls in", () => {
   assert.ok(rain.every((p) => p.y < 0), "画面の上から始まる");
   assert.ok(rain.every((p) => p.vy > 0), "下へ落ちる");
   assert.ok(rain.every((p) => p.x >= 0 && p.x <= 1000), "画面の幅の中");
+});
+
+// 窓を描画の枠に渡し、小さな画面でも大きな星を十分な数だけ残す。
+test("リールの成功演出は窓内に収まり、連続成功で段階が増える", () => {
+  for (const width of [32, 60, 120, 240]) {
+    const height = width * 1.8;
+    const calls = { bursts: [], rings: [], glows: [] };
+    const windowEl = {};
+    const fx = createFxPresets({
+      engine: {
+        pointOf(el) { assert.equal(el, windowEl); return { x: 0, y: 0, rect: { width, height } }; },
+        burst: options => calls.bursts.push(options), ring: options => calls.rings.push(options), glow: options => calls.glows.push(options),
+      },
+      motion: { punch() {} },
+    });
+    for (const streak of [1, 2, 5, 99]) fx.reelHit({ querySelector: () => windowEl }, { streak });
+    assert.ok(calls.bursts[1].count > calls.bursts[0].count);
+    assert.ok(calls.rings[1].r1 > calls.rings[0].r1);
+    assert.equal(calls.bursts[2].count, calls.bursts[3].count);
+    for (const burst of calls.bursts) {
+      assert.equal(burst.clip.element, windowEl);
+      assert.ok(burst.count >= 20, "初回から星を十分に出す");
+      assert.ok(burst.size[0] >= width * 0.18, "小さな点に戻さない");
+      const particles = spawnBurst({ ...burst, random: seeded(27) });
+      for (const at of [0.096, 0.24, 0.48]) {
+        for (const p of particles) {
+          while (p.age < at) stepParticle(p, 1 / 120);
+          assert.equal(p.clip, burst.clip, "描画まで枠を保持する");
+        }
+        const visible = particles.filter(p => Math.abs(p.x) < width / 2 && Math.abs(p.y) < height / 2 && alphaOf(p) > 0.4);
+        assert.ok(visible.length >= 6, `${at}秒でも複数の大きな星が窓内に見える`);
+        if (at === 0.24) assert.ok(Math.max(...visible.map(p => Math.abs(p.y))) > width * 0.25, "窓の中心だけに集めない");
+      }
+    }
+    calls.rings.forEach(r => {
+      assert.equal(r.clip.element, windowEl);
+      assert.ok(r.r1 >= Math.min(width, height / 3) / 2, "当たった1コマを囲む輪");
+    });
+    calls.glows.forEach(g => assert.equal(g.clip.element, windowEl));
+  }
+});
+
+test("釣れたときは見えるしぶきと泡が魚に追従し、札を避ける", () => {
+  for (const lengthCm of [10, 30, 80]) {
+    const bursts = [];
+    const labels = [{}, {}];
+    const fish = { closest: () => ({ querySelectorAll: () => labels }) };
+    const fx = createFxPresets({
+      engine: {
+        pointOf: () => ({ x: 0, y: 0, rect: { width: 60, height: 40 } }),
+        burst: options => bursts.push(options),
+        ring() { assert.fail("長さの札を隠す輪を出している"); },
+        glow() { assert.fail("魚を隠す光を出している"); },
+      }, motion: {},
+    });
+    fx.fishCatch(fish, { lengthCm });
+    assert.equal(bursts.length, 1);
+    assert.equal(bursts[0].count, 10);
+    assert.deepEqual(bursts[0].shapes, ["drop", "drop", "bubble"]);
+    assert.deepEqual(bursts[0].colors, PALETTES.sea);
+    assert.equal(bursts[0].clip.element, fish);
+    assert.equal(bursts[0].clip.scale, 1.5);
+    assert.equal(bursts[0].clip.follow, true);
+    assert.deepEqual(bursts[0].clip.exclude, labels);
+    assert.ok(bursts[0].size[0] >= 4 && bursts[0].size[1] >= 8);
+    for (const p of spawnBurst({ ...bursts[0], random: seeded(13) })) {
+      while (p.age < 0.48) stepParticle(p, 1 / 120);
+      assert.ok(alphaOf(p) > 0.5, "480msでもしぶきが消えない");
+      assert.equal(p.clip, bursts[0].clip);
+    }
+  }
+});
+
+test("描画エンジンが窓・魚の枠と文字の除外を適用し、強さと測定の制約を守る", () => {
+  for (const level of ["none", "subtle", "normal", "big"]) {
+    let frame;
+    const clips = [], rects = [], translations = [];
+    const g = new Proxy({}, { get: (_, name) => (...args) => {
+      if (name === "clip") clips.push(args);
+      if (name === "rect") rects.push(args);
+      if (name === "translate") translations.push(args);
+    }, set: () => true });
+    let canvases = 0;
+    const doc = {
+      createElement: () => { canvases++; return { dataset: {}, setAttribute() {}, getContext: () => g }; },
+      body: { append() {} },
+      defaultView: { innerWidth: 800, innerHeight: 600, devicePixelRatio: 1, addEventListener() {}, performance: { now: () => 0 }, requestAnimationFrame: cb => { frame = cb; return 1; } },
+    };
+    const engine = createFxEngine({ getLevel: () => level, doc });
+    const element = { getBoundingClientRect: () => ({ left: 100, top: 200, width: 60, height: 40 }) };
+    const label = { getBoundingClientRect: () => ({ left: 110, top: 180, width: 30, height: 20 }) };
+    const clip = { element, scale: 1.5, follow: true, x: 120, y: 210, exclude: [label] };
+    engine.burst({ x: 120, y: 210, count: 10, shapes: ["drop", "bubble"], clip });
+    assert.equal(engine.count(), Math.round(10 * fxScale(level).particles));
+    if (level === "none") { assert.equal(canvases, 0, "なし・測定はキャンバスも作らない"); continue; }
+    frame(16);
+    assert.ok(rects.some(r => JSON.stringify(r) === JSON.stringify([85, 190, 90, 60])), "魚の1.5倍の範囲");
+    assert.ok(rects.some(r => JSON.stringify(r) === JSON.stringify([106, 176, 38, 28])), "文字の周囲4pxまでくり抜く");
+    assert.ok(clips.some(args => args[0] === "evenodd"));
+    assert.ok(translations.some(t => t[0] === 10 && t[1] === 10), "魚の移動分に追従する");
+    rects.length = 0;
+    engine.ring({ x: 130, y: 220, clip: { element } });
+    frame(32);
+    assert.ok(rects.some(r => JSON.stringify(r) === JSON.stringify([100, 200, 60, 40])), "輪もリールの窓内で切る");
+    assert.equal(resolveFxLevel({ fxLevel: level }, { measurement: true }), "none");
+  }
+});
+
+test("遊びの形（紙テープ・ふうせん・ボール・魚・絵の具・音符）が描け、紙テープはひらひら、ふうせんは上がる", () => {
+  const SHAPES = ["ribbon", "balloon", "ball", "fish", "splat", "note"];
+  const [ribbon] = spawnBurst({ x: 0, y: 0, count: 1, shapes: ["ribbon"], gravity: 400, random: seeded(3) });
+  assert.ok(ribbon.flipSpeed > 0 && ribbon.gravity < 400, "紙テープは紙吹雪と同じく、裏返りながらゆっくり落ちる");
+  const [balloon] = spawnBurst({ x: 0, y: 0, count: 1, shapes: ["balloon"], gravity: 400, random: seeded(3) });
+  assert.ok(balloon.gravity < 0, "ふうせんは上がる");
+  let frame;
+  const drawn = [];
+  const g = new Proxy({}, { get: (_, name) => (...args) => { if (name === "fill" || name === "stroke") drawn.push(name); }, set: () => true });
+  const doc = {
+    createElement: () => ({ dataset: {}, setAttribute() {}, getContext: () => g }),
+    body: { append() {} },
+    defaultView: { innerWidth: 800, innerHeight: 600, devicePixelRatio: 1, addEventListener() {}, performance: { now: () => 0 }, requestAnimationFrame: (cb) => { frame = cb; return 1; }, cancelAnimationFrame() {} },
+  };
+  const engine = createFxEngine({ getLevel: () => "big", doc });
+  for (const shape of SHAPES) {
+    drawn.length = 0;
+    engine.clear();
+    engine.burst({ x: 200, y: 200, count: 4, shapes: [shape], size: [20, 24], speed: [10, 20] });
+    frame(16);
+    assert.ok(drawn.length > 0, `${shape} を描く`);
+  }
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

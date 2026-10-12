@@ -34,6 +34,7 @@
 //   試行に使わず、「まってね」の合図だけ返す（黙って捨てない）。
 // =====================================================================
 
+import { presentation } from "../presentation.js";
 import { cranePresets, cranePrizes, cueTones } from "../content.js";
 import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
@@ -54,6 +55,15 @@ import {
   project,
 } from "./craneGeometry.js";
 import { PRIZE_ART, clawClosedUrl, clawOpenUrl } from "./craneArt.js";
+import {
+  CRANE_ART_VERSION,
+  clawHtml,
+  cranePrizeSvg,
+  craneMatHtml,
+  craneRoomHtml,
+  craneWorldHtml,
+} from "../art/craneWorldArt.js";
+import { practiceArtFor, showsWorldArt, shownArtVersion } from "../artVersion.js";
 
 // 合図と当たりの音は合図の大きさ、外れは小さく（audio.js の CUE_TONE_GAIN / CUE_SOFT_GAIN）。
 const FEEDBACK_GAIN = CUE_TONE_GAIN;
@@ -98,6 +108,12 @@ const RESULT_HOLD_MS = 650;
  * 次の軸が即座に確定してしまうのを防ぐ。捨てるのではなく合図を返す。
  */
 const INPUT_GUARD_MS = 320;
+/**
+ * 受け皿に並べる取れた景品の数（れんしゅうの回。新しいものから）。それより多いぶんは
+ * 「+n」にまとめる。エンドレスで長く続くと受け皿が伸び、狭い横画面では状態の札を
+ * 上の帯の裏へ押し上げていた。そくていの回は5回なので、ここまで並ばない。
+ */
+const MAX_TRAY_ITEMS = 8;
 
 /**
  * 降下・上昇・搬送の緩急。
@@ -307,6 +323,9 @@ function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = nul
     difficultyMode: resolveDifficultyMode(settings),
     // 演出の強さ（そくていの回は常に none。src/lib/fx/）。
     fxLevel,
+    // 見え方の版（art/craneWorldArt.js）。れんしゅうの回の景品やアームの絵が変わった
+    // 前後を分けるため。
+    artVersion: shownArtVersion(resolveDifficultyMode(settings), CRANE_ART_VERSION, practiceArtFor(settings, "crane")),
     // そくていに入る前の成立確認が通っていたか（src/lib/readinessCheck.js）。
     // リズムと同じ理由でここにも残す——測定条件は禁止せず記録する。
     measurementReadiness: readiness || "n/a",
@@ -335,6 +354,12 @@ export function createCraneGame(ctx) {
   // 漢字の名前を足すと静かにルビだけ落ちる。その線は
   // tests/i18n.test.mjs の「景品名に漢字を使わない」で縛ってある。
   const config = resolveCraneConfig(ctx.settings, ctx.readiness, ctx.endless, ctx.fx?.level() ?? null);
+  // れんしゅうの回か（前の版からの、明るい色の台。theme-hakkiri.css）。
+  const practice = config.difficultyMode !== "measure";
+  // 新しい絵（おもちゃ屋さんの世界。src/lib/art/craneWorldArt.js・world-crane.css）を出すか。
+  // れんしゅうの回だけで、遊びの中の「この遊びの設定」で前の絵も選べる（artVersion.js）。
+  // そくていの回は、刺激の見え方も測定の条件なので、いつも前の PNG のまま動かさない。
+  const worldArt = showsWorldArt(config.difficultyMode, practiceArtFor(ctx.settings, "crane"));
   let stageEl = null;
   let sceneEl = null;
   let statusEl = null;
@@ -351,6 +376,9 @@ export function createCraneGame(ctx) {
   let collectedEl = null;
   let guideXEl = null;
   let guideYEl = null;
+  // れんしゅうの回だけ、走査の線の下に黒い太線を敷く（色のついた床の上でも線が読める）。
+  let guideShadeXEl = null;
+  let guideShadeYEl = null;
   let rafId = null;
   let destroyed = false;
   let finished = false;
@@ -369,6 +397,8 @@ export function createCraneGame(ctx) {
   let prizes = [];
   let judgment = null;
   let collected = [];
+  /** 受け皿からはみ出してまとめた景品の数（「+n」）。 */
+  let trayOverflow = 0;
   /** 直近で連続して掴めなかった回数。掴めたら 0 に戻る（アシストの入力）。 */
   let consecutiveFailures = 0;
   /** この試行で実際に適用する許容半径。試行ごとに記録する。 */
@@ -388,11 +418,20 @@ export function createCraneGame(ctx) {
     return prizes[currentIndex];
   }
 
+  // 世界の絵が壊れたときも、狙う景品の種類を既存の画像で伝える。
+  function prizePicture(asset) {
+    return presentation.run("world.crane.prize", () => cranePrizeSvg(asset), `<img src="${PRIZE_ART[asset]}" alt="" style="width:100%;height:100%;object-fit:contain" />`);
+  }
+
   /** 奥に転がしておく飾りの景品。狙う対象ではないので影もリングも付けない。 */
   function decorMarkup() {
     return DECOR_SPOTS.map((spot, index) => {
       const prize = cranePrizes[index % cranePrizes.length];
       const at = project(spot.x, spot.y);
+      if (worldArt) {
+        return `<div class="crane-decor" aria-hidden="true"
+          style="left:${at.left}%;top:${at.top}%;--prize-scale:${at.scale.toFixed(3)}">${prizePicture(prize.asset)}</div>`;
+      }
       return `<img class="crane-decor" src="${PRIZE_ART[prize.asset]}" alt=""
         style="left:${at.left}%;top:${at.top}%;--prize-scale:${at.scale.toFixed(3)}" />`;
     }).join("");
@@ -408,28 +447,44 @@ export function createCraneGame(ctx) {
     // marquee（台の看板）、下に本体と景品の取り出し口を置くと、画面全体が
     // 「1台の筐体が立っている」構図になり、空きが消える。中身の幾何は
     // 一切さわっていない。
-    stageEl.innerHTML = `
+    //
+    // れんしゅうの回だけ、店内（台の外）と箱の中の部屋・床のマットを足す。
+    // 世界は始めに1回だけ作る（試行ごとには作り直さない）。景品とアームは
+    // PNG ではなく SVG を入れる（同じクラスなので、位置と大きさの CSS はそのまま効く）。
+    const worldHtml = worldArt ? presentation.run("world.crane", craneWorldHtml, "") : "";
+    const roomHtml = worldArt ? presentation.run("world.room", craneRoomHtml, "") : "";
+    const shadeHtml = worldArt
+      ? `<line class="crane-guide-shade crane-guide-shade-x" vector-effect="non-scaling-stroke" /><line class="crane-guide-shade crane-guide-shade-y" vector-effect="non-scaling-stroke" />`
+      : "";
+    const matHtml = worldArt ? `${presentation.run("world.mat", craneMatHtml, "")}<div class="crane-tint" aria-hidden="true"></div>` : "";
+    const prizeHtml = worldArt
+      ? `<div class="crane-prize" aria-hidden="true"></div>`
+      : `<img class="crane-prize" src="" alt="" />`;
+    const clawMarkup = worldArt
+      ? `<div class="crane-claw" aria-hidden="true">${presentation.run("world.crane.claw", clawHtml, `<img src="${clawOpenUrl}" alt="" style="width:100%;height:100%" />`)}</div>`
+      : `<img class="crane-claw" src="${clawOpenUrl}" alt="" />`;
+    stageEl.innerHTML = `${worldHtml}
       <div class="crane-cabinet" aria-hidden="true">
         <div class="crane-marquee">
-          <span class="crane-marquee-title">${tHtml("tile.crane-corner.title")}</span>
+          <span class="crane-marquee-title">${tHtml(practice ? "tile.crane-corner.title" : "stage.crane.measureTitle")}</span>
           <div class="crane-score">${tHtml("crane.score", { n: 0 })}</div>
         </div>
         <div class="crane-stage">
-          <div class="crane-back"></div>
-          <div class="crane-floor"></div>
+          <div class="crane-back"></div>${roomHtml}
+          <div class="crane-floor"></div>${matHtml}
           ${decorMarkup()}
           <div class="crane-chute"><span class="crane-chute-mouth"></span></div>
           <div class="crane-rail"></div>
           <div class="crane-trolley"></div>
           <div class="crane-cable"></div>
-          <svg class="crane-guides" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <svg class="crane-guides" viewBox="0 0 100 100" preserveAspectRatio="none">${shadeHtml}
             <line class="crane-guide crane-guide-x" vector-effect="non-scaling-stroke" />
             <line class="crane-guide crane-guide-y" vector-effect="non-scaling-stroke" />
           </svg>
           <span class="crane-ring"></span>
           <span class="crane-shadow"></span>
-          <img class="crane-prize" src="" alt="" />
-          <img class="crane-claw" src="${clawOpenUrl}" alt="" />
+          ${prizeHtml}
+          ${clawMarkup}
           <div class="crane-glass"></div>
           <div class="crane-streak"></div>
         </div>
@@ -466,8 +521,18 @@ export function createCraneGame(ctx) {
     prizeEl = stageEl.querySelector(".crane-prize");
     chuteEl = stageEl.querySelector(".crane-chute");
     collectedEl = stageEl.querySelector(".crane-collected");
+    trayOverflow = 0;
     guideXEl = stageEl.querySelector(".crane-guide-x");
     guideYEl = stageEl.querySelector(".crane-guide-y");
+    guideShadeXEl = stageEl.querySelector(".crane-guide-shade-x");
+    guideShadeYEl = stageEl.querySelector(".crane-guide-shade-y");
+  }
+
+  /** 下敷きの線を、本線と同じ位置・同じ表示にそろえる（れんしゅうの回だけ）。 */
+  function syncGuideShade(line, shade) {
+    if (!shade) return;
+    ["x1", "y1", "x2", "y2"].forEach((name) => shade.setAttribute(name, line.getAttribute(name) ?? "0"));
+    shade.classList.toggle("is-shown", line.classList.contains("is-shown"));
   }
 
   /**
@@ -507,6 +572,8 @@ export function createCraneGame(ctx) {
     // 走査中の軸だけを明るくする。確定済みの軸は「もう決めた線」として残す。
     guideXEl.classList.toggle("is-active", phase === "x");
     guideYEl.classList.toggle("is-active", phase === "y");
+    syncGuideShade(guideXEl, guideShadeXEl);
+    syncGuideShade(guideYEl, guideShadeYEl);
   }
 
   /** 景品と「掴める範囲」のリングを、いまの目標に合わせて置き直す。 */
@@ -514,7 +581,8 @@ export function createCraneGame(ctx) {
     const target = currentTarget();
     const prize = currentPrize();
     const at = project(target.x, target.y);
-    prizeEl.src = PRIZE_ART[prize.asset];
+    if (worldArt) prizeEl.innerHTML = prizePicture(prize.asset);
+    else prizeEl.src = PRIZE_ART[prize.asset];
     prizeEl.style.left = `${at.left}%`;
     prizeEl.style.top = `${at.top}%`;
     prizeEl.style.setProperty("--prize-scale", at.scale.toFixed(3));
@@ -530,6 +598,16 @@ export function createCraneGame(ctx) {
     ringEl.style.top = `${at.top}%`;
     ringEl.style.width = `${ring.width}%`;
     ringEl.style.height = `${ring.height}%`;
+  }
+
+  /**
+   * アームを開く／閉じる。れんしゅうの回は SVG を2枚重ねて持っているので、
+   * 切り替えは class だけ（画像の読み込み待ちで一瞬消えることが無い）。
+   * 2枚は下端（つかむ点）をそろえてあるので、切り替えてもアームは跳ねない。
+   */
+  function setClawClosed(closed) {
+    if (worldArt) clawEl.classList.toggle("is-closed", closed);
+    else clawEl.src = closed ? clawClosedUrl : clawOpenUrl;
   }
 
   /** アームと、そこにぶら下がる索・台車・影の位置を1フレームぶん更新する。 */
@@ -626,7 +704,7 @@ export function createCraneGame(ctx) {
     );
     statusEl.innerHTML = tHtml("crane.movingX");
     sceneEl.classList.remove("is-grip", "is-slip", "is-miss");
-    clawEl.src = clawOpenUrl;
+    setClawClosed(false);
     clawEl.classList.remove("is-holding");
     placeTarget();
     placeClaw(0, 50, 0);
@@ -694,7 +772,8 @@ export function createCraneGame(ctx) {
     logTrial(session);
 
     const now = audio.scheduler.now();
-    clawEl.src = clawClosedUrl;
+    ctx.party?.react({ success: judgment === "grip", source: prizeEl, total: config.targetTrials, endless: config.endless });
+    setClawClosed(true);
     sceneEl.classList.add(`is-${judgment}`);
     // 音でも3つの結果を describe する。以前は高さの違うサイン波が1つ鳴るだけで、
     // 掴んだ・すべった・届かなかったの区別が音からはつきにくかった。
@@ -932,8 +1011,24 @@ export function createCraneGame(ctx) {
   }
 
   /** 景品口へ落として、取れたことを確定させる。 */
+  /** 受け皿は新しい順に MAX_TRAY_ITEMS まで。古いものは「+n」にまとめる。 */
+  function trimTray() {
+    const items = [...collectedEl.querySelectorAll(".crane-collected-item")];
+    const extra = items.length - MAX_TRAY_ITEMS;
+    if (extra <= 0) return;
+    items.slice(0, extra).forEach((item) => item.remove());
+    trayOverflow += extra;
+    let more = collectedEl.querySelector(".crane-collected-more");
+    if (!more) {
+      more = document.createElement("span");
+      more.className = "crane-collected-more";
+      collectedEl.prepend(more);
+    }
+    more.textContent = `+${trayOverflow}`;
+  }
+
   function dropIntoChute() {
-    clawEl.src = clawOpenUrl;
+    setClawClosed(false);
     clawEl.classList.remove("is-holding");
     prizeEl.classList.remove("is-lifted");
     prizeEl.classList.add("is-dropped");
@@ -943,11 +1038,16 @@ export function createCraneGame(ctx) {
     window.setTimeout(() => chuteEl?.classList.remove("is-filled"), 600);
     // 取れた景品を筐体の外に並べていく。数字の「つかんだ N」だけだと、
     // 何を取ったのかも、増えていくことも見えない。
-    const badge = document.createElement("img");
+    const badge = document.createElement(worldArt ? "div" : "img");
     badge.className = "crane-collected-item";
-    badge.src = PRIZE_ART[currentPrize().asset];
-    badge.alt = "";
+    if (worldArt) {
+      badge.innerHTML = prizePicture(currentPrize().asset);
+    } else {
+      badge.src = PRIZE_ART[currentPrize().asset];
+      badge.alt = "";
+    }
     collectedEl.appendChild(badge);
+    if (worldArt) trimTray();
     // 受け口に落ちたら紙吹雪（れんしゅうの回だけ）。
     fx?.craneWin(chuteEl);
     fx?.motion.popIn(badge, { from: 0.4 });
@@ -996,9 +1096,12 @@ export function createCraneGame(ctx) {
   function mount(el) {
     stageEl = el;
     stageEl.classList.add("module-crane");
-    // れんしゅうの回だけの見た目（明るい色の筐体。theme-hakkiri.css）。ガラスの箱
-    // （床と景品・狙い）は、そくていの回と同じ。
-    stageEl.classList.toggle("is-practice", config.difficultyMode !== "measure");
+    // れんしゅうの回だけの見た目（おもちゃ屋さんの世界。theme-hakkiri.css と
+    // world-crane.css）。ガラスの箱の中の床・景品・狙いの位置と大きさ、アームの
+    // 動く範囲は、そくていの回と同じ。
+    stageEl.classList.toggle("is-practice", practice);
+    // 新しい絵の印。world-crane.css はすべてこの下に書く（前の絵を選んだ回には付けない）。
+    stageEl.classList.toggle("has-world-art", worldArt);
     renderMarkup();
     railEl.dataset.top = "8";
 
@@ -1088,7 +1191,7 @@ export function createCraneGame(ctx) {
       logTrial(session);
     }
     if (stageEl) {
-      stageEl.classList.remove("module-crane", "is-practice");
+      stageEl.classList.remove("module-crane", "is-practice", "has-world-art");
       stageEl.innerHTML = "";
     }
     stageEl = null;
@@ -1107,6 +1210,8 @@ export function createCraneGame(ctx) {
     collectedEl = null;
     guideXEl = null;
     guideYEl = null;
+    guideShadeXEl = null;
+    guideShadeYEl = null;
   }
 
   return { mount, handleInput, destroy };

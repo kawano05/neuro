@@ -22,6 +22,7 @@
 
 import { resolveTextMode, speechLangForText, toSpeechText } from "./i18n.js";
 import { createPartyMusic } from "./partyMusic.js";
+import { presentation } from "./presentation.js";
 import { pickVoice } from "./speechVoice.js";
 import { chunkGapS, planVoiceClips, splitSpeechChunks, voiceLang } from "./voicePack.js";
 
@@ -329,11 +330,38 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
   // いまの場面。"play"（合図の無い場面）か "task"（合図のある遊び）。
   // gameHost が遊びの開始・終了で切り替える。
   let profile = "play";
+  const effectSources = new Set();
+  let effectGeneration = 0;
+  function ownEffectSource(source) {
+    effectSources.add(source);
+    source.addEventListener?.("ended", () => {
+      effectSources.delete(source);
+      presentation.run("audio.disconnect", () => source.disconnect());
+    }, { once: true });
+    return source;
+  }
+
+  function stopAll() {
+    // 読み込み待ちの録音にも同じ世代を使い、中断後に新しい音を作らせない。
+    effectGeneration += 1;
+    presentation.run("audio.voice.stop", stopSpeech);
+    presentation.run("audio.music.hush", () => music.hush());
+    effectSources.forEach(source => {
+      presentation.run("audio.source.stop", () => source.stop());
+      presentation.run("audio.source.disconnect", () => source.disconnect());
+    });
+    effectSources.clear();
+  }
   // 少し遅らせて読み上げる文（おいわいの音のあと）。stopSpeech で取り消す。
   let pendingSpeech = null;
   // 読み上げの番号。新しく読む・止めるたびに進む。読み込みや待ちのあとで、
   // もう古くなった読み上げを鳴らさないために見る。
   let speechToken = 0;
+  const voiceRetryTimers = new Set();
+  function clearVoiceRetry(timer) {
+    window.clearTimeout(timer);
+    voiceRetryTimers.delete(timer);
+  }
   // 鳴っている（鳴る予定の）声のパックの音。
   let voiceSources = [];
   // 声のパック（言語 → 読み込み中の Promise<ArrayBuffer|null>）と、そこから作った音。
@@ -413,10 +441,11 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     if (!ctx) return false;
     const level = CELEBRATION_SAMPLES.has(name) ? CELEBRATION_SAMPLE_LEVEL : SAMPLE_LEVEL;
     const requestedAt = ctx.currentTime + Math.max(0, delayS);
+    const currentGeneration = effectGeneration;
     const play = (buffer) => {
-      if (!buffer) return;
+      if (!buffer || currentGeneration !== effectGeneration) return;
       try {
-        const source = ctx.createBufferSource();
+        const source = ownEffectSource(ctx.createBufferSource());
         source.buffer = buffer;
         const gain = ctx.createGain();
         gain.gain.value = level;
@@ -585,7 +614,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
         music.duck(at - ctx.currentTime);
       })
       .catch(() => {
-        if (token === speechToken) fallback();
+        if (token !== speechToken) return;
+        fallback();
       });
   }
 
@@ -594,7 +624,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    * 使ったときは、鳴らなかったら端末の中の声で1回だけ言い直す——病院・施設では
    * ネットにつながらないことがあり、そのまま黙ると伝えたいことが届かない。
    */
-  function speakWithDevice(spokenText, lang, volume, token, { localOnly = false } = {}) {
+  function speakWithDevice(spokenText, lang, volume, token, { localOnly = false, onFailure = () => {} } = {}) {
     const synth = window.speechSynthesis;
     if (!synth || typeof synth.speak !== "function" || typeof globalThis.SpeechSynthesisUtterance !== "function") {
       return false;
@@ -618,7 +648,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
         const retry = () => {
           if (settled) return;
           settled = true;
-          window.clearTimeout(timer);
+          clearVoiceRetry(timer);
           remoteVoiceFailedAt = Date.now();
           if (token !== speechToken) return;
           try {
@@ -626,21 +656,32 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
           } catch {
             /* noop */
           }
-          speakWithDevice(spokenText, lang, volume, token, { localOnly: true });
+          if (!speakWithDevice(spokenText, lang, volume, token, { localOnly: true, onFailure })) onFailure();
         };
         const timer = window.setTimeout(retry, REMOTE_VOICE_START_TIMEOUT_MS);
+        voiceRetryTimers.add(timer);
         utterance.onstart = () => {
           settled = true;
-          window.clearTimeout(timer);
+          clearVoiceRetry(timer);
         };
         utterance.onerror = (event) => {
           // 止めた（cancel）ときの知らせは、鳴らなかったことではない。
           if (event?.error === "interrupted" || event?.error === "canceled") {
             settled = true;
-            window.clearTimeout(timer);
+            clearVoiceRetry(timer);
             return;
           }
-          retry();
+          if (settled) {
+            if (token === speechToken) onFailure();
+          } else {
+            retry();
+          }
+        };
+      }
+      if (!voice || voice.localService !== false) {
+        utterance.onerror = (event) => {
+          if (token !== speechToken || ["interrupted", "canceled"].includes(event?.error)) return;
+          onFailure();
         };
       }
       synth.speak(utterance);
@@ -659,7 +700,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    * （または設定で「端末の声」を選んでいれば）端末の読み上げで読む。
    * どちらでも、前の読み上げは止めてから読む。
    */
-  function speak(text) {
+  function speak(text, onFailure = () => announce(text)) {
     const speechSettings = getSettings();
     if (!speechSettings.speechEnabled) return false;
     // 表記に合わせて読み上げの言語も変える。英語表記のまま日本語音声で
@@ -677,8 +718,11 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       if (plan && ctx) {
         const token = silenceSpeech();
         playVoiceClips(ctx, token, lang, plan, chunks, volume, () => {
-          if (speakWithDevice(spokenText, lang, volume, token)) {
+          if (speakWithDevice(spokenText, lang, volume, token, { onFailure })) {
             reportSpeech({ text: spokenText, lang, via: "device", fallback: true });
+          } else {
+            // パックの予約は成功ではない。非同期の二重障害でも文字へ所有権を戻す。
+            onFailure();
           }
         });
         reportSpeech({ text: spokenText, lang, via: "voice-pack", chunks, volume });
@@ -686,7 +730,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       }
     }
     const token = silenceSpeech();
-    if (!speakWithDevice(spokenText, lang, volume, token)) return false;
+    if (!speakWithDevice(spokenText, lang, volume, token, { onFailure })) return false;
     // 端末の声は長さが分からないので、短い文ぶん下げる。
     music.duck(1.8);
     reportSpeech({ text: spokenText, lang, via: "device", volume });
@@ -695,7 +739,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
 
   /** アプリTTSかlive regionの一方だけに、その回の音声所有権を与える。 */
   function speakOrAnnounce(spokenText, announcementText = spokenText) {
-    if (speak(spokenText)) return "app-tts";
+    if (speak(spokenText, () => announce(announcementText))) return "app-tts";
     announce(announcementText);
     return "live-region";
   }
@@ -738,6 +782,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    * 場合も含め、「止める」は常に効くべきなので。
    */
   function stopSpeech() {
+    voiceRetryTimers.forEach(timer => window.clearTimeout(timer));
+    voiceRetryTimers.clear();
     cancelPendingSpeech();
     silenceSpeech();
   }
@@ -755,7 +801,9 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
   function playToneAt(frequency, atTimeS, gain = DEFAULT_TONE_GAIN) {
     const ctx = ensureContext();
     if (!ctx) return null;
-    return scheduleOscillatorTone(ctx, frequency, atTimeS, gain);
+    const tone = scheduleOscillatorTone(ctx, frequency, atTimeS, gain);
+    if (tone) ownEffectSource(tone.oscillator);
+    return tone;
   }
 
   /**
@@ -799,7 +847,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     const ctx = ensureContext();
     if (!ctx) return null;
     try {
-      const source = ctx.createBufferSource();
+      const source = ownEffectSource(ctx.createBufferSource());
       source.buffer = ensureNoiseBuffer(ctx);
       const band = ctx.createBiquadFilter();
       band.type = filter;
@@ -838,7 +886,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     const ctx = ensureContext();
     if (!ctx) return null;
     try {
-      const oscillator = ctx.createOscillator();
+      const oscillator = ownEffectSource(ctx.createOscillator());
       const envelope = ctx.createGain();
       const at = ctx.currentTime;
       const peak = clampEffectGain(gain);
@@ -888,7 +936,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
         { ratio: 1, level: 1, decayS: durationS },
         { ratio: 4, level: 0.28, decayS: 0.18 },
       ].forEach(({ ratio, level, decayS }) => {
-        const oscillator = ctx.createOscillator();
+        const oscillator = ownEffectSource(ctx.createOscillator());
         const partial = ctx.createGain();
         oscillator.type = "sine";
         oscillator.frequency.value = frequency * ratio;
@@ -924,7 +972,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     if (!ctx) return null;
     try {
       const at = ctx.currentTime;
-      const oscillator = ctx.createOscillator();
+      const oscillator = ownEffectSource(ctx.createOscillator());
       const body = ctx.createGain();
       oscillator.type = "triangle";
       oscillator.frequency.setValueAtTime(220, at);
@@ -976,7 +1024,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       out.gain.value = APPLAUSE_OUTPUT_GAIN;
       out.connect(effectOut(ctx, APPLAUSE_MAKEUP_DB));
 
-      const crowd = ctx.createBufferSource();
+      const crowd = ownEffectSource(ctx.createBufferSource());
       crowd.buffer = buffer;
       const crowdBand = ctx.createBiquadFilter();
       crowdBand.type = "bandpass";
@@ -994,7 +1042,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       for (let index = 0; index < 26; index += 1) {
         // 前半に多く、後半はまばらに（拍手が鳴りやんでいく感じ）。
         const at = start + Math.pow(Math.random(), 1.6) * (length - 0.1);
-        const clap = ctx.createBufferSource();
+        const clap = ownEffectSource(ctx.createBufferSource());
         clap.buffer = buffer;
         const band = ctx.createBiquadFilter();
         band.type = "bandpass";
@@ -1028,13 +1076,13 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     if (!ctx) return null;
     try {
       const at = ctx.currentTime;
-      const oscillator = ctx.createOscillator();
+      const oscillator = ownEffectSource(ctx.createOscillator());
       oscillator.type = "triangle";
       oscillator.frequency.setValueAtTime(150, at);
       oscillator.frequency.exponentialRampToValueAtTime(330, at + 0.07);
       oscillator.frequency.exponentialRampToValueAtTime(210, at + 0.7);
       // ばねのゆれ: 11Hz のゆれが、だんだん小さくなる。
-      const wobble = ctx.createOscillator();
+      const wobble = ownEffectSource(ctx.createOscillator());
       wobble.frequency.value = 11;
       const depth = ctx.createGain();
       depth.gain.setValueAtTime(70, at + 0.05);
@@ -1065,7 +1113,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    */
   function laughSyllable(ctx, destination, noise, at, pitch, level) {
     const voicedS = 0.085;
-    const source = ctx.createOscillator();
+    const source = ownEffectSource(ctx.createOscillator());
     source.type = "sawtooth";
     source.frequency.setValueAtTime(pitch * 1.08, at + 0.02);
     source.frequency.exponentialRampToValueAtTime(pitch * 0.88, at + 0.05 + voicedS);
@@ -1089,7 +1137,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
       band.connect(weight);
       weight.connect(destination);
     });
-    const breath = ctx.createBufferSource();
+    const breath = ownEffectSource(ctx.createBufferSource());
     breath.buffer = noise;
     const breathBand = ctx.createBiquadFilter();
     breathBand.type = "bandpass";
@@ -1152,7 +1200,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
 
   /** 短い上がる口笛（イルカの「キュイ」）。 */
   function whistle(ctx, at, fromHz, toHz, durationS, gain, makeupDb = 0) {
-    const oscillator = ctx.createOscillator();
+    const oscillator = ownEffectSource(ctx.createOscillator());
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(fromHz, at);
     oscillator.frequency.exponentialRampToValueAtTime(toHz, at + durationS);
@@ -1192,12 +1240,12 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
         whistle(ctx, at, 1500, 2900, 0.13, peak * 0.8);
         whistle(ctx, at + 0.17, 1700, 3300, 0.13, peak * 0.8);
       } else if (id === "whale") {
-        const oscillator = ctx.createOscillator();
+        const oscillator = ownEffectSource(ctx.createOscillator());
         oscillator.type = "triangle";
         oscillator.frequency.setValueAtTime(230, at);
         oscillator.frequency.exponentialRampToValueAtTime(300, at + 0.35);
         oscillator.frequency.exponentialRampToValueAtTime(170, at + 1.1);
-        const sway = ctx.createOscillator();
+        const sway = ownEffectSource(ctx.createOscillator());
         sway.frequency.value = 5;
         const swayDepth = ctx.createGain();
         swayDepth.gain.value = 7;
@@ -1223,11 +1271,11 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
           whistle(ctx, at + delay, 380 + index * 60, 900 + index * 120, 0.07, peak * 0.9);
         });
       } else if (id === "octopus") {
-        const oscillator = ctx.createOscillator();
+        const oscillator = ownEffectSource(ctx.createOscillator());
         oscillator.type = "triangle";
         oscillator.frequency.setValueAtTime(620, at);
         oscillator.frequency.exponentialRampToValueAtTime(190, at + 0.45);
-        const wobble = ctx.createOscillator();
+        const wobble = ownEffectSource(ctx.createOscillator());
         wobble.frequency.value = 16;
         const depth = ctx.createGain();
         depth.gain.value = 45;
@@ -1275,7 +1323,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     if (!ctx) return null;
     try {
       const at = ctx.currentTime;
-      const oscillator = ctx.createOscillator();
+      const oscillator = ownEffectSource(ctx.createOscillator());
       oscillator.type = "triangle";
       oscillator.frequency.value = 1320;
       const envelope = ctx.createGain();
@@ -1335,7 +1383,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
         { frequency: 2730, level: 0.5 },
         { frequency: 4120, level: 0.25 },
       ].forEach(({ frequency, level }) => {
-        const oscillator = ctx.createOscillator();
+        const oscillator = ownEffectSource(ctx.createOscillator());
         oscillator.type = "sine";
         oscillator.frequency.value = frequency;
         const envelope = ctx.createGain();
@@ -1448,6 +1496,7 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     speakOrAnnounce,
     speakOrAnnounceLater,
     stopSpeech,
+    stopAll,
     prefetchVoice,
     setProfile,
     /** いまの場面（テスト・記録用）。 */

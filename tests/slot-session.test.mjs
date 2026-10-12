@@ -10,6 +10,9 @@ import {
 } from "../src/lib/games/slotJudge.js";
 import { sanitizeSlotSession } from "../src/lib/games/slotState.js";
 import { buildSlotCsvRows } from "../src/lib/slotCsv.js";
+import { SLOT_ART_VERSION } from "../src/lib/art/slotWorldArt.js";
+import { buildSessionLedgerRows } from "../src/lib/dataExport.js";
+import { sanitizeState } from "../src/lib/state.js";
 
 let passed = 0;
 let failed = 0;
@@ -194,19 +197,57 @@ test("the shown reel cell size survives config -> sanitize -> CSV", () => {
   assert.equal(restored.config.reelCellPx, 62.7);
   assert.equal(restored.trials.at(-1).reelCellPx, 75.3);
   const rows = buildSlotCsvRows([restored]);
-  assert.equal(rows[0].at(-1), "reelCellPx");
-  assert.ok(rows.slice(1, -1).every((row) => row.at(-1) === 62.7));
-  assert.equal(rows.at(-1).at(-1), 75.3);
+  const cellIndex = rows[0].indexOf("reelCellPx");
+  assert.ok(cellIndex >= 0);
+  assert.ok(rows.slice(1, -1).every((row) => row[cellIndex] === 62.7));
+  assert.equal(rows.at(-1)[cellIndex], 75.3);
   // 1回ごとの値を持たない記録は、回の始めの値で埋める。
   const startOnly = makeSession();
   startOnly.config.reelCellPx = 82;
-  assert.ok(buildSlotCsvRows([sanitizeSlotSession(startOnly)]).slice(1).every((row) => row.at(-1) === 82));
+  assert.ok(buildSlotCsvRows([sanitizeSlotSession(startOnly)]).slice(1).every((row) => row[cellIndex] === 82));
   // 無い値・おかしな値は null（分からない）。0 や負の値を大きさとして残さない。
   assert.equal(sanitizeSlotSession(makeSession()).config.reelCellPx, null);
   for (const bogus of [0, -5, Number.NaN, "94", 1e9]) {
     const session = makeSession();
     session.config.reelCellPx = bogus;
     assert.equal(sanitizeSlotSession(session).config.reelCellPx, null, `reelCellPx ${bogus}`);
+  }
+});
+
+test("slot art version survives config -> reload -> slot CSV and ledger without retiring version 5", () => {
+  // 絵だけの更新で、端末に残る版5の測定記録を解析の表から外さない。
+  assert.equal(SLOT_ENGINE_VERSION, 5);
+  const source = makeSession();
+  source.config.artVersion = SLOT_ART_VERSION;
+  const restored = sanitizeState(JSON.parse(JSON.stringify({ sessions: [source] }))).sessions[0];
+  assert.equal(restored.config.artVersion, SLOT_ART_VERSION);
+  assert.notEqual(restored.legacyVersion, true);
+  assert.equal(restored.trials.length, source.trials.length);
+  const rows = buildSlotCsvRows([restored]);
+  const artIndex = rows[0].indexOf("artVersion");
+  assert.ok(artIndex >= 0);
+  assert.ok(rows.slice(1).every(row => row[artIndex] === SLOT_ART_VERSION));
+  const ledger = buildSessionLedgerRows([restored]);
+  const ledgerArt = ledger[0].indexOf("artVersion");
+  assert.equal(ledger[1][ledgerArt], SLOT_ART_VERSION);
+
+  const old = sanitizeSlotSession(makeSession());
+  assert.equal(old.config.artVersion, null);
+  assert.notEqual(old.legacyVersion, true);
+  assert.equal(buildSlotCsvRows([old]).length, old.trials.length + 1);
+  assert.ok(buildSlotCsvRows([old]).slice(1).every(row => row[artIndex] === ""));
+  assert.equal(buildSessionLedgerRows([old])[1][ledgerArt], "");
+  const invalid = makeSession();
+  invalid.config.artVersion = "two";
+  assert.equal(sanitizeSlotSession(invalid).config.artVersion, null);
+});
+
+test("artVersion preserves positive integers without clamping or rounding", () => {
+  for (const value of [-1, 0, 1.8, "2", NaN, Infinity, null, undefined, 1, 1001]) {
+    const session = makeSession();
+    session.config.artVersion = value;
+    assert.equal(sanitizeSlotSession(session).config.artVersion,
+      Number.isInteger(value) && value >= 1 ? value : null);
   }
 });
 

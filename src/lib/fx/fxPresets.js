@@ -4,8 +4,12 @@
 // 遊びの側は「何が起きたか」を名前で呼ぶだけ（ctx.fx.balloonPop(...) など）。
 // 粒の数・速さ・色・揺れは、ここと fxSafety の強さの係数で決まる。
 // だんだん盛り上がる（§3.1）: 回の番号 k で escalation(k) を掛け、色も増やす。
+// おいわい（finale・おおさわぎ）の粒の形と色は、遊びごとの型（src/lib/partyThemes.js）から引く。
+// 型を渡さなければ、これまでの見た目（金の星と虹）。
 // =====================================================================
 
+import { presentation } from "../presentation.js";
+import { partyThemeFor } from "../partyThemes.js";
 import { escalation } from "./fxSafety.js";
 
 /** 色の組（カラーユニバーサルデザイン推奨配色と、はっきりした色の黄・白）。 */
@@ -22,6 +26,11 @@ export const PALETTES = Object.freeze({
 export function colorsForPress(k, base = PALETTES.night) {
   const extra = Math.max(0, Math.min(PALETTES.rainbow.length, Math.floor(k) * 2));
   return [...base, ...PALETTES.rainbow.slice(0, extra)];
+}
+
+/** 回を追うごとに、型の色を2つずつ足していく（はじめは白と1色）。 */
+function growingColors(colors, k) {
+  return ["#FFFFFF", ...colors.slice(0, Math.min(colors.length, 1 + Math.floor(k) * 2))];
 }
 
 /** 要素のまとまり（複数の要素）を囲む四角の真ん中。 */
@@ -188,26 +197,33 @@ export function createFxPresets({ engine, motion }) {
       });
     },
 
-    /** リール（れんしゅう）: 「ぴったり！」で星がはじける。 */
+    /** リール（れんしゅう）: 次のリールを隠さず、止めた窓の中だけで祝う。 */
     reelHit(reelEl, { streak = 1 } = {}) {
       if (!reelEl) return;
-      const { x, y } = engine.pointOf(reelEl);
-      const e = escalation(Math.min(streak - 1, 4));
-      engine.ring({ x, y, color: "#FFC83D", r0: 20, r1: 150, width: 8, life: 0.5 });
+      const windowEl = reelEl.querySelector(".slot-reel-window") || reelEl;
+      const { x, y, rect } = engine.pointOf(windowEl);
+      const short = Math.min(rect.width, rect.height);
+      if (!short) return;
+      const e = escalation(Math.min(Math.max(0, streak - 1), 4));
+      const clip = { element: windowEl };
+      // 3コマの窓では中央の1コマを囲む。星は窓全体を使い、四角の端で切る。
+      const cell = Math.min(rect.width, rect.height / 3);
+      engine.ring({ x, y, color: "#FFFFFF", r0: cell * 0.3, r1: cell * (0.55 + 0.04 * (e - 1)), width: Math.max(3, cell * 0.055), life: 0.65, clip });
       engine.burst({
-        x,
-        y,
-        count: 18 * e,
-        speed: [320, 700],
+        x, y, clip,
+        count: 20 * e,
+        speed: [short * 1.2, short * 2.5],
+        // 細長い窓でも、中央のコマだけでなく上下まで星が広がる。
+        velocityScale: [1, Math.max(1, rect.height / rect.width * 0.75)],
         shapes: ["star", "star", "sparkle"],
-        colors: [...PALETTES.gold, "#B98CFF", "#FFFFFF"],
-        size: [12, 22],
-        life: [0.7, 1.2],
-        gravity: 300,
-        drag: 2.2,
-        twinkle: 0.2,
+        colors: ["#F6AA00", "#FFFFFF", "#D8F3FF", "#FF8082"],
+        size: [short * 0.18, short * 0.3],
+        life: [0.75, 0.95],
+        gravity: 0,
+        drag: 2.8,
+        twinkle: 0.15,
       });
-      engine.glow({ x, y, radius: 200, color: "#FFF4C2", alpha: 0.34, lifeMs: 460 });
+      engine.glow({ x, y, radius: short * 0.48, color: "#FFFFFF", alpha: 0.18, lifeMs: 420, clip });
       motion.punch(reelEl, { amount: 0.06 });
     },
 
@@ -240,27 +256,33 @@ export function createFxPresets({ engine, motion }) {
       motion.bump(trayEl, { amount: 0.12 });
     },
 
-    /** さかなつり（れんしゅう）: 釣れた瞬間の水しぶき。大きい魚ほど高く。 */
+    /** さかなつり（れんしゅう）: 魚に付いて巻き上がるしぶき。長さの札は避ける。 */
     fishCatch(fishEl, { lengthCm = 20 } = {}) {
       if (!fishEl) return;
-      const { x, y } = engine.pointOf(fishEl);
-      const power = Math.min(1.8, 0.8 + lengthCm / 40);
+      const { x, y, rect } = engine.pointOf(fishEl);
+      const short = Math.min(rect.width, rect.height);
+      if (!short) return;
+      const power = Math.min(1.4, 0.8 + lengthCm / 80);
+      const scene = fishEl.closest?.(".fishing-scene");
+      const exclude = [...(scene?.querySelectorAll(".fishing-catch, .fishing-status") || [])];
       engine.burst({
         x,
         y,
-        count: 22 * power,
-        speed: [300 * power, 640 * power],
+        // 魚が縮んで舟へ移っても、魚の1.5倍の枠と文字の除外を毎コマ保つ。
+        clip: { element: fishEl, scale: 1.5, follow: true, x, y, exclude },
+        count: 10,
+        // 顔の中心を覆う塊ではなく、魚の輪郭のまわりから水が散る。
+        originRadius: [rect.width * 0.3, rect.height * 0.3],
+        speed: [short * 0.2, short * 0.5 * power],
         angle: -Math.PI / 2,
-        spread: Math.PI * 0.8,
-        shapes: ["drop", "drop", "dot"],
+        spread: Math.PI * 1.6,
+        shapes: ["drop", "drop", "bubble"],
         colors: PALETTES.sea,
-        size: [7, 14],
-        life: [0.6, 1.05],
-        gravity: 900,
-        drag: 1,
+        size: [short * 0.12, short * 0.22],
+        life: [0.7, 0.9],
+        gravity: short * 1.4,
+        drag: 2.6,
       });
-      engine.burst({ x, y, count: 10, shapes: ["sparkle", "star"], colors: PALETTES.gold, size: [10, 18], gravity: 80, twinkle: 0.25 });
-      engine.ring({ x, y, color: "#FFFFFF", r0: 16, r1: 110, width: 6, life: 0.45 });
     },
 
     /** 高い音だけ（れんしゅう）: 合った音符がはじける。 */
@@ -272,11 +294,35 @@ export function createFxPresets({ engine, motion }) {
     },
 
     /**
-     * おおさわぎ: 押したら動物がポンと出る（popAppear の代わり）。輪を2つ、ハートと星。
+     * おおさわぎ: 押した回の粒。押すと 出てくる（型 pop）は、動物がポンと出る（popAppear の
+     * 代わり）。輪を2つ、ハートと星。ほかの遊びは、その遊びの型の粒（ふうせんは紙吹雪と
+     * 紙テープ、ぬりえは絵の具、ボールは火花と紙テープ）が、遊びの演出に重ねて出る。
      * 回を追うごとに大きく、色が増える。黄色は使わない。
      */
-    partyPress(figureEl, { k = 0 } = {}) {
+    partyPress(figureEl, { k = 0, theme = "pop" } = {}) {
       if (!figureEl) return;
+      const look = partyThemeFor(theme);
+      if (look && look.id !== "pop") {
+        const { x, y } = engine.pointOf(figureEl.querySelector?.("svg") || figureEl);
+        const e = escalation(k);
+        engine.ring({ x, y, color: "#FFFFFF", r0: 20, r1: 110 + 24 * k, width: 7, life: 0.5 });
+        const [slow, fast] = look.particles.pressSpeed ?? [320, 760];
+        engine.burst({
+          x,
+          y,
+          count: (look.particles.pressCount ?? 20) * e,
+          speed: [slow * Math.sqrt(e), fast * Math.sqrt(e)],
+          shapes: look.particles.shapes,
+          colors: growingColors(look.particles.colors, k),
+          size: [18, 32],
+          life: [0.9, 1.5],
+          gravity: look.particles.gravity,
+          drag: 2.3,
+          twinkle: 0.12,
+        });
+        engine.glow({ x, y, radius: 170 + 30 * k, alpha: 0.24 + 0.04 * k, lifeMs: 460 });
+        return;
+      }
       const art = figureEl.querySelector("svg") || figureEl;
       const { x, y } = engine.pointOf(art);
       const e = escalation(k);
@@ -301,8 +347,9 @@ export function createFxPresets({ engine, motion }) {
     },
 
     /** おおさわぎ: キラキラびんが「はんぶん」「いっぱい」になった（びんの下ではじける）。 */
-    partyCheer(jarEl) {
+    partyCheer(jarEl, { theme = "pop" } = {}) {
       if (!jarEl) return;
+      const look = partyThemeFor(theme);
       const { x, y, rect } = engine.pointOf(jarEl);
       engine.burst({
         x,
@@ -311,8 +358,8 @@ export function createFxPresets({ engine, motion }) {
         speed: [260, 620],
         angle: Math.PI / 2,
         spread: Math.PI * 1.2,
-        shapes: ["star", "heart", "sparkle"],
-        colors: PALETTES.party,
+        shapes: look && look.id !== "pop" ? look.particles.shapes : ["star", "heart", "sparkle"],
+        colors: look && look.id !== "pop" ? look.particles.colors : PALETTES.party,
         size: [14, 26],
         life: [0.7, 1.2],
         gravity: 320,
@@ -320,9 +367,10 @@ export function createFxPresets({ engine, motion }) {
       });
     },
 
-    /** おおさわぎ: 5回目、びんのふたが飛んで星があふれる。 */
-    partyOverflow(jarEl) {
+    /** おおさわぎ: 5回目、びんのふたが飛んで中身（その遊びの粒）があふれる。 */
+    partyOverflow(jarEl, { theme = "pop" } = {}) {
       if (!jarEl) return;
+      const look = partyThemeFor(theme);
       const { x, y, rect } = engine.pointOf(jarEl);
       engine.burst({
         x,
@@ -331,8 +379,8 @@ export function createFxPresets({ engine, motion }) {
         speed: [420, 900],
         angle: -Math.PI / 2,
         spread: Math.PI * 0.9,
-        shapes: ["star", "star", "heart", "sparkle"],
-        colors: PALETTES.party,
+        shapes: look && look.id !== "pop" ? look.particles.shapes : ["star", "star", "heart", "sparkle"],
+        colors: look && look.id !== "pop" ? look.particles.colors : PALETTES.party,
         size: [16, 30],
         life: [1, 1.7],
         gravity: 520,
@@ -340,23 +388,45 @@ export function createFxPresets({ engine, motion }) {
       });
     },
 
-    /** おおさわぎ: 5回目のお祝い（紙吹雪の雨と花火。花火の回数は光の上限の中）。 */
-    partyFinale() {
-      engine.confettiRain({ count: 140, colors: PALETTES.party });
-      engine.fireworks({ colors: PALETTES.party, bursts: 4 });
+    /**
+     * おおさわぎ: 最後のお祝い（その遊びの形の雨と花火。花火の回数は光の上限の中）。
+     * point を渡すと、そこ（見せ場）から型の粒も大きくはじける。
+     */
+    partyFinale({ theme = "pop", point = null } = {}) {
+      const look = partyThemeFor(theme);
+      const colors = look && look.id !== "pop" ? look.particles.colors : PALETTES.party;
+      if (point) {
+        engine.ring({ x: point.x, y: point.y, color: "#FFFFFF", r0: 30, r1: 240, width: 9, life: 0.7 });
+        engine.burst({
+          x: point.x,
+          y: point.y,
+          count: 44,
+          speed: [520, 1050],
+          shapes: look?.particles.finaleShapes ?? look?.particles.shapes ?? ["star", "sparkle"],
+          colors,
+          size: [22, 40],
+          life: [1, 1.7],
+          gravity: look && !look.particles.finaleShapes ? look.particles.gravity : 260,
+          drag: 2,
+          twinkle: 0.15,
+        });
+      }
+      engine.confettiRain({ count: 140, colors, ...(look ? { shapes: look.rain } : {}) });
+      engine.fireworks({ colors, bursts: 4 });
     },
 
-    /** おおさわぎ: けっかで、ラッコが服をもらった。 */
-    partyReward(otterEl) {
+    /** おおさわぎ: けっかで、ラッコが服をもらった（その遊びの粒で）。 */
+    partyReward(otterEl, { theme = "pop" } = {}) {
       if (!otterEl) return;
+      const look = partyThemeFor(theme);
       const { x, y, rect } = engine.pointOf(otterEl);
       engine.burst({
         x,
         y: y - (rect ? rect.height * 0.25 : 0),
         count: 30,
         speed: [260, 640],
-        shapes: ["star", "heart", "sparkle"],
-        colors: PALETTES.party,
+        shapes: look && look.id !== "pop" ? look.particles.shapes : ["star", "heart", "sparkle"],
+        colors: look && look.id !== "pop" ? look.particles.colors : PALETTES.party,
         size: [14, 26],
         life: [0.8, 1.3],
         gravity: 300,
@@ -365,31 +435,50 @@ export function createFxPresets({ engine, motion }) {
     },
 
     /**
-     * ⑤ フィナーレ（5回目・できたとき）。星の大きな輪、紙吹雪の雨、主役が跳ねる。
-     * 強さ「ひかえめ」は星の輪だけ、「なし」は何もしない（fxSafety の finale）。
+     * ⑤ フィナーレ（5回目・できたとき）。大きな輪、粒、紙吹雪の雨、主役が跳ねる。
+     * 強さ「ひかえめ」は小さな輪だけ、「なし」は何もしない（fxSafety の finale）。
+     * theme（遊びの id か型の名前。src/lib/partyThemes.js）を渡すと、粒の形と色がその遊びの
+     * ものになる（ふうせんは紙テープ、ぬりえは絵の具、高い音だけは音符…）。
      */
-    finale(stageEl, { hero = null, palette = PALETTES.rainbow } = {}) {
+    finale(stageEl, { hero = null, palette = PALETTES.rainbow, theme = null } = {}) {
       const s = engine.scale();
       if (s.finale === "none") return;
+      const look = partyThemeFor(theme);
       const { x, y } = engine.pointOf(hero?.querySelector?.("svg") || hero || stageEl);
+      if (s.finale === "ring") {
+        engine.ring({ x, y, color: look ? look.particles.colors[0] : "#D8F3FF", r0: 20, r1: 100, width: 4, life: 0.5 });
+        engine.burst({
+          x,
+          y,
+          count: 12,
+          speed: [100, 180],
+          shapes: look ? look.particles.finaleShapes ?? look.particles.shapes : ["star"],
+          colors: look ? look.particles.colors : PALETTES.sea,
+          size: [10, 16],
+          life: [0.4, 0.6],
+          gravity: 0,
+        });
+        return;
+      }
+      const colors = look ? look.particles.colors : palette;
       engine.ring({ x, y, color: "#FFFFFF", r0: 30, r1: 260, width: 10, life: 0.7 });
-      engine.ring({ x, y, color: "#FFC83D", r0: 20, r1: 340, width: 6, life: 0.9, delay: 0.1 });
+      engine.ring({ x, y, color: look ? colors[0] : "#FFC83D", r0: 20, r1: 340, width: 6, life: 0.9, delay: 0.1 });
       engine.burst({
         x,
         y,
         count: 40,
         speed: [620, 1150],
-        shapes: ["star", "star", "sparkle"],
-        colors: [...PALETTES.gold, ...palette],
+        shapes: look ? look.particles.finaleShapes ?? look.particles.shapes : ["star", "star", "sparkle"],
+        colors: look ? colors : [...PALETTES.gold, ...palette],
         size: [26, 46],
         life: [1, 1.7],
-        gravity: 260,
+        gravity: look && !look.particles.finaleShapes ? look.particles.gravity : 260,
         drag: 2,
         twinkle: 0.2,
       });
       engine.glow({ x, y, radius: 300, color: "#FFFFFF", alpha: 0.32, lifeMs: 720 });
-      if (s.finale === "full") engine.confettiRain({ count: 120, colors: palette });
-      engine.fireworks({ colors: palette, bursts: 4 });
+      if (s.finale === "full") engine.confettiRain({ count: 120, colors, ...(look ? { shapes: look.rain } : {}) });
+      engine.fireworks({ colors, bursts: 4 });
       if (stageEl) motion.punch(stageEl, { amount: 0.03 });
       if (hero) motion.hop(hero, { delayMs: 100 });
     },
@@ -402,6 +491,7 @@ export function createFxPresets({ engine, motion }) {
      */
     revealResult(container, { playStar = null } = {}) {
       if (!container) return 0;
+      if (engine.scale().finale === "none") return 0;
       const stars = [...container.querySelectorAll(".hk-star, .hk-result-medal")];
       const lit = stars.filter((star) => !star.classList.contains("is-off"));
       const items = [...container.querySelectorAll(".hk-result-item, .hk-result-picture")];
@@ -409,15 +499,16 @@ export function createFxPresets({ engine, motion }) {
       const STEP = 230;
       stars.forEach((star, index) => {
         const delayMs = 120 + index * STEP;
-        motion.slamIn(star, { delayMs });
+        if (engine.scale().finale === "ring") motion.popIn(star, {delayMs, from:0.8});
+        else motion.slamIn(star, { delayMs });
         if (!star.classList.contains("is-off")) {
           playStar?.(index, (delayMs + 220) / 1000);
-          window.setTimeout(() => {
+          presentation.later(delayMs + 220, () => {
             if (!star.isConnected) return;
             const { x, y } = engine.pointOf(star);
             engine.burst({ x, y, count: 14, speed: [260, 620], shapes: ["sparkle", "star"], colors: PALETTES.gold, size: [16, 28], life: [0.6, 1.1], gravity: 160, twinkle: 0.2 });
             engine.ring({ x, y, color: "#FFC83D", r0: 10, r1: 70, width: 5, life: 0.4 });
-          }, delayMs + 220);
+          });
         }
       });
       const itemsStart = 120 + stars.length * STEP;
@@ -425,25 +516,31 @@ export function createFxPresets({ engine, motion }) {
       const titleAt = itemsStart + items.length * 110 + 80;
       if (title) motion.stamp(title, { delayMs: titleAt });
       // 星が2つ以上（または点の無い遊びの「できた」）なら、小さな紙吹雪も。
-      if (lit.length >= 2 || container.querySelector(".completion-result")) {
-        window.setTimeout(() => {
+      // 一言の左右から、内側の上へ向けて出す（クラッカーの形）。一言の真ん中から出すと、
+      // はじけた瞬間の粒がけっかの主役（一言と星）を覆い、おおさわぎでは字が読めなかった
+      // （2026-10-01、14 の大きさの撮影で見つけた。飾りは主役より目立たせない）。
+      if (engine.scale().finale === "full" && (lit.length >= 2 || container.querySelector(".completion-result"))) {
+        presentation.later(titleAt + 200, () => {
           if (!container.isConnected) return;
-          const p = engine.pointOf(title || container);
-          engine.burst({
-            x: p.x,
-            y: p.y,
-            count: 44,
-            speed: [460, 900],
-            angle: -Math.PI / 2,
-            spread: Math.PI * 1.1,
-            shapes: ["confetti", "confetti", "star"],
-            colors: PALETTES.rainbow,
-            size: [15, 26],
-            life: [1, 1.6],
-            gravity: 520,
-            drag: 1.7,
+          const { x, y, rect } = engine.pointOf(title || container);
+          const half = rect ? rect.width / 2 + 36 : 160;
+          [-1, 1].forEach((side) => {
+            engine.burst({
+              x: x + side * half,
+              y: rect ? rect.bottom : y,
+              count: 22,
+              speed: [460, 900],
+              angle: -Math.PI / 2 - side * 0.35,
+              spread: Math.PI * 0.45,
+              shapes: ["confetti", "confetti", "star"],
+              colors: PALETTES.rainbow,
+              size: [15, 26],
+              life: [1, 1.6],
+              gravity: 520,
+              drag: 1.7,
+            });
           });
-        }, titleAt + 200);
+        });
       }
       return titleAt + 500;
     },
