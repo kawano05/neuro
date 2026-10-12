@@ -719,5 +719,6 @@ export const visibleViews = new Set([
   "operation",
   "evaluation",
   "research",
+  "log",
   "settings",
 ]);
