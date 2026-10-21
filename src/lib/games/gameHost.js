@@ -56,7 +56,8 @@
 import { findGameModule } from "./registry.js";
 import { presentation } from "../presentation.js";
 import { MAX_SESSIONS } from "../state.js";
-import { gameHowTo } from "../content.js";
+import { cueTones, gameHowTo } from "../content.js";
+import { CUE_TONE_GAIN } from "../audio.js";
 import { entryFor, joinSpeech, resolveTextMode } from "../i18n.js";
 import { isMeasurementMode } from "../difficultyMode.js";
 import { createReadyScreen } from "./readyScreen.js";
@@ -522,6 +523,30 @@ export function createGameHost(ctx) {
     crane: "howto.endless.crane",
   };
 
+  /**
+   * 音で押す遊びの、押す合図の音（れんしゅうの回の説明の画面で先に聞かせる）。
+   * 施設の試用で「高い音・低い音が分かりにくい。最初に、この音が鳴ったら押してね！の
+   * ほうが分かりやすい」と言われた（2026-10-21）。そくていの回には鳴らさない——合図を
+   * 前もって聞かせると、それまでの記録と条件が変わる（docs/rules/measurement-invariance.md）。
+   */
+  const READY_SAMPLE_TONES = {
+    gonogo: cueTones.high,
+    fishing: cueTones.high,
+    "fishing-gonogo": cueTones.high,
+  };
+  /** 見本の音を鳴らす時刻（秒）。合図と同じ音を2回。 */
+  const READY_SAMPLE_AT_S = [0.15, 0.85];
+  /** 見本の音のあと、説明を読みはじめるまで（ms）。2回目の音が消えてから。 */
+  const READY_SAMPLE_SPEECH_DELAY_MS = 1400;
+
+  /** 見本の音を鳴らす。鳴らせたら true（音が止まっていて時計が無ければ false）。 */
+  function playReadySample(frequency) {
+    const now = ctx.audio.scheduler?.now?.();
+    if (typeof now !== "number" || !(now > 0) || typeof ctx.audio.playToneAt !== "function") return false;
+    READY_SAMPLE_AT_S.forEach((offsetS) => ctx.audio.playToneAt(frequency, now + offsetS, CUE_TONE_GAIN));
+    return true;
+  }
+
   function renderReady(module, stepKeys) {
     // content.js の gameHowTo が持つのは並びだけで、中身は i18n のキー。
     // 表記（漢字／ひらがな／英語）は設定で変わるので、ここで引く。
@@ -538,6 +563,10 @@ export function createGameHost(ctx) {
     const resolvedKeys = (endlessKey ? [...stepKeys.slice(0, -1), endlessKey] : stepKeys).map((key) =>
       practice && entryFor(`${key}.practice`) ? `${key}.practice` : key
     );
+    // 音で押す遊びの れんしゅうの回は、手順の前に「この音が鳴ったら、押してね。」を置き、
+    // 開いたときに その音を鳴らしてから読む（READY_SAMPLE_TONES）。
+    const sampleTone = practice ? READY_SAMPLE_TONES[module.id] : undefined;
+    if (sampleTone) resolvedKeys.unshift("howto.sample");
     const steps = resolvedKeys.map((key) => ctx.tHtml(key));
     const spokenSteps = resolvedKeys.map((key) => ctx.t(key));
     // 行は「番号の丸（::before）＋文」を flex で並べる。文を1つの箱にまとめないと、
@@ -570,7 +599,12 @@ export function createGameHost(ctx) {
     // 画面注視が困難な利用者にも届かせる必要がある（basic-design.md §1.2）。
     // 題名と手順は文として区切って読む（句点が無いと、分かち書きを外したときに
     // 題名と1行目が1語のようにつながる。i18n.js の joinSpeech）。
-    const spoken = joinSpeech([moduleTitle(module), ...spokenSteps], resolveTextMode(state.settings));
+    // 見本の音があるときは、音のすぐあとに「この音が鳴ったら、押してね。」が来るよう、
+    // 題名より先に読む。
+    const spokenParts = sampleTone
+      ? [spokenSteps[0], moduleTitle(module), ...spokenSteps.slice(1)]
+      : [moduleTitle(module), ...spokenSteps];
+    const spoken = joinSpeech(spokenParts, resolveTextMode(state.settings));
     // エンドレスは終わりが無い。スイッチだけで終わる道（しばらく押さずに待つと
     // 「もういちど／おわる」が出る）を、始める前に知らせておく。
     if (requestedEndless && !isMeasurementMode(state.settings) && state.settings.autoScan && !state.settings.switchControlMode) {
@@ -580,7 +614,14 @@ export function createGameHost(ctx) {
       elements.gameStageContent.querySelector(".game-ready-go").append(hint);
     }
     setPhase("ready");
-    ctx.voiceFeedback(spoken);
+    if (sampleTone && playReadySample(sampleTone)) {
+      // 押して始めたら、待っている読み上げは beginSession の stopSpeech が取り消す。
+      presentation.run("voice.feedback", () =>
+        ctx.audio.speakOrAnnounceLater(spoken, READY_SAMPLE_SPEECH_DELAY_MS)
+      );
+    } else {
+      ctx.voiceFeedback(spoken);
+    }
     readyScreen.open();
   }
 
@@ -612,14 +653,17 @@ export function createGameHost(ctx) {
     const module = findGameModule(gameId);
     if (!module || module.enabled === false) return;
     ctx.audio.music?.stop(0.3);
-    // 効果音の場面（src/lib/audio.js の effectOutputGain）。合図のある遊び
-    // （taskType あり）は今までどおりの大きさ、測定の課題でない遊びは持ち上げる。
-    ctx.audio.setProfile?.(module.taskType ? "task" : "play");
     // そくていの回の遊びでは、演出を何も足さない（docs/overall-design §5）。
     // キャリブレーション（支援者と使う基準の測定）は、モードによらず測定の扱い。
-    ctx.fx?.setMeasurement(
-      Boolean(module.taskType) && (isMeasurementMode(state.settings) || module.id === "calibration")
-    );
+    const measuring =
+      Boolean(module.taskType) && (isMeasurementMode(state.settings) || module.id === "calibration");
+    // 効果音の場面（src/lib/audio.js の effectOutputGain）。そくていの回は今までどおりの
+    // 大きさ（"task"）、それ以外は持ち上げる（"play"）。以前は合図のある遊び（taskType
+    // あり）を、れんしゅうの回でも "task" にしていた。2026-10-21 の打ち合わせで、施設の
+    // 試用から「ゲームの元の音が小さい（iPad を最大にしても聞こえにくい）」と言われた。
+    // 持ち上げても効果音の山は合図（CUE_TONE_GAIN 0.4）より下にあり、帯域も分けたまま。
+    ctx.audio.setProfile?.(measuring ? "task" : "play");
+    ctx.fx?.setMeasurement(measuring);
     requestedEndless = options.endless === true;
     readyScreen.close();
     destroyActive(); // 多重起動防止（MUST）: 前回 instance の destroy() を必ず呼ぶ

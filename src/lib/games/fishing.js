@@ -428,7 +428,7 @@ export function createFishingGame(gameId) {
         <img class="fishing-boat" src="${boatUrl}" alt="" />
         <div class="fishing-swimmer"><img class="fishing-swimmer-art" src="" alt="" /></div>
         <div class="fishing-catch"></div>
-        <div class="fishing-score">0 cm</div>
+        <div class="fishing-score">${scoreHtml(0)}</div>
         <div class="fishing-streak"></div>
         <div class="fishing-status">${tHtml("fishing.wait")}</div>
         ${showBiteMark ? '<div class="fishing-bite-mark"><span>!</span></div>' : ""}
@@ -477,7 +477,21 @@ export function createFishingGame(gameId) {
 
   function updateScore() {
     if (!scoreEl || !session) return;
-    scoreEl.textContent = `${session.summary.scoreCm ?? 0} cm`;
+    scoreEl.innerHTML = scoreHtml(session.summary.scoreCm ?? 0);
+  }
+
+  // 「○cm」が何の数かを、れんしゅうの回だけ字で添える。2026-10-21 の打ち合わせで
+  // 「この何センチって、どういう意味ですか」と聞かれた（先方の「改善のお願い」にも
+  // 「魚の大きさ ○○cm など、何の数値かを添える表示を」）。そくていの回の遊ぶ面は、
+  // 字も変えない（docs/rules/measurement-invariance.md）。
+  function scoreHtml(cm) {
+    return practice ? tHtml("fishing.scoreTotal", { n: cm }) : `${cm} cm`;
+  }
+
+  function catchHtml(cm, speedBonus) {
+    if (!practice) return speedBonus ? `★ ${cm} cm ＋${SPEED_BONUS_CM}` : `${cm} cm`;
+    const size = tHtml("fishing.catchSize", { n: cm });
+    return speedBonus ? `★ ${size} ＋${SPEED_BONUS_CM}` : size;
   }
 
   /**
@@ -524,9 +538,7 @@ export function createFishingGame(gameId) {
     swimmerEl.classList.remove("is-biting");
     sceneEl?.classList.remove("is-bite");
     swimmerEl.classList.add("is-hooked");
-    catchEl.textContent = speedBonus
-      ? `★ ${planned.lengthCm} cm ＋${SPEED_BONUS_CM}`
-      : `${planned.lengthCm} cm`;
+    catchEl.innerHTML = catchHtml(planned.lengthCm, speedBonus);
     catchEl.classList.add("is-shown");
     // 釣れた瞬間の水しぶき（れんしゅうの回だけ。そくていの回は演出エンジンが何もしない）。
     fx?.fishCatch(swimmerEl, { lengthCm: planned.lengthCm });

@@ -512,6 +512,14 @@ const STRINGS = {
     kana: "ひくい おとの ときは、おさずに まちます。",
     en: "On the low note, wait without pressing.",
   },
+  // れんしゅうの回の説明の画面で、押す合図の音を先に鳴らしてから読む文（gameHost の
+  // renderReady）。施設の試用で「高い音のときは…より、この音が鳴ったら押してね！の
+  // ほうが分かりやすい」と言われた（2026-10-21）。
+  "howto.sample": { ruby: "この音[おと]が鳴[な]ったら、押[お]してね。",
+    kanji: "この音が鳴ったら、押してね。",
+    kana: "この おとが なったら、おしてね。",
+    en: "Press when you hear this sound.",
+  },
   // そくていは continuous（毎拍が押しどころ）。cued だった頃の
   // 「高い音に合わせて1回」ではないので、rhythm-l2 と同じ手順になる。
   "howto.calibration.1": { ruby: "最初[さいしょ]に低[ひく]い音[おと]が鳴[な]ります。",
@@ -585,17 +593,22 @@ const STRINGS = {
     kana: "さかなが みぎから およいで きます。",
     en: "A fish swims in from the right.",
   },
-  "howto.fishing.2": { ruby: "「アタリ」の音[おと]が鳴[な]ったらすぐ押[お]します。",
-    kanji: "「アタリ」の音が鳴ったらすぐ押します。",
-    kana: "「アタリ」の おとが なったら すぐ おします。",
-    en: "Press as soon as you hear the bite.",
+  // 「魚が糸に来たら押すのか、音が鳴ったら押すのか」が分からなかった（2026-10-21 の
+  // 打ち合わせ。説明を見ずに始め、魚が糸に来たときに押して釣れなかった）。釣れるのは
+  // 食いついて音が鳴ったあと、と書く。
+  // 説明の画面は1行ずつ並べるので、長くすると収まらない画面が出る（大きい文字・1180×820）。
+  // 1文にする。
+  "howto.fishing.2": { ruby: "魚[さかな]が食[く]いついて「アタリ」の音[おと]が鳴[な]ったら、すぐ押[お]します。",
+    kanji: "魚が食いついて「アタリ」の音が鳴ったら、すぐ押します。",
+    kana: "さかなが くいついて「アタリ」の おとが なったら、すぐ おします。",
+    en: "When a fish bites and you hear the bite, press right away.",
   },
   // れんしゅうの回は、アタリと同時に大きな「！」が出る（games/fishing.js）。打ち合わせで
   // 「ビックリマークが出たら押すんだと分かると最高」と言われた。
-  "howto.fishing.2.practice": { ruby: "「アタリ」の音[おと]が鳴[な]って大[おお]きな「！」が出[で]たら、すぐ押[お]します。",
-    kanji: "「アタリ」の音が鳴って大きな「！」が出たら、すぐ押します。",
-    kana: "「アタリ」の おとが なって おおきな「！」が でたら、すぐ おします。",
-    en: "Press as soon as you hear the bite and see the big \u201c!\u201d.",
+  "howto.fishing.2.practice": { ruby: "魚[さかな]が食[く]いついて音[おと]が鳴[な]り、大[おお]きな「！」が出[で]たら、すぐ押[お]します。",
+    kanji: "魚が食いついて音が鳴り、大きな「！」が出たら、すぐ押します。",
+    kana: "さかなが くいついて おとが なり、おおきな「！」が でたら、すぐ おします。",
+    en: "When a fish bites, you hear it and see a big “!”. Press right away.",
   },
   "howto.fishing.3": { ruby: "早[はや]く押[お]せるとボーナスがつきます。",
     kanji: "早く押せるとボーナスがつきます。",
@@ -612,10 +625,12 @@ const STRINGS = {
     kana: "さかなが みぎから およいで きます。",
     en: "A fish swims in from the right.",
   },
-  "howto.fishing-gonogo.2": { ruby: "「アタリ」の高[たか]い音[おと]で押[お]すと釣[つ]れます。",
-    kanji: "「アタリ」の高い音で押すと釣れます。",
-    kana: "「アタリ」の たかい おとで おすと つれます。",
-    en: "Press on the high bite note to reel it in.",
+  // 「アタリの高い音」では、どの音が高い音か、聞いてから押すのか予測して押すのかが
+  // 分からなかった（2026-10-21、先方の「改善のお願い」）。
+  "howto.fishing-gonogo.2": { ruby: "魚[さかな]が食[く]いついて高[たか]い音[おと]が鳴[な]ったら、すぐ押[お]します。",
+    kanji: "魚が食いついて高い音が鳴ったら、すぐ押します。",
+    kana: "さかなが くいついて たかい おとが なったら、すぐ おします。",
+    en: "When a fish bites and a high note plays, press right away.",
   },
   "howto.fishing-gonogo.3": { ruby: "低[ひく]い音[おと]は長靴[ながぐつ]です。押[お]さずに待[ま]ちます。",
     kanji: "低い音は長靴です。押さずに待ちます。",
@@ -1155,6 +1170,9 @@ const STRINGS = {
   "fishing.boot": { ruby: "長靴[ながぐつ]だった", kanji: "長靴だった", kana: "ながぐつ だった", en: "It was a boot" },
   "fishing.lost": { ruby: "おしい！", kanji: "おしい！", kana: "おしい！", en: "So close!" },
   // 釣れたときの表示。長さ（cm）を差し込む。
+  // れんしゅうの回の「○cm」に添える字（games/fishing.js の scoreHtml・catchHtml）。
+  "fishing.scoreTotal": { ruby: "魚[さかな]の大[おお]きさ ぜんぶで {n}cm", kanji: "魚の大きさ ぜんぶで {n}cm", kana: "さかなの おおきさ ぜんぶで {n}cm", en: "Fish size, total {n}cm" },
+  "fishing.catchSize": { ruby: "魚[さかな]の大[おお]きさ {n}cm", kanji: "魚の大きさ {n}cm", kana: "さかなの おおきさ {n}cm", en: "Fish size {n}cm" },
   "fishing.caught": { ruby: "{n}cm 釣[つ]れた！", kanji: "{n}cm 釣れた！", kana: "{n}cm つれた！", en: "Caught {n}cm!" },
   "fishing.fast": { ruby: "すばやい！ {n}cm", kanji: "すばやい！ {n}cm", kana: "すばやい！ {n}cm", en: "Quick! {n}cm" },
 
