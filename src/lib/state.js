@@ -51,9 +51,9 @@ import { DEFAULT_PARTY, sanitizeParty } from "./party.js";
  * 枠（走査）が動いたときの音（settings.scanFeedback）。画面を見続けるのが難しい
  * 利用者のため。打ち合わせで「画面を見なくても、音なら届く」と言われた
  * （docs/design-renewal-2026-09-25.md §1.7）。
- *   none  … 鳴らさない（既定。今までと同じ）
+ *   none  … 鳴らさない（2026-10-21 までの既定）
  *   tick  … 小さな音
- *   speak … その項目の名前を読む（読み上げを切っているときは小さな音）
+ *   speak … その項目の名前を読む（既定。読み上げを切っているときは小さな音）
  */
 export const SCAN_FEEDBACKS = new Set(["none", "tick", "speak"]);
 
@@ -155,7 +155,7 @@ export const defaultState = {
   matchingIndex: 0,
   letterIndex: 0,
   currentPhrase: "",
-  currentCategory: "基本",
+  currentCategory: "あいさつ",
   operation: {
     mode: "item",
     itemIndex: 0,
@@ -191,8 +191,11 @@ export const defaultState = {
     // 分からない言葉・余計なボタンだった（docs/design-renewal-2026-09-25.md §3.5）。
     // NeuroNode やキーボードのスイッチは、これが無くても使える。
     showScreenSwitch: false,
-    // 枠が動いたときの音（SCAN_FEEDBACKS）。
-    scanFeedback: "none",
+    // 枠が動いたときの音（SCAN_FEEDBACKS）。既定は名前を読む（2026-10-21。先方から
+    // 「カーソルが項目に合った時点で、その名前やことばを読み上げてほしい」と頼まれた。
+    // それまでの既定は none で、設定があることに気づかれていなかった）。
+    // 保存してある値は変えない（いま使っている端末は、設定で選び直す）。
+    scanFeedback: "speak",
     // 演出の強さ（FX_LEVELS）。
     fxLevel: "normal",
     // れんしゅうの回の、タイミングの遊びの絵（遊びの種類ごと。artVersion.js の ART_FAMILIES）。

@@ -199,9 +199,9 @@ test("the redesign's settings survive a reload and fall back on unknown values",
   const defaults = sanitizeState({}).settings;
   assert.equal(defaults.showScreenSwitch, false, "画面の「おす」ボタンは既定で出さない");
   // 枠が動いたときの音は、既定では鳴らさない（今までと同じ）。選べば残り、知らない値は既定へ。
-  assert.equal(defaults.scanFeedback, "none");
-  assert.equal(sanitizeState({ settings: { scanFeedback: "speak" } }).settings.scanFeedback, "speak");
-  assert.equal(sanitizeState({ settings: { scanFeedback: "beep" } }).settings.scanFeedback, "none");
+  assert.equal(defaults.scanFeedback, "speak");
+  assert.equal(sanitizeState({ settings: { scanFeedback: "none" } }).settings.scanFeedback, "none");
+  assert.equal(sanitizeState({ settings: { scanFeedback: "beep" } }).settings.scanFeedback, "speak");
   // はじめの遊びは、遊びごとに見え方と音を持つ。既定の音に「びっくりする音」は使わない
   // （強すぎる音は発作につながりうる、と言われている）。
   assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "baseball", "color-legacy", "coloring"]);
@@ -471,7 +471,7 @@ test("sanitizeState rejects invalid shapes, enums and unsafe ranges item by item
   });
 
   assert.equal(sanitized.currentView, "start");
-  assert.equal(sanitized.currentCategory, "基本");
+  assert.equal(sanitized.currentCategory, "あいさつ");
   assert.equal(sanitized.matchingIndex, 2);
   assert.equal(sanitized.operation.mode, "item");
   assert.equal(sanitized.operation.pointPhase, "x");

@@ -1576,7 +1576,7 @@ async function checkBaseballFlow(page) {
 /**
  * 枠が動いたときの音（settings.scanFeedback）。「名前を読む」にすると、枠が
  * 次の項目へ動くたびに、その項目の名前を読む（画面を見続けるのが難しい利用者の
- * ため。打ち合わせ「画面を見なくても、音なら届く」）。既定の「なし」では読まない。
+ * ため。打ち合わせ「画面を見なくても、音なら届く」）。「なし」では読まない（既定は「名前を読む」）。
  */
 async function checkScanFeedbackSpeaksNames(page) {
   // 読んだ文を数える（アプリの声でも端末の声でも neuronode:speech が出る）。
@@ -1620,15 +1620,15 @@ async function checkScanFeedbackSpeaksNames(page) {
     );
   };
 
-  // 既定（なし）では、枠が動いても読まない。
-  await page.reload();
+  // 「なし」では、枠が動いても読まない（2026-10-21 までの既定。いまの既定は「名前を読む」）。
+  await patchSettings(page, { scanFeedback: "none", speechEnabled: true, autoScan: false }, { allowMissing: true });
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 9);
   const quiet = await stepAndHear();
   assert(
     quiet.said.length === 0,
-    `With the default setting the scan must stay silent, but it said ${JSON.stringify(quiet.said)}`
+    `With "none" the scan must stay silent, but it said ${JSON.stringify(quiet.said)}`
   );
 
   // 「名前を読む」にすると、動いた先の名前を読む。
@@ -2461,7 +2461,7 @@ async function checkSettingsReset(page) {
 
   // スイッチ: iPad 本体に合わせるものは戻さない。
   await openSettingsDetails(page, "switch");
-  await page.locator("#scanFeedback").selectOption("speak");
+  await page.locator("#scanFeedback").selectOption("tick");
   await page.locator("#showScreenSwitch").check();
   await page.locator("#showScreenSwitch").focus();
   await page.keyboard.press("Tab");
@@ -2472,7 +2472,7 @@ async function checkSettingsReset(page) {
   await page.keyboard.press("Space");
   saved = await savedSettings();
   assert(
-    saved.scanFeedback === "none" && saved.showScreenSwitch === false && saved.switchControlMode === false,
+    saved.scanFeedback === "speak" && saved.showScreenSwitch === false && saved.switchControlMode === false,
     "Switch reset restores the app-side switch settings"
   );
   assert(
