@@ -127,6 +127,11 @@ export function collectElements() {
     mistakeCount: document.querySelector("#mistakeCount"),
     logList: document.querySelector("#logList"),
     sessionList: document.querySelector("#sessionList"),
+    // 家族向けの「がんばりの記録」（views/progress.js）。
+    progressNote: document.querySelector("#progressNote"),
+    progressSummary: document.querySelector("#progressSummary"),
+    progressWeek: document.querySelector("#progressWeek"),
+    progressGames: document.querySelector("#progressGames"),
     sessionTrends: document.querySelector("#sessionTrends"),
     trendTabs: document.querySelector("#trendTabs"),
     exportCsv: document.querySelector("#exportCsv"),

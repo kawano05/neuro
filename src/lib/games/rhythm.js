@@ -43,6 +43,7 @@ import { rhythmPresets, cueTones } from "../content.js";
 import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
   allowsVisualGuidance,
+  cueTimbreFor,
   resolveDifficultyMode,
   resolveRhythmDifficulty,
 } from "../difficultyMode.js";
@@ -373,7 +374,7 @@ function buildContinuousPlan({ bpm, countInBeats, targetBeats }) {
  *
  * @returns buildCuedPlan と同じ形 ＋ seedSequence（Array<"go"|"nogo">）
  */
-function buildGonogoPlan({ bpm, countInBeats, targetBeats, goRatio }) {
+function buildGonogoPlan({ bpm, countInBeats, targetBeats, goRatio, goTimbre = "sine" }) {
   const beatIntervalS = 60 / bpm;
   const audioBeats = [];
   const judgedBeats = [];
@@ -393,7 +394,10 @@ function buildGonogoPlan({ bpm, countInBeats, targetBeats, goRatio }) {
   sequence.forEach((kind, i) => {
     const timeS = (countInBeats + i) * beatIntervalS;
     const tone = kind === "go" ? cueTones.high : cueTones.noGo;
-    audioBeats.push({ index: runningIndex, timeS, tone, gain: FEEDBACK_GAIN_HIT });
+    const beat = { index: runningIndex, timeS, tone, gain: FEEDBACK_GAIN_HIT };
+    // れんしゅうの回は、押す合図だけ音色を変える（audio.js の CUE_TIMBRES）。
+    if (kind === "go" && goTimbre !== "sine") beat.timbre = goTimbre;
+    audioBeats.push(beat);
     runningIndex += 1;
     judgedBeats.push({ index: i, kind, timeS });
   });
@@ -530,6 +534,8 @@ export function createRhythmGame(gameId) {
     // 1回だけ確定させ、セッションの途中では変えない——途中で切り替わると、
     // その回の記録がどちらの条件だったのか言えなくなる。
     let visualGuidance = false;
+    // 押す合図の音色（cueTimbreFor）。mount() で確定させ、記録に残す。
+    let cueTimbre = "sine";
 
     // セッション文脈（mount() で1回だけ確定する。detailed-design.md §6.3）。
     let plan = null;
@@ -888,7 +894,8 @@ export function createRhythmGame(gameId) {
 
       params = resolveParams(gameId, settings);
       effectiveWindowMs = computeEffectiveWindowMs(params.mode, params.bpm, settings.judgmentWindowMs);
-      plan = buildPlan(params);
+      cueTimbre = cueTimbreFor(gameId, settings);
+      plan = buildPlan({ ...params, goTimbre: cueTimbre });
       excludedTrialCount = params.excludedTrialCount || 0;
       mountStageVisuals();
 
@@ -1008,6 +1015,9 @@ export function createRhythmGame(gameId) {
           // 合図音の大きさ（audio.js の CUE_TONE_GAIN）。2026-09-30 に 0.05 から上げたので、
           // どちらの大きさで取った記録かを分けられるように残す。
           cueGain: FEEDBACK_GAIN_HIT,
+          // 押す合図の音色（audio.js の CUE_TIMBRES）。れんしゅうの高い音だけの回は bright。
+          // 2026-10-21 に足した。どちらの音色で取った回かを分けられるように残す。
+          cueTimbre,
           countInBeats: params.countInBeats,
           targetBeats: params.targetBeats,
           judgmentWindowMs: settings.judgmentWindowMs,

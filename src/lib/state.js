@@ -30,6 +30,7 @@ import { READINESS_STATES } from "./readinessCheck.js";
 import { SELECTABLE_TEXT_MODES, TEXT_MODES } from "./i18n.js";
 import { sanitizeSlotSession } from "./games/slotState.js";
 import { DEFAULT_PARTY, sanitizeParty } from "./party.js";
+import { sanitizePlayRecords } from "./playRecords.js";
 
 /**
  * はじめの遊び（失敗の無い遊び）の、遊びごとの見え方と音（settings.playPrefs）。
@@ -75,6 +76,8 @@ export const SPEECH_VOICES = new Set(["app", "device"]);
  * 強さを session.config.fxLevel に残す（sanitize → CSV まで）。
  */
 export const FX_LEVELS = new Set(["none", "subtle", "normal", "big"]);
+/** 押す合図の音色（session.config.cueTimbre。src/lib/audio.js の CUE_TIMBRES と同じ値）。 */
+const CUE_TIMBRES = new Set(["sine", "bright"]);
 
 export const PLAY_BACKGROUNDS = new Set(["sea", "dark", "light"]);
 /**
@@ -318,6 +321,9 @@ export const defaultState = {
   // （src/lib/party.js）。
   // 研究の記録ではない（記録を消しても残す）。
   party: { ...DEFAULT_PARTY, outfits: [] },
+  // 遊びの記録（家族向けの「がんばりの記録」の元。src/lib/playRecords.js）。
+  // 研究の記録ではない。1回遊び終わるごとに1件。CSV には出さない。
+  playRecords: [],
   // 旧v3データとの読み書き互換用。中立UIでは新規付与・表示を行わない。
   arcade: {
     medals: 0,
@@ -725,6 +731,10 @@ function sanitizeRhythmSession(session, taskType) {
     // れんしゅうの回は絵を作り直した（art/gonogoWorldArt.js）。落とすと再読み込みで消え、
     // 絵が変わる前後の回を分けられない。この列を持たない古い記録は null（分からない）。
     artVersion: sanitizeArtVersion(config.artVersion),
+    // 押す合図の音色（audio.js の CUE_TIMBRES）。れんしゅうの回は bright のことがある
+    // （2026-10-21 から）。落とすと再読み込みで消え、音色の違う回を分けられない。
+    // この列を持たない古い記録は null（その頃はいつも sine だったが、推測で埋めない）。
+    cueTimbre: enumOr(config.cueTimbre, CUE_TIMBRES, null),
     // どの表記で回したか。手順の説明が読めるかは成績に効きうる。
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
@@ -1101,6 +1111,10 @@ function sanitizeReactionSession(session) {
     // 見え方の版（art/craneWorldArt.js・art/fishingWorldArt.js）。落とすと再読み込みで
     // 消え、絵が変わる前後の回を分けられない。持たない古い記録は null（分からない）。
     artVersion: sanitizeArtVersion(config.artVersion),
+    // 押す合図の音色（audio.js の CUE_TIMBRES）。れんしゅうの回は bright のことがある
+    // （2026-10-21 から）。落とすと再読み込みで消え、音色の違う回を分けられない。
+    // この列を持たない古い記録は null（その頃はいつも sine だったが、推測で埋めない）。
+    cueTimbre: enumOr(config.cueTimbre, CUE_TIMBRES, null),
     // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
     measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
   };
@@ -1364,14 +1378,14 @@ export function sanitizeState(candidate) {
         settings.slotCycleMs,
         fallback.settings.slotCycleMs,
         2800,
-        6000,
+        9600,
         true
       ),
       slotToleranceMs: numberInRange(
         settings.slotToleranceMs,
         fallback.settings.slotToleranceMs,
         60,
-        220,
+        600,
         true
       ),
       slotL1Rounds: numberInRange(settings.slotL1Rounds, fallback.settings.slotL1Rounds, 3, 20, true),
@@ -1525,6 +1539,7 @@ export function sanitizeState(candidate) {
       }, {}),
     },
     party: sanitizeParty(candidate.party),
+    playRecords: sanitizePlayRecords(candidate.playRecords),
     arcade: {
       medals: numberInRange(
         arcade.medals,

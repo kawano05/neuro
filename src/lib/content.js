@@ -715,4 +715,6 @@ export const visibleViews = new Set([
   "research",
   "log",
   "settings",
+  // 家族向けの「がんばりの記録」（2026-10-21。src/lib/views/progress.js）。
+  "progress",
 ]);

@@ -3919,6 +3919,178 @@ body.high-contrast .spread-mark {
   margin-bottom: 20px;
 }
 
+/* ---------------------------------------------------------------------
+   がんばりの記録（views/progress.js）。家族が見る画面なので、数字を大きく、言葉は前向きに。
+   カードの形は評価ログの推移（.trend-card）にそろえる。
+   --------------------------------------------------------------------- */
+.progress-summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin: 12px 0 16px;
+}
+
+.progress-tile,
+.progress-week,
+.progress-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.progress-tile {
+  padding: 14px 16px;
+}
+
+.progress-tile span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.progress-tile strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.progress-week {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+}
+
+.progress-week-title {
+  margin: 0 0 8px;
+  font-weight: 800;
+}
+
+.progress-week-days {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: center;
+}
+
+.progress-week-bar {
+  display: flex;
+  height: 64px;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+
+.progress-week-bar span {
+  display: block;
+  width: 70%;
+  min-height: 0;
+  border-radius: 6px 6px 0 0;
+  background: var(--good);
+}
+
+.progress-week-days strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.1rem;
+}
+
+.progress-week-days small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.progress-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-bottom: 20px;
+}
+
+.progress-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 16px 18px;
+}
+
+.progress-head strong {
+  display: block;
+  font-size: 1.15rem;
+}
+
+.progress-head small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.progress-metric,
+.progress-message {
+  margin: 0;
+  font-weight: 700;
+}
+
+.progress-message.is-better {
+  justify-self: start;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.progress-values {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.progress-values dt {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.progress-values dd {
+  margin: 2px 0 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-chart {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.progress-bars {
+  max-width: 100%;
+  height: auto;
+}
+
+.progress-bars .is-score {
+  fill: var(--good);
+}
+
+.progress-bars .is-none {
+  fill: var(--line);
+}
+
+.progress-chart-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .trend-card {
   display: grid;
   gap: 10px;

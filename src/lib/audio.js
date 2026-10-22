@@ -80,16 +80,42 @@ const SCHEDULE_AHEAD_S = 0.1;
 const START_DELAY_S = 0.3;
 
 /**
+ * 合図の音色（session.config.cueTimbre に残す）。
+ *   sine   … 純音。そくていの回は、いつもこれ（前からの合図）
+ *   bright … 倍音を足した「パキッとした」音。れんしゅうの回の、押す合図（高い音）だけ
+ * 2026-10-21 の打ち合わせで、施設の試用から「高い音と低い音が分かりにくい。ポーンと
+ * こもった感じ。耳の聞こえにくい子も多いので、もっとパキッとした高い音に」と言われた。
+ * 押さない合図（低い音）は純音のままにして、高さだけでなく音色でも分かれるようにする。
+ */
+export const CUE_TIMBRES = Object.freeze(["sine", "bright"]);
+
+/** bright の倍音の大きさ（基音 = 1。高い倍音ほど小さく）。 */
+const BRIGHT_HARMONICS = [0, 1, 0.6, 0.4, 0.25, 0.15, 0.1];
+const brightWaves = new WeakMap();
+
+function brightWave(audioContext) {
+  let wave = brightWaves.get(audioContext);
+  if (!wave) {
+    const imag = Float32Array.from(BRIGHT_HARMONICS);
+    wave = audioContext.createPeriodicWave(new Float32Array(imag.length), imag);
+    brightWaves.set(audioContext, wave);
+  }
+  return wave;
+}
+
+/**
  * 単一のオシレータ音を指定の AudioContext 時刻に予約する（playTone/playToneAt と
  * createBeatScheduler の両方から使う共通実装。envelope は既存 playTone と同型）。
+ * timbre が "bright" のときだけ倍音を足す（CUE_TIMBRES）。包絡と山の大きさは同じ。
  * @returns {{oscillator: OscillatorNode, gainNode: GainNode}|null}
  */
-function scheduleOscillatorTone(audioContext, frequency, atTimeS, gain = DEFAULT_TONE_GAIN) {
+function scheduleOscillatorTone(audioContext, frequency, atTimeS, gain = DEFAULT_TONE_GAIN, timbre = "sine") {
   try {
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     oscillator.frequency.value = frequency;
-    oscillator.type = "sine";
+    if (timbre === "bright") oscillator.setPeriodicWave(brightWave(audioContext));
+    else oscillator.type = "sine";
     gainNode.gain.value = gain;
     // 下げ始めを、鳴らす時刻にそろえる。これが無いと、ランプは「予約した時刻」
     // から始まる（Web Audio の決まり）。先読みで0.1秒前、始めの拍は0.3秒前に
@@ -116,7 +142,7 @@ function scheduleOscillatorTone(audioContext, frequency, atTimeS, gain = DEFAULT
  *
  * @param {AudioContext} audioContext
  * @returns {{
- *   start: (plan: {beats: Array<{index:number, timeS:number, tone:number, gain?:number}>}) => number,
+ *   start: (plan: {beats: Array<{index:number, timeS:number, tone:number, gain?:number, timbre?:string}>}) => number,
  *   stop: () => void,
  *   now: () => number,
  * }}
@@ -142,7 +168,7 @@ export function createBeatScheduler(audioContext) {
       const beat = plan.beats[nextIndex];
       const atTime = plan.startAt + beat.timeS;
       if (atTime >= horizon) break;
-      const node = scheduleOscillatorTone(audioContext, beat.tone, atTime, beat.gain ?? DEFAULT_TONE_GAIN);
+      const node = scheduleOscillatorTone(audioContext, beat.tone, atTime, beat.gain ?? DEFAULT_TONE_GAIN, beat.timbre);
       if (node) activeNodes.push(node);
       nextIndex += 1;
     }
@@ -798,10 +824,10 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    * （リズム系ゲームの合図音は基本設計書 §6「音優先の明示的判断」により
    * ミュート不可とする。効果音トグルは既存呼び出し元 playTone() 側にのみ適用する）。
    */
-  function playToneAt(frequency, atTimeS, gain = DEFAULT_TONE_GAIN) {
+  function playToneAt(frequency, atTimeS, gain = DEFAULT_TONE_GAIN, timbre = "sine") {
     const ctx = ensureContext();
     if (!ctx) return null;
-    const tone = scheduleOscillatorTone(ctx, frequency, atTimeS, gain);
+    const tone = scheduleOscillatorTone(ctx, frequency, atTimeS, gain, timbre);
     if (tone) ownEffectSource(tone.oscillator);
     return tone;
   }

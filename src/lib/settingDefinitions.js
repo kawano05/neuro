@@ -197,7 +197,8 @@ export const SETTING_DEFINITIONS = Object.freeze({
     label: { ja: "絵が回る速さ", en: "Spin speed" },
     hint: { ja: "絵が1周する時間。長いほどゆっくりです。", en: "Time for one full turn. Longer is slower." },
     min: 2800,
-    max: 6000,
+    // 2026-10-21 に 6000 から広げた（施設の試用で「もっと遅くできる設定が欲しい」）。
+    max: 9600,
     step: 100,
     format: "seconds",
     preset: slotPresets["slot-l1"].cycleMs,
@@ -213,7 +214,10 @@ export const SETTING_DEFINITIONS = Object.freeze({
       en: "How far before and after the target still counts. Wider is easier.",
     },
     min: 60,
-    max: 220,
+    // 2026-10-21 に 220 から広げた（「幅がさらに広くなる設定が欲しい」）。実際の広さは、
+    // となりの絵と取り違えない上限（1周の 1/12。difficultyMode.js の resolveSlotDifficulty）
+    // で頭を押さえる。ふつうの速さ（3.2秒）なら 266ms まで、ゆっくりにすると広がる。
+    max: 600,
     step: 10,
     format: "seconds",
     preset: slotPresets["slot-l1"].toleranceMs,

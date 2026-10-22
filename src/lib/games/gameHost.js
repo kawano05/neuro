@@ -59,7 +59,7 @@ import { MAX_SESSIONS } from "../state.js";
 import { cueTones, gameHowTo } from "../content.js";
 import { CUE_TONE_GAIN } from "../audio.js";
 import { entryFor, joinSpeech, resolveTextMode } from "../i18n.js";
-import { isMeasurementMode } from "../difficultyMode.js";
+import { cueTimbreFor, isMeasurementMode } from "../difficultyMode.js";
 import { createReadyScreen } from "./readyScreen.js";
 
 /** けっかの星が飛び込むときの音（1つ目から順に上がる。G5・B5・D6・G6）。 */
@@ -79,6 +79,7 @@ import { tileThemeFor } from "../homeTheme.js";
 import { createGameSettings } from "./gameSettings.js";
 import { resolveReadinessState } from "../readinessCheck.js";
 import { applyPartyResult, localDayKey } from "../party.js";
+import { appendPlayRecord, playRecordFrom } from "../playRecords.js";
 import { atmosphereFor } from "../atmosphere.js";
 import { createPartyStage, revealPartyResult } from "./partyStage.js";
 import { READY_GUARD_MS } from "./readyScreen.js";
@@ -540,10 +541,11 @@ export function createGameHost(ctx) {
   const READY_SAMPLE_SPEECH_DELAY_MS = 1400;
 
   /** 見本の音を鳴らす。鳴らせたら true（音が止まっていて時計が無ければ false）。 */
-  function playReadySample(frequency) {
+  function playReadySample(frequency, timbre) {
     const now = ctx.audio.scheduler?.now?.();
     if (typeof now !== "number" || !(now > 0) || typeof ctx.audio.playToneAt !== "function") return false;
-    READY_SAMPLE_AT_S.forEach((offsetS) => ctx.audio.playToneAt(frequency, now + offsetS, CUE_TONE_GAIN));
+    // 遊びの中と同じ音色で聞かせる（difficultyMode.js の cueTimbreFor）。
+    READY_SAMPLE_AT_S.forEach((offsetS) => ctx.audio.playToneAt(frequency, now + offsetS, CUE_TONE_GAIN, timbre));
     return true;
   }
 
@@ -614,7 +616,7 @@ export function createGameHost(ctx) {
       elements.gameStageContent.querySelector(".game-ready-go").append(hint);
     }
     setPhase("ready");
-    if (sampleTone && playReadySample(sampleTone)) {
+    if (sampleTone && playReadySample(sampleTone, cueTimbreFor(module.id, state.settings))) {
       // 押して始めたら、待っている読み上げは beginSession の stopSpeech が取り消す。
       presentation.run("voice.feedback", () =>
         ctx.audio.speakOrAnnounceLater(spoken, READY_SAMPLE_SPEECH_DELAY_MS)
@@ -731,6 +733,25 @@ export function createGameHost(ctx) {
     showResult(summary);
   }
 
+  /**
+   * 遊び終わった1回を、遊びの記録（家族向けの「がんばりの記録」。src/lib/playRecords.js）に足す。
+   * 研究の記録（state.sessions）とは別。基準をとる回（calibration）は遊びではないので入れない。
+   */
+  function recordPlay(module, summary) {
+    if (!module || module.id === "calibration") return;
+    state.playRecords = appendPlayRecord(
+      state.playRecords,
+      playRecordFrom({
+        gameId: module.id,
+        participantId: state.evaluation?.participantId || "",
+        score: resultScore(module.resultType || module.taskType, summary),
+        summary,
+        difficultyMode: isMeasurementMode(state.settings) && module.taskType ? "measure" : "practice",
+        endless: requestedEndless,
+      })
+    );
+  }
+
   /** お祝いの待ちのあと（または待たずに）、けっかの画面へ移る。 */
   function showResult(summary) {
     const profile = atmosphere?.profile ?? null;
@@ -740,6 +761,7 @@ export function createGameHost(ctx) {
     lastResultSummary = party ? { ...summary, party } : summary || null;
     const activeModule = activeGameId ? findGameModule(activeGameId) : null;
     const taskType = activeModule?.taskType;
+    recordPlay(activeModule, summary);
     if (summary && taskType) {
       // 効果測定セッション（手動カウンタ・評定・観察メモ）は別紙の手順書へ
       // 置き換えて削除した（2026-08-29）。研究データ本体は state.sessions に

@@ -2270,6 +2270,15 @@ body.user-world.user-activity-mode .tabbar {
   display: none;
 }
 
+/* 背の低い画面（スマホの横）では、盤に寄せたピッチャーの顔に言葉が重なる。
+   高さはそのまま、内野の左の芝へ寄せる（高さを下げると、おおさわぎの最後の札を置く
+   「言葉と下の印のあいだの帯」が狭くなり、札が言葉と印にかぶった。partyStage.js の freeBand）。 */
+@media (max-height: 520px) {
+  .bb-word {
+    left: 19%;
+  }
+}
+
 .bb-word[data-word="baseball.word.homerun"] {
   background: #ffc83d;
   animation: bb-word-pop 0.45s cubic-bezier(0.34, 1.36, 0.64, 1) both;
@@ -2300,6 +2309,18 @@ body.user-world.user-activity-mode .tabbar {
 .bb-bat.is-swinging {
   transform: rotate(-64deg);
   transition-duration: 0.09s;
+}
+
+/* ピッチャーの右腕: 肩を軸に、投げた瞬間だけ前（下）へ振る（games/baseball.js の throwPitch）。 */
+.bb-pitcher-arm {
+  transform-box: view-box;
+  transform-origin: 317px 378px;
+  transition: transform 0.2s ease-out;
+}
+
+.bb-pitcher.is-throwing .bb-pitcher-arm {
+  transform: rotate(150deg);
+  transition-duration: 0.08s;
 }
 
 /* ホームランの火花・花火・光の尾は、演出エンジン（src/lib/fx/ の batHit・homerunSky・
@@ -2413,6 +2434,50 @@ body.user-world.user-activity-mode .tabbar {
 
 .coloring-art .cl-line:not(.is-colored) {
   fill: none;
+}
+
+/* 絵のまわりの星（games/coloring.js の SKY_STARS）。押すたびに色がつく。
+   まだのときは、ぬりえの線画と同じ「白地に線」（暗い地では線だけ）。
+   置き場は遊びの面（.game-stage-content。position: absolute）いっぱい。 */
+.coloring-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.module-coloring .coloring-stage {
+  position: relative;
+  z-index: 1;
+}
+
+.cl-sky-star {
+  position: absolute;
+  width: clamp(28px, 6vmin, 60px);
+  height: clamp(28px, 6vmin, 60px);
+  transform: translate(-50%, -50%);
+  overflow: visible;
+}
+
+.cl-sky-star path {
+  fill: transparent;
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 6px;
+  stroke-linejoin: round;
+  transition:
+    fill 0.45s ease,
+    stroke 0.45s ease;
+}
+
+.module-coloring.is-light .cl-sky-star path {
+  fill: #ffffff;
+  stroke: #1a1a1a;
+}
+
+.module-coloring .cl-sky-star.is-colored path {
+  fill: var(--star-color);
+  stroke: #1a1a1a;
 }
 
 .module-coloring.is-complete .coloring-card {
@@ -2884,6 +2949,13 @@ body.result-mode.user-world #resultHome::before {
       column-gap: clamp(12px, 2.4vw, 32px);
     }
 
+    /* 3本のリール: 窓の横幅で絵の大きさが決まっていた（小さい iPad の横で、1コマ 141〜167px。
+       高さはまだ 110px ほど余っていた）。窓をほぼ正方形まで細くしてよいことにし、そのぶん
+       絵を大きくする（2026-10-21、施設の試用で「3つのスロットだと小さい。みんなで見るのに」）。 */
+    .slot-task[data-difficulty-mode="practice"] .slot-reels:not(.is-1-reel) {
+      --slot-min-aspect: 1;
+    }
+
     .slot-task[data-difficulty-mode="practice"] .slot-target {
       grid-column: 1;
       grid-row: 2;
@@ -3149,6 +3221,35 @@ body.result-mode.user-world #resultHome::before {
 
   .coloring-card {
     max-height: 52vh;
+  }
+
+  .coloring-stage {
+    --coloring-word-room: 64px;
+  }
+}
+
+/* ぬりえの絵を、言葉の分を残して画面いっぱいに（2026-10-21）。小さい iPad で、絵が
+   「画用紙のように真ん中にちょこっと」になっていた（幅 540px で頭打ち）。打ち合わせで
+   「お絵かきアプリのように画面いっぱいだと見やすい」と言われた。
+   言葉（.coloring-word）の高さと間（--coloring-word-room）を引いた高さに、絵の縦横比で
+   合わせる。上の背の低い画面の max-height より後ろに置いて、こちらを効かせる。 */
+@supports (height: 1cqh) {
+  .coloring-stage {
+    container-type: size;
+  }
+
+  .coloring-card {
+    width: min(100cqw, calc((100cqh - var(--coloring-word-room, 100px)) * 1.25));
+    max-height: none;
+  }
+
+  /* おおさわぎの背の低い画面（スマホの横）では、前の大きさのまま。仲間・札・旗の置き場が、
+     絵のまわりにしか無い（いっぱいにすると、札が絵に重なった。web-smoke の重なりの検査）。 */
+  @media (max-height: 520px) {
+    .game-stage-content.module-coloring[data-atmosphere="big"] .coloring-card {
+      width: min(540px, 82vw);
+      max-height: 52vh;
+    }
   }
 }
 

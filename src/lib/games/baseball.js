@@ -54,9 +54,61 @@ export function judgeSwing(deltaMs) {
 }
 
 // 盤の上の位置（BALL_FIELD_ART の viewBox 0 0 600 600）。
+//
+// 画面に出すのは、マウンドからホームの手前まで（BOARD_VIEWBOX）。盤の全体を出すと、
+// 小さい iPad でボールが直径30px ほど、バットが盤の 1/6 ほどにしかならず、2026-10-21 の
+// 打ち合わせで「ボールやバットが小さい」「大きく表示されると見やすい」と言われた。
+// 寄せると、同じ画面で2倍ほどの大きさになる。まわりの芝と内野は viewBox の外まで
+// 描いてあるので、余白にもそのまま出る（.bb-field の overflow: visible）。
+// 打った球は、寄せた範囲の外（スタンドのほう）へ飛んでいって見えなくなる。
+const BOARD_VIEWBOX = "130 266 340 364";
 const MOUND = { x: 300, y: 405 };
 const PLATE = { x: 300, y: 548 };
 const PAST = { x: 300, y: 640 };
+
+// ピッチャーとバッター（盤と同じ座標）。2026-10-21 の打ち合わせで「人が打っている、
+// 人が投げているのが分かるといい」「バッター、ピッチャーなど表示があるとより良い」と
+// 言われた。それまではボールとバットだけが盤の上を動いていた。
+// ピッチャーはマウンドでこちらを向き、ボールはその胸元から出る。投げた瞬間に右腕を振る
+// （.bb-pitcher.is-throwing）。バッターはホームの左で、こちらに背を向けて立つ。バットの
+// 手元（.bb-bat の回転の軸 262,560）を両手で持つ。
+const SKIN = "#F5C9A5";
+const INK = "#1A1A1A";
+const PITCHER_SVG = `<g class="bb-pitcher">
+  <rect x="287" y="398" width="10" height="22" rx="4" fill="#E9EEF5" stroke="${INK}" stroke-width="3"></rect>
+  <rect x="303" y="398" width="10" height="22" rx="4" fill="#E9EEF5" stroke="${INK}" stroke-width="3"></rect>
+  <ellipse cx="291" cy="422" rx="7" ry="3.5" fill="${INK}"></ellipse>
+  <ellipse cx="309" cy="422" rx="7" ry="3.5" fill="${INK}"></ellipse>
+  <path d="M283 380 L268 394" stroke="${INK}" stroke-width="9" stroke-linecap="round"></path>
+  <path d="M283 380 L268 394" stroke="${SKIN}" stroke-width="5" stroke-linecap="round"></path>
+  <circle cx="265" cy="397" r="9" fill="#A0622D" stroke="${INK}" stroke-width="3"></circle>
+  <rect x="280" y="366" width="40" height="38" rx="13" fill="#FFFFFF" stroke="${INK}" stroke-width="3"></rect>
+  <rect x="281.5" y="391" width="37" height="5" fill="#E0302D"></rect>
+  <g class="bb-pitcher-arm">
+    <path d="M317 378 L333 361" stroke="${INK}" stroke-width="9" stroke-linecap="round"></path>
+    <path d="M317 378 L333 361" stroke="${SKIN}" stroke-width="5" stroke-linecap="round"></path>
+    <circle cx="334" cy="359" r="5" fill="${SKIN}" stroke="${INK}" stroke-width="2.5"></circle>
+  </g>
+  <circle cx="300" cy="352" r="15" fill="${SKIN}" stroke="${INK}" stroke-width="3"></circle>
+  <path d="M285.5 350 A14.5 14.5 0 0 1 314.5 350 Z" fill="#E0302D" stroke="${INK}" stroke-width="3" stroke-linejoin="round"></path>
+  <path d="M290 350 L310 350 L306 355 L294 355 Z" fill="#B71F1D"></path>
+  <circle cx="295" cy="358" r="2" fill="${INK}"></circle>
+  <circle cx="305" cy="358" r="2" fill="${INK}"></circle>
+  <path d="M296 362 Q300 365 304 362" fill="none" stroke="${INK}" stroke-width="2" stroke-linecap="round"></path>
+</g>`;
+const BATTER_SVG = `<g class="bb-batter">
+  <rect x="213" y="597" width="12" height="26" rx="5" fill="#E9EEF5" stroke="${INK}" stroke-width="3"></rect>
+  <rect x="232" y="597" width="12" height="26" rx="5" fill="#E9EEF5" stroke="${INK}" stroke-width="3"></rect>
+  <rect x="205" y="560" width="46" height="44" rx="15" fill="#FFFFFF" stroke="${INK}" stroke-width="3"></rect>
+  <text x="228" y="592" font-size="20" font-weight="900" text-anchor="middle" fill="#1E3A5F" font-family="sans-serif">1</text>
+  <path d="M211 572 Q236 580 259 563" fill="none" stroke="${INK}" stroke-width="9" stroke-linecap="round"></path>
+  <path d="M211 572 Q236 580 259 563" fill="none" stroke="${SKIN}" stroke-width="5" stroke-linecap="round"></path>
+  <path d="M246 570 L260 561" stroke="${INK}" stroke-width="9" stroke-linecap="round"></path>
+  <path d="M246 570 L260 561" stroke="${SKIN}" stroke-width="5" stroke-linecap="round"></path>
+  <circle cx="228" cy="545" r="16" fill="#1E3A5F" stroke="${INK}" stroke-width="3"></circle>
+  <path d="M214 541 Q228 527 242 541" fill="none" stroke="#3A6EA5" stroke-width="4" stroke-linecap="round"></path>
+  <circle cx="243" cy="549" r="6" fill="#1E3A5F" stroke="${INK}" stroke-width="2.5"></circle>
+</g>`;
 
 const lerp = (a, b, k) => a + (b - a) * k;
 const easeOut = (k) => 1 - (1 - k) * (1 - k);
@@ -69,6 +121,8 @@ export function createBaseballGame(ctx) {
   let trailFrame = 0;
   let ballEl = null;
   let batEl = null;
+  let pitcherEl = null;
+  let throwTimer = null;
   let wordEl = null;
   let slotsEl = null;
   let phase = "idle"; // windup | pitching | flying | missed | done
@@ -128,6 +182,7 @@ export function createBaseballGame(ctx) {
     releaseAt = performance.now();
     arrivalAt = releaseAt + pitchMs;
     audio.playThrow?.();
+    throwPitch();
     // 投げる音が到着の手がかりなので、その1球のあいだは音楽を下げる。
     if (ctx.party?.isBig()) audio.music?.duck?.(pitchMs / 1000 + 0.25);
     setWord(null);
@@ -188,6 +243,16 @@ export function createBaseballGame(ctx) {
     placeBall(PAST.x, PAST.y, 1, 0);
     setWord("baseball.word.again");
     schedule(windup, RETRY_PAUSE_MS);
+  }
+
+  /** ピッチャーが腕を振る（投げた瞬間だけ）。「人が投げている」が分かるように。 */
+  function throwPitch() {
+    if (!pitcherEl) return;
+    window.clearTimeout(throwTimer);
+    pitcherEl.classList.remove("is-throwing");
+    void pitcherEl.getBoundingClientRect();
+    pitcherEl.classList.add("is-throwing");
+    throwTimer = window.setTimeout(() => pitcherEl?.classList.remove("is-throwing"), 320);
   }
 
   function swingBat() {
@@ -294,8 +359,10 @@ export function createBaseballGame(ctx) {
       stageEl.innerHTML = `
         <span class="bb-stage" aria-hidden="true">
           <span class="bb-word"></span>
-          <svg class="bb-field" viewBox="${BALL_FIELD_ART.viewBox}" preserveAspectRatio="xMidYMid meet" focusable="false">
+          <svg class="bb-field" viewBox="${BOARD_VIEWBOX}" preserveAspectRatio="xMidYMid meet" focusable="false">
             ${BALL_FIELD_ART.body}
+            ${PITCHER_SVG}
+            ${BATTER_SVG}
             <g class="bb-bat"><rect x="256" y="553" width="96" height="14" rx="7" fill="#A0622D" stroke="#1A1A1A" stroke-width="3"></rect><rect x="256" y="553" width="26" height="14" rx="6" fill="#1A1A1A"></rect></g>
             <g class="bb-ball"><circle r="13" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="3"></circle><path d="M-6 -9 Q 1 0 -6 9 M6 -9 Q -1 0 6 9" fill="none" stroke="#E0302D" stroke-width="2.4"></path></g>
           </svg>
@@ -305,6 +372,7 @@ export function createBaseballGame(ctx) {
       boardEl = stageEl.querySelector(".bb-stage");
       ballEl = stageEl.querySelector(".bb-ball");
       batEl = stageEl.querySelector(".bb-bat");
+      pitcherEl = stageEl.querySelector(".bb-pitcher");
       wordEl = stageEl.querySelector(".bb-word");
       slotsEl = stageEl.querySelector(".bb-slots");
       renderSlots();
@@ -316,6 +384,7 @@ export function createBaseballGame(ctx) {
     destroy() {
       window.clearTimeout(timer);
       window.clearTimeout(batTimer);
+      window.clearTimeout(throwTimer);
       if (rafId !== null) window.cancelAnimationFrame(rafId);
       rafId = null;
       timer = null;

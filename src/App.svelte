@@ -71,6 +71,12 @@
       なくホームの「まなぶ・つたえる」二階層から入る。
       タブバーに残るのは支援者機能（評価ログ・設定）のみ。
     -->
+    <!--
+      がんばりの記録は、家族が見る成長の記録（2026-10-21）。評価ログ（研究の記録）より前に置く。
+    -->
+    <button class="tab" data-view="progress" data-scan aria-label={t({ ja: "がんばりの記録", en: "Progress" })}>
+      <span class="tab-full">{t({ ja: "がんばりの記録", en: "Progress" })}</span><span class="tab-short">{t({ ja: "きろく", en: "Progress" })}</span>
+    </button>
     <button class="tab" data-view="log" data-scan aria-label={t({ ja: "評価ログ", en: "Records" })}>
       <span class="tab-full">{t({ ja: "評価ログ", en: "Records" })}</span><span class="tab-short">{t({ ja: "ログ", en: "Records" })}</span>
     </button>
@@ -265,6 +271,24 @@
         <strong id="letterPrompt">「あめ」の最初の文字を選んでください</strong>
       </div>
       <div class="letter-grid" id="letterGrid" aria-label="文字選択肢"></div>
+    </section>
+
+    <!--
+      がんばりの記録（src/lib/views/progress.js）。家族（お母さん・お父さん）が「これだけできるように
+      なった」を見る画面。評価ログ（研究の記録）とは別に、遊び終わるたびに残す小さな記録
+      （state.playRecords）から作る。中身は JS が描く。
+    -->
+    <section class="view" id="progress" aria-labelledby="progress-title">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Progress</p>
+          <h2 id="progress-title">{t({ ja: "がんばりの記録", en: "Progress" })}</h2>
+        </div>
+      </div>
+      <p class="settings-group-note" id="progressNote"></p>
+      <div class="progress-summary" id="progressSummary"></div>
+      <div class="progress-week" id="progressWeek"></div>
+      <div class="progress-grid" id="progressGames"></div>
     </section>
 
     <section class="view" id="log" aria-labelledby="log-title">
