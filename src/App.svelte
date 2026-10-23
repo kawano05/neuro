@@ -280,13 +280,8 @@
     -->
     <section class="view" id="progress" aria-labelledby="progress-title">
       <div class="section-head">
-        <div>
-          <p class="eyebrow">Progress</p>
-          <h2 id="progress-title">{t({ ja: "がんばりの記録", en: "Progress" })}</h2>
-        </div>
+        <h2 id="progress-title">{t({ ja: "がんばりの記録", en: "Progress" })}</h2>
       </div>
-      <p class="settings-group-note" id="progressNote"></p>
-      <div class="progress-summary" id="progressSummary"></div>
       <div class="progress-week" id="progressWeek"></div>
       <div class="progress-grid" id="progressGames"></div>
     </section>
