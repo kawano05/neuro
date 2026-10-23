@@ -486,12 +486,12 @@ export function createFishingGame(gameId) {
   // 「魚の大きさ ○○cm など、何の数値かを添える表示を」）。そくていの回の遊ぶ面は、
   // 字も変えない（docs/rules/measurement-invariance.md）。
   function scoreHtml(cm) {
-    return practice ? tHtml("fishing.scoreTotal", { n: cm }) : `${cm} cm`;
+    return practice ? tHtml("fishing.size", { n: cm }) : `${cm} cm`;
   }
 
   function catchHtml(cm, speedBonus) {
     if (!practice) return speedBonus ? `★ ${cm} cm ＋${SPEED_BONUS_CM}` : `${cm} cm`;
-    const size = tHtml("fishing.catchSize", { n: cm });
+    const size = tHtml("fishing.size", { n: cm });
     return speedBonus ? `★ ${size} ＋${SPEED_BONUS_CM}` : size;
   }
 
