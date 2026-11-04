@@ -41,6 +41,7 @@ import { initVoca } from "./views/voca.js";
 import { initLetters } from "./views/letters.js";
 import { initDataExport } from "./dataExport.js";
 import { initLog } from "./views/log.js";
+import { initProgress } from "./views/progress.js";
 import { initSettings } from "./views/settings.js";
 
 // 同一物理入力（pointerdown → click 等）の多重発火を1入力に畳む閾値
@@ -68,6 +69,7 @@ const TAB_WORLD_VIEWS = new Set([
   "letters",
   "log",
   "settings",
+  "progress",
 ]);
 
 // 支援者編集ロックは廃止した（2026-08-17）。
@@ -147,7 +149,7 @@ export function initNeuroNodeApp() {
   let storageFailed = false;
   function renderStorageWarning() {
     elements.storageWarning.hidden = !storageFailed ||
-      !["home", "result", "settings", "log"].includes(state.currentView);
+      !["home", "result", "settings", "log", "progress"].includes(state.currentView);
   }
   ctx.save = () => {
     const saved = saveState();
@@ -214,6 +216,8 @@ export function initNeuroNodeApp() {
   // 支援者のデータ画面（書き出し・参加者ID・切り替え）は評価ログの中に置く。
   ctx.views.dataExport = initDataExport(ctx);
   ctx.views.log = initLog(ctx);
+  // 家族向けの「がんばりの記録」（遊びの記録 state.playRecords から。研究の記録とは別）。
+  ctx.views.progress = initProgress(ctx);
   ctx.views.settings = initSettings(ctx);
 
   /**
@@ -321,6 +325,7 @@ export function initNeuroNodeApp() {
     ctx.views.dataExport.render();
     ctx.views.settings.render();
     ctx.views.log.render();
+    ctx.views.progress.render();
     ctx.gameHost.render();
     ctx.views.settings.applyClasses();
     renderStorageWarning();

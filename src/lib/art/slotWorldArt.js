@@ -6,9 +6,12 @@
  *   1 … Font Awesome と CSS の輪郭の絵。そくていの回は今もこの見え方
  *   2 … れんしゅうの回だけ SVG の絵と遊園地にした（2026-09-30）。
  *       並び・周期・判定は 1 と同じ。1コマの高さは画面に合わせて変わり、記録の reelCellPx に残る。
+ *   3 … とりを青から白（はと）にした（2026-10-21）。施設の試用で「魚と鳥がどちらも青で
+ *       混同しそう」「見えにくい・苦手な色の子がいる」と言われた。色の名前ではなく明るさで
+ *       分かれるように、さかな（水色）に対して、とりは白い体にした。ほかは 2 と同じ。
  *   記録するのは見せた絵の版: そくていの回は、いつでも 1（src/lib/artVersion.js）。
  */
-export const SLOT_ART_VERSION = 2;
+export const SLOT_ART_VERSION = 3;
 
 // 測定の刺激と分けておくことで、遊びの絵を直してもそくていの見え方を保つ。
 const SYMBOL_BODIES = Object.freeze({
@@ -16,7 +19,7 @@ const SYMBOL_BODIES = Object.freeze({
   square: `<rect x="5" y="5" width="90" height="90" rx="8" fill="#03AF7A"/><path d="M9 72 H91 V87 Q91 91 87 91 H13 Q9 91 9 87Z" fill="#02875E" stroke="none"/><path d="M19 58 V20 H65" fill="none" stroke="#CFF7E6" stroke-width="7"/>`,
   star: `<path d="M50 5 Q53 5 55 10 L65 33 L90 35 Q97 36 92 42 L73 59 L80 86 Q82 94 75 90 L50 75 L25 90 Q18 94 20 86 L27 59 L8 42 Q3 36 10 35 L35 33 L45 10 Q47 5 50 5Z" fill="#F6AA00"/><path d="M50 19 L43 38 L23 40" fill="none" stroke="#FFF2CF" stroke-width="5"/>`,
   fish: `<path d="M70 31 L94 13 L89 49 L95 83 L70 67Z" fill="#1FA2E0"/><path d="M35 30 Q43 9 61 15 L62 35" fill="#1FA2E0"/><path d="M5 50 Q19 19 51 25 Q70 27 78 50 Q68 77 47 77 Q19 78 5 50Z" fill="#4DC4FF"/><path d="M21 62 Q44 77 67 59 Q58 73 43 73Z" fill="#D8F3FF" stroke="none"/><path d="M48 48 Q65 49 58 62Z" fill="#1FA2E0" stroke-width="3"/><circle cx="26" cy="43" r="6" fill="#10222E" stroke="none"/><circle cx="28" cy="41" r="2" fill="#FFF" stroke="none"/><path d="M13 54 Q19 59 25 54" fill="none" stroke="#10222E" stroke-width="3"/>`,
-  bird: `<path d="M64 66 L91 53 L86 75 L69 79Z" fill="#004FE0"/><path d="M38 82 L32 94 M55 83 L61 94" fill="none" stroke="#1A1A1A" stroke-width="4"/><path d="M18 44 L5 51 L20 57Z" fill="#F6AA00"/><path d="M18 46 Q15 15 41 9 Q71 2 77 38 Q89 77 59 86 Q24 94 18 65Z" fill="#005AFF"/><ellipse cx="43" cy="65" rx="17" ry="18" fill="#CFE6FF" stroke="none"/><path d="M51 46 Q74 39 70 65 Q57 73 51 46Z" fill="#004FE0" stroke-width="3"/><circle cx="33" cy="35" r="6" fill="#10222E" stroke="none"/><circle cx="35" cy="33" r="2" fill="#FFF" stroke="none"/><path d="M23 52 Q30 57 35 52" fill="none" stroke="#10222E" stroke-width="3"/>`,
+  bird: `<path d="M64 66 L91 53 L86 75 L69 79Z" fill="#C9D1DC"/><path d="M38 82 L32 94 M55 83 L61 94" fill="none" stroke="#1A1A1A" stroke-width="4"/><path d="M18 44 L5 51 L20 57Z" fill="#F6AA00"/><path d="M18 46 Q15 15 41 9 Q71 2 77 38 Q89 77 59 86 Q24 94 18 65Z" fill="#FFFFFF"/><ellipse cx="43" cy="65" rx="17" ry="18" fill="#EEF1F5" stroke="none"/><path d="M51 46 Q74 39 70 65 Q57 73 51 46Z" fill="#C9D1DC" stroke-width="3"/><circle cx="33" cy="35" r="6" fill="#10222E" stroke="none"/><circle cx="35" cy="33" r="2" fill="#FFF" stroke="none"/><path d="M23 52 Q30 57 35 52" fill="none" stroke="#10222E" stroke-width="3"/>`,
   flower: `<path d="M37 22 C32 0 67 0 63 22 C82 6 101 33 81 44 C105 50 94 82 73 73 C75 99 40 105 38 79 C18 96 0 70 20 57 C-3 43 11 16 37 22Z" fill="#D65DB1"/><path d="M17 40 Q17 29 28 30 M49 13 Q56 11 58 19" fill="none" stroke="#FFE4F6" stroke-width="5"/><circle cx="50" cy="51" r="18" fill="#F6AA00" stroke-width="4"/><circle cx="44" cy="48" r="3" fill="#10222E" stroke="none"/><circle cx="57" cy="48" r="3" fill="#10222E" stroke="none"/><circle cx="45" cy="47" r="1" fill="#FFF" stroke="none"/><circle cx="58" cy="47" r="1" fill="#FFF" stroke="none"/><path d="M44 57 Q50 63 57 57" fill="none" stroke="#10222E" stroke-width="2.5"/>`,
 });
 

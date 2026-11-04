@@ -274,6 +274,10 @@ function troubleSection(w) {
           "Watching the screen is hard",
           `Set ${w.path("scanFeedback")} to ${q(w.optionLabel("scanFeedback", "speak"))} to hear the name at each move (${q(w.optionLabel("scanFeedback", "tick"))} plays a sound only).`,
         ],
+        [
+          "The name is read at every move, and it is too much",
+          `Set ${w.path("scanFeedback")} to ${q(w.optionLabel("scanFeedback", "tick"))} or ${q(w.optionLabel("scanFeedback", "none"))}.`,
+        ],
         ["Light or motion seems too much, or the player gets overexcited", `Set ${w.path("fxLevel")} to ${q(w.atmosphereName("subtle"))} or ${q(w.atmosphereName("none"))}.`],
         ["No sound", `Check the iPad's volume and silent mode. Also turn on ${w.path("soundEnabled")}.`],
         ["No voice, or the voice is quiet", `Turn on ${w.path("speechEnabled")}. Change the volume with ${w.path("speechVolume")}.`],
@@ -292,6 +296,10 @@ function troubleSection(w) {
         [
           "画面を見続けるのが難しい",
           `${w.path("scanFeedback")}を${q(w.optionLabel("scanFeedback", "speak"))}にすると、枠が動くたびに遊びの名前を読みます（${q(w.optionLabel("scanFeedback", "tick"))}は音だけ）。`,
+        ],
+        [
+          "枠が動くたびに名前を読むのが多すぎる",
+          `${w.path("scanFeedback")}を${q(w.optionLabel("scanFeedback", "tick"))}か${q(w.optionLabel("scanFeedback", "none"))}にします。`,
         ],
         ["光や動きがつらそう・興奮しすぎる", `${w.path("fxLevel")}を${q(w.atmosphereName("subtle"))}か${q(w.atmosphereName("none"))}にします。`],
         ["音が出ない", `iPad の音量と消音（マナーモード）を確かめます。${w.path("soundEnabled")}もオンにします。`],

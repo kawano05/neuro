@@ -1147,33 +1147,27 @@
    ]
   },
   {
-   "text": "「アタリ」の音が鳴ったらすぐ押します。",
-   "from": [
-    "howto.fishing.2"
-   ]
-  },
-  {
-   "text": "「アタリ」の音が鳴って大きな「！」が出たら、すぐ押します。",
-   "from": [
-    "howto.fishing.2.practice"
-   ]
-  },
-  {
-   "text": "「アタリ」の高い音で押すと釣れます。",
-   "from": [
-    "howto.fishing-gonogo.2"
-   ]
-  },
-  {
    "text": "あ",
    "from": [
     "letters.option"
    ]
   },
   {
+   "text": "あいさつ",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
    "text": "あたった！",
    "from": [
     "baseball.word.bunt"
+   ]
+  },
+  {
+   "text": "あつい",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -1289,7 +1283,7 @@
    ]
   },
   {
-   "text": "うれしいです",
+   "text": "うれしい",
    "from": [
     "voca.phrase"
    ]
@@ -1314,6 +1308,18 @@
    ]
   },
   {
+   "text": "おかあさん",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "おこる",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "おしい！",
    "from": [
     "crane.voice.miss",
@@ -1321,9 +1327,27 @@
    ]
   },
   {
+   "text": "おとうさん",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "おはようございます",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "おほしさまをつかんだ！",
    "from": [
     "crane.voice.grip"
+   ]
+  },
+  {
+   "text": "おもしろい",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -1345,6 +1369,18 @@
    ]
   },
   {
+   "text": "かなしい",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "かんごしさん",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "くつ",
    "from": [
     "matching.option"
@@ -1363,6 +1399,12 @@
    ]
   },
   {
+   "text": "げんき",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "ことばで伝える",
    "from": [
     "tile.voca.title"
@@ -1378,6 +1420,30 @@
    "text": "この遊びの設定",
    "from": [
     "game.settings"
+   ]
+  },
+  {
+   "text": "この音が鳴ったら、押してね。",
+   "from": [
+    "howto.sample"
+   ]
+  },
+  {
+   "text": "こんにちは",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "こんばんは",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "ごめんなさい",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -1402,6 +1468,18 @@
    "text": "さかなつり。",
    "from": [
     "tile.fishing-corner.title (ready)"
+   ]
+  },
+  {
+   "text": "さむい",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "さようなら",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -1459,6 +1537,12 @@
    ]
   },
   {
+   "text": "せんせい",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "ぜんぶ打てた！",
    "from": [
     "baseball.word.done"
@@ -1502,6 +1586,18 @@
    ]
   },
   {
+   "text": "だいじょうぶです",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "だるい",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "つかんだけどすべっちゃった",
    "from": [
     "crane.voice.slip"
@@ -1533,6 +1629,18 @@
    ]
   },
   {
+   "text": "つまらない",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "つらい",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "できた！",
    "from": [
     "crane.voice.finish",
@@ -1542,6 +1650,12 @@
     "rhythm.voice.finish",
     "slot.voice.finish",
     "slot.voice.finishNone"
+   ]
+  },
+  {
+   "text": "どちらでもありません",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -1594,6 +1708,12 @@
    ]
   },
   {
+   "text": "ねむい",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "はい",
    "from": [
     "voca.phrase"
@@ -1603,6 +1723,12 @@
    "text": "はじめる",
    "from": [
     "start.begin"
+   ]
+  },
+  {
+   "text": "はずかしい",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -1646,6 +1772,12 @@
    "text": "ふうせんわり。",
    "from": [
     "tile.balloon.title (ready)"
+   ]
+  },
+  {
+   "text": "へるぱーさん",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -1710,12 +1842,6 @@
    ]
   },
   {
-   "text": "もう一度",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
    "text": "もう一度押します。",
    "from": [
     "howto.crane.2"
@@ -1748,6 +1874,12 @@
    ]
   },
   {
+   "text": "やめて",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "ゆき",
    "from": [
     "matching.option"
@@ -1763,12 +1895,6 @@
    "text": "りんご",
    "from": [
     "matching.option"
-   ]
-  },
-  {
-   "text": "わかりません",
-   "from": [
-    "voca.phrase"
    ]
   },
   {
@@ -1882,18 +2008,6 @@
    "from": [
     "color.voice.progress",
     "party.voice.press"
-   ]
-  },
-  {
-   "text": "トイレに行きたいです",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "ナースコール",
-   "from": [
-    "voca.phrase"
    ]
   },
   {
@@ -2018,21 +2132,9 @@
    ]
   },
   {
-   "text": "不安です",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "介助",
+   "text": "人を呼ぶ",
    "from": [
     "voca.category"
-   ]
-  },
-  {
-   "text": "休みたいです",
-   "from": [
-    "voca.phrase"
    ]
   },
   {
@@ -2066,36 +2168,6 @@
    ]
   },
   {
-   "text": "吸引してください",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "基本",
-   "from": [
-    "voca.category"
-   ]
-  },
-  {
-   "text": "外に出たいです",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "大丈夫です",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "姿勢を変えてください",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
    "text": "学ぶ・伝える",
    "from": [
     "tile.learning-corner.title"
@@ -2108,18 +2180,6 @@
    ]
   },
   {
-   "text": "家族に連絡してください",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "寒いです",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
    "text": "左の列から順番に止めます。",
    "from": [
     "howto.slot-l2.2"
@@ -2129,12 +2189,6 @@
    "text": "床の光る輪の中で止めるとつかめます。",
    "from": [
     "howto.crane.4"
-   ]
-  },
-  {
-   "text": "待ってください",
-   "from": [
-    "voca.phrase"
    ]
   },
   {
@@ -2187,12 +2241,6 @@
    ]
   },
   {
-   "text": "暑いです",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
    "text": "最初に低い音が鳴ります。",
    "from": [
     "howto.calibration.1",
@@ -2203,12 +2251,6 @@
    "text": "最後まで止められたね",
    "from": [
     "slot.voice.finishNone"
-   ]
-  },
-  {
-   "text": "楽しいです",
-   "from": [
-    "voca.phrase"
    ]
   },
   {
@@ -2227,24 +2269,6 @@
    "text": "気持ち",
    "from": [
     "voca.category"
-   ]
-  },
-  {
-   "text": "水がほしいです",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "痛いです",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "眠いです",
-   "from": [
-    "voca.phrase"
    ]
   },
   {
@@ -2273,9 +2297,9 @@
    ]
   },
   {
-   "text": "話したいです",
+   "text": "返事",
    "from": [
-    "voca.phrase"
+    "voca.category"
    ]
   },
   {
@@ -2294,12 +2318,6 @@
    "text": "野球。",
    "from": [
     "tile.baseball.title (ready)"
-   ]
-  },
-  {
-   "text": "静かにしたいです",
-   "from": [
-    "voca.phrase"
    ]
   },
   {
@@ -2343,6 +2361,24 @@
    "from": [
     "howto.fishing-gonogo.1",
     "howto.fishing.1"
+   ]
+  },
+  {
+   "text": "魚が食いついて「アタリ」の音が鳴ったら、すぐ押します。",
+   "from": [
+    "howto.fishing.2"
+   ]
+  },
+  {
+   "text": "魚が食いついて音が鳴り、大きな「！」が出たら、すぐ押します。",
+   "from": [
+    "howto.fishing.2.practice"
+   ]
+  },
+  {
+   "text": "魚が食いついて高い音が鳴ったら、すぐ押します。",
+   "from": [
+    "howto.fishing-gonogo.2"
    ]
   },
   {
@@ -3069,6 +3105,18 @@
    ]
   },
   {
+   "text": "Angry",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Answers",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
    "text": "Awesome!",
    "from": [
     "party.voice.press"
@@ -3093,15 +3141,15 @@
    ]
   },
   {
-   "text": "Basics",
+   "text": "Boring",
    "from": [
-    "voca.category"
+    "voca.phrase"
    ]
   },
   {
-   "text": "Call the nurse",
+   "text": "Calling someone",
    "from": [
-    "voca.phrase"
+    "voca.category"
    ]
   },
   {
@@ -3136,6 +3184,12 @@
    ]
   },
   {
+   "text": "Cold",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "Colouring",
    "from": [
     "tile.coloring.title"
@@ -3161,6 +3215,12 @@
    ]
   },
   {
+   "text": "Dad",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "Dolphin!",
    "from": [
     "color.voice.progress",
@@ -3177,6 +3237,12 @@
    "text": "Each press stops one column.",
    "from": [
     "howto.slot-l1.3"
+   ]
+  },
+  {
+   "text": "Embarrassed",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -3246,9 +3312,33 @@
    ]
   },
   {
+   "text": "Fun",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "Game settings",
    "from": [
     "game.settings"
+   ]
+  },
+  {
+   "text": "Good evening",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Good morning",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Goodbye",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -3264,15 +3354,33 @@
    ]
   },
   {
+   "text": "Greetings",
+   "from": [
+    "voca.category"
+   ]
+  },
+  {
    "text": "Half a jar!",
    "from": [
     "party.voice.half"
    ]
   },
   {
-   "text": "Help",
+   "text": "Happy",
    "from": [
-    "voca.category"
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Hello",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Helper",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -3314,73 +3422,25 @@
    ]
   },
   {
+   "text": "Hot",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "How I feel",
    "from": [
     "voca.category"
    ]
   },
   {
-   "text": "I don't understand",
+   "text": "I feel bad",
    "from": [
     "voca.phrase"
    ]
   },
   {
-   "text": "I need the bathroom",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I want to go outside",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I want to rest",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I want to talk",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I'd like some quiet",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I'd like some water",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I'm cold",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I'm happy",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I'm having fun",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I'm hot",
+   "text": "I'm fine",
    "from": [
     "voca.phrase"
    ]
@@ -3392,13 +3452,7 @@
    ]
   },
   {
-   "text": "I'm sleepy",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "I'm worried",
+   "text": "I'm sorry",
    "from": [
     "voca.phrase"
    ]
@@ -3408,12 +3462,6 @@
    "from": [
     "howto.endless.crane",
     "howto.endless.fishing"
-   ]
-  },
-  {
-   "text": "It hurts",
-   "from": [
-    "voca.phrase"
    ]
   },
   {
@@ -3455,6 +3503,18 @@
    ]
   },
   {
+   "text": "Mom",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
+   "text": "Neither",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "Next",
    "from": [
     "learn.next"
@@ -3491,6 +3551,12 @@
    ]
   },
   {
+   "text": "Nurse",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "Octopus!",
    "from": [
     "color.voice.progress",
@@ -3501,12 +3567,6 @@
    "text": "On the low note, wait without pressing.",
    "from": [
     "howto.gonogo.2"
-   ]
-  },
-  {
-   "text": "Once more, please",
-   "from": [
-    "voca.phrase"
    ]
   },
   {
@@ -3571,30 +3631,6 @@
    ]
   },
   {
-   "text": "Please call my family",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "Please change my position",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "Please suction me",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
-   "text": "Please wait",
-   "from": [
-    "voca.phrase"
-   ]
-  },
-  {
    "text": "Pop the balloons",
    "from": [
     "tile.balloon.title"
@@ -3613,24 +3649,6 @@
    ]
   },
   {
-   "text": "Press as soon as you hear the bite and see the big “!”.",
-   "from": [
-    "howto.fishing.2.practice"
-   ]
-  },
-  {
-   "text": "Press as soon as you hear the bite.",
-   "from": [
-    "howto.fishing.2"
-   ]
-  },
-  {
-   "text": "Press on the high bite note to reel it in.",
-   "from": [
-    "howto.fishing-gonogo.2"
-   ]
-  },
-  {
    "text": "Press once more.",
    "from": [
     "howto.crane.2"
@@ -3640,6 +3658,12 @@
    "text": "Press only on the high note.",
    "from": [
     "howto.gonogo.1"
+   ]
+  },
+  {
+   "text": "Press right away.",
+   "from": [
+    "howto.fishing.2.practice"
    ]
   },
   {
@@ -3664,6 +3688,12 @@
    "text": "Press when the same shape is between the thick lines.",
    "from": [
     "howto.slot-l1.2"
+   ]
+  },
+  {
+   "text": "Press when you hear this sound.",
+   "from": [
+    "howto.sample"
    ]
   },
   {
@@ -3829,6 +3859,12 @@
    ]
   },
   {
+   "text": "Sad",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "Say it again",
    "from": [
     "learn.again"
@@ -3844,6 +3880,12 @@
    "text": "Say it with words.",
    "from": [
     "tile.voca.title (ready)"
+   ]
+  },
+  {
+   "text": "Sleepy",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -3879,6 +3921,12 @@
    ]
   },
   {
+   "text": "Stop it",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "Stop one",
    "from": [
     "tile.slot-l1.title"
@@ -3906,6 +3954,12 @@
    "text": "Stop three.",
    "from": [
     "tile.slot-l2.title (ready)"
+   ]
+  },
+  {
+   "text": "Teacher",
+   "from": [
+    "voca.phrase"
    ]
   },
   {
@@ -3958,6 +4012,12 @@
    ]
   },
   {
+   "text": "Tired",
+   "from": [
+    "voca.phrase"
+   ]
+  },
+  {
    "text": "Try the next one",
    "from": [
     "learn.tryNext"
@@ -3987,6 +4047,24 @@
    "from": [
     "color.voice.progress",
     "party.voice.press"
+   ]
+  },
+  {
+   "text": "When a fish bites and a high note plays, press right away.",
+   "from": [
+    "howto.fishing-gonogo.2"
+   ]
+  },
+  {
+   "text": "When a fish bites and you hear the bite, press right away.",
+   "from": [
+    "howto.fishing.2"
+   ]
+  },
+  {
+   "text": "When a fish bites, you hear it and see a big “!”.",
+   "from": [
+    "howto.fishing.2.practice"
    ]
   },
   {

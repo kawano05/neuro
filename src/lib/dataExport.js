@@ -190,6 +190,10 @@ export function buildRhythmCsvRows(sessions) {
       // れんしゅうの回は絵を作り直したので、変わる前後の回を分ける。そくていの回はいつでも 1。
       // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
       "artVersion",
+      // 押す合図の音色（config.cueTimbre。sine / bright。audio.js の CUE_TIMBRES）。
+      // れんしゅうの高い音だけの回は bright（2026-10-21 から）。そくていの回はいつでも sine。
+      // artVersion の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
+      "cueTimbre",
     ],
   ];
   sessions.forEach((session) => {
@@ -220,6 +224,7 @@ export function buildRhythmCsvRows(sessions) {
         config.measurementReadiness ?? "n/a",
         config.fxLevel ?? "",
         config.artVersion ?? "",
+        config.cueTimbre ?? "",
       ]);
     });
   });
@@ -378,6 +383,9 @@ export function buildTaskCsvRows(sessions, taskType) {
         // 見え方の版（config.artVersion）。れんしゅうの回の絵が変わった前後を分ける。
         // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
         "artVersion",
+        // アタリの合図の音色（config.cueTimbre。sine / bright）。れんしゅうの回は bright
+        // （2026-10-21 から）。artVersion の後ろに足す。この列より前の記録は空欄。
+        "cueTimbre",
       ],
     ];
     sessions
@@ -408,6 +416,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.endReason ?? "",
             session.config?.fxLevel ?? "",
             session.config?.artVersion ?? "",
+            session.config?.cueTimbre ?? "",
           ]);
         });
       });

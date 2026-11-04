@@ -67,6 +67,17 @@ export function resolveDifficultyMode(settings) {
   return DIFFICULTY_MODES.has(mode) ? mode : DEFAULT_DIFFICULTY_MODE;
 }
 
+/** 押す合図の音色を、れんしゅうの回だけ bright にする遊び（音で押す遊び）。 */
+const BRIGHT_CUE_GAMES = new Set(["gonogo", "fishing", "fishing-gonogo"]);
+
+/**
+ * 押す合図（高い音）の音色（audio.js の CUE_TIMBRES）。そくていの回は、いつも sine
+ * （前からの合図のまま。docs/rules/measurement-invariance.md）。
+ */
+export function cueTimbreFor(gameId, settings) {
+  return BRIGHT_CUE_GAMES.has(gameId) && resolveDifficultyMode(settings) !== "measure" ? "bright" : "sine";
+}
+
 /**
  * 「エンドレス」の回か。
  *

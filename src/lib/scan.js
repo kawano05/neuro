@@ -144,7 +144,10 @@ export function createScanEngine(ctx) {
     const audio = ctx.audio;
     if (!mode || mode === "none" || !audio || !target) return;
     if (!document.body.classList.contains("user-world")) return;
-    if (mode === "speak") {
+    // 遊ぶ前の説明の画面では名前を読まない。枠は「はじめる」「おわる」を回るので、
+    // 読むと説明の読み上げ（と、音で押す遊びの見本の音のあとの声）を途中で切ってしまう。
+    const readyOpen = elements.gameReadyControls && !elements.gameReadyControls.hidden;
+    if (mode === "speak" && !readyOpen) {
       // 名前は読み上げ名（aria-label）を優先。無ければ、ふりがな（rt）を除いた字。
       let name = target.getAttribute("aria-label") || "";
       if (!name) {

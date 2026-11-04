@@ -3919,6 +3919,106 @@ body.high-contrast .spread-mark {
   margin-bottom: 20px;
 }
 
+/* ---------------------------------------------------------------------
+   がんばりの記録（views/progress.js）。補足の札や説明は置かず、棒の高さと、棒の上の数で
+   見せる（2026-10-23）。カードの形は評価ログの推移（.trend-card）にそろえる。
+   --------------------------------------------------------------------- */
+.progress-week,
+.progress-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.progress-week {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+}
+
+.progress-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
+  margin-bottom: 20px;
+}
+
+.progress-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.progress-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.progress-head strong {
+  font-size: 1.15rem;
+}
+
+.progress-head span {
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 棒の列。棒の上に数、下に曜日（この7日だけ）。高さは --h（満点で 100%）。 */
+.progress-bars {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 6px;
+  align-items: end;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: center;
+}
+
+.progress-bars li {
+  display: grid;
+  grid-template-rows: auto 72px auto;
+  gap: 4px;
+}
+
+.progress-bars b {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-bars li > span {
+  position: relative;
+  border-radius: 6px;
+  background: var(--bg-panel);
+}
+
+.progress-bars li > span::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--h, 0%);
+  border-radius: 6px;
+  background: var(--good);
+}
+
+.progress-bars small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.progress-bars .is-today small {
+  color: inherit;
+  font-weight: 900;
+}
+
 .trend-card {
   display: grid;
   gap: 10px;

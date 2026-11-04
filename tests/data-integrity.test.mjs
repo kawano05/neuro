@@ -199,9 +199,9 @@ test("the redesign's settings survive a reload and fall back on unknown values",
   const defaults = sanitizeState({}).settings;
   assert.equal(defaults.showScreenSwitch, false, "画面の「おす」ボタンは既定で出さない");
   // 枠が動いたときの音は、既定では鳴らさない（今までと同じ）。選べば残り、知らない値は既定へ。
-  assert.equal(defaults.scanFeedback, "none");
-  assert.equal(sanitizeState({ settings: { scanFeedback: "speak" } }).settings.scanFeedback, "speak");
-  assert.equal(sanitizeState({ settings: { scanFeedback: "beep" } }).settings.scanFeedback, "none");
+  assert.equal(defaults.scanFeedback, "speak");
+  assert.equal(sanitizeState({ settings: { scanFeedback: "none" } }).settings.scanFeedback, "none");
+  assert.equal(sanitizeState({ settings: { scanFeedback: "beep" } }).settings.scanFeedback, "speak");
   // はじめの遊びは、遊びごとに見え方と音を持つ。既定の音に「びっくりする音」は使わない
   // （強すぎる音は発作につながりうる、と言われている）。
   assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "baseball", "color-legacy", "coloring"]);
@@ -471,7 +471,7 @@ test("sanitizeState rejects invalid shapes, enums and unsafe ranges item by item
   });
 
   assert.equal(sanitized.currentView, "start");
-  assert.equal(sanitized.currentCategory, "基本");
+  assert.equal(sanitized.currentCategory, "あいさつ");
   assert.equal(sanitized.matchingIndex, 2);
   assert.equal(sanitized.operation.mode, "item");
   assert.equal(sanitized.operation.pointPhase, "x");
@@ -1174,9 +1174,10 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // ＋ difficultyMode ＋ readiness ＋ endless ＋ limitMs
   //   ＋ endlessProtocolVersion ＋ endReason。
   //   ＋ fxLevel（演出の強さ。2026-09-28）。
-  //   ＋ artVersion（見え方の版。2026-09-30、いちばん後ろ）。
-  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 8);
-  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 8);
+  //   ＋ artVersion（見え方の版。2026-09-30）。
+  //   ＋ cueTimbre（アタリの合図の音色。2026-10-21、いちばん後ろ）。
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 9);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 9);
   assert.equal(rtRows[0][13], "excluded");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 2], "deviceUserAgent");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceInputMethod");
@@ -1185,7 +1186,7 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 2], "endless");
   // 試行ごとの受付時間。エンドレスでは試行ごとに短くなる。
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 3], "limitMs");
-  assert.deepEqual(rtRows[0].slice(-3), ["endReason", "fxLevel", "artVersion"]);
+  assert.deepEqual(rtRows[0].slice(-4), ["endReason", "fxLevel", "artVersion", "cueTimbre"]);
   // 列を持たない古い記録は practice / n/a / false に倒す（scan と同じ既定）。
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS], "practice");
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 1], "n/a");
@@ -1983,8 +1984,9 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
   // 途中に挿すと、列位置で読んでいる解析側が黙って壊れる。
   // 既存18列 ＋ visualGuidance ＋ difficultyMode ＋ 端末7列 ＋ readiness。
   // 端末列は 2026-08-29 に deviceInputMethod を末尾へ足して7つになった。
-  // ＋ fxLevel（演出の強さ。2026-09-28）＋ artVersion（見え方の版。2026-10-01、いちばん後ろ）。
-  assert.equal(rows[0].length, 20 + 7 + 3);
+  // ＋ fxLevel（演出の強さ。2026-09-28）＋ artVersion（見え方の版。2026-10-01）
+  // ＋ cueTimbre（押す合図の音色。2026-10-21、いちばん後ろ）。
+  assert.equal(rows[0].length, 20 + 7 + 4);
   assert.equal(rows[0][16], "judgment");
   assert.equal(rows[0][17], "excluded");
   assert.equal(rows[0][18], "visualGuidance");
@@ -1998,10 +2000,10 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
 
   // 末尾に成立確認の状態（src/lib/readinessCheck.js）。この列が無いと、
   // 成績の低い回について「そもそも課題が成立していたのか」を後から分けられない。
-  assert.deepEqual(rows[0].slice(-3), ["measurementReadiness", "fxLevel", "artVersion"]);
+  assert.deepEqual(rows[0].slice(-4), ["measurementReadiness", "fxLevel", "artVersion", "cueTimbre"]);
   // 列を持たない古い記録は n/a。met と復元してしまうと、確認を経た回と
   // 区別できなくなる。演出の強さ・見え方の版を持たない古い記録は空欄。
-  assert.deepEqual(rows[1].slice(-3), ["n/a", "", ""]);
+  assert.deepEqual(rows[1].slice(-4), ["n/a", "", "", ""]);
 });
 
 test("the rhythm CSV carries the readiness state of a measurement run", () => {

@@ -224,12 +224,12 @@ test("each detailed group can go back to the state.js defaults, except what cann
 
   // スイッチ: iPad 本体に合わせる項目は戻さない。スイッチコントロール中は枠の自動も戻さない（枠が2つ出る）。
   const switchGroup = settingsGroup("switch");
-  const delegated = { ...defaultState.settings, switchControlMode: true, autoScan: false, scanFeedback: "speak", showScreenSwitch: true };
+  const delegated = { ...defaultState.settings, switchControlMode: true, autoScan: false, scanFeedback: "tick", showScreenSwitch: true };
   const switchPlan = resetPlan(switchGroup, delegated);
   assert.deepEqual(switchPlan.changes.map(({ field }) => field.key), ["scanFeedback", "showScreenSwitch"]);
   assert.deepEqual(switchPlan.kept.map(({ field }) => field.key), ["switchControlMode", "autoScan"]);
   const message = describeReset(switchGroup, switchPlan);
-  assert.match(message, /枠が動いたときの音（名前を読む → なし）/);
+  assert.match(message, /枠が動いたときの音（小さな音 → 名前を読む）/);
   assert.match(message, /変えていないもの: iPad のスイッチコントロールを使う（iPad 本体の設定と合わせるため）/);
   assert.match(message, /変えていないもの: 枠を自動で動かす（iPad のスイッチコントロールを使っているあいだは/);
 
