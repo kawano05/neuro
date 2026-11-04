@@ -1171,8 +1171,7 @@ const STRINGS = {
   "fishing.lost": { ruby: "おしい！", kanji: "おしい！", kana: "おしい！", en: "So close!" },
   // 釣れたときの表示。長さ（cm）を差し込む。
   // れんしゅうの回の「○cm」に添える字（games/fishing.js の scoreHtml・catchHtml）。
-  "fishing.scoreTotal": { ruby: "魚[さかな]の大[おお]きさ ぜんぶで {n}cm", kanji: "魚の大きさ ぜんぶで {n}cm", kana: "さかなの おおきさ ぜんぶで {n}cm", en: "Fish size, total {n}cm" },
-  "fishing.catchSize": { ruby: "魚[さかな]の大[おお]きさ {n}cm", kanji: "魚の大きさ {n}cm", kana: "さかなの おおきさ {n}cm", en: "Fish size {n}cm" },
+  "fishing.size": { ruby: "魚[さかな]の大[おお]きさ {n}cm", kanji: "魚の大きさ {n}cm", kana: "さかなの おおきさ {n}cm", en: "Fish size {n}cm" },
   "fishing.caught": { ruby: "{n}cm 釣[つ]れた！", kanji: "{n}cm 釣れた！", kana: "{n}cm つれた！", en: "Caught {n}cm!" },
   "fishing.fast": { ruby: "すばやい！ {n}cm", kanji: "すばやい！ {n}cm", kana: "すばやい！ {n}cm", en: "Quick! {n}cm" },
 

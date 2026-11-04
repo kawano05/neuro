@@ -11,6 +11,7 @@ import {
   DEFAULT_DIFFICULTY_MODE,
   MEASUREMENT_PROTOCOL,
   allowsVisualGuidance,
+  cueTimbreFor,
   isMeasurementMode,
   resolveCraneDifficulty,
   resolveDifficultyMode,
@@ -20,8 +21,8 @@ import {
   resolveRhythmDifficulty,
   resolveSlotDifficulty,
 } from "../src/lib/difficultyMode.js";
-import { resolveParams } from "../src/lib/games/rhythm.js";
-import { cranePresets, fishingPresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
+import { buildPlan, resolveParams } from "../src/lib/games/rhythm.js";
+import { cranePresets, cueTones, fishingPresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
 import { sanitizeState } from "../src/lib/state.js";
 
 let passed = 0;
@@ -276,6 +277,51 @@ test("an endless run survives a reload as a completed practice run", () => {
   // れんしゅうを重ねているのに成立確認が通らない、という見えない詰まりになる。
   assert.equal(restored.aborted, false);
   assert.equal(restored.finished, true);
+});
+
+test("the brighter cue timbre is only for practice rounds of the sound games", () => {
+  // 2026-10-21: れんしゅうの回だけ、押す合図（高い音）を倍音のある音にした。
+  // そくていの回の合図は前からの純音のまま（docs/rules/measurement-invariance.md）。
+  const practice = { difficultyMode: "practice" };
+  const measure = { difficultyMode: "measure" };
+  ["gonogo", "fishing", "fishing-gonogo"].forEach((gameId) => {
+    assert.equal(cueTimbreFor(gameId, practice), "bright", `${gameId} のれんしゅう`);
+    assert.equal(cueTimbreFor(gameId, measure), "sine", `${gameId} のそくてい`);
+  });
+  ["rhythm-l1", "rhythm-l2", "calibration", "slot-l1"].forEach((gameId) => {
+    assert.equal(cueTimbreFor(gameId, practice), "sine", `${gameId} は音色を変えない`);
+  });
+
+  // 高い音だけの計画: 押す合図（高い音）にだけ音色が付き、数え拍と押さない合図は純音のまま。
+  // 音色を付けない回の計画は、前と1つも変わらない（timbre の項目自体が無い）。
+  // 押す／押さないの並びは回ごとに乱数で決まるので、同じ計画の中で確かめる。
+  const params = { ...rhythmPresets.gonogo };
+  assert.ok(buildPlan(params).audioBeats.every((beat) => !("timbre" in beat)));
+  const bright = buildPlan({ ...params, goTimbre: "bright" });
+  assert.ok(bright.audioBeats.some((beat) => beat.timbre === "bright"));
+  bright.audioBeats.forEach((beat) => {
+    if (beat.tone === cueTones.high) assert.equal(beat.timbre, "bright", "押す合図は bright");
+    else assert.ok(!("timbre" in beat), "数え拍・押さない合図は純音のまま");
+  });
+
+  // 記録: 再読み込みしても残り、知らない値は null。
+  const restored = (timbre) =>
+    sanitizeState({
+      sessions: [
+        {
+          sessionId: "s-timbre",
+          taskType: "gonogo",
+          gameId: "gonogo",
+          startedAtIso: "2026-10-21T10:00:00.000Z",
+          aborted: true,
+          config: { mode: "gonogo", bpm: 50, countInBeats: 3, targetBeats: 20, cueTimbre: timbre },
+          trials: [],
+        },
+      ],
+    }).sessions[0]?.config.cueTimbre;
+  assert.equal(restored("bright"), "bright");
+  assert.equal(restored("sine"), "sine");
+  assert.equal(restored("loud"), null);
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

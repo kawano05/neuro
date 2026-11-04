@@ -78,6 +78,32 @@ export function coloringMarkup(art, parts = BEGINNER_TARGET_PRESSES) {
   return [...backdrop.slice(0, 1), ...body, ...backdrop.slice(1)].join("");
 }
 
+/**
+ * 絵のまわり（画面の余白）に散らした星。押すたびに、決まった数ずつ色がつく。
+ * 2026-10-21 の打ち合わせで、施設の試用から「イルカが細かく塗られていくのが伝わりにくい。
+ * 周りの星も黄色になるなど、画面全体に色が入っていくと分かりやすい」と言われた。
+ * 位置は画面に対する % （左, 上）。縦長の画面では、絵のカードの裏に回る星もある。
+ * 上の帯（のこり・設定・おわる）の高さには置かない。10個で、押すたびに2つずつ色がつく。
+ */
+const SKY_STARS = [
+  [5, 20], [13, 42], [4, 64], [12, 84], [95, 22], [87, 40],
+  [96, 62], [88, 84], [30, 93], [70, 93],
+];
+const SKY_COLORS = ["#FFC83D", "#FF8082", "#4DC4FF", "#03AF7A", "#F6AA00", "#D65DB1"];
+const STAR_PATH = "M50 6 L62 37 L95 38 L69 59 L78 92 L50 73 L22 92 L31 59 L5 38 L38 37 Z";
+
+function skyMarkup() {
+  return SKY_STARS.map(([left, top], index) => {
+    const color = SKY_COLORS[index % SKY_COLORS.length];
+    return `<svg class="cl-sky-star" style="left:${left}%;top:${top}%;--star-color:${color}" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="${STAR_PATH}"></path></svg>`;
+  }).join("");
+}
+
+/** 何回押したら、いくつの星に色がつくか（5回目で全部）。 */
+function skyStarsColored(colored) {
+  return Math.round((SKY_STARS.length * Math.min(colored, BEGINNER_TARGET_PRESSES)) / BEGINNER_TARGET_PRESSES);
+}
+
 export function createColoringGame(ctx) {
   const { settings, t, tHtml, fx } = ctx;
 
@@ -120,6 +146,7 @@ export function createColoringGame(ctx) {
   function build() {
     if (!stageEl) return;
     stageEl.innerHTML = `
+      <span class="coloring-sky" aria-hidden="true">${skyMarkup()}</span>
       <span class="coloring-stage" aria-hidden="true">
         <span class="coloring-card">
           <svg class="coloring-art" viewBox="${picture.viewBox}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">${coloringMarkup(picture)}</svg>
@@ -136,6 +163,10 @@ export function createColoringGame(ctx) {
     stageEl.classList.toggle("is-light", playPrefsFor(settings, GAME_ID).background === "light");
     stageEl.querySelectorAll(".cl-part").forEach((part) => {
       part.classList.toggle("is-colored", Number(part.dataset.part) < colored);
+    });
+    const starsColored = skyStarsColored(colored);
+    stageEl.querySelectorAll(".cl-sky-star").forEach((star, index) => {
+      star.classList.toggle("is-colored", index < starsColored);
     });
     stageEl.classList.toggle("is-complete", colored >= BEGINNER_TARGET_PRESSES);
     const word = stageEl.querySelector(".coloring-word");

@@ -31,6 +31,7 @@ import { cueTones, fishingPresets, fishingSpecies } from "../content.js";
 import { CUE_SOFT_GAIN, CUE_TONE_GAIN } from "../audio.js";
 import {
   ENDLESS_PROTOCOL_VERSION,
+  cueTimbreFor,
   endlessDifficultyStep,
   resolveDifficultyMode,
   resolveEndlessMode,
@@ -485,12 +486,12 @@ export function createFishingGame(gameId) {
   // 「魚の大きさ ○○cm など、何の数値かを添える表示を」）。そくていの回の遊ぶ面は、
   // 字も変えない（docs/rules/measurement-invariance.md）。
   function scoreHtml(cm) {
-    return practice ? tHtml("fishing.scoreTotal", { n: cm }) : `${cm} cm`;
+    return practice ? tHtml("fishing.size", { n: cm }) : `${cm} cm`;
   }
 
   function catchHtml(cm, speedBonus) {
     if (!practice) return speedBonus ? `★ ${cm} cm ＋${SPEED_BONUS_CM}` : `${cm} cm`;
-    const size = tHtml("fishing.catchSize", { n: cm });
+    const size = tHtml("fishing.size", { n: cm });
     return speedBonus ? `★ ${size} ＋${SPEED_BONUS_CM}` : size;
   }
 
@@ -1014,12 +1015,19 @@ export function createFishingGame(gameId) {
     // プリセットの固定値ではなく実際に計画した試行数を入れる。
     config.targetTrials = trials.length;
 
-    const beats = trials.map((trial) => ({
-      index: trial.index,
-      timeS: trial.cueMs / 1000,
-      tone: trial.kind === "real" ? cueTones.high : cueTones.noGo,
-      gain: FEEDBACK_GAIN,
-    }));
+    // アタリ（高い音）の音色。れんしゅうの回は bright、長靴（低い音）は純音のまま
+    // （difficultyMode.js の cueTimbreFor）。
+    const cueTimbre = cueTimbreFor(gameId, ctx.settings);
+    const beats = trials.map((trial) => {
+      const beat = {
+        index: trial.index,
+        timeS: trial.cueMs / 1000,
+        tone: trial.kind === "real" ? cueTones.high : cueTones.noGo,
+        gain: FEEDBACK_GAIN,
+      };
+      if (trial.kind === "real" && cueTimbre !== "sine") beat.timbre = cueTimbre;
+      return beat;
+    });
 
     const startAt = audio.scheduler.start({ beats });
 
@@ -1080,6 +1088,8 @@ export function createFishingGame(gameId) {
         // 合図音の大きさ（audio.js の CUE_TONE_GAIN）。2026-09-30 に 0.05 から上げたので、
         // どちらの大きさで取った記録かを分けられるように残す。
         cueGain: FEEDBACK_GAIN,
+        // アタリの合図の音色（audio.js の CUE_TIMBRES）。2026-10-21 に足した。
+        cueTimbre: cueTimbreFor(gameId, ctx.settings),
         seedSequence: foreperiods,
         kindSequence,
         // その回が「そくてい」か「れんしゅう」か（src/lib/difficultyMode.js）。

@@ -303,11 +303,11 @@ if (failures.length) {
 
 async function checkMainApp(page) {
   await waitForText(page, "h1", "NEURONODE");
-  // タブは2つ（評価ログ・設定）＋「← ホームへ」。効果測定・操作訓練・研究の
+  // タブは3つ（がんばりの記録・評価ログ・設定）＋「← ホームへ」。効果測定・操作訓練・研究の
   // 3画面は 2026-08-29 に削除し、支援者のデータ画面は評価ログ1枚へまとめた
-  // （手順は別紙の手順書に置く）。matching/voca/letters は利用者向けなので、
-  // 以前にホームの「まなぶ・つたえる」二階層目へ移している。
-  await waitForCount(page, ".tab", 2);
+  // （手順は別紙の手順書に置く）。がんばりの記録は家族向けで 2026-10-21 に足した。
+  // matching/voca/letters は利用者向けなので、以前にホームの「まなぶ・つたえる」二階層目へ移している。
+  await waitForCount(page, ".tab", 3);
   // The app always boots into the start screen (detailed-design.md §2.1:
   // MUST start from "start" even on revisit, to guarantee the AudioContext
   // unlock + input continuity check every time).
@@ -1412,6 +1412,13 @@ async function checkBeginnerGamesFlow(page) {
     (await page.locator(".hk-result-item.is-burst").count()) === presses,
     "The balloon result must show one burst per balloon"
   );
+  // 遊び終わった回は、家族向けの「がんばりの記録」の元（state.playRecords）に1件残る
+  // （2026-10-21。はじめの遊びは研究の記録を残さないので、ここにしか無い）。
+  const balloonRecords = await page.evaluate(
+    (key) => (JSON.parse(localStorage.getItem(key))?.playRecords || []).filter((record) => record.gameId === "balloon").length,
+    storageKey
+  );
+  assert(balloonRecords === 1, `A finished balloon game must leave one play record, got ${balloonRecords}`);
   await page.locator("#resultHome").click();
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 9);
@@ -4785,10 +4792,10 @@ async function checkFeatureTabs(page) {
     await waitForClass(page, "#homeView", "is-active");
   }
 
-  // 支援者タブは評価ログと設定。旧研究者タブは削除済み。
+  // 支援者タブは がんばりの記録・評価ログ・設定。旧研究者タブは削除済み。
   await page.locator("#homeSupporterMenu").click();
   await waitForClass(page, "#settings", "is-active");
-  const tabTargets = ["log", "settings"];
+  const tabTargets = ["progress", "log", "settings"];
   for (const target of tabTargets) {
     await page.locator(`.tab[data-view="${target}"]`).click();
     await waitForClass(page, `#${target}`, "is-active");
@@ -4865,7 +4872,7 @@ async function checkResearcherDataOnOneScreen(page) {
     assert((await page.locator(gone).count()) === 0, `${gone} must be gone, not hidden`);
   }
   const tabs = await page.locator(".tabbar button").allTextContents();
-  assert(tabs.length === 3, `Expected three shell tabs (home / log / settings), got ${tabs.length}: ${tabs.join(" ")}`);
+  assert(tabs.length === 4, `Expected four shell tabs (home / progress / log / settings), got ${tabs.length}: ${tabs.join(" ")}`);
 
   // 評価ログから設定へ戻っても、研究の欄は使える（走査は止まったまま）。
   await page.locator('.tab[data-view="settings"]').click();
@@ -5196,7 +5203,8 @@ async function checkLayoutInvariants(page) {
   // 支援者が見る面は評価ログと設定の2つだけになった（2026-08-29）。
   // 評価ログは列の多い画面（書き出し9個・推移のタブ・セッション一覧）なので、
   // はみ出しが出るならここに出る。
-  for (const view of ["log"]) {
+  // がんばりの記録（2026-10-21）も、記録が増えるとカードが並ぶので同じように見る。
+  for (const view of ["log", "progress"]) {
     await page.locator(`.tab[data-view="${view}"]`).click();
     await waitForClass(page, `#${view}`, "is-active");
     await inspect(view);
