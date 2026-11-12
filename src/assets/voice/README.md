@@ -17,7 +17,7 @@
 - 日本語の音は、VOICEVOX（https://voicevox.hiroshiba.jp/）の「四国めたん」の声で作った。
   VOICEVOX の利用規約と、四国めたん（東北ずん子・ずんだもんプロジェクト）の音声ライブラリ
   利用規約（https://zunko.jp/con_ongen_kiyaku.html）に従う。**クレジット「VOICEVOX:四国めたん」が要る**
-  （アプリの設定「見え方・音」のいちばん下に出している。`src/lib/soundCredits.js`）。
+  （アプリの設定の「音の素材」に出している。`src/lib/soundCredits.js`）。
   この音をほかで使う人も、同じ規約とクレジットに従うこと（VOICEVOX の規約が求めている）。
 - 英語の音は、Kokoro-82M（https://huggingface.co/hexgrad/Kokoro-82M、Apache License 2.0）で作った。
 

@@ -74,8 +74,3 @@ export function tileThemeFor(tileId) {
   if (!theme) return null;
   return { ...theme, colors: PALETTE[theme.palette] };
 }
-
-/** ゲーム画面の上の帯などで、遊びの色を使いたいときに（gameId から引く）。 */
-export function gamePalette(gameId) {
-  return tileThemeFor(gameId)?.colors ?? null;
-}

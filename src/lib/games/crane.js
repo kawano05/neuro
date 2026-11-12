@@ -333,7 +333,7 @@ function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = nul
 }
 
 export function createCraneGame(ctx) {
-  const { audio, announce, voiceFeedback, logTrial, finish, setProgress, t, tHtml, fx } = ctx;
+  const { audio, voiceFeedback, logTrial, finish, setProgress, t, tHtml, fx } = ctx;
 
   /**
    * 景品の名前。

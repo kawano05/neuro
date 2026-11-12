@@ -96,6 +96,15 @@ test("practice runs keep the supporter's settings", () => {
 });
 
 test("the engine actually uses the protocol values, not just the resolver", () => {
+  // 解決器が正しくても、ゲーム側が呼んでいなければ意味がない。
+  const measured = resolveParams("rhythm-l1", { ...TWEAKED, difficultyMode: "measure" });
+  assert.equal(measured.bpm, MEASUREMENT_PROTOCOL.rhythm["rhythm-l1"].bpm);
+  assert.equal(measured.targetBeats, MEASUREMENT_PROTOCOL.rhythm["rhythm-l1"].targetBeats);
+
+  const practised = resolveParams("rhythm-l1", { ...TWEAKED, difficultyMode: "practice" });
+  assert.equal(practised.bpm, 30);
+  assert.equal(practised.targetBeats, 200);
+});
 
 test("measurement runs fix every slot-v1 value and seed", () => {
   const settings = { ...TWEAKED, difficultyMode: "measure" };
@@ -119,16 +128,6 @@ test("practice slot runs keep supporter values and the recorded variable seed", 
   assert.equal(resolved.toleranceMs, 180);
   assert.equal(resolved.rounds, 7);
   assert.equal(resolved.seed, "slot-practice-test");
-});
-
-  // 解決器が正しくても、ゲーム側が呼んでいなければ意味がない。
-  const measured = resolveParams("rhythm-l1", { ...TWEAKED, difficultyMode: "measure" });
-  assert.equal(measured.bpm, MEASUREMENT_PROTOCOL.rhythm["rhythm-l1"].bpm);
-  assert.equal(measured.targetBeats, MEASUREMENT_PROTOCOL.rhythm["rhythm-l1"].targetBeats);
-
-  const practised = resolveParams("rhythm-l1", { ...TWEAKED, difficultyMode: "practice" });
-  assert.equal(practised.bpm, 30);
-  assert.equal(practised.targetBeats, 200);
 });
 
 test("calibration stays on its own protocol in both modes", () => {

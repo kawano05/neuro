@@ -207,8 +207,6 @@ function checkRuleExecution(sessions) {
  * いない理由」で、通っているときは空。英語の画面のために labelEn・reasonEn も持つ
  * （支援者の画面は、利用者の「言語」に合わせる。src/lib/supporterText.js）。
  */
-export const READINESS_CHECK_IDS = ["discrimination", "volition", "ruleExecution"];
-
 const CHECKS = [
   { id: "discrimination", label: "高い音と低い音を聞き分けられる", labelEn: "Tells high notes from low notes", run: checkDiscrimination },
   { id: "volition", label: "合図に対して意図して押せる", labelEn: "Presses on purpose in response to a cue", run: checkVolition },
