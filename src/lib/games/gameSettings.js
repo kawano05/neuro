@@ -493,6 +493,7 @@ export function createGameSettings(ctx, host) {
       stoppedSession = false;
       dialog.hidden = true;
       dialog.innerHTML = "";
+      elements.gameSettings?.setAttribute("aria-expanded", "false");
     },
     /** 設定ボタンを出すか。 */
     available(gameId) {

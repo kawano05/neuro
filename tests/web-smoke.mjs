@@ -424,14 +424,16 @@ async function checkStartToHomeToGameFlow(page) {
     const stageContent = document.querySelector("#gameStageContent");
     const live = document.querySelector("#liveRegion");
     const progress = document.querySelector("#gameProgress");
-    let synth = window.speechSynthesis;
-    if (!synth) {
-      synth = {};
-      Object.defineProperty(window, "speechSynthesis", {
-        configurable: true,
-        value: synth
-      });
-    }
+    // 本物の speechSynthesis があっても、window に直に結んでおく。WebKit は、JS から誰も
+    // 握っていない speechSynthesis の包み（ラッパー）を GC で捨て、次に引いたときに作り直す。
+    // 作り直した包みには、下で差し替えた speak / cancel が無い——Linux の CI の WebKit で、
+    // 読み上げを切ったときの cancel が本物へ行き、数えられなかった（2026-10-22）。
+    // Windows の WebKit には speechSynthesis が無く、偽物を結ぶので起きなかった。
+    const synth = window.speechSynthesis || {};
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      value: synth
+    });
     if (!("SpeechSynthesisUtterance" in window)) {
       Object.defineProperty(window, "SpeechSynthesisUtterance", {
         configurable: true,
@@ -1598,12 +1600,11 @@ async function checkScanFeedbackSpeaksNames(page) {
         }
       };
     }
+    // 本物があっても window に結ぶ（差し替えた speak が GC で消えないように。上の color の検査を見る）。
     const synth = window.speechSynthesis || {};
     synth.speak = () => {};
     synth.cancel = () => {};
-    if (!window.speechSynthesis) {
-      Object.defineProperty(window, "speechSynthesis", { value: synth });
-    }
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: synth });
     window.addEventListener("neuronode:speech", (event) => {
       if (event.detail.fallback) {
         return;
@@ -1690,6 +1691,8 @@ async function checkAppVoiceSpeaks(page) {
     const synth = window.speechSynthesis;
     if (synth) {
       synth.speak = () => {};
+      // 差し替えた speak が GC で消えないように window に結ぶ（上の color の検査を見る）。
+      Object.defineProperty(window, "speechSynthesis", { configurable: true, value: synth });
     }
     window.addEventListener("neuronode:speech", (event) => window.__speech.push(event.detail));
   });

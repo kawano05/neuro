@@ -399,7 +399,7 @@ export function initLog(ctx) {
       const result = describeSessionResult(session);
       item.innerHTML = `
         <span class="metric-label">${formatTime(session.startedAtIso)}</span>
-        <strong>${escapeHtml(gameTitle(session.gameId))}</strong>
+        <strong>${escapeHtml(trendGameTitle(session.gameId))}</strong>
         <span>${escapeHtml(describeSessionOutcome(session))}</span>
         ${result ? `<span class="session-result">${escapeHtml(result)}</span>` : ""}
         ${conditions ? `<span class="session-conditions">${escapeHtml(conditions)}</span>` : ""}
