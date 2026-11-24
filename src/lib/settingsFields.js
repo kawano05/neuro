@@ -10,7 +10,7 @@
 // 見直しの記録: docs/reports/2026-10-01/settings-polish.md。
 // =====================================================================
 
-import { isMeasurementMode } from "./difficultyMode.js";
+import { SURE_HIT_OVERRIDDEN_SETTINGS, isMeasurementMode } from "./difficultyMode.js";
 import { translate } from "./i18n.js";
 import { SETTING_DEFINITIONS, describeSettingValue, effectiveSettingValue, protocolText } from "./settingDefinitions.js";
 import { defaultState } from "./state.js";
@@ -50,6 +50,17 @@ const LOCKS = {
       en: "Cannot be reset while iPad Switch Control is in use.",
     },
   },
+  // 「押せば必ず当たる」がオンの れんしゅうの回は、当たりの広さ・長さが決まった広い値になる
+  // （difficultyMode.js の SURE_HIT_OVERRIDDEN_SETTINGS）。そくていの回では measured の理由が先に出る。
+  sureHit: {
+    active: (settings) => settings?.sureHit === true && !isMeasurementMode(settings),
+    reason: (field, lang) =>
+      say({ ja: "「押せば必ず当たる」がオンのあいだは使いません。", en: "Not used while “Every press wins” is on." }, lang),
+    resetReason: {
+      ja: "「押せば必ず当たる」がオンのあいだは、戻せません。",
+      en: "Cannot be reset while “Every press wins” is on.",
+    },
+  },
   speech: {
     active: (settings) => settings?.speechEnabled === false,
     reason: (field, lang) =>
@@ -64,6 +75,7 @@ const FIELD_LOCKS = {
   autoScan: ["switchControl"],
   speechVolume: ["speech"],
   speechVoice: ["speech"],
+  ...Object.fromEntries(SURE_HIT_OVERRIDDEN_SETTINGS.map((key) => [key, ["sureHit"]])),
 };
 
 /** 遊びの名前（利用者の世界の辞書。日本語は漢字の表記）と、その遊びを既定に戻すボタンの文字。 */

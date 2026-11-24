@@ -134,6 +134,13 @@ export const SURE_HIT_GAMES = Object.freeze([
 ]);
 
 /**
+ * 押せば必ず当たる回のあいだ、効かなくなる設定（当たりの広さ・長さ。この回は決まった広い値で走る）。
+ * 設定の画面と「この遊びの設定」は、オンのあいだ これらを使えなくして、理由を出す
+ * （効かない操作子を黙って置かない。docs/rules/supporter-settings.md）。
+ */
+export const SURE_HIT_OVERRIDDEN_SETTINGS = Object.freeze(["slotToleranceMs", "craneToleranceR", "fishingLimitMs"]);
+
+/**
  * その回を「押せば必ず当たる」で走らせるか。
  *
  * そくていの回では必ず false（MUST）。そくていは protocol の値で走ることが条件そのもの。

@@ -15,6 +15,7 @@ import {
   SURE_HIT_CRANE_TOLERANCE_R,
   SURE_HIT_FISHING,
   SURE_HIT_GAMES,
+  SURE_HIT_OVERRIDDEN_SETTINGS,
   resolveCraneDifficulty,
   resolveFishingDifficulty,
   resolveSlotDifficulty,
@@ -34,6 +35,7 @@ import {
 } from "../src/lib/games/slotJudge.js";
 import { GAME_SETTINGS } from "../src/lib/games/gameSettings.js";
 import { SETTING_DEFINITIONS } from "../src/lib/settingDefinitions.js";
+import { describeReset, resetPlan, settingsField, settingsGroup, unavailableReason } from "../src/lib/settingsFields.js";
 import { buildSlotCsvRows } from "../src/lib/slotCsv.js";
 import { defaultState, sanitizeState } from "../src/lib/state.js";
 
@@ -83,6 +85,38 @@ test("the in-game settings offer it for exactly the games that implement it", ()
   assert.deepEqual(offered, [...SURE_HIT_GAMES].sort());
   assert.deepEqual([...SETTING_DEFINITIONS.sureHit.inGame].sort(), [...SURE_HIT_GAMES].sort());
   assert.equal(SETTING_DEFINITIONS.sureHit.measured, true, "そくていでは固定（オフ）と画面に出る");
+});
+
+test("the settings it overrides are switched off with the reason in their own row", () => {
+  // オンのあいだ、当たりの広さ・長さは決まった広い値で走る。変えても何も起きない操作子を、
+  // 黙って置かない（docs/rules/supporter-settings.md）。
+  const tweaked = { slotToleranceMs: 100, craneToleranceR: 9, fishingLimitMs: 1400 };
+  const on = { ...PRACTICE_ON, ...tweaked };
+  assert.equal(resolveSlotDifficulty("slot-l1", on, slotPresets["slot-l1"], "s").toleranceMs, on.slotCycleMs);
+  assert.equal(resolveCraneDifficulty(on, cranePresets).toleranceR, SURE_HIT_CRANE_TOLERANCE_R);
+  assert.equal(resolveFishingDifficulty("fishing", on, fishingPresets.fishing).limitMs, SURE_HIT_FISHING.limitMs);
+  assert.deepEqual([...SURE_HIT_OVERRIDDEN_SETTINGS].sort(), Object.keys(tweaked).sort());
+
+  SURE_HIT_OVERRIDDEN_SETTINGS.forEach((key) => {
+    const field = settingsField(key);
+    assert.equal(unavailableReason(field, on), "「押せば必ず当たる」がオンのあいだは使いません。", key);
+    assert.equal(unavailableReason(field, { ...on, sureHit: false }), "", `${key} はオフなら変えられる`);
+    // そくていの回は、そくていで固定される理由が先に出る（押せば必ず当たる は効いていない）。
+    assert.match(unavailableReason(field, { ...on, difficultyMode: "measure" }), /^そくていの回は固定です/, key);
+  });
+  // 速さ・回数は、オンのあいだも効く。
+  ["slotCycleMs", "slotL1Rounds", "craneSweepMs", "craneTargetTrials", "rhythmBpm", "targetBeats"].forEach((key) => {
+    assert.equal(unavailableReason(settingsField(key), on), "", `${key} はオンでも変えられる`);
+  });
+  assert.match(unavailableReason(settingsField("sureHit"), MEASURE_ON), /そくていでは オフ/);
+
+  // 既定に戻す: 使えない項目は戻さない。全部が使えない まとまり（さかなつり）は、理由を出して押せない。
+  const fishing = settingsGroup("fishing");
+  assert.equal(resetPlan(fishing, on).blockedReason, "「押せば必ず当たる」がオンのあいだは、戻せません。");
+  const slotPlan = resetPlan(settingsGroup("slot"), { ...on, slotCycleMs: 4800 });
+  assert.deepEqual(slotPlan.changes.map(({ field }) => field.key), ["slotCycleMs"]);
+  assert.deepEqual(slotPlan.kept.map(({ field }) => field.key), ["slotToleranceMs"]);
+  assert.match(describeReset(settingsGroup("slot"), slotPlan), /変えていないもの: 「合った」にする広さ（「押せば必ず当たる」がオンのあいだは使いません）/);
 });
 
 // ---------------------------------------------------------------------

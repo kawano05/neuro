@@ -198,58 +198,59 @@ async function latestSession(page, gameId) {
  * 広い許容幅を受け取れないと、次に開いたとき「完走していない回」になる）。
  */
 async function checkSureHitReels(page) {
-  await turnSureHitOn(page, { slotL1Rounds: 4 });
+  // 3本のリールで見る。止めた帯は、3本目を止めて回が替わるまで止まったままなので、
+  // 遅い機械でも、止まった絵を読む前に次の回が始まらない。
+  await turnSureHitOn(page, { slotL2Rounds: 2 });
   await openActivity(page, t("tile.slot-corner.title"));
   await waitForActivityChoices(page, 3);
-  await openActivity(page, t("tile.slot-l1.title"));
+  await openActivity(page, t("tile.slot-l2.title"));
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await page.locator("#gameStage").click();
   await finishReady(page);
-  await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
+  await page.locator(".slot-task[data-game-id='slot-l2']").waitFor({ state: "visible" });
 
   // 押す間は ばらばら（すぐ・少し待って・長く待って）。ねらいを見て合わせることはしない。
-  const waits = [340, 900, 1500, 420];
+  const waits = [340, 900, 1500, 420, 1100, 360];
   for (let press = 0; press < waits.length; press += 1) {
-    await page.locator(".slot-reel.is-active").waitFor({ state: "visible", timeout: 5_000 });
+    const reelIndex = press % 3;
+    await page.locator(`.slot-reel[data-slot-reel="${reelIndex}"].is-active`).waitFor({ state: "visible", timeout: 5_000 });
     await page.waitForTimeout(waits[press]);
     const target = await page.locator(".slot-target .slot-symbol").getAttribute("data-symbol");
     await page.locator("#gameStage").click();
     await page.waitForFunction(
       ({ key, count }) => {
         const state = JSON.parse(localStorage.getItem(key) || "{}");
-        const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l1");
+        const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l2");
         return session?.trials?.length === count;
       },
       { key: storageKey, count: press + 1 }
     );
-    if (press < waits.length - 1) {
-      // 止まった帯の真ん中（5コマの3つ目）は、ねらいの絵。
-      const shown = await page
-        .locator(".slot-reel.is-stopped .slot-track-cell:nth-child(3) .slot-symbol")
-        .getAttribute("data-symbol");
+    if (reelIndex < 2) {
+      // 止まった帯の真ん中（5コマの3つ目）は、ねらいの絵。ずれも無い。
+      const stopped = page.locator(`.slot-reel[data-slot-reel="${reelIndex}"].is-stopped`);
+      const shown = await stopped.locator(".slot-track-cell:nth-child(3) .slot-symbol").getAttribute("data-symbol");
       assert(shown === target, `A sure-hit stop must show the target (${target}) on the line, got ${shown}`);
-      const offset = await page
-        .locator(".slot-reel.is-stopped .slot-reel-track")
+      const offset = await stopped
+        .locator(".slot-reel-track")
         .evaluate((track) => Number(track.style.getPropertyValue("--slot-track-offset")));
       assert(Math.abs(offset) < 0.001, `The target must sit exactly on the line, offset ${offset}`);
     }
   }
 
-  await page.locator(".game-result, #gameResult, .result-screen").first().waitFor({ state: "visible", timeout: 8_000 }).catch(() => {});
   await page.waitForFunction(
     ({ key }) => {
       const state = JSON.parse(localStorage.getItem(key) || "{}");
-      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l1");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l2");
       return session?.finished === true;
     },
     { key: storageKey },
     { timeout: 8_000 }
   );
-  const played = await latestSession(page, "slot-l1");
+  const played = await latestSession(page, "slot-l2");
   assert(played.config.sureHit === true, "The run must record that it was a sure-hit run");
   assert(played.config.toleranceMs === played.config.cycleMs, "A sure-hit reel run uses one full turn as the window");
-  assert(played.trials.length === 4, `Expected 4 stops, got ${played.trials.length}`);
+  assert(played.trials.length === 6, `Expected 6 stops, got ${played.trials.length}`);
   assert(
     played.trials.every((trial) => trial.judgment === "hit"),
     `Every press must be a hit: ${played.trials.map((trial) => trial.judgment).join(",")}`
@@ -258,9 +259,9 @@ async function checkSureHitReels(page) {
   // 読み直しても、回は完走のまま、試行も落ちない。
   await page.reload();
   await waitForClass(page, "#startView", "is-active");
-  const restored = await latestSession(page, "slot-l1");
+  const restored = await latestSession(page, "slot-l2");
   assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
-  assert(restored.trials.length === 4, `No stop may be dropped on reload, got ${restored.trials.length}`);
+  assert(restored.trials.length === 6, `No stop may be dropped on reload, got ${restored.trials.length}`);
   assert(restored.config.sureHit === true, "The condition must survive a reload");
 }
 
