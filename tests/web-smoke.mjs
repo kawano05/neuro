@@ -129,6 +129,7 @@ const checks = [
   ["makes every press a hit on the reels when the supporter turns sure-hit on", checkSureHitReels],
   ["grabs the prize wherever the arm is stopped when sure-hit is on", checkSureHitCrane],
   ["makes every swing at a pitch a home run when sure-hit is on", checkSureHitBaseball],
+  ["counts every press between the tones as a hit when sure-hit is on", checkSureHitTones],
   ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
   ["switches the supporter screens to the chosen language from the common settings", checkSupporterLanguage],
   ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
@@ -380,6 +381,73 @@ async function checkSureHitBaseball(page) {
     assert(filled === swing, `Swing ${swing} must fill ${swing} home-run marks, got ${filled}`);
   }
   await waitForClass(page, "#resultView", "is-active", { timeout: 15_000 });
+}
+
+/**
+ * 押せば必ず当たる: おとあそび（高い音だけ）。
+ *
+ * 押さない合図（低い音）は出ない。拍と拍のあいだの どこで押しても、いちばん近い拍に入って
+ * 当たりになる。同じ拍で もう一度押しても「はずれ」の字は出ない（記録は extra のまま）。
+ */
+async function checkSureHitTones(page) {
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  // 合図が音の遊びなので、音の無いブラウザでは始まらない（checkRhythmL1GameFlow と同じ）。
+  if (!audioAvailable) return SKIPPED;
+  await turnSureHitOn(page, { rhythmBpm: 60, targetBeats: 5 });
+  await openActivity(page, t("tile.gonogo.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await finishReady(page);
+  // AudioContext はあるのに鳴らせない環境（音の出口が無い機械の WebKit）では、遊びは理由を出して
+  // 始まらない。見るものが無いので飛ばす。
+  await page.locator("#gameStageContent.module-rhythm, .game-unavailable").first().waitFor({ state: "visible" });
+  if ((await page.locator(".game-unavailable").count()) > 0) return SKIPPED;
+
+  // 拍に合わせず、0.43秒おきに押しつづける（1拍 1秒のあいだに2回は入る）。
+  const wrongWords = [t("rhythm.judgment.wrong"), t("rhythm.judgment.miss")];
+  const seenWords = new Set();
+  const finished = () =>
+    page.evaluate((key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "gonogo");
+      return session?.finished === true;
+    }, storageKey);
+  for (let press = 0; press < 40 && !(await finished()); press += 1) {
+    if ((await page.locator("#gameStageContent.module-rhythm").count()) === 0) break;
+    await page.locator("#gameStage").dispatchEvent("click").catch(() => {});
+    const word = await page.evaluate(() => document.querySelector(".rhythm-judgment, [data-rhythm-judgment]")?.textContent || "");
+    if (word) seenWords.add(word.trim());
+    await page.waitForTimeout(430);
+  }
+  await page.waitForFunction(
+    (key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "gonogo");
+      return session?.finished === true;
+    },
+    storageKey,
+    { timeout: 10_000 }
+  );
+  const played = await latestSession(page, "gonogo");
+  assert(played.config.sureHit === true, "The run must record that it was a sure-hit run");
+  assert(played.config.goRatio === 1, "A sure-hit run plays no hold-back tone");
+  assert(played.config.effectiveWindowMs === 500, `The window is half the beat interval, got ${played.config.effectiveWindowMs}`);
+  const beats = played.trials.filter((trial) => trial.beatIndex !== null);
+  assert(beats.length === 5, `Expected 5 judged beats, got ${beats.length}`);
+  assert(
+    beats.every((trial) => trial.judgment === "hit"),
+    `Every beat must be a hit: ${beats.map((trial) => trial.judgment).join(",")}`
+  );
+  assert(played.trials.some((trial) => trial.judgment === "extra"), "Presses outside a beat stay recorded as extra");
+  wrongWords.forEach((word) =>
+    assert(!seenWords.has(word), `A sure-hit run must never show "${word}" after a press (saw ${[...seenWords].join(" / ")})`)
+  );
+
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await latestSession(page, "gonogo");
+  assert(restored?.aborted === false, "The sure-hit run must stay a finished run after a reload");
+  assert(restored.trials.length === played.trials.length, "No trial may be dropped on reload");
 }
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。

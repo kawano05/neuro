@@ -8,8 +8,8 @@
 //      遊べたのに、次に開いたときには「完走していない回」になる（がんばりの記録からも消える）。
 
 import assert from "node:assert/strict";
-import { cranePresets, slotPresets } from "../src/lib/content.js";
-import { buildSessionLedgerRows, buildTaskCsvRows } from "../src/lib/dataExport.js";
+import { cranePresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
+import { buildRhythmCsvRows, buildSessionLedgerRows, buildTaskCsvRows } from "../src/lib/dataExport.js";
 import {
   MEASUREMENT_PROTOCOL,
   SURE_HIT_CRANE_TOLERANCE_R,
@@ -17,8 +17,11 @@ import {
   resolveCraneDifficulty,
   resolveSlotDifficulty,
   resolveSureHit,
+  sureHitRhythmWindowMs,
 } from "../src/lib/difficultyMode.js";
 import { assistedToleranceR } from "../src/lib/games/craneGeometry.js";
+import { computeEffectiveWindowMs, judgeInput, sweepExpired } from "../src/lib/games/judge.js";
+import { buildPlan, resolveParams } from "../src/lib/games/rhythm.js";
 import { evaluatePick, graspOutcome } from "../src/lib/games/pointing.js";
 import {
   SLOT_ENGINE_VERSION,
@@ -337,6 +340,147 @@ test("arm: without the mark, the wide range is not accepted (an ordinary run can
   assert.equal(restored.config.sureHit, false);
   assert.equal(restored.trials.length, 0, "広すぎる toleranceR の行は、印が無ければ通さない");
   assert.equal(restored.finished, false);
+});
+
+// ---------------------------------------------------------------------
+// おとあそび（高い音だけ）
+// ---------------------------------------------------------------------
+
+/**
+ * 遊びと同じ道筋で1回ぶんを回す。presses は、はじまりからの時刻（ミリ秒）。
+ * 拍に入った押しは hit、入らない押し（同じ拍の2回目・はじまる前）は extra、押さなかった拍は miss。
+ */
+function playGonogo(settings, presses) {
+  const params = resolveParams("gonogo", settings);
+  const windowMs = params.sureHit
+    ? sureHitRhythmWindowMs(params.bpm)
+    : computeEffectiveWindowMs(params.mode, params.bpm, settings.judgmentWindowMs);
+  const plan = buildPlan(params);
+  let remaining = plan.judgedBeats.map((beat) => ({ index: beat.index, kind: beat.kind, timeMs: beat.timeS * 1000 }));
+  const scheduled = new Map(remaining.map((beat) => [beat.index, beat.timeMs]));
+  const kinds = new Map(remaining.map((beat) => [beat.index, beat.kind]));
+  const trials = [];
+  const expire = (nowMs) => {
+    const expired = sweepExpired(nowMs, remaining, windowMs, 0);
+    const gone = new Set(expired.map((entry) => entry.beatIndex));
+    remaining = remaining.filter((beat) => !gone.has(beat.index));
+    expired.forEach((entry) => {
+      trials.push({
+        index: trials.length,
+        beatIndex: entry.beatIndex,
+        beatKind: kinds.get(entry.beatIndex),
+        scheduledMs: scheduled.get(entry.beatIndex),
+        inputMs: null,
+        rawOffsetMs: null,
+        appliedBaselineMs: 0,
+        judgment: entry.judgment,
+        excluded: false,
+      });
+    });
+  };
+  [...presses].sort((a, b) => a - b).forEach((inputMs) => {
+    expire(inputMs);
+    const result = judgeInput(inputMs, remaining, windowMs, 0);
+    if (result.beatIndex !== null) remaining = remaining.filter((beat) => beat.index !== result.beatIndex);
+    trials.push({
+      index: trials.length,
+      beatIndex: result.beatIndex,
+      beatKind: result.beatIndex !== null ? kinds.get(result.beatIndex) : null,
+      scheduledMs: result.beatIndex !== null ? scheduled.get(result.beatIndex) : null,
+      inputMs,
+      rawOffsetMs: result.raw,
+      appliedBaselineMs: 0,
+      judgment: result.judgment,
+      excluded: false,
+    });
+  });
+  expire(Number.MAX_SAFE_INTEGER);
+  return {
+    params,
+    windowMs,
+    plan,
+    session: {
+      sessionId: "sure-hit-gonogo",
+      taskType: "gonogo",
+      gameId: "gonogo",
+      participantId: "P001",
+      startedAtIso: "2026-11-24T00:00:00.000Z",
+      aborted: false,
+      finished: true,
+      config: {
+        bpm: params.bpm,
+        countInBeats: params.countInBeats,
+        targetBeats: params.targetBeats,
+        judgmentWindowMs: settings.judgmentWindowMs,
+        effectiveWindowMs: windowMs,
+        baselineOffsetMs: 0,
+        mode: params.mode,
+        goRatio: params.goRatio,
+        visualGuidance: false,
+        difficultyMode: "practice",
+        textMode: "ruby",
+        measurementReadiness: "n/a",
+        seedSequence: plan.seedSequence,
+        sureHit: params.sureHit,
+      },
+      device: {},
+      trials,
+    },
+  };
+}
+
+test("tone game: the measured run keeps its window and its no-go tones", () => {
+  const measured = resolveParams("gonogo", MEASURE_ON);
+  assert.equal(measured.sureHit, false);
+  assert.equal(measured.goRatio, rhythmPresets.gonogo.goRatio);
+  assert.equal(measured.bpm, MEASUREMENT_PROTOCOL.rhythm.gonogo.bpm);
+  // 基準をとる回（calibration）は、れんしゅうでも変えない。
+  assert.equal(resolveParams("calibration", PRACTICE_ON).sureHit, false);
+});
+
+test("tone game: there is no tone to hold back on, and the windows of neighbouring beats touch", () => {
+  const { params, windowMs, plan } = playGonogo(PRACTICE_ON, []);
+  assert.equal(params.sureHit, true);
+  assert.equal(params.goRatio, 1);
+  assert.ok(plan.judgedBeats.every((beat) => beat.kind === "go"), "押さない合図（低い音）が無い");
+  assert.equal(windowMs * 2, plan.beatIntervalS * 1000, "窓は拍の間隔の ちょうど半分");
+});
+
+test("tone game: a press anywhere between the beats is a hit, and a second press in the same beat is not a miss", () => {
+  const { plan } = playGonogo(PRACTICE_ON, []);
+  const interval = plan.beatIntervalS * 1000;
+  const first = plan.judgedBeats[0].timeS * 1000;
+  // 拍ごとに、違う場所で1回ずつ押す（拍のずっと前・ちょうど・ずっと後）。
+  const fractions = [-0.49, -0.3, 0, 0.2, 0.49];
+  const presses = plan.judgedBeats.map((beat, index) => beat.timeS * 1000 + fractions[index % fractions.length] * interval);
+  // はじまる前（カウントのあいだ）と、同じ拍の2回目。
+  const stray = [first - interval * 1.2, first + 0.05 * interval + 1];
+  const { session } = playGonogo(PRACTICE_ON, [...presses, ...stray]);
+
+  const judged = session.trials.filter((trial) => trial.beatIndex !== null);
+  assert.equal(judged.length, plan.judgedBeats.length);
+  judged.forEach((trial) => assert.equal(trial.judgment, "hit", `拍 ${trial.beatIndex}`));
+  const others = session.trials.filter((trial) => trial.beatIndex === null);
+  assert.equal(others.length, 2);
+  others.forEach((trial) => assert.equal(trial.judgment, "extra", "拍に入らない押しは extra のまま記録する"));
+  assert.ok(!session.trials.some((trial) => trial.judgment === "commission" || trial.judgment === "miss"));
+});
+
+test("tone game: a saved sure-hit run comes back whole, and the CSV says so in the last column", () => {
+  const { plan } = playGonogo(PRACTICE_ON, []);
+  const presses = plan.judgedBeats.map((beat, index) => beat.timeS * 1000 + (index % 2 ? 400 : -350));
+  const { session: source, windowMs } = playGonogo(PRACTICE_ON, presses);
+  const restored = reload(source);
+  assert.equal(restored.trials.length, source.trials.length, "試行が落ちない");
+  assert.equal(restored.aborted, false);
+  assert.equal(restored.config.sureHit, true);
+  assert.equal(restored.config.effectiveWindowMs, windowMs);
+  assert.equal(restored.config.goRatio, 1);
+  assert.equal(restored.summary.hits, plan.judgedBeats.length);
+
+  const rows = buildRhythmCsvRows([restored]);
+  assert.equal(rows[0].at(-1), "sureHit");
+  assert.ok(rows.slice(1).every((row) => row.at(-1) === true));
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

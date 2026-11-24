@@ -739,6 +739,8 @@ function sanitizeRhythmSession(session, taskType) {
     // （2026-10-21 から）。落とすと再読み込みで消え、音色の違う回を分けられない。
     // この列を持たない古い記録は null（その頃はいつも sine だったが、推測で埋めない）。
     cueTimbre: enumOr(config.cueTimbre, CUE_TIMBRES, null),
+    // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。持たない古い記録は false。
+    sureHit: config.sureHit === true,
     // どの表記で回したか。手順の説明が読めるかは成績に効きうる。
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。

@@ -198,6 +198,9 @@ export function buildRhythmCsvRows(sessions) {
       // れんしゅうの高い音だけの回は bright（2026-10-21 から）。そくていの回はいつでも sine。
       // artVersion の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
       "cueTimbre",
+      // 押せば必ず当たる回か（config.sureHit）。この回は effectiveWindowMs が拍の間隔の半分で、
+      // 押さない合図が無い（beatKind はどれも go）。cueTimbre の後ろに足す。この列より前の記録は false。
+      "sureHit",
     ],
   ];
   sessions.forEach((session) => {
@@ -229,6 +232,7 @@ export function buildRhythmCsvRows(sessions) {
         config.fxLevel ?? "",
         config.artVersion ?? "",
         config.cueTimbre ?? "",
+        config.sureHit === true,
       ]);
     });
   });

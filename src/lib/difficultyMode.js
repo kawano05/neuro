@@ -70,6 +70,18 @@ export const MEASUREMENT_PROTOCOL = {
  */
 export const SURE_HIT_CRANE_TOLERANCE_R = 300;
 
+/**
+ * 押せば必ず当たる回の、高い音だけの判定の窓（拍の前後、ミリ秒）。
+ *
+ * 拍と拍のあいだの ちょうど半分。となりの拍の窓と すきまなく つながるので、どこで押しても
+ * いちばん近い拍に入る（ふだんは 拍の間隔の 45% まで。games/judge.js の
+ * computeEffectiveWindowMs）。あわせて、この回は押さない合図（低い音）を出さない
+ * （games/rhythm.js の resolveParams が goRatio を 1 にする）。
+ */
+export function sureHitRhythmWindowMs(bpm) {
+  return 60000 / bpm / 2;
+}
+
 /** 設定値から、いまどちらの回かを決める。 */
 export function resolveDifficultyMode(settings) {
   const mode = settings?.difficultyMode;
@@ -98,7 +110,7 @@ export function cueTimbreFor(gameId, settings) {
  *
  * 設定画面と「この遊びの設定」に出す遊びも、ここから引く（settingDefinitions.js の inGame）。
  */
-export const SURE_HIT_GAMES = Object.freeze(["slot-l1", "slot-l2", "crane", "baseball"]);
+export const SURE_HIT_GAMES = Object.freeze(["slot-l1", "slot-l2", "crane", "baseball", "gonogo"]);
 
 /**
  * その回を「押せば必ず当たる」で走らせるか。
