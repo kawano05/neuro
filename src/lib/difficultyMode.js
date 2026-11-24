@@ -98,7 +98,7 @@ export function cueTimbreFor(gameId, settings) {
  *
  * 設定画面と「この遊びの設定」に出す遊びも、ここから引く（settingDefinitions.js の inGame）。
  */
-export const SURE_HIT_GAMES = Object.freeze(["slot-l1", "slot-l2", "crane"]);
+export const SURE_HIT_GAMES = Object.freeze(["slot-l1", "slot-l2", "crane", "baseball"]);
 
 /**
  * その回を「押せば必ず当たる」で走らせるか。

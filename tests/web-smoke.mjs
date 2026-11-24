@@ -128,6 +128,7 @@ const checks = [
   ["shows the eight common settings and preserves values through accessible details", checkSettingsDetails],
   ["makes every press a hit on the reels when the supporter turns sure-hit on", checkSureHitReels],
   ["grabs the prize wherever the arm is stopped when sure-hit is on", checkSureHitCrane],
+  ["makes every swing at a pitch a home run when sure-hit is on", checkSureHitBaseball],
   ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
   ["switches the supporter screens to the chosen language from the common settings", checkSupporterLanguage],
   ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
@@ -340,6 +341,45 @@ async function checkSureHitCrane(page) {
   const restored = await latestSession(page, "crane");
   assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
   assert(restored.trials.length === 3, `No trial may be dropped on reload, got ${restored.trials.length}`);
+}
+
+/**
+ * 押せば必ず当たる: ボールを打つ遊び。
+ *
+ * ボールが出ているあいだなら、いつ振ってもホームラン（ふだんは、ぴったりのときだけ）。
+ * 遊びの中の「この遊びの設定」にも切り替えがある。
+ */
+async function checkSureHitBaseball(page) {
+  await turnSureHitOn(page);
+  await openActivity(page, t("tile.baseball.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await finishReady(page);
+  await page.locator("#gameStageContent.module-baseball .bb-field").waitFor({ state: "visible" });
+
+  // 投げた直後（ボールがまだマウンドの近く）に振る。ふだんなら「ころころ」になる早さ。
+  const waitForEarlyPitch = () =>
+    page.waitForFunction(
+      () => {
+        const word = document.querySelector(".bb-word")?.dataset.word;
+        const match = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+          document.querySelector(".bb-ball")?.getAttribute("transform") || ""
+        );
+        return word === "" && match && Number(match[2]) > 408 && Number(match[2]) < 450;
+      },
+      null,
+      { timeout: 10_000 }
+    );
+  for (let swing = 1; swing <= 5; swing += 1) {
+    await waitForEarlyPitch();
+    await page.locator("#gameStage").dispatchEvent("click");
+    const word = await page.evaluate(() => document.querySelector(".bb-word")?.dataset.word || "");
+    assert(word === "baseball.word.homerun", `Swing ${swing} must be a home run in a sure-hit run, got "${word}"`);
+    const filled = await page.locator(".bb-slot.is-homerun").count();
+    assert(filled === swing, `Swing ${swing} must fill ${swing} home-run marks, got ${filled}`);
+  }
+  await waitForClass(page, "#resultView", "is-active", { timeout: 15_000 });
 }
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。

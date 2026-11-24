@@ -99,6 +99,14 @@ function beginnerGroups(gameId) {
 /** ボールを打つ遊び。速さは次の1球から効くので、その場で続けられる（live）。 */
 function baseballGroups() {
   return [
+    // 押せば必ず当たる（ボールが出ているあいだなら、いつ振ってもホームラン）。次の1球から効く。
+    // 名前・そくていで固定されるかは、タイミングの遊びと同じ表から引く。
+    {
+      key: "sureHit",
+      label: SETTING_DEFINITIONS.sureHit.label,
+      measured: SETTING_DEFINITIONS.sureHit.measured === true,
+      options: IN_GAME_CHOICES.sureHit,
+    },
     {
       key: "playPrefs.baseball.speed",
       label: { ja: "ボールの速さ", en: "Ball speed" },
