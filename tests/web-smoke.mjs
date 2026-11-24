@@ -127,6 +127,7 @@ const checks = [
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["shows the eight common settings and preserves values through accessible details", checkSettingsDetails],
   ["makes every press a hit on the reels when the supporter turns sure-hit on", checkSureHitReels],
+  ["switches sure-hit in the in-game settings and disables the range it overrides", checkSureHitGameSettings],
   ["grabs the prize wherever the arm is stopped when sure-hit is on", checkSureHitCrane],
   ["makes every swing at a pitch a home run when sure-hit is on", checkSureHitBaseball],
   ["counts every press between the tones as a hit when sure-hit is on", checkSureHitTones],
@@ -177,6 +178,31 @@ async function turnSureHitOn(page, extraSettings = {}) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 9);
+}
+
+/**
+ * 音の時計が進むか（押したあとに呼ぶ。押す前の AudioContext は止まっている）。
+ *
+ * 合図が音の遊び（高い音だけ・さかなつり）は、拍も魚も AudioContext の時刻で進む。
+ * AudioContext はあるのに時刻が進まない環境（音の出口が無い機械の WebKit）では、遊びは
+ * 始まっても先へ進まない。そこでは見るものが無いので、検査を飛ばす。
+ */
+async function audioClockAdvances(page) {
+  return page.evaluate(async () => {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return false;
+    const context = new AudioContextClass();
+    try {
+      await Promise.race([context.resume(), new Promise((resolve) => setTimeout(resolve, 500))]);
+      const before = context.currentTime;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return context.state === "running" && context.currentTime > before;
+    } catch {
+      return false;
+    } finally {
+      context.close().catch(() => {});
+    }
+  });
 }
 
 /** 保存してある、その遊びのいちばん新しい回。 */
@@ -263,6 +289,59 @@ async function checkSureHitReels(page) {
   assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
   assert(restored.trials.length === 6, `No stop may be dropped on reload, got ${restored.trials.length}`);
   assert(restored.config.sureHit === true, "The condition must survive a reload");
+}
+
+/**
+ * 押せば必ず当たる: 遊びの中の「この遊びの設定」。
+ *
+ * オンのあいだ効かない「合った」にする広さは、押せなくして理由を出す。項目が1つ増えたので、
+ * 小さい画面でも、下のボタンまで（中を送って）届くことも見る。オフにして閉じると保存される。
+ */
+async function checkSureHitGameSettings(page) {
+  await turnSureHitOn(page);
+  await openActivity(page, t("tile.slot-corner.title"));
+  await waitForActivityChoices(page, 3);
+  await openActivity(page, t("tile.slot-l1.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameSettings").click();
+  const dialog = page.locator("#gameSettingsDialog");
+  await dialog.waitFor({ state: "visible" });
+
+  const option = (key, value) => dialog.locator(`.gs-option[data-gs-key="${key}"][data-gs-value="${value}"]`);
+  assert((await option("sureHit", "true").getAttribute("aria-pressed")) === "true", "Sure-hit must show as on");
+  const widths = dialog.locator('.gs-option[data-gs-key="slotToleranceMs"]');
+  const widthCount = await widths.count();
+  assert(widthCount > 0, "The reel game must still list the match window");
+  for (let index = 0; index < widthCount; index += 1) {
+    assert(await widths.nth(index).isDisabled(), "The match window is not used while sure-hit is on, so it must be disabled");
+  }
+  assert(
+    (await dialog.locator(".gs-note.is-lock").allInnerTexts()).some((text) => text.includes("押せば必ず当たる")),
+    "The dialog must say why the window cannot be changed"
+  );
+  // 速さは、オンのあいだも変えられる。
+  assert(await dialog.locator('.gs-option[data-gs-key="slotCycleMs"]').first().isEnabled(), "Speed stays adjustable");
+
+  // 下のボタンまで届く（パネルの中を送る）。画面の外へ はみ出したままにならない。
+  const apply = dialog.locator(".gs-apply");
+  await apply.scrollIntoViewIfNeeded();
+  const box = await apply.boundingBox();
+  const viewport = page.viewportSize();
+  assert(
+    box && box.y >= 0 && box.y + box.height <= viewport.height + 1 && box.x >= 0 && box.x + box.width <= viewport.width + 1,
+    `The apply button must be reachable inside the screen: ${JSON.stringify(box)} in ${JSON.stringify(viewport)}`
+  );
+
+  // オフにすると、広さがまた選べる。閉じると保存される。
+  await option("sureHit", "false").scrollIntoViewIfNeeded();
+  await option("sureHit", "false").click();
+  assert(await dialog.locator('.gs-option[data-gs-key="slotToleranceMs"]').first().isEnabled(), "Turning sure-hit off gives the window back");
+  await dialog.locator(".gs-apply").scrollIntoViewIfNeeded();
+  await dialog.locator(".gs-apply").click();
+  await dialog.waitFor({ state: "hidden" });
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").settings, storageKey);
+  assert(saved.sureHit === false, "The choice made inside the game must be saved");
 }
 
 /**
@@ -396,6 +475,7 @@ async function checkSureHitTones(page) {
   // 合図が音の遊びなので、音の無いブラウザでは始まらない（checkRhythmL1GameFlow と同じ）。
   if (!audioAvailable) return SKIPPED;
   await turnSureHitOn(page, { rhythmBpm: 60, targetBeats: 5 });
+  if (!(await audioClockAdvances(page))) return SKIPPED;
   await openActivity(page, t("tile.gonogo.title"));
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
@@ -462,6 +542,7 @@ async function checkSureHitFishing(page) {
   const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
   if (!audioAvailable) return SKIPPED;
   await turnSureHitOn(page);
+  if (!(await audioClockAdvances(page))) return SKIPPED;
   await openActivity(page, t("tile.fishing-corner.title"));
   // さかなつり・長靴あり・「もどる」（ずっとあそぶ は出ない）。
   await waitForActivityChoices(page, 3);
@@ -2510,7 +2591,8 @@ async function checkSettingsDetails(page) {
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
   await page.locator(".status-pill").waitFor({ state: "hidden" });
   const summary = page.locator("#settingsSwitch > summary");
-  await page.locator("#hideVisualTasks").focus();
+  // よく使う設定の最後の項目（8つ目の「押せば必ず当たる」）から、Tab で次のまとまりへ。
+  await page.locator("#sureHit").focus();
   await page.keyboard.press("Tab");
   assert(await summary.evaluate((node) => document.activeElement === node), "Tab must reach the next details summary");
   await page.keyboard.press("Enter");
