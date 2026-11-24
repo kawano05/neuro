@@ -84,7 +84,7 @@ const GROUPS = [
     title: { ja: "よく使う設定", en: "Common settings" },
     // 言語は いちばん上（2026-10-02、「言語の選択を よく使う設定に」）。英語にしてしまっても、
     // 開いてすぐのところで戻せる。
-    fields: ["textMode", "fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"],
+    fields: ["textMode", "fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks", "sureHit"],
   },
   {
     id: "switch",

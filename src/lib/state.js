@@ -222,6 +222,10 @@ export const defaultState = {
     rhythmBpm: null,
     countInBeats: null,
     targetBeats: null,
+    // 押せば必ず当たる（2026-11-04、訪問先の学校で頼まれた）。れんしゅうの回だけ効き、
+    // 当たりの広さなどの数値を、どこで押しても当たる大きさにする（difficultyMode.js の
+    // resolveSureHit）。既定はオフ。走らせた回は session.config.sureHit に残る。
+    sureHit: false,
     // スロット型課題の練習条件。測定時は difficultyMode.js の slot-v1 固定値を使う。
     slotCycleMs: 3200,
     slotToleranceMs: 220,
@@ -1371,6 +1375,7 @@ export function sanitizeState(candidate) {
         MAX_BASELINE_OFFSET_MS,
         true
       ),
+      sureHit: booleanOr(settings.sureHit, fallback.settings.sureHit),
       rhythmBpm: nullableNumberInRange(settings.rhythmBpm, null, 20, 240, true),
       countInBeats: nullableNumberInRange(settings.countInBeats, null, 1, 16, true),
       targetBeats: nullableNumberInRange(settings.targetBeats, null, 1, 200, true),

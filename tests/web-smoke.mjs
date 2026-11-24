@@ -125,7 +125,8 @@ const checks = [
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["starts a cue task once suspended sound comes back, and retries on the next press", checkCueTasksWaitForSuspendedSound],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
-  ["shows the seven common settings and preserves values through accessible details", checkSettingsDetails],
+  ["shows the eight common settings and preserves values through accessible details", checkSettingsDetails],
+  ["makes every press a hit on the reels when the supporter turns sure-hit on", checkSureHitReels],
   ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
   ["switches the supporter screens to the chosen language from the common settings", checkSupporterLanguage],
   ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
@@ -156,6 +157,108 @@ const checks = [
   ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
   ["hands the device to the next participant after an export, keeping the newly typed ID", checkHandOverAfterExport]
 ];
+
+// 「押せば必ず当たる」（settings.sureHit）を入れて、ページを読み直す。
+async function turnSureHitOn(page, extraSettings = {}) {
+  await page.evaluate(
+    ({ key, extra }) => {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      saved.settings = { ...(saved.settings || {}), sureHit: true, ...extra };
+      localStorage.setItem(key, JSON.stringify(saved));
+    },
+    { key: storageKey, extra: extraSettings }
+  );
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+}
+
+/** 保存してある、その遊びのいちばん新しい回。 */
+async function latestSession(page, gameId) {
+  return page.evaluate(
+    ({ key, id }) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      return [...(state.sessions || [])].reverse().find((item) => item.gameId === id) || null;
+    },
+    { key: storageKey, id: gameId }
+  );
+}
+
+/**
+ * 押せば必ず当たる（2026-11-04 に訪問先で頼まれた段階）: えあわせ。
+ *
+ * どこで押しても当たりになり、止まった帯の真ん中には ねらいの絵が出る。記録には、押したときに
+ * 実際に真ん中にあった絵が残る。回を終えて読み直しても、試行は1つも落ちない（sanitize が
+ * 広い許容幅を受け取れないと、次に開いたとき「完走していない回」になる）。
+ */
+async function checkSureHitReels(page) {
+  await turnSureHitOn(page, { slotL1Rounds: 4 });
+  await openActivity(page, t("tile.slot-corner.title"));
+  await waitForActivityChoices(page, 3);
+  await openActivity(page, t("tile.slot-l1.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await finishReady(page);
+  await page.locator(".slot-task[data-game-id='slot-l1']").waitFor({ state: "visible" });
+
+  // 押す間は ばらばら（すぐ・少し待って・長く待って）。ねらいを見て合わせることはしない。
+  const waits = [340, 900, 1500, 420];
+  for (let press = 0; press < waits.length; press += 1) {
+    await page.locator(".slot-reel.is-active").waitFor({ state: "visible", timeout: 5_000 });
+    await page.waitForTimeout(waits[press]);
+    const target = await page.locator(".slot-target .slot-symbol").getAttribute("data-symbol");
+    await page.locator("#gameStage").click();
+    await page.waitForFunction(
+      ({ key, count }) => {
+        const state = JSON.parse(localStorage.getItem(key) || "{}");
+        const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l1");
+        return session?.trials?.length === count;
+      },
+      { key: storageKey, count: press + 1 }
+    );
+    if (press < waits.length - 1) {
+      // 止まった帯の真ん中（5コマの3つ目）は、ねらいの絵。
+      const shown = await page
+        .locator(".slot-reel.is-stopped .slot-track-cell:nth-child(3) .slot-symbol")
+        .getAttribute("data-symbol");
+      assert(shown === target, `A sure-hit stop must show the target (${target}) on the line, got ${shown}`);
+      const offset = await page
+        .locator(".slot-reel.is-stopped .slot-reel-track")
+        .evaluate((track) => Number(track.style.getPropertyValue("--slot-track-offset")));
+      assert(Math.abs(offset) < 0.001, `The target must sit exactly on the line, offset ${offset}`);
+    }
+  }
+
+  await page.locator(".game-result, #gameResult, .result-screen").first().waitFor({ state: "visible", timeout: 8_000 }).catch(() => {});
+  await page.waitForFunction(
+    ({ key }) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l1");
+      return session?.finished === true;
+    },
+    { key: storageKey },
+    { timeout: 8_000 }
+  );
+  const played = await latestSession(page, "slot-l1");
+  assert(played.config.sureHit === true, "The run must record that it was a sure-hit run");
+  assert(played.config.toleranceMs === played.config.cycleMs, "A sure-hit reel run uses one full turn as the window");
+  assert(played.trials.length === 4, `Expected 4 stops, got ${played.trials.length}`);
+  assert(
+    played.trials.every((trial) => trial.judgment === "hit"),
+    `Every press must be a hit: ${played.trials.map((trial) => trial.judgment).join(",")}`
+  );
+
+  // 読み直しても、回は完走のまま、試行も落ちない。
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await latestSession(page, "slot-l1");
+  assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
+  assert(restored.trials.length === 4, `No stop may be dropped on reload, got ${restored.trials.length}`);
+  assert(restored.config.sureHit === true, "The condition must survive a reload");
+}
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。
 //   SMOKE_PROJECTS=chromium-desktop SMOKE_CHECKS=color,result node tests/web-smoke.mjs
@@ -2126,9 +2229,9 @@ async function checkSettingsDetails(page) {
   assert(
     JSON.stringify(visibleIds) ===
       JSON.stringify(
-        ["textMode", "fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"].sort()
+        ["textMode", "fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks", "sureHit"].sort()
       ),
-    "Only the seven common settings (with the language) should be visible initially"
+    "Only the eight common settings (with the language) should be visible initially"
   );
   assert((await page.locator("#settings details[open]").count()) === 0, "Details should start collapsed");
   // よく使う設定は囲んで先に出す。設定の画面では枠が動かないので、押せない入力ドックと

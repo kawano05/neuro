@@ -122,6 +122,11 @@ function baseballGroups() {
  * （tests/settings-definitions.test.mjs）。null は「ふつう」＝ content.js のプリセット。
  */
 const IN_GAME_CHOICES = {
+  // 押せば必ず当たる（difficultyMode.js の resolveSureHit）。入れてある遊びにだけ出る。
+  sureHit: [
+    [false, { ja: "オフ", en: "Off" }],
+    [true, { ja: "オン", en: "On" }],
+  ],
   // リールが1周する時間（ミリ秒）。大きいほど ゆっくり。ふつう＝slotPresets.cycleMs。
   // 「とても ゆっくり」は 2026-10-21 に足した（施設の試用で「もっと遅くできる設定が欲しい」）。
   slotCycleMs: [

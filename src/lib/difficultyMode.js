@@ -79,6 +79,30 @@ export function cueTimbreFor(gameId, settings) {
 }
 
 /**
+ * 「押せば必ず当たる」（settings.sureHit）を入れてある遊び。
+ *
+ * 2026-11-04 に訪問先の学校で頼まれた。「どの遊びも、押したら必ず当たりになる段階が
+ * ほしい」——押すことはできるが、時刻を合わせるのは まだ難しい人のための段階。
+ * 判定の式は変えず、当たりの広さなどの数値を、どこで押しても当たる大きさにする
+ * （それぞれの resolve…Difficulty）。数値だけで届かないところ（合図の前に押した、など）は
+ * 遊びの側で扱う。押した時刻・位置などの生の値は、そのまま記録する。
+ *
+ * 設定画面と「この遊びの設定」に出す遊びも、ここから引く（settingDefinitions.js の inGame）。
+ */
+export const SURE_HIT_GAMES = Object.freeze(["slot-l1", "slot-l2"]);
+
+/**
+ * その回を「押せば必ず当たる」で走らせるか。
+ *
+ * そくていの回では必ず false（MUST）。そくていは protocol の値で走ることが条件そのもの。
+ * どちらだったかは session.config.sureHit に残し、CSV にも出す
+ * （docs/rules/measurement-invariance.md の「記録」）。
+ */
+export function resolveSureHit(gameId, settings) {
+  return SURE_HIT_GAMES.includes(gameId) && !isMeasurementMode(settings) && settings?.sureHit === true;
+}
+
+/**
  * 「エンドレス」の回か。
  *
  * 決まった回数・決まった時間で終わらず、続けるほど難しくなる。終わりは
@@ -188,12 +212,17 @@ export function resolveSlotDifficulty(gameId, settings, preset, practiceSeed) {
     ? protocolValues.rounds
     : settings?.[roundsKey] ?? preset.rounds;
   const maximumUnambiguousTolerance = cycleMs / (preset.symbolCount * 2);
+  // 押せば必ず当たる回: 「合った」にする広さを1周ぶんにする。目標の絵は1周に1回 通るので、
+  // どこで押しても、いちばん近い通過から1周より離れない（最初の通過の前に押しても同じ）。
+  // となりの絵と取り違えない上限は、この回だけ外す（games/slotJudge.js の wideTolerance）。
+  const sureHit = resolveSureHit(gameId, settings);
   return {
     ...preset,
     cycleMs,
-    toleranceMs: Math.min(requestedToleranceMs, maximumUnambiguousTolerance),
+    toleranceMs: sureHit ? cycleMs : Math.min(requestedToleranceMs, maximumUnambiguousTolerance),
     rounds,
     seed: measuring ? protocolValues.seed : practiceSeed,
+    sureHit,
   };
 }
 

@@ -1045,9 +1045,12 @@ test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
     // 画面に出した1コマの高さ（2026-09-28、games/slotFit.js）。その後ろ。
     "reelCellPx",
     "artVersion",
+    // 押せば必ず当たる回か（2026-11-24、difficultyMode.js の resolveSureHit）。いちばん後ろ。
+    "sureHit",
   ]);
-  assert.equal(rows[0].length, 34);
-  assert.equal(rows[1].length, 34);
+  assert.equal(rows[0].length, 35);
+  assert.equal(rows[1].length, 35);
+  assert.deepEqual(columnOf(rows, "sureHit"), [false], "sureHit を持たない古い記録は false");
   // 演出の強さ・1コマの高さ・見え方の版を持たない古い記録は空欄。
   for (const name of ["fxLevel", "reelCellPx", "artVersion"]) {
     assert.deepEqual(columnOf(rows, name), [""], `${name} を持たない古い記録は空欄`);
