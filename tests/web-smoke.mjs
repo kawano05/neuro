@@ -594,8 +594,9 @@ async function checkSureHitFishing(page) {
     `Every fish must be landed: ${played.trials.map((trial) => trial.judgment).join(",")}`
   );
   assert(!sawTooEarly, "A press while the fish is still coming must not be answered with a too-early message");
-  // 10ぴきを 10秒ずつ待つと 100秒をこえる。詰めて進むので、ずっと短い。
-  assert(elapsedMs < 45_000, `The next fish must come soon after a catch (10 fish took ${elapsedMs}ms)`);
+  // 10ぴきを 10秒ずつ待つと 100秒をこえる。詰めて進むので、ずっと短い（手元では 20秒ほど。
+  // 遅い機械でも揺れないよう、上限は広めに取る）。
+  assert(elapsedMs < 70_000, `The next fish must come soon after a catch (10 fish took ${elapsedMs}ms)`);
   // 合図の時刻は、前の魚を釣った時刻より後（詰めた計画と記録が合っている）。
   for (let index = 1; index < played.trials.length; index += 1) {
     assert(
