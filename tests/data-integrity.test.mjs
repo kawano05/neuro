@@ -1110,9 +1110,10 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // ＋ endless ＋ sweepMs。
   // ＋ endless ＋ sweepMs ＋ endlessProtocolVersion ＋ endReason。
   // ＋ fxLevel（演出の強さ。2026-09-28）。
-  // ＋ artVersion（見え方の版。2026-09-30、いちばん後ろ）。
-  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 7);
-  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 7);
+  // ＋ artVersion（見え方の版。2026-09-30）。
+  // ＋ sureHit（押せば必ず当たる回か。2026-11-24、いちばん後ろ）。
+  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 8);
+  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 8);
   assert.equal(scanRows[0][17], "judgment");
   assert.equal(scanRows[1][17], "grip");
   assert.equal(scanRows[0][18], "audioGuidance");
@@ -1143,11 +1144,12 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、toleranceR
   // だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
   assert.equal(scanRows[0][29], "sweepMs");
-  assert.deepEqual(scanRows[0].slice(-3), ["endReason", "fxLevel", "artVersion"]);
+  // ＋ sureHit（押せば必ず当たる回か。2026-11-24、いちばん後ろ）。
+  assert.deepEqual(scanRows[0].slice(-4), ["endReason", "fxLevel", "artVersion", "sureHit"]);
   assert.equal(scanRows[1][29], "");
   // 終了理由を持たない回は空欄（「分からない」と「予定どおり」は違う）。
-  // 演出の強さ・見え方の版を持たない古い記録も空欄。
-  assert.deepEqual(scanRows[1].slice(-3), ["", "", ""]);
+  // 演出の強さ・見え方の版を持たない古い記録も空欄。sureHit を持たない古い記録は false。
+  assert.deepEqual(scanRows[1].slice(-4), ["", "", "", false]);
 
   const rtRows = buildTaskCsvRows(
     [

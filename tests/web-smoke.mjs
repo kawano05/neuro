@@ -127,6 +127,7 @@ const checks = [
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
   ["shows the eight common settings and preserves values through accessible details", checkSettingsDetails],
   ["makes every press a hit on the reels when the supporter turns sure-hit on", checkSureHitReels],
+  ["grabs the prize wherever the arm is stopped when sure-hit is on", checkSureHitCrane],
   ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
   ["switches the supporter screens to the chosen language from the common settings", checkSupporterLanguage],
   ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
@@ -258,6 +259,87 @@ async function checkSureHitReels(page) {
   assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
   assert(restored.trials.length === 4, `No stop may be dropped on reload, got ${restored.trials.length}`);
   assert(restored.config.sureHit === true, "The condition must survive a reload");
+}
+
+/**
+ * 押せば必ず当たる: アーム。
+ *
+ * どこで止めても つかめる。アームは降りながら ねらいの上へ寄る（見た目だけで、記録は止めた
+ * 場所のまま）。外したところで終わる「ずっとあそぶ」の入口は、この回には出さない。
+ */
+async function checkSureHitCrane(page) {
+  await turnSureHitOn(page, { craneTargetTrials: 3, craneSweepMs: 1700 });
+  await openActivity(page, t("tile.crane-corner.title"));
+  // アームと「もどる」だけ（ずっとあそぶ は出ない）。
+  await waitForActivityChoices(page, 2);
+  assert(
+    (await page.getByRole("button", { name: t("tile.crane-endless.title"), exact: true }).count()) === 0,
+    "The endless arm entry must not be offered in a sure-hit run"
+  );
+  await openActivity(page, t("tile.crane.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await finishReady(page);
+
+  // 押す間は ばらばら。ねらいの上で止めることはしない。
+  const waits = [
+    [420, 1300],
+    [1900, 450],
+    [700, 2300],
+  ];
+  for (let trial = 0; trial < waits.length; trial += 1) {
+    await waitForCraneStatus(page, "横に動きます");
+    assert(await page.locator(".crane-ring").isHidden(), "The grab ring is not drawn when the whole floor counts");
+    await page.waitForTimeout(waits[trial][0]);
+    await page.locator("#gameStage").click();
+    await waitForCraneStatus(page, "奥に動きます");
+    await page.waitForTimeout(waits[trial][1]);
+    await page.locator("#gameStage").click();
+    await page.waitForFunction(
+      ({ key, count }) => {
+        const state = JSON.parse(localStorage.getItem(key) || "{}");
+        const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "crane");
+        return session?.trials?.length === count;
+      },
+      { key: storageKey, count: trial + 1 },
+      { timeout: 6_000 }
+    );
+    // つかんだ瞬間、アームは ねらい（景品）の上にいる。
+    const gap = await page.evaluate(() => {
+      const claw = document.querySelector(".crane-claw");
+      const prize = document.querySelector(".crane-prize");
+      return Math.abs(parseFloat(claw.style.left) - parseFloat(prize.style.left));
+    });
+    assert(gap < 0.5, `The arm must close over the prize (horizontal gap ${gap}%)`);
+  }
+
+  await page.waitForFunction(
+    ({ key }) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "crane");
+      return session?.finished === true;
+    },
+    { key: storageKey },
+    { timeout: 10_000 }
+  );
+  const played = await latestSession(page, "crane");
+  assert(played.config.sureHit === true, "The run must record that it was a sure-hit run");
+  assert(played.config.endless === false, "A sure-hit run is never an endless run");
+  assert(
+    played.trials.every((trial) => trial.judgment === "grip"),
+    `Every stop must be a grab: ${played.trials.map((trial) => trial.judgment).join(",")}`
+  );
+  assert(
+    played.trials.some((trial) => trial.distance > 15),
+    "The record keeps where the arm was really stopped (not moved onto the target)"
+  );
+
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await latestSession(page, "crane");
+  assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
+  assert(restored.trials.length === 3, `No trial may be dropped on reload, got ${restored.trials.length}`);
 }
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。

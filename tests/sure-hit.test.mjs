@@ -8,13 +8,18 @@
 //      遊べたのに、次に開いたときには「完走していない回」になる（がんばりの記録からも消える）。
 
 import assert from "node:assert/strict";
-import { slotPresets } from "../src/lib/content.js";
+import { cranePresets, slotPresets } from "../src/lib/content.js";
+import { buildSessionLedgerRows, buildTaskCsvRows } from "../src/lib/dataExport.js";
 import {
   MEASUREMENT_PROTOCOL,
+  SURE_HIT_CRANE_TOLERANCE_R,
   SURE_HIT_GAMES,
+  resolveCraneDifficulty,
   resolveSlotDifficulty,
   resolveSureHit,
 } from "../src/lib/difficultyMode.js";
+import { assistedToleranceR } from "../src/lib/games/craneGeometry.js";
+import { evaluatePick, graspOutcome } from "../src/lib/games/pointing.js";
 import {
   SLOT_ENGINE_VERSION,
   SLOT_PROTOCOL_VERSION,
@@ -219,6 +224,119 @@ test("reel: an ordinary run is stored as before (sureHit false, the narrow limit
   assert.equal(restored.config.sureHit, false);
   assert.ok(restored.config.toleranceMs <= restored.config.cycleMs / 12);
   assert.equal(buildSlotCsvRows([restored])[1]?.at(-1) ?? false, false);
+});
+
+// ---------------------------------------------------------------------
+// アーム
+// ---------------------------------------------------------------------
+
+/** 床の四すみ・まん中・ねらいの真上。ねらいは遊びが引く範囲（craneGeometry.js の pickTarget）の端。 */
+const CRANE_PICKS = [
+  { target: { x: 20, y: 22 }, selected: { x: 100, y: 100 } },
+  { target: { x: 80, y: 78 }, selected: { x: 0, y: 0 } },
+  { target: { x: 20, y: 78 }, selected: { x: 100, y: 0 } },
+  { target: { x: 80, y: 22 }, selected: { x: 0, y: 100 } },
+  { target: { x: 50, y: 50 }, selected: { x: 50, y: 50 } },
+];
+
+function makeSureHitCraneSession() {
+  const config = resolveCraneDifficulty({ ...PRACTICE_ON, craneTargetTrials: CRANE_PICKS.length }, cranePresets);
+  const trials = CRANE_PICKS.map(({ target, selected }, index) => {
+    // 遊びと同じ道筋: アシストを通した広さで判定する（外しつづけても広がらない）。
+    const toleranceR = assistedToleranceR(config.toleranceR, index, config.assistMaxSteps, config.assistStepRatio);
+    const result = evaluatePick(selected, { ...target, r: toleranceR });
+    return {
+      index,
+      targetX: target.x,
+      targetY: target.y,
+      toleranceR,
+      sweepMs: config.sweepMs,
+      selectedX: selected.x,
+      selectedY: selected.y,
+      dx: result.dx,
+      dy: result.dy,
+      distance: result.distance,
+      xPhaseMs: 400 + index * 130,
+      yPhaseMs: 900 + index * 70,
+      judgment: graspOutcome(result.distance, toleranceR),
+    };
+  });
+  return {
+    sessionId: "sure-hit-crane",
+    taskType: "scan",
+    gameId: "crane",
+    participantId: "P001",
+    startedAtIso: "2026-11-24T00:00:00.000Z",
+    endedAtIso: "2026-11-24T00:01:00.000Z",
+    aborted: false,
+    finished: true,
+    endReason: "planned",
+    config: {
+      ...config,
+      endless: false,
+      endlessProtocolVersion: null,
+      difficultyMode: "practice",
+      measurementReadiness: "n/a",
+      textMode: "ruby",
+      targetSequence: CRANE_PICKS.map(({ target }) => target),
+    },
+    device: {},
+    trials,
+    summary: null,
+  };
+}
+
+test("arm: the measured run keeps the protocol values and stays off", () => {
+  const measured = resolveCraneDifficulty(MEASURE_ON, cranePresets);
+  assert.equal(measured.sureHit, false);
+  assert.equal(measured.toleranceR, MEASUREMENT_PROTOCOL.crane.toleranceR);
+  assert.equal(measured.sweepMs, MEASUREMENT_PROTOCOL.crane.sweepMs);
+  const ordinary = resolveCraneDifficulty({ ...PRACTICE_ON, sureHit: false, craneToleranceR: 24 }, cranePresets);
+  assert.equal(ordinary.sureHit, false);
+  assert.equal(ordinary.toleranceR, 24, "オフなら支援者の広さのまま");
+});
+
+test("arm: every stop is a grab, even from the far corner of the floor", () => {
+  assert.ok(SURE_HIT_CRANE_TOLERANCE_R * 0.5 > Math.hypot(100, 100), "半分が、床の対角より大きい");
+  const session = makeSureHitCraneSession();
+  assert.equal(session.config.sureHit, true);
+  assert.equal(session.config.toleranceR, SURE_HIT_CRANE_TOLERANCE_R);
+  session.trials.forEach((trial) => {
+    assert.equal(trial.judgment, "grip", `試行 ${trial.index}（距離 ${trial.distance.toFixed(1)}）`);
+    assert.equal(trial.toleranceR, SURE_HIT_CRANE_TOLERANCE_R, "アシストで動かない");
+  });
+});
+
+test("arm: a saved sure-hit run comes back whole, and the CSVs say so in the last column", () => {
+  const source = makeSureHitCraneSession();
+  const restored = reload(source);
+  assert.equal(restored.trials.length, source.trials.length, "試行が落ちない");
+  assert.equal(restored.finished, true);
+  assert.equal(restored.aborted, false);
+  assert.equal(restored.config.sureHit, true);
+  assert.equal(restored.config.toleranceR, SURE_HIT_CRANE_TOLERANCE_R);
+  assert.equal(restored.summary.grips, source.trials.length);
+  // 止めた場所は、そのまま残る（ねらいへ寄せた値に書き換えない）。
+  assert.deepEqual(
+    restored.trials.map((trial) => [trial.selectedX, trial.selectedY]),
+    CRANE_PICKS.map(({ selected }) => [selected.x, selected.y])
+  );
+
+  const rows = buildTaskCsvRows([restored], "scan");
+  assert.equal(rows[0].at(-1), "sureHit");
+  assert.ok(rows.slice(1).every((row) => row.at(-1) === true));
+  const ledger = buildSessionLedgerRows([restored]);
+  assert.equal(ledger[0].at(-1), "sureHit");
+  assert.equal(ledger[1].at(-1), true);
+});
+
+test("arm: without the mark, the wide range is not accepted (an ordinary run cannot claim it)", () => {
+  const source = makeSureHitCraneSession();
+  delete source.config.sureHit;
+  const restored = reload(source);
+  assert.equal(restored.config.sureHit, false);
+  assert.equal(restored.trials.length, 0, "広すぎる toleranceR の行は、印が無ければ通さない");
+  assert.equal(restored.finished, false);
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

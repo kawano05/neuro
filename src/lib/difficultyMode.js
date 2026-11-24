@@ -61,6 +61,15 @@ export const MEASUREMENT_PROTOCOL = {
   },
 };
 
+/**
+ * 押せば必ず当たる回の、アームの「つかめる広さ」（床の上の半径）。
+ *
+ * つかめるのは、ねらいからの距離が この半分まで（games/pointing.js の graspOutcome）。
+ * 床は 0〜100 の正方形で、いちばん遠い2点の距離は対角の約 141.4。半分の 150 がそれより
+ * 大きいので、どこで止めても「つかんだ」になる。
+ */
+export const SURE_HIT_CRANE_TOLERANCE_R = 300;
+
 /** 設定値から、いまどちらの回かを決める。 */
 export function resolveDifficultyMode(settings) {
   const mode = settings?.difficultyMode;
@@ -89,7 +98,7 @@ export function cueTimbreFor(gameId, settings) {
  *
  * 設定画面と「この遊びの設定」に出す遊びも、ここから引く（settingDefinitions.js の inGame）。
  */
-export const SURE_HIT_GAMES = Object.freeze(["slot-l1", "slot-l2"]);
+export const SURE_HIT_GAMES = Object.freeze(["slot-l1", "slot-l2", "crane"]);
 
 /**
  * その回を「押せば必ず当たる」で走らせるか。
@@ -242,14 +251,20 @@ export function resolveCraneDifficulty(settings, preset) {
       // 常に素の toleranceR を返す（games/craneGeometry.js）。
       assistMaxSteps: 0,
       audioGuidance: false,
+      sureHit: false,
     };
   }
+  const sureHit = resolveSureHit("crane", settings);
   return {
     ...preset,
     sweepMs: settings?.craneSweepMs ?? preset.sweepMs,
-    toleranceR: settings?.craneToleranceR ?? preset.toleranceR,
+    // 押せば必ず当たる回: つかめる広さを、床のどこで止めても届く大きさにする
+    // （SURE_HIT_CRANE_TOLERANCE_R）。これ以上は広げないので、アシストも切る。
+    toleranceR: sureHit ? SURE_HIT_CRANE_TOLERANCE_R : settings?.craneToleranceR ?? preset.toleranceR,
+    ...(sureHit ? { assistMaxSteps: 0 } : {}),
     targetTrials: settings?.craneTargetTrials ?? preset.targetTrials,
     audioGuidance: settings?.craneAudioGuidance === true,
+    sureHit,
   };
 }
 

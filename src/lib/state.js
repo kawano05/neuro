@@ -840,7 +840,16 @@ function sanitizeDevice(device) {
   };
 }
 
-function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs) {
+/**
+ * つかめる広さ（toleranceR）の上限。ふだんは 100（床の1辺）。押せば必ず当たる回
+ * （config.sureHit）は、床のどこで止めても届く大きさで走る（difficultyMode.js の
+ * SURE_HIT_CRANE_TOLERANCE_R）ので、その回だけ広く受け取る。ここで落とすと、遊べた回が
+ * 読み直したときに「完走していない回」になる。
+ */
+const MAX_SCAN_TOLERANCE_R = 100;
+const MAX_SURE_HIT_SCAN_TOLERANCE_R = 400;
+
+function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs, maxToleranceR = MAX_SCAN_TOLERANCE_R) {
   if (!isRecord(trial)) return null;
   const judgment = enumOr(trial.judgment, new Set(["grip", "slip", "miss"]), null);
   if (!judgment) return null;
@@ -866,7 +875,7 @@ function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs) {
     trial.selectedY < 0 ||
     trial.selectedY > 100 ||
     trial.toleranceR <= 0 ||
-    trial.toleranceR > 100 ||
+    trial.toleranceR > maxToleranceR ||
     trial.xPhaseMs < 0 ||
     trial.yPhaseMs < 0
   ) return null;
@@ -926,9 +935,12 @@ function summarizeScanTrials(trials) {
 function sanitizeScanSession(session) {
   if (!isRecord(session) || !SCAN_GAME_IDS.has(session.gameId)) return null;
   const config = isRecord(session.config) ? session.config : {};
+  // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。持たない古い記録は false。
+  const sureHit = config.sureHit === true;
   const sanitizedConfig = {
     sweepMs: numberInRange(config.sweepMs, 2400, 400, 10_000, true),
-    toleranceR: numberInRange(config.toleranceR, 12, 1, 50),
+    toleranceR: numberInRange(config.toleranceR, 12, 1, sureHit ? MAX_SURE_HIT_SCAN_TOLERANCE_R : 50),
+    sureHit,
     targetTrials: numberInRange(config.targetTrials, 5, 1, 100, true),
     graspAnimMs: numberInRange(config.graspAnimMs, 1200, 100, 10_000, true),
     // その回、目標の通過音を鳴らしていたか（settings.craneAudioGuidance）。
@@ -978,8 +990,14 @@ function sanitizeScanSession(session) {
   };
   const rawTrials = Array.isArray(session.trials) ? session.trials : null;
   const slots =
-    rawTrials?.map((trial, index) => sanitizeScanTrial(trial, index, sanitizedConfig.sweepMs)) ||
-    [];
+    rawTrials?.map((trial, index) =>
+      sanitizeScanTrial(
+        trial,
+        index,
+        sanitizedConfig.sweepMs,
+        sureHit ? MAX_SURE_HIT_SCAN_TOLERANCE_R : MAX_SCAN_TOLERANCE_R
+      )
+    ) || [];
   const trials = slots.filter(Boolean).slice(0, MAX_TRIALS_PER_SESSION);
   const completedNormally =
     session.finished === true &&

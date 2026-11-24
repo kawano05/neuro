@@ -110,6 +110,10 @@ export const SESSION_LEDGER_HEADERS = Object.freeze([
   // 見え方の版（config.artVersion。その回に画面へ出した絵の版、src/lib/artVersion.js）。
   // fxLevel の後ろに足す。版を持たない課題と、この列より前の記録は空欄。
   "artVersion",
+  // 押せば必ず当たる回か（config.sureHit。difficultyMode.js の resolveSureHit）。この回は
+  // どこで押しても当たりになるので、成績をほかの回と同じ分布に混ぜない。
+  // 末尾に足す（列位置を動かさない）。この列より前の記録は false。
+  "sureHit",
 ]);
 
 function deviceColumns(session) {
@@ -263,6 +267,7 @@ export function buildSessionLedgerRows(sessions) {
       JSON.stringify(session.summary ?? {}),
       session.config?.fxLevel ?? "",
       session.config?.artVersion ?? "",
+      session.config?.sureHit === true,
     ]);
   });
   return rows;
@@ -312,6 +317,10 @@ export function buildTaskCsvRows(sessions, taskType) {
         // 見え方の版（config.artVersion）。れんしゅうの回の絵が変わった前後を分ける。
         // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
         "artVersion",
+        // 押せば必ず当たる回か（config.sureHit）。この回は toleranceR が床より広く、どこで
+        // 止めても grip になる。selectedX・selectedY・distance は止めた場所のまま。
+        // artVersion の後ろに足す。この列より前の記録は false。
+        "sureHit",
       ],
     ];
     sessions
@@ -347,6 +356,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.endReason ?? "",
             session.config?.fxLevel ?? "",
             session.config?.artVersion ?? "",
+            session.config?.sureHit === true,
           ]);
         });
       });
