@@ -36,6 +36,7 @@ import {
   resolveDifficultyMode,
   resolveEndlessMode,
   resolveFishingDifficulty,
+  resolveSureHit,
 } from "../difficultyMode.js";
 import { FISHING_ART_VERSION, fishingBoatSvg, fishingCatchSvg, fishingSeaHtml, fishingSkyHtml } from "../art/fishingWorldArt.js";
 import { generateGoNoGoSequence } from "./judge.js";
@@ -127,6 +128,12 @@ function formatRemaining(ms) {
  * （窓を狭めるのではなく、速いときに上乗せするだけにしている）。
  */
 const SPEED_BONUS_CM = 10;
+
+/**
+ * 押せば必ず当たる回で、釣れてから次の魚の枠が始まるまでの間（巻き上げを見せる時間）。
+ * 実際の間は、これに音の予約の先読み（audio.js の 0.3 秒）が足される。
+ */
+const SURE_HIT_NEXT_FISH_MS = 800;
 
 /** ボーナス判定に自己中央値を使いはじめるまでに必要な hit 数。 */
 const SPEED_BONUS_MIN_SAMPLES = 3;
@@ -280,7 +287,10 @@ export function createFishingGame(gameId) {
   const worldArt = showsWorldArt(resolveDifficultyMode(ctx.settings), practiceArtFor(ctx.settings, gameId));
   // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
   // 返すので、測る回の長さは protocol のまま動かない。
-  config.endless = resolveEndlessMode(ctx.settings, ctx.endless);
+  //
+  // 押せば必ず当たる回も false。「ずっとあそぶ」は外したところで終わる遊び方なので、外れない
+  // 回では終わりが来ない（その入口はホームにも出さない。views/home.js）。
+  config.endless = !resolveSureHit(gameId, ctx.settings) && resolveEndlessMode(ctx.settings, ctx.endless);
   // 難度の上げ方の版（difficultyMode.js）。定数を変えると回どうしを
   // 比べられなくなるので、どの版で走ったかを残す。
   config.endlessProtocolVersion = config.endless ? ENDLESS_PROTOCOL_VERSION : null;
@@ -473,6 +483,12 @@ export function createFishingGame(gameId) {
       setProgress(t("progress.endlessCount", { n: session ? session.trials.length + 1 : 1 }));
       return;
     }
+    // 押せば必ず当たる回は、魚の数で進む（釣るたびに次の魚が前へ詰まるので、時計では数えない）。
+    if (config.sureHit) {
+      const done = session ? session.trials.length : 0;
+      setProgress(t("progress.remainingCount", { n: Math.max(0, trialsPlan.length - done) }));
+      return;
+    }
     setProgress(t("progress.remainingTime", { time: formatRemaining(sessionEndMs - nowRelativeMs) }));
   }
 
@@ -577,6 +593,61 @@ export function createFishingGame(gameId) {
     return typeof planned?.limitMs === "number" ? planned.limitMs : config.limitMs;
   }
 
+  /**
+   * その枠が終わる時刻。ふだんは、アタリが終わる時刻（合図＋受付時間）。
+   * 押せば必ず当たる回で釣れた枠だけ、そこで早く終わる（bringNextFishForward が endMs を置く）。
+   */
+  function slotEndMs(planned) {
+    return typeof planned.endMs === "number" ? planned.endMs : planned.cueMs + limitMsOf(planned);
+  }
+
+  /**
+   * 押せば必ず当たる回: 釣れたら、残りの枠を前へ詰めて、すぐ次の魚を寄せる。
+   *
+   * この回のアタリは10秒 続く。詰めないと、すぐ釣れたあとの9秒あまり、押しても何も起きない
+   * 海を見て待つことになる。予約してあるアタリの音も、詰めた時刻で予約し直す（音と魚の
+   * 位置は、いつも同じ計画から出す）。釣れた枠の記録（合図の時刻・受付時間・押した時刻）は
+   * 変えない。
+   */
+  function bringNextFishForward() {
+    const current = trialsPlan[currentIndex];
+    if (!current) return;
+    const nowMs = toSessionRelativeMs(audio.scheduler.now() * 1000);
+    const rest = trialsPlan.slice(currentIndex + 1);
+    if (!rest.length) {
+      // 最後の魚。巻き上げを見せてから終わる。
+      current.endMs = Math.min(slotEndMs(current), nowMs + SURE_HIT_NEXT_FISH_MS + 300);
+      sessionEndMs = current.endMs;
+      return;
+    }
+    const firstStartMs = rest[0].startMs;
+    // アタリの終わりぎわに釣れたときは、詰めるほどの間が無い。そのまま進める。
+    if (firstStartMs - nowMs <= SURE_HIT_NEXT_FISH_MS + 400) return;
+    const timbre = cueTimbreFor(gameId, ctx.settings);
+    const beats = rest.map((trial) => {
+      const beat = {
+        index: trial.index,
+        timeS: (trial.cueMs - firstStartMs + SURE_HIT_NEXT_FISH_MS) / 1000,
+        tone: cueTones.high,
+        gain: FEEDBACK_GAIN,
+      };
+      if (timbre !== "sine") beat.timbre = timbre;
+      return beat;
+    });
+    const startAt = audio.scheduler.start({ beats });
+    if (startAt === null) return;
+    // 予約し直した音の時刻に、残りの枠の時刻を合わせる（必ず同じ計画から）。
+    const newFirstStartMs = toSessionRelativeMs(startAt * 1000) + SURE_HIT_NEXT_FISH_MS;
+    const shiftMs = firstStartMs - newFirstStartMs;
+    rest.forEach((trial) => {
+      trial.startMs -= shiftMs;
+      trial.cueMs -= shiftMs;
+    });
+    current.endMs = newFirstStartMs;
+    const last = rest[rest.length - 1];
+    sessionEndMs = last.cueMs + limitMsOf(last);
+  }
+
   function recordCurrent(judgment, inputMs = null) {
     if (finished || currentIndex >= trialsPlan.length) return;
     if (resolvedIndex === currentIndex) return; // 1枠1行（多重記録を防ぐ）
@@ -678,6 +749,7 @@ export function createFishingGame(gameId) {
     // ここでは枠を進めない。枠の進行は advanceSlot()（＝時間）が担う。
     resolvedIndex = currentIndex;
     resolvedJudgment = judgment;
+    if (config.sureHit && judgment === "hit") bringNextFishForward();
   }
 
   /**
@@ -830,7 +902,7 @@ export function createFishingGame(gameId) {
     if (destroyed || finished || !session) return;
     const nowRelativeMs = toSessionRelativeMs(audio.scheduler.now() * 1000);
     const planned = trialsPlan[currentIndex];
-    if (planned && nowRelativeMs > planned.cueMs + limitMsOf(planned)) {
+    if (planned && nowRelativeMs > slotEndMs(planned)) {
       advanceSlot();
       if (finished || destroyed) return;
     }
@@ -856,7 +928,7 @@ export function createFishingGame(gameId) {
 
     // rAFの境界直前に入力が来ても、期限切れの枠を正常に確定してから
     // 次の前刺激区間の入力として扱う。
-    while (planned && inputMs > planned.cueMs + limitMsOf(planned)) {
+    while (planned && inputMs > slotEndMs(planned)) {
       advanceSlot();
       if (finished) return;
       planned = trialsPlan[currentIndex];
@@ -879,6 +951,10 @@ export function createFishingGame(gameId) {
     // 決着済みの試行の残り時間に来た入力はどの試行にも属さないので、
     // 記録せずに捨てる（誤った試行へ付け替えるより実態に近い）。
     if (inputMs < planned.startMs) return;
+
+    // 押せば必ず当たる回は、魚が寄ってくる途中（1秒たらず）の押しを数えない。数えると
+    // 「まだ待とう」で その魚を逃がすことになる。糸は動く（上の pullLine）。
+    if (config.sureHit && inputMs < planned.cueMs) return;
 
     const judgment = judgeReaction(inputMs, planned.cueMs, limitMsOf(planned), planned.kind);
     recordCurrent(judgment, inputMs);

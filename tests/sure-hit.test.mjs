@@ -8,13 +8,15 @@
 //      遊べたのに、次に開いたときには「完走していない回」になる（がんばりの記録からも消える）。
 
 import assert from "node:assert/strict";
-import { cranePresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
+import { cranePresets, fishingPresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
 import { buildRhythmCsvRows, buildSessionLedgerRows, buildTaskCsvRows } from "../src/lib/dataExport.js";
 import {
   MEASUREMENT_PROTOCOL,
   SURE_HIT_CRANE_TOLERANCE_R,
+  SURE_HIT_FISHING,
   SURE_HIT_GAMES,
   resolveCraneDifficulty,
+  resolveFishingDifficulty,
   resolveSlotDifficulty,
   resolveSureHit,
   sureHitRhythmWindowMs,
@@ -23,6 +25,7 @@ import { assistedToleranceR } from "../src/lib/games/craneGeometry.js";
 import { computeEffectiveWindowMs, judgeInput, sweepExpired } from "../src/lib/games/judge.js";
 import { buildPlan, resolveParams } from "../src/lib/games/rhythm.js";
 import { evaluatePick, graspOutcome } from "../src/lib/games/pointing.js";
+import { judgeReaction } from "../src/lib/games/reaction.js";
 import {
   SLOT_ENGINE_VERSION,
   SLOT_PROTOCOL_VERSION,
@@ -481,6 +484,114 @@ test("tone game: a saved sure-hit run comes back whole, and the CSV says so in t
   const rows = buildRhythmCsvRows([restored]);
   assert.equal(rows[0].at(-1), "sureHit");
   assert.ok(rows.slice(1).every((row) => row.at(-1) === true));
+});
+
+// ---------------------------------------------------------------------
+// さかなつり
+// ---------------------------------------------------------------------
+
+/**
+ * 遊びと同じ決まりで1回ぶんを作る。魚ごとに、食いついてから reactionMs 後に押す（null は押さない）。
+ * 釣れたら次の魚が前へ詰まるので、合図の時刻は等間隔にならない。
+ */
+function makeSureHitFishingSession(gameId, reactions) {
+  const config = resolveFishingDifficulty(gameId, PRACTICE_ON, fishingPresets[gameId]);
+  let cursorMs = 300;
+  const trials = reactions.map((reactionMs, index) => {
+    const cueMs = cursorMs + config.foreperiodMinMs;
+    const inputMs = reactionMs === null ? null : cueMs + reactionMs;
+    const judgment = judgeReaction(inputMs, cueMs, config.limitMs, "real");
+    // 釣れたら 1.1 秒後に次の枠、逃げられたら受付の終わりから次の枠。
+    cursorMs = judgment === "hit" ? inputMs + 1100 : cueMs + config.limitMs;
+    return {
+      index,
+      kind: "real",
+      foreperiodMs: config.foreperiodMinMs,
+      cueMs,
+      limitMs: config.limitMs,
+      inputMs,
+      reactionTimeMs: judgment === "hit" ? inputMs - cueMs : null,
+      judgment,
+      excluded: false,
+    };
+  });
+  return {
+    sessionId: `sure-hit-${gameId}`,
+    taskType: "rt",
+    gameId,
+    participantId: "P001",
+    startedAtIso: "2026-11-24T00:00:00.000Z",
+    endedAtIso: "2026-11-24T00:01:00.000Z",
+    aborted: false,
+    finished: true,
+    endReason: "planned",
+    config: {
+      ...config,
+      targetTrials: trials.length,
+      endless: false,
+      endlessProtocolVersion: null,
+      seedSequence: trials.map((trial) => trial.foreperiodMs),
+      kindSequence: trials.map((trial) => trial.kind),
+      difficultyMode: "practice",
+      measurementReadiness: "n/a",
+    },
+    device: {},
+    trials,
+    summary: null,
+  };
+}
+
+test("fishing: the measured run keeps the protocol values and its boots", () => {
+  ["fishing", "fishing-gonogo"].forEach((gameId) => {
+    const measured = resolveFishingDifficulty(gameId, MEASURE_ON, fishingPresets[gameId]);
+    assert.equal(measured.sureHit, false);
+    assert.equal(measured.limitMs, MEASUREMENT_PROTOCOL.fishing[gameId].limitMs);
+    assert.equal(measured.fakeRatio, fishingPresets[gameId].fakeRatio);
+    assert.equal(measured.foreperiodMinMs, fishingPresets[gameId].foreperiodMinMs);
+    assert.equal(measured.sessionMs, fishingPresets[gameId].sessionMs);
+    const ordinary = resolveFishingDifficulty(gameId, { ...PRACTICE_ON, sureHit: false, fishingLimitMs: 3000 }, fishingPresets[gameId]);
+    assert.equal(ordinary.sureHit, false);
+    assert.equal(ordinary.limitMs, 3000, "オフなら支援者の長さのまま");
+  });
+});
+
+test("fishing: the fish bites almost at once, waits ten seconds, and no boot comes", () => {
+  ["fishing", "fishing-gonogo"].forEach((gameId) => {
+    const config = resolveFishingDifficulty(gameId, PRACTICE_ON, fishingPresets[gameId]);
+    assert.equal(config.sureHit, true);
+    assert.equal(config.fakeRatio, 0, "長靴は出ない");
+    assert.equal(config.foreperiodMinMs, SURE_HIT_FISHING.foreperiodMs);
+    assert.equal(config.foreperiodMaxMs, SURE_HIT_FISHING.foreperiodMs);
+    assert.equal(config.approachMs, SURE_HIT_FISHING.foreperiodMs, "魚は、寄ってくる時間で糸まで来る");
+    assert.equal(config.limitMs, 10_000);
+    // 計画に入る魚の数（games/fishing.js の buildPlan と同じ数え方）。
+    assert.equal(Math.floor(config.sessionMs / (config.foreperiodMinMs + config.limitMs)), SURE_HIT_FISHING.fishCount);
+  });
+  // 食いついてからなら、いつ押しても釣れる（すぐ・5秒後・10秒ちょうど）。
+  [0, 1, 5_000, 10_000].forEach((reactionMs) => {
+    assert.equal(judgeReaction(2_000 + reactionMs, 2_000, 10_000, "real"), "hit", `${reactionMs}ms 後`);
+  });
+});
+
+test("fishing: a saved sure-hit run comes back whole, and the CSV says so in the last column", () => {
+  ["fishing", "fishing-gonogo"].forEach((gameId) => {
+    // 10ぴき。すぐ押す・ゆっくり押す・1ぴきは押さずに逃がす。
+    const source = makeSureHitFishingSession(gameId, [120, 2_400, 9_900, 600, null, 4_000, 30, 7_500, 1_000, 300]);
+    const restored = reload(source);
+    assert.equal(restored.trials.length, source.trials.length, `${gameId}: 試行が落ちない`);
+    assert.equal(restored.finished, true);
+    assert.equal(restored.aborted, false);
+    assert.equal(restored.config.sureHit, true);
+    assert.equal(restored.config.limitMs, 10_000);
+    assert.equal(restored.config.fakeRatio, 0);
+    assert.equal(restored.summary.hits, 9);
+    assert.equal(restored.summary.timeouts, 1, "押さなかった魚は、これまでどおり逃げる");
+    assert.equal(restored.summary.falseStarts, 0);
+
+    const rows = buildTaskCsvRows([restored], "rt");
+    assert.equal(rows[0].at(-1), "sureHit");
+    assert.ok(rows.slice(1).every((row) => row.at(-1) === true));
+  });
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

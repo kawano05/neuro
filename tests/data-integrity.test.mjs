@@ -1181,8 +1181,9 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   //   ＋ fxLevel（演出の強さ。2026-09-28）。
   //   ＋ artVersion（見え方の版。2026-09-30）。
   //   ＋ cueTimbre（アタリの合図の音色。2026-10-21、いちばん後ろ）。
-  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 9);
-  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 9);
+  //   ＋ sureHit（押せば必ず当たる回か。2026-11-24、いちばん後ろ）。
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 10);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 10);
   assert.equal(rtRows[0][13], "excluded");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 2], "deviceUserAgent");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceInputMethod");
@@ -1191,7 +1192,8 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 2], "endless");
   // 試行ごとの受付時間。エンドレスでは試行ごとに短くなる。
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 3], "limitMs");
-  assert.deepEqual(rtRows[0].slice(-4), ["endReason", "fxLevel", "artVersion", "cueTimbre"]);
+  assert.deepEqual(rtRows[0].slice(-5), ["endReason", "fxLevel", "artVersion", "cueTimbre", "sureHit"]);
+  assert.equal(rtRows[1].at(-1), false, "sureHit を持たない古い記録は false");
   // 列を持たない古い記録は practice / n/a / false に倒す（scan と同じ既定）。
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS], "practice");
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 1], "n/a");

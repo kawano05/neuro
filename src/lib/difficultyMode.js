@@ -82,6 +82,19 @@ export function sureHitRhythmWindowMs(bpm) {
   return 60000 / bpm / 2;
 }
 
+/**
+ * 押せば必ず当たる回の、さかなつりの数値。
+ *
+ *   foreperiodMs … 魚が寄ってくる時間。短く、そろえる（ふだんは 1.8〜4.2 秒の ばらばら）。
+ *                   寄ってくる途中の押しは、この回では数えない（games/fishing.js）。
+ *   limitMs      … アタリが続く長さ。記録に残せる いちばん長い値（state.js の sanitize の上限）。
+ *                   食いついた魚は、押すまで10秒 待つ。
+ *   fishCount    … 1回に来る魚の数（ふだんは 60 秒ぶん）。釣ったら すぐ次の魚が来るので、
+ *                   時間ではなく数で決める。
+ * あわせて、押さない合図（長靴）は出さない（fakeRatio 0）。
+ */
+export const SURE_HIT_FISHING = Object.freeze({ foreperiodMs: 900, limitMs: 10_000, fishCount: 10 });
+
 /** 設定値から、いまどちらの回かを決める。 */
 export function resolveDifficultyMode(settings) {
   const mode = settings?.difficultyMode;
@@ -110,7 +123,15 @@ export function cueTimbreFor(gameId, settings) {
  *
  * 設定画面と「この遊びの設定」に出す遊びも、ここから引く（settingDefinitions.js の inGame）。
  */
-export const SURE_HIT_GAMES = Object.freeze(["slot-l1", "slot-l2", "crane", "baseball", "gonogo"]);
+export const SURE_HIT_GAMES = Object.freeze([
+  "slot-l1",
+  "slot-l2",
+  "crane",
+  "baseball",
+  "gonogo",
+  "fishing",
+  "fishing-gonogo",
+]);
 
 /**
  * その回を「押せば必ず当たる」で走らせるか。
@@ -292,9 +313,23 @@ export function resolveCraneDifficulty(settings, preset) {
  */
 export function resolveFishingDifficulty(gameId, settings, preset) {
   if (isMeasurementMode(settings)) {
-    return { ...preset, ...MEASUREMENT_PROTOCOL.fishing[gameId] };
+    return { ...preset, ...MEASUREMENT_PROTOCOL.fishing[gameId], sureHit: false };
   }
-  return { ...preset, limitMs: settings?.fishingLimitMs ?? preset.limitMs };
+  if (resolveSureHit(gameId, settings)) {
+    const { foreperiodMs, limitMs, fishCount } = SURE_HIT_FISHING;
+    return {
+      ...preset,
+      foreperiodMinMs: foreperiodMs,
+      foreperiodMaxMs: foreperiodMs,
+      // 魚は、寄ってくる時間いっぱいを使って糸まで来る。
+      approachMs: foreperiodMs,
+      limitMs,
+      fakeRatio: 0,
+      sessionMs: fishCount * (foreperiodMs + limitMs),
+      sureHit: true,
+    };
+  }
+  return { ...preset, limitMs: settings?.fishingLimitMs ?? preset.limitMs, sureHit: false };
 }
 
 /**

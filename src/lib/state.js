@@ -1141,6 +1141,8 @@ function sanitizeReactionSession(session) {
     cueTimbre: enumOr(config.cueTimbre, CUE_TIMBRES, null),
     // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
     measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
+    // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。持たない古い記録は false。
+    sureHit: config.sureHit === true,
   };
   const rawTrials = Array.isArray(session.trials) ? session.trials : null;
   // 受付時間は試行ごとに違いうる（エンドレスでは試行とともに短くなる。

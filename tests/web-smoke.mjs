@@ -130,6 +130,7 @@ const checks = [
   ["grabs the prize wherever the arm is stopped when sure-hit is on", checkSureHitCrane],
   ["makes every swing at a pitch a home run when sure-hit is on", checkSureHitBaseball],
   ["counts every press between the tones as a hit when sure-hit is on", checkSureHitTones],
+  ["lands a fish on every press and brings the next one at once when sure-hit is on", checkSureHitFishing],
   ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
   ["switches the supporter screens to the chosen language from the common settings", checkSupporterLanguage],
   ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
@@ -448,6 +449,84 @@ async function checkSureHitTones(page) {
   const restored = await latestSession(page, "gonogo");
   assert(restored?.aborted === false, "The sure-hit run must stay a finished run after a reload");
   assert(restored.trials.length === played.trials.length, "No trial may be dropped on reload");
+}
+
+/**
+ * 押せば必ず当たる: さかなつり。
+ *
+ * 魚はすぐ食いつき、押すまで待つ。釣れたら、すぐ次の魚が来る（10秒のアタリを待たせない）。
+ * 長靴は出ない。寄ってくる途中の押しは「まだ待とう」にならない。「ずっとあそぶ」の入口は出ない。
+ */
+async function checkSureHitFishing(page) {
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) return SKIPPED;
+  await turnSureHitOn(page);
+  await openActivity(page, t("tile.fishing-corner.title"));
+  // さかなつり・長靴あり・「もどる」（ずっとあそぶ は出ない）。
+  await waitForActivityChoices(page, 3);
+  assert(
+    (await page.getByRole("button", { name: t("tile.fishing-endless.title"), exact: true }).count()) === 0,
+    "The endless fishing entry must not be offered in a sure-hit run"
+  );
+  await openActivity(page, t("tile.fishing-gonogo.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await finishReady(page);
+  await page.locator(".fishing-scene, .game-unavailable").first().waitFor({ state: "visible" });
+  if ((await page.locator(".game-unavailable").count()) > 0) return SKIPPED;
+
+  // 合図を待たず、0.5秒おきに押しつづける。
+  const startedAt = Date.now();
+  const tooEarly = t("fishing.tooEarly");
+  let sawTooEarly = false;
+  const finished = () =>
+    page.evaluate((key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "fishing-gonogo");
+      return session?.finished === true;
+    }, storageKey);
+  for (let press = 0; press < 90 && !(await finished()); press += 1) {
+    if ((await page.locator(".fishing-scene").count()) === 0) break;
+    await page.locator("#gameStage").dispatchEvent("click").catch(() => {});
+    const status = await page.evaluate(() => document.querySelector(".fishing-status")?.textContent || "");
+    if (status.includes(tooEarly)) sawTooEarly = true;
+    await page.waitForTimeout(500);
+  }
+  await page.waitForFunction(
+    (key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "fishing-gonogo");
+      return session?.finished === true;
+    },
+    storageKey,
+    { timeout: 15_000 }
+  );
+  const elapsedMs = Date.now() - startedAt;
+  const played = await latestSession(page, "fishing-gonogo");
+  assert(played.config.sureHit === true, "The run must record that it was a sure-hit run");
+  assert(played.config.endless === false, "A sure-hit run is never an endless run");
+  assert(played.config.fakeRatio === 0, "A sure-hit run has no boot");
+  assert(played.trials.length === 10, `Expected 10 fish, got ${played.trials.length}`);
+  assert(
+    played.trials.every((trial) => trial.judgment === "hit" && trial.kind === "real"),
+    `Every fish must be landed: ${played.trials.map((trial) => trial.judgment).join(",")}`
+  );
+  assert(!sawTooEarly, "A press while the fish is still coming must not be answered with a too-early message");
+  // 10ぴきを 10秒ずつ待つと 100秒をこえる。詰めて進むので、ずっと短い。
+  assert(elapsedMs < 45_000, `The next fish must come soon after a catch (10 fish took ${elapsedMs}ms)`);
+  // 合図の時刻は、前の魚を釣った時刻より後（詰めた計画と記録が合っている）。
+  for (let index = 1; index < played.trials.length; index += 1) {
+    assert(
+      played.trials[index].cueMs > played.trials[index - 1].inputMs,
+      `Fish ${index} must bite after fish ${index - 1} was landed`
+    );
+  }
+
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await latestSession(page, "fishing-gonogo");
+  assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
+  assert(restored.trials.length === 10, `No fish may be dropped on reload, got ${restored.trials.length}`);
 }
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。
