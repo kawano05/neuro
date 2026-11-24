@@ -30,7 +30,7 @@
 
 import { ATMOSPHERES } from "./atmosphere.js";
 import { cranePresets, fishingPresets, rhythmPresets, slotPresets } from "./content.js";
-import { MEASUREMENT_PROTOCOL, resolveDifficultyMode } from "./difficultyMode.js";
+import { MEASUREMENT_PROTOCOL, SURE_HIT_GAMES, resolveDifficultyMode } from "./difficultyMode.js";
 import { resolveTextMode, translate } from "./i18n.js";
 import { say } from "./supporterText.js";
 
@@ -190,6 +190,22 @@ export const SETTING_DEFINITIONS = Object.freeze({
       ["app", { ja: "アプリの声", en: "App voice" }],
       ["device", { ja: "端末の声", en: "Device voice" }],
     ],
+  },
+
+  // 押せば必ず当たる（2026-11-04 に訪問先の学校で頼まれた段階）。どの遊びにも効く1つの切り替え。
+  // 速さ・広さの項目より前に置く（遊びの中の「この遊びの設定」は、この表の順に出る）。
+  sureHit: {
+    type: "checkbox",
+    label: { ja: "押せば必ず当たる", en: "Every press wins" },
+    hint: {
+      ja: "どこで押しても当たりになります。",
+      en: "Any press counts as a win, whenever it is pressed.",
+    },
+    format: "onOff",
+    measured: true,
+    // difficultyMode.js の resolveSureHit が、そくていでは必ず切る。
+    protocol: false,
+    inGame: [...SURE_HIT_GAMES],
   },
 
   slotCycleMs: {

@@ -9,7 +9,7 @@
 // =====================================================================
 
 import { gameModules } from "../games/registry.js";
-import { isMeasurementMode } from "../difficultyMode.js";
+import { isMeasurementMode, resolveSureHit } from "../difficultyMode.js";
 import { POP_ANIMALS, SCENE_ART, artSvg } from "../art/hakkiriArt.js";
 import { tileThemeFor } from "../homeTheme.js";
 import {
@@ -439,6 +439,9 @@ export function initHome(ctx) {
      */
     function endlessTileFor(gameId) {
       if (isMeasurementMode(state.settings)) return null;
+      // 押せば必ず当たる回にも出さない。外したところで終わる遊び方なので、外れない回では
+      // 終わりが来ない（games/crane.js の endlessFor）。
+      if (resolveSureHit(gameId, state.settings)) return null;
       return endlessTiles.find((tile) => tile.gameId === gameId) || null;
     }
 

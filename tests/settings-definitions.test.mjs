@@ -56,7 +56,8 @@ test("every field on the screen comes from the shared definitions, once", () => 
   const ids = SETTINGS_FIELDS.map((field) => field.id);
   assert.equal(new Set(ids).size, ids.length, "DOM の id は重ならない");
   SETTINGS_FIELDS.forEach((field) => assert.ok(field.label && field.hint, `${field.key} に名前と説明がある`));
-  assert.equal(SETTINGS_GROUPS[0].fields.length, 7, "よく使う設定は7つ（言語を含む）");
+  // 8つ目は「押せば必ず当たる」（2026-11-24。訪問先で頼まれた段階なので、開いてすぐの所に置く）。
+  assert.equal(SETTINGS_GROUPS[0].fields.length, 8, "よく使う設定は8つ（言語を含む）");
   assert.equal(SETTINGS_FIELDS.some((field) => field.key === "researcherMode"), false, "効かない研究者モードは画面に出さない");
 });
 
@@ -97,6 +98,8 @@ test("in-game settings use the same keys, names, measured flags and ranges", () 
             assert.equal(defaultState.settings[group.key], null, `${group.key} は null（あそびごとの既定）を持てる`);
           } else if (definition.type === "range") {
             assert.ok(value >= definition.min && value <= definition.max, `${group.key}=${value} が範囲の中`);
+          } else if (definition.type === "checkbox") {
+            assert.equal(typeof value, "boolean", `${group.key}=${value} はオン／オフ`);
           } else {
             assert.ok(definition.options.some(([option]) => option === String(value)), `${group.key}=${value} が選択肢にある`);
           }

@@ -29,7 +29,7 @@
 // 「小学校高学年が読んで分かる」くらいの言葉で書く（打ち合わせ §1.8）。
 // =====================================================================
 
-import { isMeasurementMode } from "../difficultyMode.js";
+import { SURE_HIT_OVERRIDDEN_SETTINGS, isMeasurementMode } from "../difficultyMode.js";
 import { ART_FAMILIES } from "../artVersion.js";
 import { SETTING_DEFINITIONS } from "../settingDefinitions.js";
 import { PLAY_BACKGROUNDS_BY_GAME, PLAY_SOUNDS_BY_GAME } from "../state.js";
@@ -99,6 +99,14 @@ function beginnerGroups(gameId) {
 /** ボールを打つ遊び。速さは次の1球から効くので、その場で続けられる（live）。 */
 function baseballGroups() {
   return [
+    // 押せば必ず当たる（ボールが出ているあいだなら、いつ振ってもホームラン）。次の1球から効く。
+    // 名前・そくていで固定されるかは、タイミングの遊びと同じ表から引く。
+    {
+      key: "sureHit",
+      label: SETTING_DEFINITIONS.sureHit.label,
+      measured: SETTING_DEFINITIONS.sureHit.measured === true,
+      options: IN_GAME_CHOICES.sureHit,
+    },
     {
       key: "playPrefs.baseball.speed",
       label: { ja: "ボールの速さ", en: "Ball speed" },
@@ -122,6 +130,11 @@ function baseballGroups() {
  * （tests/settings-definitions.test.mjs）。null は「ふつう」＝ content.js のプリセット。
  */
 const IN_GAME_CHOICES = {
+  // 押せば必ず当たる（difficultyMode.js の resolveSureHit）。入れてある遊びにだけ出る。
+  sureHit: [
+    [false, { ja: "オフ", en: "Off" }],
+    [true, { ja: "オン", en: "On" }],
+  ],
   // リールが1周する時間（ミリ秒）。大きいほど ゆっくり。ふつう＝slotPresets.cycleMs。
   // 「とても ゆっくり」は 2026-10-21 に足した（施設の試用で「もっと遅くできる設定が欲しい」）。
   slotCycleMs: [
@@ -275,6 +288,11 @@ export function createGameSettings(ctx, host) {
     return openFor !== null;
   }
 
+  /** 「押せば必ず当たる」のあいだ効かない項目か（当たりの広さ・長さ）。 */
+  function overriddenBySureHit(group) {
+    return SURE_HIT_OVERRIDDEN_SETTINGS.includes(group.key);
+  }
+
   function notesFor(definition, measuring) {
     const notes = [];
     if (definition.mode === "live") {
@@ -294,12 +312,30 @@ export function createGameSettings(ctx, host) {
     } else {
       notes.push({ text: { ja: "閉じると、この設定で はじめます。", en: "When closed, the game starts with these settings." } });
     }
-    if (measuring && definition.groups.some((group) => group.measured)) {
+    const measuredGroups = definition.groups.filter((group) => group.measured);
+    if (measuring && measuredGroups.length) {
+      // 固定されるのが「押せば必ず当たる」だけの遊び（ボールを打つ）では、速さは変えられる。
+      const onlySureHit = measuredGroups.every((group) => group.key === "sureHit");
+      notes.push({
+        lock: true,
+        text: onlySureHit
+          ? {
+              ja: "いまは「そくてい」の回なので、「押せば必ず当たる」は使えません。",
+              en: "This is a measured run, so “Every press wins” cannot be used.",
+            }
+          : {
+              ja: "いまは「そくてい」の回なので、速さや広さ・長さは変えられません。記録の条件をそろえるためです。",
+              en: "This is a measured run, so speed, range and length cannot be changed. This keeps the recording conditions the same.",
+            },
+      });
+    }
+    // 「押せば必ず当たる」を選んでいるあいだ、広さ・長さは効かない（下の render が使えなくする）。
+    if (!measuring && draft.sureHit === true && definition.groups.some(overriddenBySureHit)) {
       notes.push({
         lock: true,
         text: {
-          ja: "いまは「そくてい」の回なので、速さや広さ・長さは変えられません。記録の条件をそろえるためです。",
-          en: "This is a measured run, so speed, range and length cannot be changed. This keeps the recording conditions the same.",
+          ja: "「押せば必ず当たる」がオンのあいだ、広さ・長さの設定は使いません。",
+          en: "While “Every press wins” is on, the range and length settings are not used.",
         },
       });
     }
@@ -347,7 +383,8 @@ export function createGameSettings(ctx, host) {
       .join("");
     const groups = definition.groups
       .map((group) => {
-        const locked = Boolean(group.measured && measuring);
+        const locked =
+          Boolean(group.measured && measuring) || (draft.sureHit === true && overriddenBySureHit(group));
         const options = group.options
           .map(([value, label]) => {
             const pressed = draft[group.key] === value;

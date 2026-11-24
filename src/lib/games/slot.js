@@ -292,6 +292,7 @@ export function createSlotGame(gameId) {
         symbolOrder: reelPlan.symbolOrder,
         targetSymbol: round.targetSymbol,
         initialPhase: reelPlan.initialPhase,
+        wideTolerance: config.sureHit,
       });
       const stoppedAtMs = inputMs ?? timeoutAtMs;
       const row = {
@@ -320,7 +321,11 @@ export function createSlotGame(gameId) {
         reelCellPx: shownCellPx,
       };
       session.trials.push(row);
-      reelViews[reelIndex].stoppedPhase = result.stoppedPhase;
+      // 押せば必ず当たる回は、当たった帯を ねらいの絵まで すべらせて止める（見た目だけ）。
+      // 当たりなのに違う絵が真ん中に残ると、絵と結果が食い違う。記録（row.stoppedPhase・
+      // stoppedSymbol）は、押したときに実際に真ん中にあった絵のまま。
+      reelViews[reelIndex].stoppedPhase =
+        config.sureHit && result.judgment === "hit" ? result.targetIndex : result.stoppedPhase;
       paintReel(reelIndex, stoppedAtMs);
       hitStreak = result.judgment === "hit" ? hitStreak + 1 : 0;
       playStopSound(result.judgment);
@@ -554,6 +559,8 @@ export function createSlotGame(gameId) {
           visualGuidance: false,
           // 1コマの高さ（px）。下で、画面に出した実際の大きさを入れる。
           reelCellPx: null,
+          // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit。そくていの回は必ず false）。
+          sureHit: config.sureHit,
         },
         device: audio.getDeviceInfo(),
         trials: [],

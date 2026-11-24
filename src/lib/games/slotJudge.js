@@ -159,6 +159,9 @@ export function judgeSlotStop({
   symbolOrder,
   targetSymbol,
   initialPhase = 0,
+  // 押せば必ず当たる回（session.config.sureHit）だけ true。許容幅を1周ぶんまで受け取る。
+  // 判定の式は同じ（目標の通過からのずれ ≤ 許容幅）。止めた絵（stoppedSymbol）も実際のまま返す。
+  wideTolerance = false,
 }) {
   if (!Array.isArray(symbolOrder) || symbolOrder.length < 2) {
     throw new RangeError("symbolOrder must contain at least two symbols");
@@ -173,7 +176,11 @@ export function judgeSlotStop({
   finiteNumber(cycleMs, "cycleMs");
   finiteNumber(toleranceMs, "toleranceMs");
   if (cycleMs <= 0) throw new RangeError("cycleMs must be greater than zero");
-  if (toleranceMs < 0 || toleranceMs > cycleMs / (symbolOrder.length * 2)) {
+  if (wideTolerance) {
+    if (toleranceMs < 0 || toleranceMs > cycleMs) {
+      throw new RangeError("toleranceMs must fit inside one cycle");
+    }
+  } else if (toleranceMs < 0 || toleranceMs > cycleMs / (symbolOrder.length * 2)) {
     throw new RangeError("toleranceMs must fit inside half a symbol interval");
   }
 

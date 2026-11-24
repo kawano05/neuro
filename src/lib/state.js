@@ -222,6 +222,10 @@ export const defaultState = {
     rhythmBpm: null,
     countInBeats: null,
     targetBeats: null,
+    // 押せば必ず当たる（2026-11-04、訪問先の学校で頼まれた）。れんしゅうの回だけ効き、
+    // 当たりの広さなどの数値を、どこで押しても当たる大きさにする（difficultyMode.js の
+    // resolveSureHit）。既定はオフ。走らせた回は session.config.sureHit に残る。
+    sureHit: false,
     // スロット型課題の練習条件。測定時は difficultyMode.js の slot-v1 固定値を使う。
     slotCycleMs: 3200,
     slotToleranceMs: 220,
@@ -735,6 +739,8 @@ function sanitizeRhythmSession(session, taskType) {
     // （2026-10-21 から）。落とすと再読み込みで消え、音色の違う回を分けられない。
     // この列を持たない古い記録は null（その頃はいつも sine だったが、推測で埋めない）。
     cueTimbre: enumOr(config.cueTimbre, CUE_TIMBRES, null),
+    // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。持たない古い記録は false。
+    sureHit: config.sureHit === true,
     // どの表記で回したか。手順の説明が読めるかは成績に効きうる。
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
@@ -836,7 +842,16 @@ function sanitizeDevice(device) {
   };
 }
 
-function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs) {
+/**
+ * つかめる広さ（toleranceR）の上限。ふだんは 100（床の1辺）。押せば必ず当たる回
+ * （config.sureHit）は、床のどこで止めても届く大きさで走る（difficultyMode.js の
+ * SURE_HIT_CRANE_TOLERANCE_R）ので、その回だけ広く受け取る。ここで落とすと、遊べた回が
+ * 読み直したときに「完走していない回」になる。
+ */
+const MAX_SCAN_TOLERANCE_R = 100;
+const MAX_SURE_HIT_SCAN_TOLERANCE_R = 400;
+
+function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs, maxToleranceR = MAX_SCAN_TOLERANCE_R) {
   if (!isRecord(trial)) return null;
   const judgment = enumOr(trial.judgment, new Set(["grip", "slip", "miss"]), null);
   if (!judgment) return null;
@@ -862,7 +877,7 @@ function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs) {
     trial.selectedY < 0 ||
     trial.selectedY > 100 ||
     trial.toleranceR <= 0 ||
-    trial.toleranceR > 100 ||
+    trial.toleranceR > maxToleranceR ||
     trial.xPhaseMs < 0 ||
     trial.yPhaseMs < 0
   ) return null;
@@ -922,9 +937,12 @@ function summarizeScanTrials(trials) {
 function sanitizeScanSession(session) {
   if (!isRecord(session) || !SCAN_GAME_IDS.has(session.gameId)) return null;
   const config = isRecord(session.config) ? session.config : {};
+  // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。持たない古い記録は false。
+  const sureHit = config.sureHit === true;
   const sanitizedConfig = {
     sweepMs: numberInRange(config.sweepMs, 2400, 400, 10_000, true),
-    toleranceR: numberInRange(config.toleranceR, 12, 1, 50),
+    toleranceR: numberInRange(config.toleranceR, 12, 1, sureHit ? MAX_SURE_HIT_SCAN_TOLERANCE_R : 50),
+    sureHit,
     targetTrials: numberInRange(config.targetTrials, 5, 1, 100, true),
     graspAnimMs: numberInRange(config.graspAnimMs, 1200, 100, 10_000, true),
     // その回、目標の通過音を鳴らしていたか（settings.craneAudioGuidance）。
@@ -974,8 +992,14 @@ function sanitizeScanSession(session) {
   };
   const rawTrials = Array.isArray(session.trials) ? session.trials : null;
   const slots =
-    rawTrials?.map((trial, index) => sanitizeScanTrial(trial, index, sanitizedConfig.sweepMs)) ||
-    [];
+    rawTrials?.map((trial, index) =>
+      sanitizeScanTrial(
+        trial,
+        index,
+        sanitizedConfig.sweepMs,
+        sureHit ? MAX_SURE_HIT_SCAN_TOLERANCE_R : MAX_SCAN_TOLERANCE_R
+      )
+    ) || [];
   const trials = slots.filter(Boolean).slice(0, MAX_TRIALS_PER_SESSION);
   const completedNormally =
     session.finished === true &&
@@ -1117,6 +1141,8 @@ function sanitizeReactionSession(session) {
     cueTimbre: enumOr(config.cueTimbre, CUE_TIMBRES, null),
     // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
     measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
+    // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。持たない古い記録は false。
+    sureHit: config.sureHit === true,
   };
   const rawTrials = Array.isArray(session.trials) ? session.trials : null;
   // 受付時間は試行ごとに違いうる（エンドレスでは試行とともに短くなる。
@@ -1371,6 +1397,7 @@ export function sanitizeState(candidate) {
         MAX_BASELINE_OFFSET_MS,
         true
       ),
+      sureHit: booleanOr(settings.sureHit, fallback.settings.sureHit),
       rhythmBpm: nullableNumberInRange(settings.rhythmBpm, null, 20, 240, true),
       countInBeats: nullableNumberInRange(settings.countInBeats, null, 1, 16, true),
       targetBeats: nullableNumberInRange(settings.targetBeats, null, 1, 200, true),

@@ -50,6 +50,10 @@ export const SLOT_CSV_HEADERS = Object.freeze([
   "reelCellPx",
   // 判定の版を変えずに、絵が変わる前後の回を解析で分けられるようにする。
   "artVersion",
+  // 押せば必ず当たる回か（config.sureHit。difficultyMode.js の resolveSureHit）。この回は
+  // toleranceMs が1周ぶんで、どこで止めても hit になる。stoppedSymbol は実際に止めた絵のまま。
+  // 末尾に足す（列位置を動かさない）。この列より前の記録は false。
+  "sureHit",
 ]);
 
 export function buildSlotCsvRows(sessions) {
@@ -98,6 +102,7 @@ export function buildSlotCsvRows(sessions) {
           config.fxLevel ?? "",
           trial.reelCellPx ?? config.reelCellPx ?? "",
           config.artVersion ?? "",
+          config.sureHit === true,
         ]);
       });
     });

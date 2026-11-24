@@ -125,7 +125,13 @@ const checks = [
   ["refuses to record when the cue cannot sound", checkSilentAudioDoesNotProduceData],
   ["starts a cue task once suspended sound comes back, and retries on the next press", checkCueTasksWaitForSuspendedSound],
   ["moves the input dock out of the way while typing", checkDockStepsAsideForTextEntry],
-  ["shows the seven common settings and preserves values through accessible details", checkSettingsDetails],
+  ["shows the eight common settings and preserves values through accessible details", checkSettingsDetails],
+  ["makes every press a hit on the reels when the supporter turns sure-hit on", checkSureHitReels],
+  ["switches sure-hit in the in-game settings and disables the range it overrides", checkSureHitGameSettings],
+  ["grabs the prize wherever the arm is stopped when sure-hit is on", checkSureHitCrane],
+  ["makes every swing at a pitch a home run when sure-hit is on", checkSureHitBaseball],
+  ["counts every press between the tones as a hit when sure-hit is on", checkSureHitTones],
+  ["lands a fish on every press and brings the next one at once when sure-hit is on", checkSureHitFishing],
   ["resets each group of detailed settings by keyboard, except what a measured run fixes", checkSettingsReset],
   ["switches the supporter screens to the chosen language from the common settings", checkSupporterLanguage],
   ["shows the same supporter guide in the settings and as the printable guide", checkSupporterGuide],
@@ -156,6 +162,455 @@ const checks = [
   ["refuses to clear a participant's data before it has been exported", checkHandOverNeedsAnExportFirst],
   ["hands the device to the next participant after an export, keeping the newly typed ID", checkHandOverAfterExport]
 ];
+
+// 「押せば必ず当たる」（settings.sureHit）を入れて、ページを読み直す。
+async function turnSureHitOn(page, extraSettings = {}) {
+  await page.evaluate(
+    ({ key, extra }) => {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      saved.settings = { ...(saved.settings || {}), sureHit: true, ...extra };
+      localStorage.setItem(key, JSON.stringify(saved));
+    },
+    { key: storageKey, extra: extraSettings }
+  );
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+}
+
+/**
+ * 音の時計が進むか（押したあとに呼ぶ。押す前の AudioContext は止まっている）。
+ *
+ * 合図が音の遊び（高い音だけ・さかなつり）は、拍も魚も AudioContext の時刻で進む。
+ * AudioContext はあるのに時刻が進まない環境（音の出口が無い機械の WebKit）では、遊びは
+ * 始まっても先へ進まない。そこでは見るものが無いので、検査を飛ばす。
+ */
+async function audioClockAdvances(page) {
+  return page.evaluate(async () => {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return false;
+    const context = new AudioContextClass();
+    try {
+      await Promise.race([context.resume(), new Promise((resolve) => setTimeout(resolve, 500))]);
+      const before = context.currentTime;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return context.state === "running" && context.currentTime > before;
+    } catch {
+      return false;
+    } finally {
+      context.close().catch(() => {});
+    }
+  });
+}
+
+/** 保存してある、その遊びのいちばん新しい回。 */
+async function latestSession(page, gameId) {
+  return page.evaluate(
+    ({ key, id }) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      return [...(state.sessions || [])].reverse().find((item) => item.gameId === id) || null;
+    },
+    { key: storageKey, id: gameId }
+  );
+}
+
+/**
+ * 押せば必ず当たる（2026-11-04 に訪問先で頼まれた段階）: えあわせ。
+ *
+ * どこで押しても当たりになり、止まった帯の真ん中には ねらいの絵が出る。記録には、押したときに
+ * 実際に真ん中にあった絵が残る。回を終えて読み直しても、試行は1つも落ちない（sanitize が
+ * 広い許容幅を受け取れないと、次に開いたとき「完走していない回」になる）。
+ */
+async function checkSureHitReels(page) {
+  // 3本のリールで見る。止めた帯は、3本目を止めて回が替わるまで止まったままなので、
+  // 遅い機械でも、止まった絵を読む前に次の回が始まらない。
+  await turnSureHitOn(page, { slotL2Rounds: 2 });
+  await openActivity(page, t("tile.slot-corner.title"));
+  await waitForActivityChoices(page, 3);
+  await openActivity(page, t("tile.slot-l2.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await finishReady(page);
+  await page.locator(".slot-task[data-game-id='slot-l2']").waitFor({ state: "visible" });
+
+  // 押す間は ばらばら（すぐ・少し待って・長く待って）。ねらいを見て合わせることはしない。
+  const waits = [340, 900, 1500, 420, 1100, 360];
+  for (let press = 0; press < waits.length; press += 1) {
+    const reelIndex = press % 3;
+    await page.locator(`.slot-reel[data-slot-reel="${reelIndex}"].is-active`).waitFor({ state: "visible", timeout: 5_000 });
+    await page.waitForTimeout(waits[press]);
+    const target = await page.locator(".slot-target .slot-symbol").getAttribute("data-symbol");
+    await page.locator("#gameStage").click();
+    await page.waitForFunction(
+      ({ key, count }) => {
+        const state = JSON.parse(localStorage.getItem(key) || "{}");
+        const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l2");
+        return session?.trials?.length === count;
+      },
+      { key: storageKey, count: press + 1 }
+    );
+    if (reelIndex < 2) {
+      // 止まった帯の真ん中（5コマの3つ目）は、ねらいの絵。ずれも無い。
+      const stopped = page.locator(`.slot-reel[data-slot-reel="${reelIndex}"].is-stopped`);
+      const shown = await stopped.locator(".slot-track-cell:nth-child(3) .slot-symbol").getAttribute("data-symbol");
+      assert(shown === target, `A sure-hit stop must show the target (${target}) on the line, got ${shown}`);
+      const offset = await stopped
+        .locator(".slot-reel-track")
+        .evaluate((track) => Number(track.style.getPropertyValue("--slot-track-offset")));
+      assert(Math.abs(offset) < 0.001, `The target must sit exactly on the line, offset ${offset}`);
+    }
+  }
+
+  await page.waitForFunction(
+    ({ key }) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "slot-l2");
+      return session?.finished === true;
+    },
+    { key: storageKey },
+    { timeout: 8_000 }
+  );
+  const played = await latestSession(page, "slot-l2");
+  assert(played.config.sureHit === true, "The run must record that it was a sure-hit run");
+  assert(played.config.toleranceMs === played.config.cycleMs, "A sure-hit reel run uses one full turn as the window");
+  assert(played.trials.length === 6, `Expected 6 stops, got ${played.trials.length}`);
+  assert(
+    played.trials.every((trial) => trial.judgment === "hit"),
+    `Every press must be a hit: ${played.trials.map((trial) => trial.judgment).join(",")}`
+  );
+
+  // 読み直しても、回は完走のまま、試行も落ちない。
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await latestSession(page, "slot-l2");
+  assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
+  assert(restored.trials.length === 6, `No stop may be dropped on reload, got ${restored.trials.length}`);
+  assert(restored.config.sureHit === true, "The condition must survive a reload");
+}
+
+/**
+ * 押せば必ず当たる: 遊びの中の「この遊びの設定」。
+ *
+ * オンのあいだ効かない「合った」にする広さは、押せなくして理由を出す。項目が1つ増えたので、
+ * 小さい画面でも、下のボタンまで（中を送って）届くことも見る。オフにして閉じると保存される。
+ */
+async function checkSureHitGameSettings(page) {
+  await turnSureHitOn(page);
+  await openActivity(page, t("tile.slot-corner.title"));
+  await waitForActivityChoices(page, 3);
+  await openActivity(page, t("tile.slot-l1.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameSettings").click();
+  const dialog = page.locator("#gameSettingsDialog");
+  await dialog.waitFor({ state: "visible" });
+
+  const option = (key, value) => dialog.locator(`.gs-option[data-gs-key="${key}"][data-gs-value="${value}"]`);
+  assert((await option("sureHit", "true").getAttribute("aria-pressed")) === "true", "Sure-hit must show as on");
+  const widths = dialog.locator('.gs-option[data-gs-key="slotToleranceMs"]');
+  const widthCount = await widths.count();
+  assert(widthCount > 0, "The reel game must still list the match window");
+  for (let index = 0; index < widthCount; index += 1) {
+    assert(await widths.nth(index).isDisabled(), "The match window is not used while sure-hit is on, so it must be disabled");
+  }
+  assert(
+    (await dialog.locator(".gs-note.is-lock").allInnerTexts()).some((text) => text.includes("押せば必ず当たる")),
+    "The dialog must say why the window cannot be changed"
+  );
+  // 速さは、オンのあいだも変えられる。
+  assert(await dialog.locator('.gs-option[data-gs-key="slotCycleMs"]').first().isEnabled(), "Speed stays adjustable");
+
+  // 下のボタンまで届く（パネルの中を送る）。画面の外へ はみ出したままにならない。
+  const apply = dialog.locator(".gs-apply");
+  await apply.scrollIntoViewIfNeeded();
+  const box = await apply.boundingBox();
+  const viewport = page.viewportSize();
+  assert(
+    box && box.y >= 0 && box.y + box.height <= viewport.height + 1 && box.x >= 0 && box.x + box.width <= viewport.width + 1,
+    `The apply button must be reachable inside the screen: ${JSON.stringify(box)} in ${JSON.stringify(viewport)}`
+  );
+
+  // オフにすると、広さがまた選べる。閉じると保存される。
+  await option("sureHit", "false").scrollIntoViewIfNeeded();
+  await option("sureHit", "false").click();
+  assert(await dialog.locator('.gs-option[data-gs-key="slotToleranceMs"]').first().isEnabled(), "Turning sure-hit off gives the window back");
+  await dialog.locator(".gs-apply").scrollIntoViewIfNeeded();
+  await dialog.locator(".gs-apply").click();
+  await dialog.waitFor({ state: "hidden" });
+  const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "{}").settings, storageKey);
+  assert(saved.sureHit === false, "The choice made inside the game must be saved");
+}
+
+/**
+ * 押せば必ず当たる: アーム。
+ *
+ * どこで止めても つかめる。アームは降りながら ねらいの上へ寄る（見た目だけで、記録は止めた
+ * 場所のまま）。外したところで終わる「ずっとあそぶ」の入口は、この回には出さない。
+ */
+async function checkSureHitCrane(page) {
+  await turnSureHitOn(page, { craneTargetTrials: 3, craneSweepMs: 1700 });
+  await openActivity(page, t("tile.crane-corner.title"));
+  // アームと「もどる」だけ（ずっとあそぶ は出ない）。
+  await waitForActivityChoices(page, 2);
+  assert(
+    (await page.getByRole("button", { name: t("tile.crane-endless.title"), exact: true }).count()) === 0,
+    "The endless arm entry must not be offered in a sure-hit run"
+  );
+  await openActivity(page, t("tile.crane.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await finishReady(page);
+
+  // 押す間は ばらばら。ねらいの上で止めることはしない。
+  const waits = [
+    [420, 1300],
+    [1900, 450],
+    [700, 2300],
+  ];
+  for (let trial = 0; trial < waits.length; trial += 1) {
+    await waitForCraneStatus(page, "横に動きます");
+    assert(await page.locator(".crane-ring").isHidden(), "The grab ring is not drawn when the whole floor counts");
+    await page.waitForTimeout(waits[trial][0]);
+    await page.locator("#gameStage").click();
+    await waitForCraneStatus(page, "奥に動きます");
+    await page.waitForTimeout(waits[trial][1]);
+    await page.locator("#gameStage").click();
+    await page.waitForFunction(
+      ({ key, count }) => {
+        const state = JSON.parse(localStorage.getItem(key) || "{}");
+        const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "crane");
+        return session?.trials?.length === count;
+      },
+      { key: storageKey, count: trial + 1 },
+      { timeout: 6_000 }
+    );
+    // つかんだ瞬間、アームは ねらい（景品）の上にいる。
+    const gap = await page.evaluate(() => {
+      const claw = document.querySelector(".crane-claw");
+      const prize = document.querySelector(".crane-prize");
+      return Math.abs(parseFloat(claw.style.left) - parseFloat(prize.style.left));
+    });
+    assert(gap < 0.5, `The arm must close over the prize (horizontal gap ${gap}%)`);
+  }
+
+  await page.waitForFunction(
+    ({ key }) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "crane");
+      return session?.finished === true;
+    },
+    { key: storageKey },
+    { timeout: 10_000 }
+  );
+  const played = await latestSession(page, "crane");
+  assert(played.config.sureHit === true, "The run must record that it was a sure-hit run");
+  assert(played.config.endless === false, "A sure-hit run is never an endless run");
+  assert(
+    played.trials.every((trial) => trial.judgment === "grip"),
+    `Every stop must be a grab: ${played.trials.map((trial) => trial.judgment).join(",")}`
+  );
+  assert(
+    played.trials.some((trial) => trial.distance > 15),
+    "The record keeps where the arm was really stopped (not moved onto the target)"
+  );
+
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await latestSession(page, "crane");
+  assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
+  assert(restored.trials.length === 3, `No trial may be dropped on reload, got ${restored.trials.length}`);
+}
+
+/**
+ * 押せば必ず当たる: ボールを打つ遊び。
+ *
+ * ボールが出ているあいだなら、いつ振ってもホームラン（ふだんは、ぴったりのときだけ）。
+ * 遊びの中の「この遊びの設定」にも切り替えがある。
+ */
+async function checkSureHitBaseball(page) {
+  await turnSureHitOn(page);
+  await openActivity(page, t("tile.baseball.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await page.locator("#gameStage").click();
+  await finishReady(page);
+  await page.locator("#gameStageContent.module-baseball .bb-field").waitFor({ state: "visible" });
+
+  // 投げた直後（ボールがまだマウンドの近く）に振る。ふだんなら「ころころ」になる早さ。
+  const waitForEarlyPitch = () =>
+    page.waitForFunction(
+      () => {
+        const word = document.querySelector(".bb-word")?.dataset.word;
+        const match = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(
+          document.querySelector(".bb-ball")?.getAttribute("transform") || ""
+        );
+        return word === "" && match && Number(match[2]) > 408 && Number(match[2]) < 450;
+      },
+      null,
+      { timeout: 10_000 }
+    );
+  for (let swing = 1; swing <= 5; swing += 1) {
+    await waitForEarlyPitch();
+    await page.locator("#gameStage").dispatchEvent("click");
+    const word = await page.evaluate(() => document.querySelector(".bb-word")?.dataset.word || "");
+    assert(word === "baseball.word.homerun", `Swing ${swing} must be a home run in a sure-hit run, got "${word}"`);
+    const filled = await page.locator(".bb-slot.is-homerun").count();
+    assert(filled === swing, `Swing ${swing} must fill ${swing} home-run marks, got ${filled}`);
+  }
+  await waitForClass(page, "#resultView", "is-active", { timeout: 15_000 });
+}
+
+/**
+ * 押せば必ず当たる: おとあそび（高い音だけ）。
+ *
+ * 押さない合図（低い音）は出ない。拍と拍のあいだの どこで押しても、いちばん近い拍に入って
+ * 当たりになる。同じ拍で もう一度押しても「はずれ」の字は出ない（記録は extra のまま）。
+ */
+async function checkSureHitTones(page) {
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  // 合図が音の遊びなので、音の無いブラウザでは始まらない（checkRhythmL1GameFlow と同じ）。
+  if (!audioAvailable) return SKIPPED;
+  await turnSureHitOn(page, { rhythmBpm: 60, targetBeats: 5 });
+  if (!(await audioClockAdvances(page))) return SKIPPED;
+  await openActivity(page, t("tile.gonogo.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await finishReady(page);
+  // AudioContext はあるのに鳴らせない環境（音の出口が無い機械の WebKit）では、遊びは理由を出して
+  // 始まらない。見るものが無いので飛ばす。
+  await page.locator("#gameStageContent.module-rhythm, .game-unavailable").first().waitFor({ state: "visible" });
+  if ((await page.locator(".game-unavailable").count()) > 0) return SKIPPED;
+
+  // 拍に合わせず、0.43秒おきに押しつづける（1拍 1秒のあいだに2回は入る）。
+  const wrongWords = [t("rhythm.judgment.wrong"), t("rhythm.judgment.miss")];
+  const seenWords = new Set();
+  const finished = () =>
+    page.evaluate((key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "gonogo");
+      return session?.finished === true;
+    }, storageKey);
+  for (let press = 0; press < 40 && !(await finished()); press += 1) {
+    if ((await page.locator("#gameStageContent.module-rhythm").count()) === 0) break;
+    await page.locator("#gameStage").dispatchEvent("click").catch(() => {});
+    const word = await page.evaluate(() => document.querySelector(".rhythm-judgment, [data-rhythm-judgment]")?.textContent || "");
+    if (word) seenWords.add(word.trim());
+    await page.waitForTimeout(430);
+  }
+  await page.waitForFunction(
+    (key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "gonogo");
+      return session?.finished === true;
+    },
+    storageKey,
+    { timeout: 10_000 }
+  );
+  const played = await latestSession(page, "gonogo");
+  assert(played.config.sureHit === true, "The run must record that it was a sure-hit run");
+  assert(played.config.goRatio === 1, "A sure-hit run plays no hold-back tone");
+  assert(played.config.effectiveWindowMs === 500, `The window is half the beat interval, got ${played.config.effectiveWindowMs}`);
+  const beats = played.trials.filter((trial) => trial.beatIndex !== null);
+  assert(beats.length === 5, `Expected 5 judged beats, got ${beats.length}`);
+  assert(
+    beats.every((trial) => trial.judgment === "hit"),
+    `Every beat must be a hit: ${beats.map((trial) => trial.judgment).join(",")}`
+  );
+  assert(played.trials.some((trial) => trial.judgment === "extra"), "Presses outside a beat stay recorded as extra");
+  wrongWords.forEach((word) =>
+    assert(!seenWords.has(word), `A sure-hit run must never show "${word}" after a press (saw ${[...seenWords].join(" / ")})`)
+  );
+
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await latestSession(page, "gonogo");
+  assert(restored?.aborted === false, "The sure-hit run must stay a finished run after a reload");
+  assert(restored.trials.length === played.trials.length, "No trial may be dropped on reload");
+}
+
+/**
+ * 押せば必ず当たる: さかなつり。
+ *
+ * 魚はすぐ食いつき、押すまで待つ。釣れたら、すぐ次の魚が来る（10秒のアタリを待たせない）。
+ * 長靴は出ない。寄ってくる途中の押しは「まだ待とう」にならない。「ずっとあそぶ」の入口は出ない。
+ */
+async function checkSureHitFishing(page) {
+  const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
+  if (!audioAvailable) return SKIPPED;
+  await turnSureHitOn(page);
+  if (!(await audioClockAdvances(page))) return SKIPPED;
+  await openActivity(page, t("tile.fishing-corner.title"));
+  // さかなつり・長靴あり・「もどる」（ずっとあそぶ は出ない）。
+  await waitForActivityChoices(page, 3);
+  assert(
+    (await page.getByRole("button", { name: t("tile.fishing-endless.title"), exact: true }).count()) === 0,
+    "The endless fishing entry must not be offered in a sure-hit run"
+  );
+  await openActivity(page, t("tile.fishing-gonogo.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await finishReady(page);
+  await page.locator(".fishing-scene, .game-unavailable").first().waitFor({ state: "visible" });
+  if ((await page.locator(".game-unavailable").count()) > 0) return SKIPPED;
+
+  // 合図を待たず、0.5秒おきに押しつづける。
+  const startedAt = Date.now();
+  const tooEarly = t("fishing.tooEarly");
+  let sawTooEarly = false;
+  const finished = () =>
+    page.evaluate((key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "fishing-gonogo");
+      return session?.finished === true;
+    }, storageKey);
+  for (let press = 0; press < 90 && !(await finished()); press += 1) {
+    if ((await page.locator(".fishing-scene").count()) === 0) break;
+    await page.locator("#gameStage").dispatchEvent("click").catch(() => {});
+    const status = await page.evaluate(() => document.querySelector(".fishing-status")?.textContent || "");
+    if (status.includes(tooEarly)) sawTooEarly = true;
+    await page.waitForTimeout(500);
+  }
+  await page.waitForFunction(
+    (key) => {
+      const state = JSON.parse(localStorage.getItem(key) || "{}");
+      const session = [...(state.sessions || [])].reverse().find((item) => item.gameId === "fishing-gonogo");
+      return session?.finished === true;
+    },
+    storageKey,
+    { timeout: 15_000 }
+  );
+  const elapsedMs = Date.now() - startedAt;
+  const played = await latestSession(page, "fishing-gonogo");
+  assert(played.config.sureHit === true, "The run must record that it was a sure-hit run");
+  assert(played.config.endless === false, "A sure-hit run is never an endless run");
+  assert(played.config.fakeRatio === 0, "A sure-hit run has no boot");
+  assert(played.trials.length === 10, `Expected 10 fish, got ${played.trials.length}`);
+  assert(
+    played.trials.every((trial) => trial.judgment === "hit" && trial.kind === "real"),
+    `Every fish must be landed: ${played.trials.map((trial) => trial.judgment).join(",")}`
+  );
+  assert(!sawTooEarly, "A press while the fish is still coming must not be answered with a too-early message");
+  // 10ぴきを 10秒ずつ待つと 100秒をこえる。詰めて進むので、ずっと短い（手元では 20秒ほど。
+  // 遅い機械でも揺れないよう、上限は広めに取る）。
+  assert(elapsedMs < 70_000, `The next fish must come soon after a catch (10 fish took ${elapsedMs}ms)`);
+  // 合図の時刻は、前の魚を釣った時刻より後（詰めた計画と記録が合っている）。
+  for (let index = 1; index < played.trials.length; index += 1) {
+    assert(
+      played.trials[index].cueMs > played.trials[index - 1].inputMs,
+      `Fish ${index} must bite after fish ${index - 1} was landed`
+    );
+  }
+
+  await page.reload();
+  await waitForClass(page, "#startView", "is-active");
+  const restored = await latestSession(page, "fishing-gonogo");
+  assert(restored?.finished === true && restored.aborted === false, "The sure-hit run must stay a finished run after a reload");
+  assert(restored.trials.length === 10, `No fish may be dropped on reload, got ${restored.trials.length}`);
+}
 
 // 手元で一部だけ回すための絞り込み。CI は何も付けずに全部回す。
 //   SMOKE_PROJECTS=chromium-desktop SMOKE_CHECKS=color,result node tests/web-smoke.mjs
@@ -2126,9 +2581,9 @@ async function checkSettingsDetails(page) {
   assert(
     JSON.stringify(visibleIds) ===
       JSON.stringify(
-        ["textMode", "fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks"].sort()
+        ["textMode", "fxLevel", "speechEnabled", "soundEnabled", "scanInterval", "largeText", "hideVisualTasks", "sureHit"].sort()
       ),
-    "Only the seven common settings (with the language) should be visible initially"
+    "Only the eight common settings (with the language) should be visible initially"
   );
   assert((await page.locator("#settings details[open]").count()) === 0, "Details should start collapsed");
   // よく使う設定は囲んで先に出す。設定の画面では枠が動かないので、押せない入力ドックと
@@ -2137,7 +2592,8 @@ async function checkSettingsDetails(page) {
   await page.locator(".switch-dock").waitFor({ state: "hidden" });
   await page.locator(".status-pill").waitFor({ state: "hidden" });
   const summary = page.locator("#settingsSwitch > summary");
-  await page.locator("#hideVisualTasks").focus();
+  // よく使う設定の最後の項目（8つ目の「押せば必ず当たる」）から、Tab で次のまとまりへ。
+  await page.locator("#sureHit").focus();
   await page.keyboard.press("Tab");
   assert(await summary.evaluate((node) => document.activeElement === node), "Tab must reach the next details summary");
   await page.keyboard.press("Enter");
