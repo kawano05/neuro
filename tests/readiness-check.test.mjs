@@ -197,6 +197,31 @@ test("another participant's records are not evidence", () => {
   assert.equal(evaluateReadiness(runs, "p2").allMet, true);
 });
 
+test("sure-hit runs are never evidence, however good they look", () => {
+  // 押せば必ず当たる回（config.sureHit）。高い音だけは押さない合図が無いので、ねらわずに
+  // 押しつづけただけで goHitRate 1 / commissionRate 0（差は最大）になる。さかなつりも、
+  // 食いついてから押せば いつでも釣れる。どちらも、確かめたことにはならない。
+  const sureRuns = [
+    run("gonogo", { goHitRate: 1, commissionRate: 0 }, { sureHit: true }),
+    run("gonogo", { goHitRate: 1, commissionRate: 0 }, { sureHit: true }),
+    run("rt", { meanRtMs: 640 }, { sureHit: true }),
+    run("rt", { meanRtMs: 700 }, { sureHit: true }),
+    run("sms", { sdRawOffsetMs: 120 }),
+    run("sms", { sdRawOffsetMs: 150 }),
+  ];
+  const result = evaluateReadiness(sureRuns, "p1");
+  assert.equal(checkById(result, "ruleExecution").met, true, "ふだんの回は、これまでどおり根拠になる");
+  assert.equal(result.allMet, false);
+  const unmet = result.checks.filter((check) => !check.met);
+  assert.equal(unmet.length, 2, "高い音だけとさかなつりの2つは、根拠が無いまま");
+  unmet.forEach((check) => assert.match(check.reason, /あと2回/, "回数に数えない（あと2回のまま）"));
+  assert.equal(resolveReadinessState({ difficultyMode: "measure" }, sureRuns, "p1"), "overridden");
+
+  // ふだんの回が そろっていれば、押せば必ず当たる回が混ざっていても成立のまま。
+  const mixed = [...readyRuns(), ...sureRuns.slice(0, 4)];
+  assert.equal(evaluateReadiness(mixed, "p1").allMet, true);
+});
+
 // ---------------------------------------------------------------------
 // 記録される値（session.config.readiness）
 // ---------------------------------------------------------------------
