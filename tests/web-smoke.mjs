@@ -1527,8 +1527,8 @@ async function checkTimingParty(page, project) {
     },
     { key: storageKey }
   );
+  // 読み込み直しは exposePresentationContext の中で行う（保存した設定は、その読み込みで効く）。
   await exposePresentationContext(page);
-  await page.reload();
   await page.locator("#startStage").click();
   await launchPracticeHighNotes(page);
   await finishReady(page);
@@ -4325,7 +4325,6 @@ async function checkRhythmVisualProfiles(page, project) {
 
   // 新規利用者は、支援者が設定を触らなくても通常練習のレーンから始まる。
   await exposePresentationContext(page);
-  await page.reload();
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
