@@ -103,6 +103,8 @@ export function createMusicRoomGame(mode) {
     let waiting = false;
     let finishTimer = null;
     let finished = false;
+    // 鳴らした楽器（けっかに並べる）。すきな 楽器 は押した順、せんせいと は せいかいの順。
+    let played = [];
 
     const instrumentName = (id) => t(`music.instrument.${id}`);
 
@@ -117,6 +119,7 @@ export function createMusicRoomGame(mode) {
           logLabel: "音あそび（すきな がっき）",
           onPress() {
             const id = MUSIC_INSTRUMENTS[cursor];
+            played.push(id);
             const card = playCard(id);
             update();
             return { source: card };
@@ -126,7 +129,8 @@ export function createMusicRoomGame(mode) {
           // 押すたびの「あと○かい」は読まない（楽器の音を聞かせる遊び）。
           progressSpeech: () => "",
           finishSpeech: () => t("music.free.finish"),
-          finishSummary: () => ({ presses: MUSIC_FREE_PRESSES }),
+          // けっか（games/results.js）には、鳴らした楽器を1つずつ並べる（同じ楽器は1回）。
+          finishSummary: () => ({ presses: MUSIC_FREE_PRESSES, music: { mode: "free", played: [...new Set(played)] } }),
           onFinale: () => fx?.finale?.(stageEl?.querySelector(".music-room") || stageEl, { theme: gameId }),
         });
 
@@ -213,6 +217,7 @@ export function createMusicRoomGame(mode) {
       }
       // せいかい: 枠を止めて「パーン」と ほめる。
       solved += 1;
+      played.push(id);
       waiting = true;
       stopCursor();
       window.clearTimeout(holdTimer);
@@ -235,7 +240,7 @@ export function createMusicRoomGame(mode) {
         finishTimer = window.setTimeout(() => {
           finishTimer = null;
           celebrate(ctx, prefs, t("music.teacher.finish"));
-          finish({ presses, rounds: MUSIC_TEACHER_ROUNDS, wrong });
+          finish({ presses, rounds: MUSIC_TEACHER_ROUNDS, wrong, music: { mode: "teacher", played: [...played] } });
         }, MUSIC_FINISH_DELAY_MS);
         return true;
       }
@@ -325,6 +330,7 @@ export function createMusicRoomGame(mode) {
         wrong = 0;
         finished = false;
         target = null;
+        played = [];
         flow?.reset();
         build();
         if (teacherMode) askNext();

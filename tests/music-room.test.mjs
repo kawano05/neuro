@@ -21,6 +21,7 @@ import {
   pickMusicTarget,
 } from "../src/lib/games/musicRoom.js";
 import { findGameModule } from "../src/lib/games/registry.js";
+import { resultRenderers } from "../src/lib/games/results.js";
 import { translate } from "../src/lib/i18n.js";
 import { partyThemeFor } from "../src/lib/partyThemes.js";
 import { SOUND_CREDITS } from "../src/lib/soundCredits.js";
@@ -99,6 +100,22 @@ test("every instrument has a picture, a sound, a name and a teacher's line, with
   assert.ok(credit, "FluidR3_GM のクレジットがある");
   assert.equal(credit.license, "CC BY 3.0");
   assert.match(credit.author, /Frank Wen/);
+});
+
+test("the result shows the instruments played, not the animals of another game", () => {
+  const t = (key, values) => translate(key, "ruby", values);
+  const free = resultRenderers.completion(
+    { presses: 10, music: { mode: "free", played: ["piano", "taiko", "bell"] } },
+    { t, gameId: "music-free" }
+  );
+  assert.match(free, /10回 楽器を 鳴らしたよ/);
+  assert.equal((free.match(/is-instrument/g) || []).length, 3, "鳴らした楽器を並べる");
+  assert.doesNotMatch(free, /ひきに会えた/, "いないいない ばあ の文を出さない");
+  const teacher = resultRenderers.completion(
+    { presses: 7, rounds: 5, wrong: 2, music: { mode: "teacher", played: ["piano", "bell", "taiko", "trumpet", "castanets"] } },
+    { t, gameId: "music-teacher" }
+  );
+  assert.match(teacher, /せんせいの 楽器を 5こ 鳴らせたよ/);
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

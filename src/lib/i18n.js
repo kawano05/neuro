@@ -208,6 +208,9 @@ const STRINGS = {
     en: "{h} {h:home run|home runs}, {k} {k:hit|hits}",
   },
   "result.balloon.summary": { ruby: "ふうせんが {n}こ われたよ", kanji: "ふうせんが {n}こ われたよ", kana: "ふうせんが {n}こ われたよ", en: "You popped {n} {n:balloon|balloons}" },
+  // 音あそび（音楽室。games/musicRoom.js）のけっか。
+  "result.music.free.summary": { ruby: "{n}回[かい] 楽器[がっき]を 鳴[な]らしたよ", kanji: "{n}回 楽器を 鳴らしたよ", kana: "{n}かい がっきを ならしたよ", en: "You played {n} {n:time|times}" },
+  "result.music.teacher.summary": { ruby: "せんせいの 楽器[がっき]を {n}こ 鳴[な]らせたよ", kanji: "せんせいの 楽器を {n}こ 鳴らせたよ", kana: "せんせいの がっきを {n}こ ならせたよ", en: "You played {n} of the teacher's instruments" },
   "result.coloring.summary": { ruby: "{name}の ぬりえが できたよ", kanji: "{name}の ぬりえが できたよ", kana: "{name}の ぬりえが できたよ", en: "Your {name} picture is done" },
 
   // 押す前の1行だけ。言葉の説明は要らない、絵と音で分かるように、と
