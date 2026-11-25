@@ -86,7 +86,22 @@ export const gameTiles = [
   { id: "fishing", taskType: "rt", title: "おとで つる", description: "おとが なったら すぐ おそう", order: 9, enabled: true, iconClass: "fa-solid fa-fish" },
   { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 10, enabled: true, iconClass: "fa-solid fa-fish-fins" },
   { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 11, enabled: true, iconClass: "fa-solid fa-stopwatch" },
+  // 音あそび（音楽室。2026-11-25）。れんしゅうの回のホームの「音あそび」は、この2つの入口
+  // （musicCornerTile）。測定の課題ではないので taskType を持たない（games/musicRoom.js）。
+  { id: "music-free", taskType: null, resultType: "completion", title: "すきな がっき", description: "おすと わくの がっきが なるよ", order: 12, enabled: true, iconClass: "fa-solid fa-music" },
+  { id: "music-teacher", taskType: null, resultType: "completion", title: "せんせいと", description: "せんせいが いった がっきを ならそう", order: 13, enabled: true, iconClass: "fa-solid fa-music" },
 ];
+
+/**
+ * 音あそび（音楽室）の2つの遊び方をまとめる二階層目への入口（2026-11-25）。れんしゅうの回の
+ * ホームの「音あそび」はこれ。そくていの回のホームでは、前の「高い音だけ」（gonogo）が出る。
+ */
+export const musicCornerTile = {
+  id: "music-corner",
+  title: "おとあそび",
+  description: "がっきを ならそう",
+  iconClass: "fa-solid fa-music",
+};
 
 /** 視覚タイミング課題2種をまとめる二階層目への入口。 */
 export const slotCornerTile = {
@@ -424,6 +439,8 @@ export const gameHowTo = {
   "slot-l1": ["howto.slot-l1.1", "howto.slot-l1.2", "howto.slot-l1.3"],
   "slot-l2": ["howto.slot-l2.1", "howto.slot-l2.2", "howto.slot-l2.3"],
   gonogo: ["howto.gonogo.1", "howto.gonogo.2"],
+  "music-free": ["howto.music-free.1", "howto.music-free.2"],
+  "music-teacher": ["howto.music-teacher.1", "howto.music-teacher.2"],
   calibration: ["howto.calibration.1", "howto.calibration.2", "howto.calibration.3"],
   crane: ["howto.crane.1", "howto.crane.2", "howto.crane.3", "howto.crane.4"],
   fishing: ["howto.fishing.1", "howto.fishing.2", "howto.fishing.3", "howto.fishing.4"],

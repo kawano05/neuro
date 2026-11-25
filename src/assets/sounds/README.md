@@ -11,6 +11,8 @@
 | `creature-dolphin.wav` | 押したときの音「生きものの声」のイルカ | Felix Blume（CC0） |
 | `bat-homerun.wav` / `bat-hit.wav` | ボールを打つ遊びの「カキーン」 | OtoLogic「SNES 野球01」（CC BY 4.0） |
 | `homerun-cheer.mp3` | ホームランの歓声 | OtoLogic「SNES 野球01」（CC BY 4.0） |
+| `instrument-piano.wav` / `instrument-taiko.wav` / `instrument-bell.wav` / `instrument-xylophone.wav` / `instrument-castanets.wav` / `instrument-trumpet.wav` | 音あそび（音楽室）で、枠のある楽器を押したときの音（ピアノ・太鼓・すず・もっきん・カスタネット・ラッパ） | FluidR3_GM（Frank Wen）の acoustic_grand_piano C4・taiko_drum C3・tinkle_bell C5・xylophone C5・woodblock C5・trumpet C5。gleitz/midi-js-soundfonts の書き出し（CC BY 3.0） |
+| `orchestra-hit.wav` | 音あそびで、先生の言った楽器を鳴らせたときの「パーン」（雰囲気が ふつう 以上の回だけ） | FluidR3_GM の orchestra_hit C4（同上） |
 
 笑い声（`laugh`）、カメ・タコ・カニは、まだ合成音です。
 

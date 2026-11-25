@@ -37,6 +37,9 @@ export const PARTY_THEME_OF = Object.freeze({
   fishing: "fishing",
   "fishing-gonogo": "fishing",
   gonogo: "gonogo",
+  // 音あそび（音楽室。2026-11-25）は、音符が舞う 音あそび の型を使う。
+  "music-free": "gonogo",
+  "music-teacher": "gonogo",
 });
 
 const PARTY = ["#FF8082", "#03AF7A", "#F6AA00", "#4DC4FF", "#D65DB1", "#FF4B00", "#FFFFFF"];

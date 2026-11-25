@@ -47,6 +47,10 @@ export const TILE_THEME = {
   baseball: { palette: "baseball", art: "baseball", level: "used" },
   "slot-corner": { palette: "reel", art: "reel", level: "used" },
   gonogo: { palette: "high", art: "high", level: "used" },
+  // 音あそび（音楽室。2026-11-25）。れんしゅうの回のホームでは、高い音だけ と同じ⑥の場所に出る。
+  "music-corner": { palette: "high", art: "high", level: "easy" },
+  "music-free": { palette: "high", art: "high", level: "easy" },
+  "music-teacher": { palette: "high", art: "high", level: "used" },
   "crane-corner": { palette: "arm", art: "arm", level: "challenge" },
   "fishing-corner": { palette: "fish", art: "fish", level: "challenge" },
   "learning-corner": { palette: "learn", art: "learn", level: "other" },

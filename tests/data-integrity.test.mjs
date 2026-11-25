@@ -204,7 +204,9 @@ test("the redesign's settings survive a reload and fall back on unknown values",
   assert.equal(sanitizeState({ settings: { scanFeedback: "beep" } }).settings.scanFeedback, "speak");
   // はじめの遊びは、遊びごとに見え方と音を持つ。既定の音に「びっくりする音」は使わない
   // （強すぎる音は発作につながりうる、と言われている）。
-  assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "baseball", "color-legacy", "coloring"]);
+  assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "baseball", "color-legacy", "coloring", "music-free", "music-teacher"]);
+  // 音あそび（音楽室）は、押したときの音が楽器そのものなので、選べるのは おいわいだけ（2026-11-25）。
+  assert.deepEqual(defaults.playPrefs["music-free"], { cheer: "both" });
   // ボールを打つ遊びは、背景の代わりにボールの速さを持つ（遊びごとに項目が違う）。
   assert.deepEqual(defaults.playPrefs.baseball, { speed: "normal", sound: "bat", cheer: "both" });
   Object.values(defaults.playPrefs).forEach((prefs) => {

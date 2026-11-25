@@ -105,6 +105,80 @@ const SOUNDS = [
     rate: 32000,
     format: "wav",
   },
+  // 音あそび（音楽室）の楽器（2026-11-25。押すと、枠のある楽器の音が鳴る）。元は
+  // FluidR3_GM（Frank Wen、CC BY 3.0）の1音ずつの書き出し。gleitz/midi-js-soundfonts の
+  // FluidR3_GM/<楽器>-mp3/<音>.mp3 を、名前を変えて fluidr3/ に置く。
+  {
+    name: "instrument-piano",
+    file: "fluidr3/fluidr3-acoustic_grand_piano-C4.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/acoustic_grand_piano-mp3/C4.mp3",
+    start: 0,
+    end: 1.3,
+    fadeOut: 0.5,
+    rate: 32000,
+    format: "wav",
+  },
+  {
+    name: "instrument-trumpet",
+    file: "fluidr3/fluidr3-trumpet-C5.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/trumpet-mp3/C5.mp3",
+    start: 0,
+    end: 1.0,
+    fadeOut: 0.35,
+    rate: 32000,
+    format: "wav",
+  },
+  {
+    name: "instrument-taiko",
+    file: "fluidr3/fluidr3-taiko_drum-C3.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/taiko_drum-mp3/C3.mp3",
+    start: 0,
+    end: 0.9,
+    // iPad のスピーカーで出ない低い所を先に落とす。落とさないと、低い山で −1dBFS に当たって
+    // そろえる大きさまで上げられない（スピーカー相当で −23dB に止まった）。
+    filters: ["highpass=f=220"],
+    fadeOut: 0.3,
+    format: "wav",
+  },
+  {
+    name: "instrument-bell",
+    file: "fluidr3/fluidr3-tinkle_bell-C5.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/tinkle_bell-mp3/C5.mp3",
+    start: 0,
+    end: 1.2,
+    fadeOut: 0.5,
+    rate: 32000,
+    format: "wav",
+  },
+  {
+    name: "instrument-xylophone",
+    file: "fluidr3/fluidr3-xylophone-C5.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/xylophone-mp3/C5.mp3",
+    start: 0,
+    end: 0.8,
+    fadeOut: 0.3,
+    rate: 32000,
+    format: "wav",
+  },
+  {
+    name: "instrument-castanets",
+    file: "fluidr3/fluidr3-woodblock-C5.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/woodblock-mp3/C5.mp3",
+    start: 0,
+    end: 0.4,
+    fadeOut: 0.12,
+    format: "wav",
+  },
+  // 先生の言った楽器を鳴らせたときの「パーン」（オーケストラ・ヒット）。
+  {
+    name: "orchestra-hit",
+    file: "fluidr3/fluidr3-orchestra_hit-C4.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/orchestra_hit-mp3/C4.mp3",
+    start: 0,
+    end: 1.1,
+    fadeOut: 0.45,
+    format: "wav",
+  },
 ];
 
 function ffmpeg(args, input) {
