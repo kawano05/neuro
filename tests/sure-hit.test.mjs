@@ -113,7 +113,7 @@ test("the settings it overrides are switched off with the reason in their own ro
   // 既定に戻す: 使えない項目は戻さない。全部が使えない まとまり（さかなつり）は、理由を出して押せない。
   const fishing = settingsGroup("fishing");
   assert.equal(resetPlan(fishing, on).blockedReason, "「押せば必ず当たる」がオンのあいだは、戻せません。");
-  const slotPlan = resetPlan(settingsGroup("slot"), { ...on, slotCycleMs: 4800 });
+  const slotPlan = resetPlan(settingsGroup("slot"), { ...on, slotCycleMs: 7200 });
   assert.deepEqual(slotPlan.changes.map(({ field }) => field.key), ["slotCycleMs"]);
   assert.deepEqual(slotPlan.kept.map(({ field }) => field.key), ["slotToleranceMs"]);
   assert.match(describeReset(settingsGroup("slot"), slotPlan), /変えていないもの: 「合った」にする広さ（「押せば必ず当たる」がオンのあいだは使いません）/);

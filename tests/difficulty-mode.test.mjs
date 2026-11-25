@@ -24,6 +24,7 @@ import {
 import { buildPlan, resolveParams } from "../src/lib/games/rhythm.js";
 import { cranePresets, cueTones, fishingPresets, rhythmPresets, slotPresets } from "../src/lib/content.js";
 import { sanitizeState } from "../src/lib/state.js";
+import { TIMING_LEVELS_VERSION } from "../src/lib/timingLevels.js";
 
 let passed = 0;
 let failed = 0;
@@ -182,9 +183,11 @@ test("fishing lets a practice run choose how long a bite lasts, never a measurem
     assert.equal(measured.fakeRatio, fishingPresets[gameId].fakeRatio);
   }
   // 保存: 範囲の中は残り、外れた値は端へ寄せ（ほかの難しさの設定と同じ）、数でなければ既定（null）。
-  assert.equal(sanitizeState({ settings: { fishingLimitMs: 3000 } }).settings.fishingLimitMs, 3000);
-  assert.equal(sanitizeState({ settings: { fishingLimitMs: 50 } }).settings.fishingLimitMs, 800);
-  assert.equal(sanitizeState({ settings: { fishingLimitMs: "long" } }).settings.fishingLimitMs, null);
+  // 今の版で保存した設定として読む（版の無い保存は timingLevels.js が前の段階として移す）。
+  const saved = (fishingLimitMs) => ({ settings: { timingLevels: TIMING_LEVELS_VERSION, fishingLimitMs } });
+  assert.equal(sanitizeState(saved(3000)).settings.fishingLimitMs, 3000);
+  assert.equal(sanitizeState(saved(50)).settings.fishingLimitMs, 800);
+  assert.equal(sanitizeState(saved("long")).settings.fishingLimitMs, null);
   assert.equal(sanitizeState({}).settings.fishingLimitMs, null);
 });
 
