@@ -6000,6 +6000,15 @@ async function checkIpadAccessibilityLayout(page, project) {
 
 // 配信応答だけで共有 ctx を公開する。製品コードに障害注入用の入口は作らない。
 async function exposePresentationContext(page) {
+  // Service Worker が手元の写しから JS を返すと、下の差し込み（route）を通らず、読み込み直したあとに
+  // ctx が出てこない（読み込み直す時刻しだいで、出たり出なかったりした）。この検査のあいだは登録させない。
+  await page.addInitScript(() => {
+    if (navigator.serviceWorker) navigator.serviceWorker.register = () => new Promise(() => {});
+  });
+  await page.evaluate(async () => {
+    const registrations = (await navigator.serviceWorker?.getRegistrations?.()) || [];
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+  });
   await page.route("**/assets/*.js", async (route) => {
     const response = await route.fetch();
     let body = await response.text();
@@ -6847,13 +6856,12 @@ async function checkSwitchUnavailableExit(page) {
     }
   });
   for (const fault of ["missing", "suspended"]) {
-    for (const game of ["fishing", "gonogo"]) {
+    // 音で押す遊び2つ。音あそびの札は 2026-11-25 から、れんしゅうの回は音楽室なので、さかなつりの2つで見る。
+    for (const game of ["fishing", "fishing-gonogo"]) {
       await page.evaluate((fault) => sessionStorage.setItem("audio-fault", fault), fault);
       await page.reload();
       await page.keyboard.press("Space");
-      if (game === "fishing") {
-        await openActivity(page, t("tile.fishing-corner.title"));
-      }
+      await openActivity(page, t("tile.fishing-corner.title"));
       await openActivity(page, t(`tile.${game}.title`));
       await page.waitForTimeout(180);
       await page.keyboard.press("Space");
