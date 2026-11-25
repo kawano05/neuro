@@ -15,7 +15,7 @@ import { chromium, devices, webkit } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
-import { colorLegacyPreset, cueTones, storageKey } from "../src/lib/content.js";
+import { colorLegacyPreset, cranePresets, cueTones, storageKey } from "../src/lib/content.js";
 import { resolveTextMode, toSpeechText, translate } from "../src/lib/i18n.js";
 import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
 import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLegacy.js";
@@ -4583,7 +4583,10 @@ async function checkEndlessEndsOnFailure(page) {
   //
   // 掃引の折り返し（sweepMs 経過＝100%地点）で止める。狙いの上限は80/78 な
   // ので、grip 圏（半径 toleranceR/2 = 7.5）には決して入らない。
-  const sweepMs = 2200;
+  // 掃引の時間は れんしゅうの回の既定（cranePresets）から引く。2026-11-25 に 2200 から 3200 へ遅くした
+  // とき、ここが 2200 の決め打ちのままで、折り返しの手前（7割ほど）で止めて たまたま掴み、回が
+  // 終わらずに時間切れになった（CI の phone-tall）。
+  const sweepMs = cranePresets.sweepMs;
   await waitForCraneStatus(page, "横に動きます");
   await page.waitForTimeout(sweepMs);
   await page.locator("#gameStage").click();
