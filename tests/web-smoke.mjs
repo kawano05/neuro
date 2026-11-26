@@ -15,7 +15,7 @@ import { chromium, devices, webkit } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
-import { colorLegacyPreset, cueTones, storageKey } from "../src/lib/content.js";
+import { colorLegacyPreset, cranePresets, cueTones, storageKey } from "../src/lib/content.js";
 import { resolveTextMode, toSpeechText, translate } from "../src/lib/i18n.js";
 import { RHYTHM_FINAL_FEEDBACK_MS } from "../src/lib/games/rhythm.js";
 import { POP_FADE_MS, POP_SHOW_MS, popAnimalFor } from "../src/lib/games/colorLegacy.js";
@@ -2646,8 +2646,9 @@ async function checkSettingsDetails(page) {
   await page.locator("#hideVisualTasks").check();
   for (const [id, value] of [
     ["scanInterval", "2200"],
-    ["slotCycleMs", "4800"],
-    ["craneSweepMs", "3200"]
+    // 既定と違う値にする（2026-11-25 に既定を一段階遅くした。絵あわせ 4.8秒・アーム 3.2秒）。
+    ["slotCycleMs", "7200"],
+    ["craneSweepMs", "4800"]
   ]) {
     await page.locator("#" + id).evaluate((node, next) => {
       node.value = next;
@@ -2656,19 +2657,19 @@ async function checkSettingsDetails(page) {
   }
   await page.locator("#rhythmBpm").selectOption("40");
   await page.locator("#rhythmTargetBeats").selectOption("10");
-  await page.locator("#fishingLimitMs").selectOption("3000");
+  await page.locator("#fishingLimitMs").selectOption("4500");
   await page.locator("#visualGuidance").uncheck();
   await page.locator("#craneAudioGuidance").check();
   const changed = await savedSettings();
   assert(
-    changed.targetBeats === 10 && changed.craneSweepMs === 3200 && changed.fishingLimitMs === 3000,
+    changed.targetBeats === 10 && changed.craneSweepMs === 4800 && changed.fishingLimitMs === 4500,
     "Typed values and the targetBeats alias must save correctly"
   );
   // VoiceOver はつまみの値を aria-valuetext で読む。画面の文（「2.2秒」）と同じで、生の値（2200）ではない。
   for (const [id, text] of [
     ["scanInterval", "2.2秒"],
-    ["slotCycleMs", "4.8秒"],
-    ["craneSweepMs", "3.2秒"]
+    ["slotCycleMs", "7.2秒"],
+    ["craneSweepMs", "4.8秒"]
   ]) {
     assert((await page.locator("#" + id).getAttribute("aria-valuetext")) === text, `${id} must read as ${text}`);
     assert((await page.locator(`#${id}Value`).textContent()) === text, `${id} must show ${text}`);
@@ -2873,7 +2874,7 @@ async function checkSettingsReset(page) {
 
   // リール: 変えてから、最後の項目から Tab で「既定に戻す」へ届き、Enter で戻す。
   await openSettingsDetails(page, "play");
-  await setRange("slotCycleMs", "4800");
+  await setRange("slotCycleMs", "7200");
   await setRange("slotToleranceMs", "100");
   await page.locator("#slotL2Rounds").focus();
   await page.keyboard.press("Tab");
@@ -2895,7 +2896,7 @@ async function checkSettingsReset(page) {
   const status = page.locator("#slotResetStatus");
   await status.waitFor({ state: "visible" });
   assert(
-    (await status.textContent()).includes("絵が回る速さ（4.8秒 → 3.2秒）"),
+    (await status.textContent()).includes("絵が回る速さ（7.2秒 → 4.8秒）"),
     "The supporter must see what was reset"
   );
   assert((await page.locator("#liveRegion").textContent()).includes("既定に戻しました"), "The reset must be announced");
@@ -2909,7 +2910,7 @@ async function checkSettingsReset(page) {
   assert(await status.isHidden(), "A stale reset message must go away after a manual change");
 
   // そくていの回: 固定される項目は戻さない。ボタンは押せず、理由をすぐ下に出す。
-  await setRange("craneSweepMs", "3200");
+  await setRange("craneSweepMs", "4800");
   await openSettingsDetails(page, "research");
   await page.locator("#difficultyMode").selectOption("measure");
   assert(await page.locator("#craneReset").isDisabled(), "Reset of a measured group must be locked in a measured run");
@@ -2917,7 +2918,7 @@ async function checkSettingsReset(page) {
     (await page.locator("#craneResetStatus").textContent()).includes("そくていの回は固定"),
     "The locked reset must say why"
   );
-  assert((await savedSettings()).craneSweepMs === 3200, "A measured run must keep the practice value");
+  assert((await savedSettings()).craneSweepMs === 4800, "A measured run must keep the practice value");
   await page.locator("#difficultyMode").selectOption("practice");
   await page.locator("#craneReset").click();
   assert((await savedSettings()).craneSweepMs === null, "Practice reset returns to the game default (null)");
@@ -4481,7 +4482,10 @@ async function checkEndlessEndsOnFailure(page) {
   //
   // 掃引の折り返し（sweepMs 経過＝100%地点）で止める。狙いの上限は80/78 な
   // ので、grip 圏（半径 toleranceR/2 = 7.5）には決して入らない。
-  const sweepMs = 2200;
+  // 掃引の時間は れんしゅうの回の既定（cranePresets）から引く。2026-11-25 に 2200 から 3200 へ遅くした
+  // とき、ここが 2200 の決め打ちのままで、折り返しの手前（7割ほど）で止めて たまたま掴み、回が
+  // 終わらずに時間切れになった（CI の phone-tall）。
+  const sweepMs = cranePresets.sweepMs;
   await waitForCraneStatus(page, "横に動きます");
   await page.waitForTimeout(sweepMs);
   await page.locator("#gameStage").click();

@@ -874,8 +874,9 @@ test("loadState migrates the complete v3 state to v4 without converting old rhyt
 
   const migrated = loadState();
   assert.equal(migrated.settings.scanInterval, 2800, "v3 must win over v2");
-  assert.equal(migrated.settings.rhythmBpm, 50, "legacy rhythm settings stay for one version");
-  assert.equal(migrated.settings.slotCycleMs, 3200, "new v4 settings receive safe defaults");
+  // 50 は前の速さの段階の「ふつう」の数なので、今の段階の 40 へ移る（timingLevels.js、2026-11-25）。
+  assert.equal(migrated.settings.rhythmBpm, 40, "legacy rhythm settings stay, moved to the current speed levels");
+  assert.equal(migrated.settings.slotCycleMs, cloneDefaultState().settings.slotCycleMs, "new v4 settings receive safe defaults");
   assert.equal(migrated.sessions.length, 1);
   assert.equal(migrated.sessions[0].gameId, "rhythm-l1");
   assert.equal(migrated.sessions[0].taskType, "sms");

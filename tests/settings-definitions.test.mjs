@@ -27,6 +27,7 @@ import {
   unavailableReason,
 } from "../src/lib/settingsFields.js";
 import { defaultState, sanitizeState } from "../src/lib/state.js";
+import { TIMING_LEVELS_VERSION } from "../src/lib/timingLevels.js";
 import { say, supporterLang } from "../src/lib/supporterText.js";
 
 let passed = 0;
@@ -44,9 +45,13 @@ function test(name, fn) {
   }
 }
 
-/** 設定1つだけを入れて読み込み直したときの値（state.js の sanitize を通す）。 */
+/**
+ * 設定1つだけを入れて読み込み直したときの値（state.js の sanitize を通す）。今の版で保存した
+ * 設定として読む（版の無い保存は、前の速さの段階として timingLevels.js が移す。それは
+ * tests/timing-levels.test.mjs が見る）。
+ */
 function sanitized(key, value) {
-  return sanitizeState({ settings: { [key]: value } }).settings[key];
+  return sanitizeState({ settings: { timingLevels: TIMING_LEVELS_VERSION, [key]: value } }).settings[key];
 }
 
 test("every field on the screen comes from the shared definitions, once", () => {
@@ -139,15 +144,15 @@ test("values read as the same sentence on screen and in VoiceOver", () => {
   assert.equal(read("speechVolume", 0.6), "60%");
   assert.equal(read("slotL1Rounds", 8), "8回");
   assert.equal(read("craneToleranceR", 15), "15");
-  assert.equal(read("craneSweepMs", null), "2.2秒", "null はプリセットの値で読む");
+  assert.equal(read("craneSweepMs", null), "3.2秒", "null はプリセットの値で読む");
   assert.equal(read("rhythmBpm", null), "あそびごとの既定");
-  assert.equal(read("fishingLimitMs", 3000), "ながい（3秒）");
+  assert.equal(read("fishingLimitMs", 4500), "ながい（4.5秒）");
   assert.equal(read("largeText", true), "オン");
   // つまみは生の値（1600）を読ませない。どの range にも文の形がある。
   SETTINGS_FIELDS.filter((field) => field.type === "range").forEach((field) => {
     assert.ok(field.format, `${field.key} に format がある`);
   });
-  assert.equal(fieldValue(settingsField("craneSweepMs"), { craneSweepMs: null }), 2200);
+  assert.equal(fieldValue(settingsField("craneSweepMs"), { craneSweepMs: null }), 3200);
   assert.equal(fieldValue(settingsField("rhythmBpm"), { rhythmBpm: null }), null, "選択肢の null は「あそびごとの既定」のまま");
   assert.equal(fieldValue(settingsField("textMode"), { textMode: "kana" }), "ruby", "選べなくなった表記は読み替える");
   assert.equal(fieldValue(settingsField("difficultyMode"), { difficultyMode: "???" }), "practice");
@@ -194,27 +199,27 @@ test("each detailed group can go back to the state.js defaults, except what cann
   assert.deepEqual(withReset, ["switch", "senses", "slot", "rhythm", "crane", "fishing"], "くわしい設定のまとまりごと");
 
   const slot = settingsGroup("slot");
-  const changed = { ...defaultState.settings, slotCycleMs: 4800, slotToleranceMs: 100 };
+  const changed = { ...defaultState.settings, slotCycleMs: 7200, slotToleranceMs: 100 };
   const plan = resetPlan(slot, changed);
   assert.equal(plan.blockedReason, "");
   assert.deepEqual(
     plan.changes.map(({ field, from, to }) => [field.key, from, to]),
     [
-      ["slotCycleMs", 4800, defaultState.settings.slotCycleMs],
+      ["slotCycleMs", 7200, defaultState.settings.slotCycleMs],
       ["slotToleranceMs", 100, defaultState.settings.slotToleranceMs],
     ]
   );
   assert.equal(
     describeReset(slot, plan),
-    "「絵あわせ」を既定に戻しました: 絵が回る速さ（4.8秒 → 3.2秒）、「合った」にする広さ（0.1秒 → 0.22秒）。"
+    "「絵あわせ」を既定に戻しました: 絵が回る速さ（7.2秒 → 4.8秒）、「合った」にする広さ（0.1秒 → 0.22秒）。"
   );
   assert.equal(describeReset(slot, resetPlan(slot, defaultState.settings)), "「絵あわせ」は、もう既定のままです。");
 
   // null（あそびごとの既定）へ戻すものは null へ。値の文はプリセットで読む。
   const crane = settingsGroup("crane");
-  const cranePlan = resetPlan(crane, { ...defaultState.settings, craneSweepMs: 3200, craneAudioGuidance: true });
+  const cranePlan = resetPlan(crane, { ...defaultState.settings, craneSweepMs: 4800, craneAudioGuidance: true });
   assert.deepEqual(cranePlan.changes.map(({ field, to }) => [field.key, to]), [["craneSweepMs", null], ["craneAudioGuidance", false]]);
-  assert.match(describeReset(crane, cranePlan), /アームの速さ（3\.2秒 → 2\.2秒）/);
+  assert.match(describeReset(crane, cranePlan), /アームの速さ（4\.8秒 → 3\.2秒）/);
 
   // そくていの回: 固定される項目は戻さない。全部固定のまとまりは押せず、理由を出す。
   const measuring = { ...changed, difficultyMode: "measure" };
@@ -279,10 +284,10 @@ test("lock reasons, values and reset messages follow the supporter language", ()
   assert.equal(formatFieldValue(settingsField("largeText"), true, "en"), "On");
   assert.equal(formatFieldValue(settingsField("slotL2Rounds"), 1, "en"), "1 time");
   const slot = settingsGroup("slot");
-  const englishPractice = { ...defaultState.settings, textMode: "en", slotCycleMs: 4800 };
+  const englishPractice = { ...defaultState.settings, textMode: "en", slotCycleMs: 7200 };
   assert.equal(
     describeReset(slot, resetPlan(slot, englishPractice), "en"),
-    "Reset “Picture match” to the defaults: Spin speed (4.8 s → 3.2 s)."
+    "Reset “Picture match” to the defaults: Spin speed (7.2 s → 4.8 s)."
   );
   const blocked = resetPlan(slot, english);
   assert.equal(blocked.blockedReason, "Fixed in measured runs, so it cannot be reset.");

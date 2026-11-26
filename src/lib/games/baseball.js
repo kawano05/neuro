@@ -26,8 +26,12 @@ import { resolveSureHit } from "../difficultyMode.js";
 
 const GAME_ID = "baseball";
 
-/** 投げてからバットに届くまでの時間（ミリ秒）。この遊びの設定で選ぶ。 */
-export const PITCH_MS = { slow: 2300, normal: 1750, fast: 1300 };
+/**
+ * 投げてからバットに届くまでの時間（ミリ秒）。この遊びの設定で選ぶ。
+ * 2026-11-25 に、札はそのままで一段階ずつ遅くした（2300/1750/1300 から。打ち合わせで
+ * 「タイミングの遊びは全体にもう一段階遅く」。保存は札の名前なので、移し替えは要らない）。
+ */
+export const PITCH_MS = { slow: 3000, normal: 2300, fast: 1750 };
 /** 構えてから投げるまで。 */
 export const WINDUP_MS = 900;
 /** ぴったり（ホームラン）の幅と、ヒットの幅（到着時刻から前後）。 */

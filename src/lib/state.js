@@ -29,6 +29,7 @@ import { DIFFICULTY_MODES } from "./difficultyMode.js";
 import { READINESS_STATES } from "./readinessCheck.js";
 import { SELECTABLE_TEXT_MODES, TEXT_MODES } from "./i18n.js";
 import { sanitizeSlotSession } from "./games/slotState.js";
+import { TIMING_LEVELS_VERSION, migrateTimingLevels } from "./timingLevels.js";
 import { DEFAULT_PARTY, sanitizeParty } from "./party.js";
 import { sanitizePlayRecords } from "./playRecords.js";
 
@@ -227,7 +228,8 @@ export const defaultState = {
     // resolveSureHit）。既定はオフ。走らせた回は session.config.sureHit に残る。
     sureHit: false,
     // スロット型課題の練習条件。測定時は difficultyMode.js の slot-v1 固定値を使う。
-    slotCycleMs: 3200,
+    // slotCycleMs の既定は 2026-11-25 に 3200 から一段階遅くした（timingLevels.js）。
+    slotCycleMs: 4800,
     slotToleranceMs: 220,
     slotL1Rounds: 8,
     slotL2Rounds: 4,
@@ -240,8 +242,11 @@ export const defaultState = {
     craneSweepMs: null,
     craneToleranceR: null,
     // さかなつりの、アタリが続く長さ（ミリ秒）。null のとき content.js の
-    // fishingPresets（2000）。れんしゅうの回だけ効く（difficultyMode.js）。
+    // fishingPresets（3000）。れんしゅうの回だけ効く（difficultyMode.js）。
     fishingLimitMs: null,
+    // タイミングの遊びの速さの段階の版（timingLevels.js）。これより前の保存は、前の札の値を
+    // 同じ札の新しい値へ1回だけ移してから、この版を書く。
+    timingLevels: TIMING_LEVELS_VERSION,
     craneTargetTrials: null,
     // UFOキャッチャーで、走査カーソルが目標を通過したとき音を鳴らすか
     // （games/crane.js の maybePassTone）。
@@ -1243,7 +1248,8 @@ export function sanitizeState(candidate) {
   const fallback = cloneDefaultState();
   if (!isRecord(candidate)) return fallback;
 
-  const settings = isRecord(candidate.settings) ? candidate.settings : {};
+  // 前の段階の速さで保存された設定は、ここで今の段階へ移す（timingLevels.js。1回だけ）。
+  const settings = migrateTimingLevels(isRecord(candidate.settings) ? candidate.settings : {});
   const switchControlMode = booleanOr(
     settings.switchControlMode,
     fallback.settings.switchControlMode
@@ -1405,7 +1411,7 @@ export function sanitizeState(candidate) {
         settings.slotCycleMs,
         fallback.settings.slotCycleMs,
         2800,
-        9600,
+        12000,
         true
       ),
       slotToleranceMs: numberInRange(
@@ -1420,7 +1426,7 @@ export function sanitizeState(candidate) {
       // 範囲は sanitizeScanSession が config に許す幅（sweepMs 400〜10000 /
       // toleranceR 1〜50）の内側に収める。ここを外すと、設定どおりに遊んだ
       // セッションが保存時に別の値へ丸められて記録と食い違う。
-      craneSweepMs: nullableNumberInRange(settings.craneSweepMs, null, 800, 6000, true),
+      craneSweepMs: nullableNumberInRange(settings.craneSweepMs, null, 800, 10000, true),
       craneToleranceR: nullableNumberInRange(settings.craneToleranceR, null, 4, 40, true),
       fishingLimitMs: nullableNumberInRange(settings.fishingLimitMs, null, 800, 6000, true),
       craneTargetTrials: nullableNumberInRange(settings.craneTargetTrials, null, 3, 15, true),
@@ -1439,6 +1445,8 @@ export function sanitizeState(candidate) {
         settings.craneAudioGuidance,
         fallback.settings.craneAudioGuidance
       ),
+      // 上の migrateTimingLevels で今の段階へ移したので、今の版を書く。
+      timingLevels: TIMING_LEVELS_VERSION,
     },
     logs: Array.isArray(candidate.logs)
       ? candidate.logs.map(sanitizeLogEntry).filter(Boolean).slice(0, MAX_LOG_ENTRIES)
