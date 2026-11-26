@@ -1095,6 +1095,23 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
    * 打ち合わせで、力を入れたら「ボカーン」「ボヨーン」と音がするのがよい、
    * と例に出た（docs/design-renewal-2026-09-25.md §1.7）。ボカーンは playBoom。
    */
+  /**
+   * 音あそび（音楽室）で、押したときに鳴らす楽器の音（2026-11-25。games/musicRoom.js）。録音は
+   * src/assets/sounds/instrument-<id>.wav（FluidR3_GM、CC BY 3.0。soundCredits.js）。
+   * この遊びでは楽器の音が遊びの中身そのもの（鳴らすために押す）なので、効果音の設定では切らない
+   * （遊びの合図と同じ扱い）。音を出したくないときは、この遊びを選ばない。大きさは、ほかの録音と
+   * 同じ（合図の無い遊びなので、出口で持ち上がる。effectOutputGain）。鳴らせたら true。
+   */
+  function playInstrument(id) {
+    return trySample(`instrument-${id}`);
+  }
+
+  /** 先生の言った楽器を鳴らせたときの「パーン」（オーケストラ・ヒット）。効果音がオフなら鳴らさない。 */
+  function playFanfare() {
+    if (!getSettings().soundEnabled) return false;
+    return trySample("orchestra-hit");
+  }
+
   function playBoing() {
     if (!getSettings().soundEnabled) return null;
     if (trySample("boing")) return true;
@@ -1533,6 +1550,8 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     playChime,
     playBoom,
     playBoing,
+    playInstrument,
+    playFanfare,
     playLaugh,
     playCreature,
     playThrow,

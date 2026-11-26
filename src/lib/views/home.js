@@ -27,6 +27,7 @@ import {
   endlessTiles,
   fishingCornerTile,
   learningCornerTile,
+  musicCornerTile,
   slotCornerTile,
 } from "../content.js";
 
@@ -494,6 +495,16 @@ export function initHome(ctx) {
       return;
     }
 
+    if (activeCorner === "music") {
+      renderCornerHeadings("music");
+      const cornerGames = ["music-free", "music-teacher"].map(gameById).filter(Boolean);
+      renderScanList([...cornerGames, cornerBackTile()], (game) => {
+        if (game.id === "home-back") leaveCorner();
+        else ctx.gameHost.launch(game.id);
+      });
+      return;
+    }
+
     if (activeCorner === "learning") {
       renderCornerHeadings("learning");
       renderScanList([...activityTiles, cornerBackTile()], (tile) => {
@@ -517,7 +528,9 @@ export function initHome(ctx) {
       gameById("coloring"),
       gameById("baseball"),
       visibleSlotGames.length ? slotCornerTile : null,
-      gameById("gonogo"),
+      // ⑥ 音あそび。れんしゅうの回は音楽室（2026-11-25。games/musicRoom.js）、そくていの回は
+      // 前の「高い音だけ」（そくていの回の記録と比べられるように、刺激も入口も変えない）。
+      isMeasurementMode(state.settings) ? gameById("gonogo") : musicCornerTile,
       !state.settings.hideVisualTasks ? craneCornerTile : null,
       fishingCornerTile,
       learningCornerTile,
@@ -549,6 +562,7 @@ export function initHome(ctx) {
       else if (game.id === "slot-corner") enterCorner("slot", ctx.t("voice.enterCorner", { name: ctx.t("corner.slot.title") }));
       else if (game.id === "fishing-corner") enterCorner("fishing", ctx.t("voice.enterCorner", { name: ctx.t("corner.fishing.title") }));
       else if (game.id === "learning-corner") enterCorner("learning", ctx.t("voice.enterCorner", { name: ctx.t("corner.learning.title") }));
+      else if (game.id === "music-corner") enterCorner("music", ctx.t("voice.enterCorner", { name: ctx.t("corner.music.title") }));
       else ctx.gameHost.launch(game.id);
     });
   }

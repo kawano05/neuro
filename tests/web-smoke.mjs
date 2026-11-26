@@ -94,6 +94,7 @@ const checks = [
   ["plays start -> home -> color-legacy game -> home end to end", checkStartToHomeToGameFlow],
   ["finishes color-legacy with progress, result, retry, and home", checkColorCompletionFlow],
   ["plays the balloon and coloring games to the end, with live per-game settings", checkBeginnerGamesFlow],
+  ["plays the music room: any instrument, and the instrument the teacher names", checkMusicRoom],
   ["hits every pitch that is swung at and re-pitches a missed one in the baseball game", checkBaseballFlow],
   ["adds effects within the safety rules and never in a measured run", checkEffectsFollowSafetyRules],
   ["plays the party atmosphere: otter, sparkles, crowd, reward, and a frame that waits", checkPartyAtmosphere],
@@ -178,6 +179,17 @@ async function turnSureHitOn(page, extraSettings = {}) {
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
   await waitForActivityChoices(page, 9);
+}
+
+/**
+ * れんしゅうの回の「高い音だけ」（gonogo）を開く。ホームの音あそびは 2026-11-25 から、れんしゅうの回は
+ * 音楽室（games/musicRoom.js）なので、子どものホームからは開けない。遊びの作り（games/rhythm.js）は
+ * そくていの回で使い、れんしゅうの回の作りも残してあるので、検査からは直接開いて確かめる。
+ * 先に exposePresentationContext を呼んで、読み込み直しておくこと。
+ */
+async function launchPracticeHighNotes(page) {
+  await page.waitForFunction(() => Boolean(window.__presentationCtx?.gameHost));
+  await page.evaluate(() => window.__presentationCtx.gameHost.launch("gonogo"));
 }
 
 /**
@@ -474,9 +486,10 @@ async function checkSureHitTones(page) {
   const audioAvailable = await page.evaluate(() => Boolean(window.AudioContext || window.webkitAudioContext));
   // 合図が音の遊びなので、音の無いブラウザでは始まらない（checkRhythmL1GameFlow と同じ）。
   if (!audioAvailable) return SKIPPED;
+  await exposePresentationContext(page);
   await turnSureHitOn(page, { rhythmBpm: 60, targetBeats: 5 });
   if (!(await audioClockAdvances(page))) return SKIPPED;
-  await openActivity(page, t("tile.gonogo.title"));
+  await launchPracticeHighNotes(page);
   await waitForClass(page, "#gameView", "is-active");
   await page.locator(".game-ready").waitFor({ state: "visible" });
   await finishReady(page);
@@ -1514,9 +1527,10 @@ async function checkTimingParty(page, project) {
     },
     { key: storageKey }
   );
-  await page.reload();
+  // 読み込み直しは exposePresentationContext の中で行う（保存した設定は、その読み込みで効く）。
+  await exposePresentationContext(page);
   await page.locator("#startStage").click();
-  await openActivity(page, t("tile.gonogo.title"));
+  await launchPracticeHighNotes(page);
   await finishReady(page);
   await page.waitForTimeout(300);
   const waiting = await page.evaluate(() => ({
@@ -1767,6 +1781,83 @@ async function checkEffectsFollowSafetyRules(page) {
  * 設定は遊びごとに保存されてほかの遊びには及ばない、閉じたらフォーカスは
  * 遊びの面へ戻る（設定ボタンに残ると、次のひと押しでまた開いてしまう）。
  */
+/**
+ * 音あそび「音楽室」（2026-11-25。games/musicRoom.js）。ホームの⑥から二階層目に入る。
+ *   すきな 楽器 … 黄色い枠が楽器を回り、押すと枠の楽器がはずむ。10回でけっかへ。
+ *   せんせいと … 枠が先生の言った楽器に来たときに押すと せいかい。ちがう楽器で押すと、その楽器が
+ *                 鳴るだけで問いは進まない。5問でけっかへ。
+ * 押す時刻で選ぶ遊びなので、枠を読んでからキーを送るまでを1つの評価の中で行う（あいだに枠が動かない）。
+ */
+async function checkMusicRoom(page) {
+  await patchSettings(page, { scanInterval: 800, speechEnabled: false }, { allowMissing: true });
+  await page.locator("#startStage").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await waitForActivityChoices(page, 9);
+  const pressNow = () =>
+    page.evaluate(() => {
+      const framed = document.querySelector(".music-instrument.is-cursor")?.dataset.instrument || null;
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent("keyup", { key: " ", code: "Space", bubbles: true }));
+      return { framed, playing: document.querySelector(".music-instrument.is-playing")?.dataset.instrument || null };
+    });
+  const doneDots = () => page.locator(".music-top .pop-dot.is-done").count();
+
+  // --- すきな 楽器 ---
+  await openActivity(page, t("tile.music-corner.title"));
+  await openActivity(page, t("tile.music-free.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await finishReady(page);
+  await page.locator("#gameStageContent.module-music .music-room.is-free").waitFor({ state: "visible" });
+  assert((await page.locator(".music-instrument").count()) === 6, "Six instruments sit in the music room");
+  const first = await page.locator(".music-instrument.is-cursor").getAttribute("data-instrument");
+  await page.waitForFunction(
+    (id) => document.querySelector(".music-instrument.is-cursor")?.dataset.instrument !== id,
+    first,
+    { timeout: 3000 }
+  );
+  for (let press = 1; press <= 10; press += 1) {
+    const { framed, playing } = await pressNow();
+    assert(framed && playing === framed, `Press ${press} must play the framed instrument (${framed}), got ${playing}`);
+    if (press < 10) assert((await doneDots()) === press, `Press ${press} must fill ${press} dots`);
+    await page.waitForTimeout(260);
+  }
+  await waitForClass(page, "#resultView", "is-active", { timeout: 10_000 });
+
+  // --- せんせいと ---
+  await page.locator("#resultHome").click();
+  await waitForClass(page, "#homeView", "is-active");
+  await openActivity(page, t("tile.music-corner.title"));
+  await openActivity(page, t("tile.music-teacher.title"));
+  await waitForClass(page, "#gameView", "is-active");
+  await page.locator(".game-ready").waitFor({ state: "visible" });
+  await finishReady(page);
+  await page.locator("#gameStageContent.module-music .music-room.is-teacher .music-bubble").waitFor({ state: "visible" });
+  // ちがう楽器で押す（枠は先生の言った楽器の向かい側から始まる）。その楽器が鳴るだけで、問いは進まない。
+  const wrong = await pressNow();
+  const target = await page.locator(".music-instrument.is-target").getAttribute("data-instrument");
+  assert(wrong.framed !== target && wrong.playing === wrong.framed, "Another instrument must just play itself");
+  assert((await doneDots()) === 0, "A wrong instrument must not count as a solved round");
+  for (let round = 1; round <= 5; round += 1) {
+    await page.waitForFunction(
+      () => {
+        const named = document.querySelector(".music-instrument.is-target");
+        return Boolean(named?.classList.contains("is-cursor"));
+      },
+      null,
+      { timeout: 12_000 }
+    );
+    const right = await pressNow();
+    const named = await page.locator(".music-instrument.is-target").getAttribute("data-instrument");
+    assert(right.framed === named && right.playing === named, `Round ${round} must play the named instrument (${named})`);
+    if (round < 5) {
+      await page.locator(".music-bubble.is-correct").waitFor({ state: "visible", timeout: 2000 });
+      await page.locator(".music-bubble:not(.is-correct)").waitFor({ state: "visible", timeout: 4000 });
+    }
+  }
+  await waitForClass(page, "#resultView", "is-active", { timeout: 10_000 });
+}
+
 async function checkBeginnerGamesFlow(page) {
   const presses = BEGINNER_TARGET_PRESSES;
   await page.locator("#startStage").click();
@@ -2327,8 +2418,9 @@ async function checkAnyKeyOnUserScreens(page) {
   await waitForClass(page, "#homeView", "is-active");
   assert(await samePage(), "F5 on the start screen must start, not reload the page");
 
-  // 遊びの中：F5 で「やりかた」を抜けて始まる。
-  await openActivity(page, t("tile.gonogo.title"));
+  // 遊びの中：F5 で「やりかた」を抜けて始まる（説明の画面のある遊び。音あそびは 2026-11-25 から
+  // 二階層目に入るので、野球で見る）。
+  await openActivity(page, t("tile.baseball.title"));
   await waitForClass(page, "#gameView", "is-active");
   for (let attempt = 0; attempt < 4 && (await page.locator(".game-ready").count()) > 0; attempt += 1) {
     await page.waitForTimeout(250);
@@ -3774,6 +3866,8 @@ async function checkSlotSequentialFlow(page) {
  * state.sessions (games/rhythm.js destroy(), detailed-design.md §7.3).
  */
 async function checkRhythmL1GameFlow(page) {
+  // ホームの音あそびが「高い音だけ」を開くのは、そくていの回だけ（れんしゅうの回は音楽室。2026-11-25）。
+  await patchSettings(page, { difficultyMode: "measure" }, { allowMissing: true });
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -3892,8 +3986,14 @@ async function checkRhythmVisualProfiles(page, project) {
 
   async function launchGonogo() {
     await waitForClass(page, "#homeView", "is-active");
-    // 現行の gonogo は利用者と同じホームタイルから開く。
-    await openActivity(page, t("tile.gonogo.title"));
+    // そくていの回は利用者と同じホームタイルから開く。れんしゅうの回は 2026-11-25 から音あそびの札が
+    // 音楽室になったので、遊びの作りを直接開く（launchPracticeHighNotes）。
+    const measuring = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key) || "{}").settings?.difficultyMode === "measure",
+      storageKey
+    );
+    if (measuring) await openActivity(page, t("tile.gonogo.title"));
+    else await launchPracticeHighNotes(page);
     await startReadyRhythm();
   }
 
@@ -4224,6 +4324,7 @@ async function checkRhythmVisualProfiles(page, project) {
   }
 
   // 新規利用者は、支援者が設定を触らなくても通常練習のレーンから始まる。
+  await exposePresentationContext(page);
   await waitForClass(page, "#startView", "is-active");
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -4927,7 +5028,8 @@ async function checkCueTasksWaitForSuspendedSound(page, project) {
 
   // 1. 押した直後は止まっていて、0.3秒後に戻る（iOS のふつうの戻り方）。どちらの課題も始まる。
   for (const [corner, task, moduleClass] of [
-    [null, t("tile.gonogo.title"), "module-rhythm"],
+    // 音で押す遊び2つ（音あそびのホームの札は、れんしゅうの回は音楽室なので、さかなつりの2つで見る）。
+    ["さかなつり", t("tile.fishing-gonogo.title"), "module-fishing"],
     ["さかなつり", t("tile.fishing.title"), "module-fishing"],
   ]) {
     await open(corner, task);
@@ -4945,7 +5047,7 @@ async function checkCueTasksWaitForSuspendedSound(page, project) {
   }
 
   // 2. 戻らないままなら理由を出す。音を直してから押せば、その場で始まる。
-  await open(null, t("tile.gonogo.title"));
+  await open("さかなつり", t("tile.fishing-gonogo.title"));
   await page.evaluate(() => {
     window.__fakeAudio.state = "suspended";
     window.__fakeAudio.resumeWorks = false;
@@ -4957,7 +5059,7 @@ async function checkCueTasksWaitForSuspendedSound(page, project) {
   });
   await page.locator("#gameStage").click();
   await page.waitForTimeout(1500);
-  const retried = await started("module-rhythm");
+  const retried = await started("module-fishing");
   assert(retried.running && !retried.unavailable, `Pressing again after fixing the sound must start the task, got ${JSON.stringify(retried)}`);
   await page.locator("#gameExit").click();
   await waitForClass(page, "#homeView", "is-active");
@@ -4965,7 +5067,7 @@ async function checkCueTasksWaitForSuspendedSound(page, project) {
 
   // 3. ためし直しても鳴らなければ、次のひと押しでホームへ戻れる（スイッチだけの人を、この画面に
   //    閉じ込めない。games/unavailableScreen.js）。ためし直しは1回だけ。
-  await open(null, t("tile.gonogo.title"));
+  await open("さかなつり", t("tile.fishing-gonogo.title"));
   await page.evaluate(() => {
     window.__fakeAudio.state = "suspended";
     window.__fakeAudio.resumeWorks = false;
@@ -5028,7 +5130,7 @@ async function checkSilentAudioDoesNotProduceData(page, project) {
   await page.reload();
 
   for (const [corner, task] of [
-    [null, t("tile.gonogo.title")],
+    ["さかなつり", t("tile.fishing-gonogo.title")],
     ["さかなつり", t("tile.fishing.title")]
   ]) {
     await page.locator("#startStage").click();
@@ -5096,7 +5198,7 @@ async function checkRhythmRecordsRealOffsets(page, project) {
   await patchSettings(page, { rhythmBpm: 80, targetBeats: 8, baselineOffsetMs: 60 });
   await page.locator("#startStage").click();
   await waitForClass(page, "#homeView", "is-active");
-  await openActivity(page, t("tile.gonogo.title"));
+  await launchPracticeHighNotes(page);
   await page.locator(".game-ready").waitFor({ state: "visible" });
   // 実際のstartを呼び、返った音時計とperformance時計の対応・配信する拍を読むだけ。
   // 入力はシェルへの物理クリックで行い、judge / logTrial / 保存には差し込まない。
@@ -5901,6 +6003,15 @@ async function checkIpadAccessibilityLayout(page, project) {
 
 // 配信応答だけで共有 ctx を公開する。製品コードに障害注入用の入口は作らない。
 async function exposePresentationContext(page) {
+  // Service Worker が手元の写しから JS を返すと、下の差し込み（route）を通らず、読み込み直したあとに
+  // ctx が出てこない（読み込み直す時刻しだいで、出たり出なかったりした）。この検査のあいだは登録させない。
+  await page.addInitScript(() => {
+    if (navigator.serviceWorker) navigator.serviceWorker.register = () => new Promise(() => {});
+  });
+  await page.evaluate(async () => {
+    const registrations = (await navigator.serviceWorker?.getRegistrations?.()) || [];
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+  });
   await page.route("**/assets/*.js", async (route) => {
     const response = await route.fetch();
     let body = await response.text();
@@ -6748,13 +6859,12 @@ async function checkSwitchUnavailableExit(page) {
     }
   });
   for (const fault of ["missing", "suspended"]) {
-    for (const game of ["fishing", "gonogo"]) {
+    // 音で押す遊び2つ。音あそびの札は 2026-11-25 から、れんしゅうの回は音楽室なので、さかなつりの2つで見る。
+    for (const game of ["fishing", "fishing-gonogo"]) {
       await page.evaluate((fault) => sessionStorage.setItem("audio-fault", fault), fault);
       await page.reload();
       await page.keyboard.press("Space");
-      if (game === "fishing") {
-        await openActivity(page, t("tile.fishing-corner.title"));
-      }
+      await openActivity(page, t("tile.fishing-corner.title"));
       await openActivity(page, t(`tile.${game}.title`));
       await page.waitForTimeout(180);
       await page.keyboard.press("Space");

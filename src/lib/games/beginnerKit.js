@@ -184,6 +184,9 @@ export function celebrate(ctx, prefs, doneText) {
  * @param {(pressIndex: number) => void} [options.onFinale] 5回目の大きな絵
  * @param {(audio: object, style: string) => void} [options.finishSound] 5回目の音（既定はファンファーレ。
  *   おおさわぎは音楽の調に合わせた音を鳴らすので、ここで差し替える）
+ * @param {(audio: object, prefs: object, pressIndex: number, drawn: object) => void} [options.pressSound]
+ *   押したときの音（既定はこの遊びの設定の「押したときの音」。音あそびは楽器の音に差し替える）。
+ *   progressSpeech が空の文を返したときは、押すたびの声を読まない。
  */
 export function createBeginnerFlow(
   ctx,
@@ -199,6 +202,8 @@ export function createBeginnerFlow(
     finishSummary,
     onFinale = () => {},
     finishSound = playFinishSound,
+    pressSound = (soundAudio, prefs, pressIndex, drawn) =>
+      playPressSound(soundAudio, prefs.sound, pressIndex, { creature: drawn.creature ?? null }),
   }
 ) {
   const { settings, audio, voiceFeedback, logEvent, finish } = ctx;
@@ -218,13 +223,14 @@ export function createBeginnerFlow(
     const prefs = playPrefsFor(settings, gameId);
     const drawn = presentation.run("beginner.press", () => onPress(pressIndex), {}) || {};
     ctx.party?.react({ index: pressIndex, source: drawn.source, name: drawn.name });
-    playPressSound(audio, prefs.sound, pressIndex, { creature: drawn.creature ?? null });
+    pressSound(audio, prefs, pressIndex, drawn);
 
     const remaining = target - count;
     if (remaining > 0) {
       speechTimer = window.setTimeout(() => {
         speechTimer = null;
-        voiceFeedback(ctx.party?.isBig() ? ctx.party.pressSpeech(pressIndex, drawn.name) : progressSpeech(remaining, pressIndex));
+        const text = ctx.party?.isBig() ? ctx.party.pressSpeech(pressIndex, drawn.name) : progressSpeech(remaining, pressIndex);
+        if (text) voiceFeedback(text);
       }, ttsDelayMs);
     } else {
       const big = ctx.party?.isBig();

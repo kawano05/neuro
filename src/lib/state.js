@@ -109,6 +109,9 @@ export const DEFAULT_PLAY_PREFS = {
   balloon: { background: "light", sound: "pop", cheer: "both" },
   coloring: { background: "light", sound: "instrument", cheer: "both" },
   baseball: { speed: "normal", sound: "bat", cheer: "both" },
+  // 音あそび（音楽室。2026-11-25）。押したときの音は楽器そのものなので、選べるのは おいわいだけ。
+  "music-free": { cheer: "both" },
+  "music-teacher": { cheer: "both" },
 };
 
 /** 遊びごとの設定を、知っている遊び・知っている値だけに正規化する。 */

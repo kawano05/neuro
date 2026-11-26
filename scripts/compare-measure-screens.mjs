@@ -67,8 +67,9 @@ const SIZES = args.sizes
 /** そくていの回のあるタイミングの遊び（calibration は いつも そくてい）。 */
 const MODE = args.mode === "practice" ? "practice" : "measure";
 const PRACTICE_ART = args["practice-art"] || "world";
-// 基準をとる回はいつも そくてい なので、れんしゅうの回を比べるときは外す。
-const ALL_GAMES = ["slot-l1", "slot-l2", "crane", "fishing", "fishing-gonogo", "gonogo", ...(MODE === "measure" ? ["calibration"] : [])];
+// 基準をとる回はいつも そくてい なので、れんしゅうの回を比べるときは外す。高い音だけ（gonogo）も、
+// 2026-11-25 から れんしゅうの回のホームには無い（音あそびの札は音楽室）ので、そくていの回だけ。
+const ALL_GAMES = ["slot-l1", "slot-l2", "crane", "fishing", "fishing-gonogo", ...(MODE === "measure" ? ["gonogo", "calibration"] : [])];
 const GAMES = args.games ? args.games.split(",") : ALL_GAMES;
 const CORNER = { "slot-l1": "slot-corner", "slot-l2": "slot-corner", crane: "crane-corner", fishing: "fishing-corner", "fishing-gonogo": "fishing-corner" };
 /** 始めてから撮る時刻（ms）。 */

@@ -231,6 +231,9 @@ export const GAME_SETTINGS = {
   balloon: { mode: "live", groups: beginnerGroups("balloon") },
   coloring: { mode: "live", groups: beginnerGroups("coloring") },
   baseball: { mode: "live", groups: baseballGroups() },
+  // 音あそび（音楽室）。枠の速さは支援者の設定「枠が動く速さ」。ここで選ぶのは おいわいだけ。
+  "music-free": { mode: "live", groups: [cheerGroup("music-free")] },
+  "music-teacher": { mode: "live", groups: [cheerGroup("music-teacher")] },
   "slot-l1": { mode: "restart", groups: timingGroups("slot-l1") },
   "slot-l2": { mode: "restart", groups: timingGroups("slot-l2") },
   gonogo: { mode: "restart", groups: timingGroups("gonogo") },
