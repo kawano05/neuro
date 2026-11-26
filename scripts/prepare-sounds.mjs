@@ -142,15 +142,18 @@ const SOUNDS = [
     format: "wav",
   },
   {
-    // すず: 「シャン、シャン」。FluidR3 の tinkle_bell は1音の「チーン」で、もっきんと同じに聞こえると
-    // 言われた（2026-11-26）。鈴を振る音は FluidR3 に無いので合成した（scripts/synth-sounds.mjs）。
-    // 倍音が 17kHz まであるので 44.1kHz で書き出す。
+    // すず: 「シャン、シャン」。FluidR3 の tinkle_bell（1音の「チーン」）は、もっきんと同じに聞こえると
+    // 言われた（2026-11-26）。FluidR3 の打楽器のセットのタンバリン（54 番）の鈴の音を、2回重ねる。
+    // 打楽器のセットは gleitz の書き出しに無いので、WebAudioFont（surikov/webaudiofontdata）の
+    // 128<番号>_0_FluidR3_GM_sf2_file.js の中の mp3（base64）を取り出して webaudiofont/ に置く。
     name: "instrument-bell",
-    file: "synth/jingle.wav",
-    url: "scripts/synth-sounds.mjs（node scripts/synth-sounds.mjs で作る）",
+    file: "webaudiofont/12854_0_FluidR3_GM-0.mp3",
+    url: "https://surikov.github.io/webaudiofontdata/sound/12854_0_FluidR3_GM_sf2_file.js",
     start: 0,
-    end: 1.0,
-    fadeOut: 0.2,
+    end: 0.5,
+    fadeOut: 0.15,
+    repeatAt: [0, 0.3],
+    repeatGain: [1, 0.85],
     rate: 44100,
     format: "wav",
   },
@@ -165,16 +168,16 @@ const SOUNDS = [
     format: "wav",
   },
   {
-    // カスタネット: 「カチカチ」。低い woodblock（C5）の「コン」は太鼓と同じに聞こえると言われた
-    // （2026-11-26）。高い音（C7）の短い当たりを、2回続けて鳴らす（repeatAt）。
+    // カスタネット: 「カチカチ」。低い woodblock（C5、「コン」）は太鼓と同じに聞こえると言われた
+    // （2026-11-26）。FluidR3 の打楽器のセットのクラベス（75 番、木を打ち合わせる硬い音）を2回重ねる。
     name: "instrument-castanets",
-    file: "fluidr3/fluidr3-woodblock-C7.mp3",
-    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/woodblock-mp3/C7.mp3",
+    file: "webaudiofont/12875_0_FluidR3_GM-0.mp3",
+    url: "https://surikov.github.io/webaudiofontdata/sound/12875_0_FluidR3_GM_sf2_file.js",
     start: 0,
-    end: 0.09,
+    end: 0.1,
     fadeOut: 0.03,
-    repeatAt: [0, 0.085],
-    repeatGain: [1, 0.8],
+    repeatAt: [0, 0.09],
+    repeatGain: [1, 0.85],
     rate: 44100,
     format: "wav",
   },
