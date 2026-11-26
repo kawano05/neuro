@@ -30,7 +30,7 @@
 
 import { ATMOSPHERES } from "./atmosphere.js";
 import { cranePresets, fishingPresets, rhythmPresets, slotPresets } from "./content.js";
-import { MEASUREMENT_PROTOCOL, resolveDifficultyMode } from "./difficultyMode.js";
+import { MEASUREMENT_PROTOCOL, SURE_HIT_GAMES, resolveDifficultyMode } from "./difficultyMode.js";
 import { resolveTextMode, translate } from "./i18n.js";
 import { say } from "./supporterText.js";
 
@@ -192,13 +192,31 @@ export const SETTING_DEFINITIONS = Object.freeze({
     ],
   },
 
+  // 押せば必ず当たる（2026-11-04 に訪問先の学校で頼まれた段階）。どの遊びにも効く1つの切り替え。
+  // 速さ・広さの項目より前に置く（遊びの中の「この遊びの設定」は、この表の順に出る）。
+  sureHit: {
+    type: "checkbox",
+    label: { ja: "押せば必ず当たる", en: "Every press wins" },
+    hint: {
+      ja: "どこで押しても当たりになります。",
+      en: "Any press counts as a win, whenever it is pressed.",
+    },
+    format: "onOff",
+    measured: true,
+    // difficultyMode.js の resolveSureHit が、そくていでは必ず切る。
+    protocol: false,
+    inGame: [...SURE_HIT_GAMES],
+  },
+
   slotCycleMs: {
     type: "range",
     label: { ja: "絵が回る速さ", en: "Spin speed" },
     hint: { ja: "絵が1周する時間。長いほどゆっくりです。", en: "Time for one full turn. Longer is slower." },
     min: 2800,
     // 2026-10-21 に 6000 から広げた（施設の試用で「もっと遅くできる設定が欲しい」）。
-    max: 9600,
+    // 2026-11-25 に 9600 から広げた（タイミングの遊びを一段階遅く。src/lib/timingLevels.js）。
+    // 記録の sanitize（games/slotState.js）が受け取るのも 12000 まで。
+    max: 12000,
     step: 100,
     format: "seconds",
     preset: slotPresets["slot-l1"].cycleMs,
@@ -258,7 +276,9 @@ export const SETTING_DEFINITIONS = Object.freeze({
     hint: { ja: "1分に鳴る音の数。少ないほどゆっくりです。", en: "Notes per minute. Fewer is slower." },
     options: [
       ["", GAME_DEFAULT],
-      ["30", { ja: "30（とてもゆっくり）", en: "30 (very slow)" }],
+      // 20 は 2026-11-25 に足した（タイミングの遊びを一段階遅く。src/lib/timingLevels.js）。
+      ["20", { ja: "20（とてもゆっくり）", en: "20 (very slow)" }],
+      ["30", "30"],
       ["40", "40"],
       ["50", "50"],
       ["60", "60"],
@@ -303,7 +323,9 @@ export const SETTING_DEFINITIONS = Object.freeze({
     label: { ja: "アームの速さ", en: "Claw speed" },
     hint: { ja: "端から端までの時間。長いほどゆっくりです。", en: "Time from one end to the other. Longer is slower." },
     min: 800,
-    max: 6000,
+    // 2026-11-25 に 6000 から広げた（「アームはいちばん遅くしても速い」）。記録の sanitize
+    // （state.js の sanitizeScanSession）が受け取るのも 10000 まで。
+    max: 10000,
     step: 100,
     format: "seconds",
     preset: cranePresets.sweepMs,
@@ -354,10 +376,11 @@ export const SETTING_DEFINITIONS = Object.freeze({
     label: { ja: "アタリが続く長さ", en: "Bite duration" },
     hint: { ja: "魚が逃げるまでの時間です。", en: "Time before the fish gets away." },
     options: [
-      ["", { ja: "ふつう（2秒）", en: "Normal (2 s)" }],
-      ["3000", { ja: "ながい（3秒）", en: "Long (3 s)" }],
-      ["4000", { ja: "とても ながい（4秒）", en: "Very long (4 s)" }],
-      ["1400", { ja: "みじかい（1.4秒）", en: "Short (1.4 s)" }],
+      // 2026-11-25 に一段階ずつ長くした（タイミングの遊びを一段階遅く。src/lib/timingLevels.js）。
+      ["", { ja: "ふつう（3秒）", en: "Normal (3 s)" }],
+      ["4500", { ja: "ながい（4.5秒）", en: "Long (4.5 s)" }],
+      ["6000", { ja: "とても ながい（6秒）", en: "Very long (6 s)" }],
+      ["2000", { ja: "みじかい（2秒）", en: "Short (2 s)" }],
     ],
     nullable: true,
     format: "seconds",

@@ -22,11 +22,16 @@
 import { BALL_FIELD_ART } from "../art/hakkiriArt.js";
 import { BEGINNER_TARGET_PRESSES, celebrate, playPrefsFor } from "./beginnerKit.js";
 import { PARTY_FINISH_DELAY_MS, atmosphereFor } from "../atmosphere.js";
+import { resolveSureHit } from "../difficultyMode.js";
 
 const GAME_ID = "baseball";
 
-/** 投げてからバットに届くまでの時間（ミリ秒）。この遊びの設定で選ぶ。 */
-export const PITCH_MS = { slow: 2300, normal: 1750, fast: 1300 };
+/**
+ * 投げてからバットに届くまでの時間（ミリ秒）。この遊びの設定で選ぶ。
+ * 2026-11-25 に、札はそのままで一段階ずつ遅くした（2300/1750/1300 から。打ち合わせで
+ * 「タイミングの遊びは全体にもう一段階遅く」。保存は札の名前なので、移し替えは要らない）。
+ */
+export const PITCH_MS = { slow: 3000, normal: 2300, fast: 1750 };
 /** 構えてから投げるまで。 */
 export const WINDUP_MS = 900;
 /** ぴったり（ホームラン）の幅と、ヒットの幅（到着時刻から前後）。 */
@@ -44,11 +49,13 @@ export const FINISH_DELAY_MS = 900;
 /**
  * 打った時刻から、当たり方を決める（描画にも時刻にも依存しない純粋関数）。
  * @param {number} deltaMs 押した時刻 − ボールがバットに届く時刻（早いと負）
+ * @param {number} [homerunWindowMs] ぴったりの幅。押せば必ず当たる回（difficultyMode.js の
+ *   resolveSureHit）は Infinity を渡す。ボールが出ているあいだなら、いつ振ってもホームランになる。
  * @returns {"homerun"|"hit"|"bunt"}
  */
-export function judgeSwing(deltaMs) {
+export function judgeSwing(deltaMs, homerunWindowMs = HOMERUN_WINDOW_MS) {
   const miss = Math.abs(deltaMs);
-  if (miss <= HOMERUN_WINDOW_MS) return "homerun";
+  if (miss <= homerunWindowMs) return "homerun";
   if (miss <= HIT_WINDOW_MS) return "hit";
   return "bunt";
 }
@@ -277,7 +284,11 @@ export function createBaseballGame(ctx) {
     const from = k <= 1
       ? { x: lerp(MOUND.x, PLATE.x, k), y: lerp(MOUND.y, PLATE.y, k) }
       : { x: PLATE.x, y: PLATE.y + 20 };
-    const result = judgeSwing(inputMs - arrivalAt);
+    // 押せば必ず当たる回は、ぴったりの幅に限りが無い（遊びの中で切り替えられるので、1球ごとに引く）。
+    const result = judgeSwing(
+      inputMs - arrivalAt,
+      resolveSureHit(GAME_ID, settings) ? Number.POSITIVE_INFINITY : HOMERUN_WINDOW_MS
+    );
     results.push(result);
     renderSlots();
     // ③ 進みぐあい: 埋まった枠が弾む。

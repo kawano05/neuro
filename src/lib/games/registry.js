@@ -25,6 +25,7 @@ import { createGonogoGame } from "./gonogo.js";
 import { createCalibrationGame } from "./calibration.js";
 import { createCraneGame } from "./crane.js";
 import { createFishingGame } from "./fishing.js";
+import { createMusicRoomGame } from "./musicRoom.js";
 
 /** id → create のひも付け。gameTiles の全idに実装を持たせる。 */
 export const gameCreators = {
@@ -43,6 +44,9 @@ export const gameCreators = {
   fishing: createFishingGame("fishing"),
   "fishing-gonogo": createFishingGame("fishing-gonogo"),
   calibration: createCalibrationGame,
+  // 音あそび（音楽室。2026-11-25）。games/musicRoom.js
+  "music-free": createMusicRoomGame("free"),
+  "music-teacher": createMusicRoomGame("teacher"),
 };
 
 /** タイル情報（content.js）と create を結合した GameModule 配列（order 昇順）。 */

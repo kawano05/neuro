@@ -26,6 +26,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { PHRASE_EN, cranePrizes, gameHowTo, letterTasks, matchingTasks, phraseCategories } from "../../src/lib/content.js";
 import { BEGINNER_TARGET_PRESSES } from "../../src/lib/games/beginnerKit.js";
 import { COLOR_TARGET_PRESSES } from "../../src/lib/games/colorLegacy.js";
+import { musicSpokenTexts } from "../../src/lib/games/musicRoom.js";
 import { allStringKeys, joinSpeech, speechLangForText, toSpeechText, translate } from "../../src/lib/i18n.js";
 import { PARTY_OUTFITS } from "../../src/lib/party.js";
 import { splitSpeechChunks, voiceLang } from "../../src/lib/voicePack.js";
@@ -127,6 +128,12 @@ export function spokenTexts(mode) {
   keys.filter((key) => key.startsWith("baseball.word.")).forEach((key) => say(t(key), key));
   range(1, BEGINNER_TARGET_PRESSES).forEach((h) => celebrateWith(t("baseball.voice.finish", { h }), "baseball.voice.finish"));
   celebrateWith(t("baseball.voice.finishNoHomerun"), "baseball.voice.finishNoHomerun");
+  // 音あそび（音楽室。games/musicRoom.js）: 枠が動いたときの楽器の名前、先生の「○○を ならしてね」、
+  // せいかい、おしまいの「やったー！ たくさん ならせたね！」（celebrate）。
+  musicSpokenTexts(t).forEach(({ text, from }) => say(text, from));
+  say(t("learn.correct"), "learn.correct");
+  celebrateWith(t("music.free.finish"), "music.free.finish");
+  celebrateWith(t("music.teacher.finish"), "music.teacher.finish");
 
   prizeNames(t).forEach((name) => say(t("crane.voice.grip", { name }), "crane.voice.grip"));
   say(t("crane.voice.slip"), "crane.voice.slip");

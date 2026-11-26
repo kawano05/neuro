@@ -41,7 +41,11 @@
 3. CSV に列として出す。**既にある列の位置は動かさず、いちばん後ろに足す**
 
 今ある条件の例: `difficultyMode`・`visualGuidance`・`craneAudioGuidance`・`textMode`・`device`・`fxLevel`・
-`artVersion`（その回に画面へ出した絵の版。そくていの回はいつも 1。`src/lib/artVersion.js`）。
+`artVersion`（その回に画面へ出した絵の版。そくていの回はいつも 1。`src/lib/artVersion.js`）・
+`sureHit`（押せば必ず当たる回か。そくていの回はいつも false。`src/lib/difficultyMode.js` の `resolveSureHit`）。
+
+「押せば必ず当たる」（2026-11-24）は、判定の式を変えずに、当たりの広さなどの数値を広げる設定。sanitize は、
+`config.sureHit` の印がある回だけ、その広い数値を受け取る（印の無い回の上限は前のまま）。そくていの回には効かない。
 
 端末の「動きを減らす」（prefers-reduced-motion）は、アプリのどこでも見ない（2026-10-01）。それまでは、端末が
 「動きを減らす」のとき、そくていの回でもリールの帯の遷移・リズムの目盛りのはずみ・CSS の動きの長さが変わって

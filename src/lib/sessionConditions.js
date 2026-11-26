@@ -12,7 +12,7 @@
 // 出さないか）をテストで固定するため。DOM には触れない。
 // =====================================================================
 
-import { fishingPresets } from "./content.js";
+import { MEASUREMENT_PROTOCOL } from "./difficultyMode.js";
 
 /** 完走したか、途中で終わったか。中断した回は数字の意味が変わる。 */
 export function describeSessionOutcome(session) {
@@ -122,6 +122,12 @@ export function describeSessionConditions(session) {
   // 線が1点ずつに割れて推移が一度も出なくなる（実測で0本だった）。
   if (config.endless === true) return "エンドレス";
 
+  // 押せば必ず当たる回（difficultyMode.js の resolveSureHit）は、名前を先頭に出して別の束にする。
+  // どこで押しても当たりになる回なので、ふだんの回と同じ線に載せると、切り替えた日に成績が
+  // 跳ね上がって（戻した日に落ちて）見える。高い音だけは、ほかの値（テンポ・拍の数）が
+  // ふだんの回と同じなので、名前が無いと同じ束に入ってしまう。
+  const sureHit = config.sureHit === true ? ["押せば必ず当たる"] : [];
+
   if (session.taskType === "scan") {
     const parts = [];
     if (typeof config.sweepMs === "number") parts.push(`はやさ ${config.sweepMs}ms`);
@@ -132,7 +138,7 @@ export function describeSessionConditions(session) {
     if (config.audioGuidance === true) parts.push("通過音あり");
     if (config.difficultyMode === "measure") parts.unshift("そくてい");
     if (config.measurementReadiness === "overridden") parts.push("成立確認なし");
-    return parts.join(" / ");
+    return [...sureHit, ...parts].join(" / ");
   }
 
   if (session.taskType === "sms" || session.taskType === "gonogo") {
@@ -155,7 +161,7 @@ export function describeSessionConditions(session) {
     // 出すのは overridden のときだけ——met を毎行書くと札が並ぶだけで、
     // 見分けたいほうが埋もれる（そくていの札と同じ扱い）。
     if (config.measurementReadiness === "overridden") parts.push("成立確認なし");
-    return parts.join(" / ");
+    return [...sureHit, ...parts].join(" / ");
   }
 
   if (session.taskType === "slot") {
@@ -166,16 +172,22 @@ export function describeSessionConditions(session) {
     if (typeof config.reelCount === "number") parts.push(`${config.reelCount}本`);
     if (config.difficultyMode === "measure") parts.unshift("そくてい");
     if (config.measurementReadiness === "overridden") parts.push("成立確認なし");
-    return parts.join(" / ");
+    return [...sureHit, ...parts].join(" / ");
   }
 
   if (session.taskType === "rt") {
     // 支援者が変えられるのは、アタリが続く長さ（受付時間 limitMs）だけ（練習の回、
     // 2026-09-27 から。difficultyMode.js の resolveFishingDifficulty）。
     //
-    // 既定のままの回には何も出さない。既定の回どうし・測定の回（同じ 2000ms）と
-    // 同じ束に入り、これまでの推移がそのまま続く。変えた回だけを別の束にする。
-    const defaultLimitMs = fishingPresets[session.gameId]?.limitMs;
+    // そくていと同じ長さ（2000ms）の回には何も出さない。測定の回と同じ束に入り、これまでの
+    // 推移がそのまま続く。違う長さの回だけを別の束にする。
+    //
+    // 比べる相手は、そくていの長さ（MEASUREMENT_PROTOCOL）。2026-11-25 に れんしゅうの「ふつう」を
+    // 3000ms へ長くした（timingLevels.js）ので、プリセットと比べると、今までの 2000ms の回の札が
+    // 消え、新しい ふつうの回が測定の回と同じ束に入ってしまう。
+    // 押せば必ず当たる回は、長さも数も決まっている（difficultyMode.js の SURE_HIT_FISHING）ので、名前だけ。
+    if (sureHit.length) return sureHit[0];
+    const defaultLimitMs = MEASUREMENT_PROTOCOL.fishing[session.gameId]?.limitMs;
     if (typeof config.limitMs === "number" && typeof defaultLimitMs === "number" && config.limitMs !== defaultLimitMs) {
       return `アタリ ${config.limitMs}ms`;
     }

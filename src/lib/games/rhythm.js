@@ -46,6 +46,8 @@ import {
   cueTimbreFor,
   resolveDifficultyMode,
   resolveRhythmDifficulty,
+  resolveSureHit,
+  sureHitRhythmWindowMs,
 } from "../difficultyMode.js";
 import {
   judgeInput,
@@ -270,12 +272,16 @@ export function resolveParams(gameId, settings) {
   const difficulty = overridable
     ? resolveRhythmDifficulty(gameId, settings, preset)
     : { bpm: preset.bpm, countInBeats: preset.countInBeats, targetBeats: preset.targetBeats };
+  // 押せば必ず当たる回（difficultyMode.js の resolveSureHit。そくていと calibration では必ず false）。
+  // 押さない合図（低い音）を出さない。出すと、そこで押したときに当たりにできない。
+  const sureHit = overridable && resolveSureHit(gameId, settings);
   return {
     mode: preset.mode,
     bpm: override(difficulty.bpm, preset.bpm),
     countInBeats: override(difficulty.countInBeats, preset.countInBeats),
     targetBeats: override(difficulty.targetBeats, preset.targetBeats),
-    goRatio: preset.goRatio ?? null,
+    goRatio: sureHit && preset.mode === "gonogo" ? 1 : preset.goRatio ?? null,
+    sureHit,
     // キャリブレーション専用（detailed-design.md §8.2）。settings 側の上書きは
     // 用意しない（利用者が調整する値ではなく、測定プロトコル自体の一部のため）。
     excludedTrialCount: preset.excludedTrialCount ?? 0,
@@ -630,7 +636,8 @@ export function createRhythmGame(gameId) {
         visualGuidance,
         practiceArt: practiceArtFor(settings, gameId),
         measurement: gameId === "calibration" || resolveDifficultyMode(settings) === "measure",
-        exactToleranceMs: EXACT_TOLERANCE_MS,
+        // 押せば必ず当たる回は、当たれば どれも「ぴったり」（早い・遅いで分けない）。
+        exactToleranceMs: params?.sureHit ? Number.POSITIVE_INFINITY : EXACT_TOLERANCE_MS,
         t,
       });
       // そくていの回の台の題は、前の字のまま（遊びの名前を変えても、刺激の見え方は1pxも変えない）。
@@ -872,16 +879,21 @@ export function createRhythmGame(gameId) {
         if (shownOffsetMs !== null) addOffsetMark(shownOffsetMs);
       }
 
-      rhythmVisuals?.showJudgment({
-        judgment: result.judgment,
-        beatIndex: result.beatIndex,
-        offsetMs: shownOffsetMs,
-      });
+      // 押せば必ず当たる回の、拍に入らない押し（同じ拍の2回目・はじまる前）。記録は extra のまま
+      // にして、返す合図だけ当たりと同じにする（「はずれ」の字と音を出さない）。
+      const sureExtra = params.sureHit && result.judgment === "extra";
+      if (!sureExtra) {
+        rhythmVisuals?.showJudgment({
+          judgment: result.judgment,
+          beatIndex: result.beatIndex,
+          offsetMs: shownOffsetMs,
+        });
+      }
       // 合った音符がはじける（れんしゅうの回だけ。そくていの回は演出エンジンが何もしない）。
-      if (result.judgment === "hit") {
+      if (result.judgment === "hit" || sureExtra) {
         ctx.fx?.noteHit(feedbackSource());
       }
-      playFeedback(result.judgment);
+      playFeedback(sureExtra ? "hit" : result.judgment);
       updateProgressText();
       finalizeIfComplete();
     }
@@ -893,7 +905,10 @@ export function createRhythmGame(gameId) {
       visualGuidance = resolveVisualGuidance(gameId, settings);
 
       params = resolveParams(gameId, settings);
-      effectiveWindowMs = computeEffectiveWindowMs(params.mode, params.bpm, settings.judgmentWindowMs);
+      // 押せば必ず当たる回は、窓を拍の間隔の半分まで広げる（となりの拍と すきまなく つながる）。
+      effectiveWindowMs = params.sureHit
+        ? sureHitRhythmWindowMs(params.bpm)
+        : computeEffectiveWindowMs(params.mode, params.bpm, settings.judgmentWindowMs);
       cueTimbre = cueTimbreFor(gameId, settings);
       plan = buildPlan({ ...params, goTimbre: cueTimbre });
       excludedTrialCount = params.excludedTrialCount || 0;
@@ -1049,6 +1064,9 @@ export function createRhythmGame(gameId) {
           measurementReadiness: ctx.readiness || "n/a",
           // gonogo のみ generateGoNoGoSequence() の結果を持つ（再現性、MUST）。
           seedSequence: plan.seedSequence || [],
+          // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。この回は窓が拍の間隔の半分で、
+          // 押さない合図が無い（goRatio 1）。
+          sureHit: params.sureHit,
         },
         device: audio.getDeviceInfo(),
         trials: [],

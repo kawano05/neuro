@@ -86,7 +86,22 @@ export const gameTiles = [
   { id: "fishing", taskType: "rt", title: "おとで つる", description: "おとが なったら すぐ おそう", order: 9, enabled: true, iconClass: "fa-solid fa-fish" },
   { id: "fishing-gonogo", taskType: "rt", title: "さかなだけ つる", description: "ながぐつの ときは おさない", order: 10, enabled: true, iconClass: "fa-solid fa-fish-fins" },
   { id: "calibration", taskType: "sms", title: "そくてい", description: "しえんしゃと いっしょに つかいます", order: 11, enabled: true, iconClass: "fa-solid fa-stopwatch" },
+  // 音あそび（音楽室。2026-11-25）。れんしゅうの回のホームの「音あそび」は、この2つの入口
+  // （musicCornerTile）。測定の課題ではないので taskType を持たない（games/musicRoom.js）。
+  { id: "music-free", taskType: null, resultType: "completion", title: "すきな がっき", description: "おすと わくの がっきが なるよ", order: 12, enabled: true, iconClass: "fa-solid fa-music" },
+  { id: "music-teacher", taskType: null, resultType: "completion", title: "せんせいと", description: "せんせいが いった がっきを ならそう", order: 13, enabled: true, iconClass: "fa-solid fa-music" },
 ];
+
+/**
+ * 音あそび（音楽室）の2つの遊び方をまとめる二階層目への入口（2026-11-25）。れんしゅうの回の
+ * ホームの「音あそび」はこれ。そくていの回のホームでは、前の「高い音だけ」（gonogo）が出る。
+ */
+export const musicCornerTile = {
+  id: "music-corner",
+  title: "おとあそび",
+  description: "がっきを ならそう",
+  iconClass: "fa-solid fa-music",
+};
 
 /** 視覚タイミング課題2種をまとめる二階層目への入口。 */
 export const slotCornerTile = {
@@ -201,9 +216,12 @@ export const activityTiles = [
  *            2つの軸を同時に上げないための設計でもある
  */
 export const rhythmPresets = {
-  "rhythm-l1": { bpm: 50, countInBeats: 2, targetBeats: 8, mode: "cued" },
-  "rhythm-l2": { bpm: 50, countInBeats: 4, targetBeats: 16, mode: "continuous" },
-  gonogo: { bpm: 50, countInBeats: 3, targetBeats: 20, mode: "gonogo", goRatio: 0.6 },
+  // bpm は れんしゅうの回の「ふつう」。2026-11-25 に 50 から 40 へ一段階遅くした
+  // （src/lib/timingLevels.js）。段のあいだでテンポを揃える決まり（tests/rhythm-params.test.mjs）
+  // があるので、3つとも同じだけ下げた。そくていの回は MEASUREMENT_PROTOCOL のまま。
+  "rhythm-l1": { bpm: 40, countInBeats: 2, targetBeats: 8, mode: "cued" },
+  "rhythm-l2": { bpm: 40, countInBeats: 4, targetBeats: 16, mode: "continuous" },
+  gonogo: { bpm: 40, countInBeats: 3, targetBeats: 20, mode: "gonogo", goRatio: 0.6 },
   // キャリブレーションは測定手順そのもので、訓練の都合では動かさない
   // （games/rhythm.js の PROTOCOL_LOCKED_GAME_IDS）。
   //
@@ -238,10 +256,13 @@ export const rhythmPresets = {
  * L1/L2で周期と許容幅を揃え、難度差をリール数（入力系列）だけに限定する。
  */
 export const slotPresets = {
+  // cycleMs は れんしゅうの回の「ふつう」。2026-11-25 に 3200 から一段階遅くした（打ち合わせで
+  // 「タイミングの遊びは全体にもう一段階遅く」。src/lib/timingLevels.js）。そくていの回は
+  // difficultyMode.js の MEASUREMENT_PROTOCOL（3200）のまま。
   "slot-l1": {
     reelCount: 1,
     symbolCount: 6,
-    cycleMs: 3200,
+    cycleMs: 4800,
     toleranceMs: 220,
     rounds: 8,
     maxCyclesPerReel: 4,
@@ -250,7 +271,7 @@ export const slotPresets = {
   "slot-l2": {
     reelCount: 3,
     symbolCount: 6,
-    cycleMs: 3200,
+    cycleMs: 4800,
     toleranceMs: 220,
     rounds: 4,
     maxCyclesPerReel: 4,
@@ -296,8 +317,12 @@ export const cranePresets = {
    * 視覚追従そのものが辛くなり、訓練したい「狙って押す」以外のところで詰まる。
    * だから難度は許容側で決める。速度を 2400 から下げているのは難度ではなく、
    * 片道2.4秒＝往復4.8秒という待ちの長さを縮めるため。
+   *
+   * 2026-11-25 に 2200 から 3200 へ一段階遅くした（打ち合わせで「アームはいちばん遅くしても
+   * 速い」「タイミングの遊びは全体にもう一段階遅く」。src/lib/timingLevels.js）。そくていの回は
+   * difficultyMode.js の MEASUREMENT_PROTOCOL（2200）のまま。
    */
-  sweepMs: 2200,
+  sweepMs: 3200,
   toleranceR: 15,
   targetTrials: 5,
   graspAnimMs: 1200,
@@ -351,10 +376,12 @@ export const cranePrizes = [
  */
 export const fishingPresets = {
   // 純粋な単純反応時間。アタリ音は1種類だけで、押すか押さないかの判断は無い。
+  // limitMs（アタリが続く長さ）は れんしゅうの回の「ふつう」。2026-11-25 に 2000 から一段階
+  // 長くした（src/lib/timingLevels.js）。そくていの回は MEASUREMENT_PROTOCOL（2000）のまま。
   fishing: {
     foreperiodMinMs: 1800,
     foreperiodMaxMs: 4200,
-    limitMs: 2000,
+    limitMs: 3000,
     sessionMs: 60_000,
     fakeRatio: 0,
     approachMs: 1800,
@@ -364,7 +391,7 @@ export const fishingPresets = {
   "fishing-gonogo": {
     foreperiodMinMs: 1800,
     foreperiodMaxMs: 4200,
-    limitMs: 2000,
+    limitMs: 3000,
     sessionMs: 60_000,
     fakeRatio: 0.22,
     approachMs: 1800,
@@ -412,6 +439,8 @@ export const gameHowTo = {
   "slot-l1": ["howto.slot-l1.1", "howto.slot-l1.2", "howto.slot-l1.3"],
   "slot-l2": ["howto.slot-l2.1", "howto.slot-l2.2", "howto.slot-l2.3"],
   gonogo: ["howto.gonogo.1", "howto.gonogo.2"],
+  "music-free": ["howto.music-free.1", "howto.music-free.2"],
+  "music-teacher": ["howto.music-teacher.1", "howto.music-teacher.2"],
   calibration: ["howto.calibration.1", "howto.calibration.2", "howto.calibration.3"],
   crane: ["howto.crane.1", "howto.crane.2", "howto.crane.3", "howto.crane.4"],
   fishing: ["howto.fishing.1", "howto.fishing.2", "howto.fishing.3", "howto.fishing.4"],

@@ -1,0 +1,250 @@
+/* =====================================================================
+   音あそび「音楽室」（2026-11-25。games/musicRoom.js、絵は art/musicRoomArt.js）
+   ---------------------------------------------------------------------
+   上の段に ことば（すきな がっき）か 先生と吹き出し（せんせいと）、下の段に楽器が6つ並ぶ。
+   黄色い枠（#FFC83D、走査の枠と同じ色と太さ）が楽器を順に回る。押すと、枠の楽器がはずむ。
+   測定の課題ではない（そくていの回の決まりは関わらない）。くっきり表示では白黒の面にする。
+   ===================================================================== */
+
+.game-stage-content.module-music {
+  padding: 80px 20px 24px;
+  background: #fff4e6;
+  color: #1a1a1a;
+}
+
+.music-room {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  justify-items: center;
+}
+
+/* 背景（壁・黒板・床）。動かさない。 */
+.music-room-backdrop {
+  position: absolute;
+  inset: -80px -20px -24px;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.music-room-backdrop svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.music-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 96px;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.music-word {
+  padding: 10px 20px;
+  border: 3px solid #1a1a1a;
+  border-radius: 18px;
+  background: #ffffff;
+  font-size: clamp(22px, 3.4vmin, 34px);
+  font-weight: 800;
+}
+
+.music-teacher {
+  width: clamp(84px, 13vmin, 130px);
+  aspect-ratio: 120 / 140;
+}
+
+.music-teacher svg,
+.music-bubble-art svg,
+.music-instrument-frame svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* 先生の吹き出し: 言った楽器の絵と、ことば。 */
+.music-bubble {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px 10px 12px;
+  border: 4px solid #1a1a1a;
+  border-radius: 24px;
+  background: #ffffff;
+}
+
+.music-bubble::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  border-left: 4px solid #1a1a1a;
+  border-bottom: 4px solid #1a1a1a;
+  background: #ffffff;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.music-bubble-art {
+  width: clamp(56px, 9vmin, 84px);
+  aspect-ratio: 1;
+}
+
+.music-bubble-text {
+  font-size: clamp(22px, 3.6vmin, 36px);
+  font-weight: 800;
+}
+
+.music-bubble.is-correct {
+  border-color: #03af7a;
+  background: #e6f8f1;
+}
+
+/* ちがう楽器で押したとき: 吹き出しが小さくゆれる（責める動きにしない。1回だけ）。 */
+.music-bubble.is-shaking {
+  animation: music-bubble-shake 360ms ease-in-out;
+}
+
+@keyframes music-bubble-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+/* 進みぐあいの点（はじめの遊びでは画面の下に浮かせている）は、上の段の下に並べる。 */
+.music-top .pop-dots {
+  position: static;
+  flex-basis: 100%;
+  justify-content: center;
+  gap: 10px;
+}
+
+.music-top .pop-dot {
+  width: 16px;
+  height: 16px;
+}
+
+/* 楽器の棚: 3つずつ2段。 */
+.music-shelf {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(100%, 880px);
+  height: 100%;
+  max-height: 560px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: clamp(10px, 2vmin, 22px);
+}
+
+.music-instrument {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: center;
+  padding: 10px 8px 8px;
+  border: 4px solid #1a1a1a;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 6px 0 rgba(26, 26, 26, 0.18);
+}
+
+.music-instrument-frame {
+  width: min(100%, 150px);
+  height: 100%;
+  max-height: 150px;
+  aspect-ratio: 1;
+}
+
+.music-instrument-name {
+  margin-top: 4px;
+  font-size: clamp(16px, 2.6vmin, 26px);
+  font-weight: 800;
+}
+
+/* いま鳴らせる楽器（枠）。走査の枠と同じ黒の芯と黄色の帯。 */
+.music-instrument.is-cursor {
+  z-index: 2;
+  box-shadow:
+    0 0 0 3px #1a1a1a,
+    0 0 0 12px #ffc83d;
+}
+
+/* 押した楽器が はずむ。 */
+.music-instrument.is-playing .music-instrument-frame {
+  animation: music-instrument-play 600ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes music-instrument-play {
+  0% { transform: scale(1) rotate(0); }
+  30% { transform: scale(1.28) rotate(-8deg); }
+  60% { transform: scale(0.94) rotate(4deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+/* せんせいと: 言われた楽器を鳴らせたら、緑で知らせる。 */
+.music-room.is-teacher .music-instrument.is-target.is-playing {
+  border-color: #03af7a;
+  background: #e6f8f1;
+}
+
+/* 横長で低い画面: 上の段を小さく、棚は横いっぱいに。 */
+@media (max-height: 560px) {
+  .game-stage-content.module-music {
+    padding-top: 64px;
+    padding-bottom: 12px;
+  }
+
+  .music-top {
+    min-height: 0;
+  }
+
+  .music-teacher {
+    width: 64px;
+  }
+
+  .music-instrument-name {
+    font-size: 15px;
+  }
+}
+
+/* くっきり表示: 白黒の面にする（色の絵は形を残して白黒に倒す）。 */
+body.high-contrast .game-stage-content.module-music {
+  background: #000000;
+  color: #ffffff;
+}
+
+body.high-contrast .music-room-backdrop {
+  display: none;
+}
+
+body.high-contrast .music-instrument,
+body.high-contrast .music-word,
+body.high-contrast .music-bubble {
+  border-color: #ffffff;
+  background: #000000;
+  color: #ffffff;
+}
+
+body.high-contrast .music-bubble::before {
+  border-color: #ffffff;
+  background: #000000;
+}
+
+body.high-contrast :is(.music-instrument-frame, .music-bubble-art, .music-teacher) svg {
+  filter: grayscale(1) contrast(1.6);
+}

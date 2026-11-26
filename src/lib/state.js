@@ -29,6 +29,7 @@ import { DIFFICULTY_MODES } from "./difficultyMode.js";
 import { READINESS_STATES } from "./readinessCheck.js";
 import { SELECTABLE_TEXT_MODES, TEXT_MODES } from "./i18n.js";
 import { sanitizeSlotSession } from "./games/slotState.js";
+import { TIMING_LEVELS_VERSION, migrateTimingLevels } from "./timingLevels.js";
 import { DEFAULT_PARTY, sanitizeParty } from "./party.js";
 import { sanitizePlayRecords } from "./playRecords.js";
 
@@ -108,6 +109,9 @@ export const DEFAULT_PLAY_PREFS = {
   balloon: { background: "light", sound: "pop", cheer: "both" },
   coloring: { background: "light", sound: "instrument", cheer: "both" },
   baseball: { speed: "normal", sound: "bat", cheer: "both" },
+  // 音あそび（音楽室。2026-11-25）。押したときの音は楽器そのものなので、選べるのは おいわいだけ。
+  "music-free": { cheer: "both" },
+  "music-teacher": { cheer: "both" },
 };
 
 /** 遊びごとの設定を、知っている遊び・知っている値だけに正規化する。 */
@@ -222,8 +226,13 @@ export const defaultState = {
     rhythmBpm: null,
     countInBeats: null,
     targetBeats: null,
+    // 押せば必ず当たる（2026-11-04、訪問先の学校で頼まれた）。れんしゅうの回だけ効き、
+    // 当たりの広さなどの数値を、どこで押しても当たる大きさにする（difficultyMode.js の
+    // resolveSureHit）。既定はオフ。走らせた回は session.config.sureHit に残る。
+    sureHit: false,
     // スロット型課題の練習条件。測定時は difficultyMode.js の slot-v1 固定値を使う。
-    slotCycleMs: 3200,
+    // slotCycleMs の既定は 2026-11-25 に 3200 から一段階遅くした（timingLevels.js）。
+    slotCycleMs: 4800,
     slotToleranceMs: 220,
     slotL1Rounds: 8,
     slotL2Rounds: 4,
@@ -236,8 +245,11 @@ export const defaultState = {
     craneSweepMs: null,
     craneToleranceR: null,
     // さかなつりの、アタリが続く長さ（ミリ秒）。null のとき content.js の
-    // fishingPresets（2000）。れんしゅうの回だけ効く（difficultyMode.js）。
+    // fishingPresets（3000）。れんしゅうの回だけ効く（difficultyMode.js）。
     fishingLimitMs: null,
+    // タイミングの遊びの速さの段階の版（timingLevels.js）。これより前の保存は、前の札の値を
+    // 同じ札の新しい値へ1回だけ移してから、この版を書く。
+    timingLevels: TIMING_LEVELS_VERSION,
     craneTargetTrials: null,
     // UFOキャッチャーで、走査カーソルが目標を通過したとき音を鳴らすか
     // （games/crane.js の maybePassTone）。
@@ -735,6 +747,8 @@ function sanitizeRhythmSession(session, taskType) {
     // （2026-10-21 から）。落とすと再読み込みで消え、音色の違う回を分けられない。
     // この列を持たない古い記録は null（その頃はいつも sine だったが、推測で埋めない）。
     cueTimbre: enumOr(config.cueTimbre, CUE_TIMBRES, null),
+    // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。持たない古い記録は false。
+    sureHit: config.sureHit === true,
     // どの表記で回したか。手順の説明が読めるかは成績に効きうる。
     // 記録は当時の値のまま残す（kanji / kana も妥当な値）。列を持たない
     // 古い記録の既定が "kana" なのは、当時の既定がかなだったから。
@@ -836,7 +850,16 @@ function sanitizeDevice(device) {
   };
 }
 
-function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs) {
+/**
+ * つかめる広さ（toleranceR）の上限。ふだんは 100（床の1辺）。押せば必ず当たる回
+ * （config.sureHit）は、床のどこで止めても届く大きさで走る（difficultyMode.js の
+ * SURE_HIT_CRANE_TOLERANCE_R）ので、その回だけ広く受け取る。ここで落とすと、遊べた回が
+ * 読み直したときに「完走していない回」になる。
+ */
+const MAX_SCAN_TOLERANCE_R = 100;
+const MAX_SURE_HIT_SCAN_TOLERANCE_R = 400;
+
+function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs, maxToleranceR = MAX_SCAN_TOLERANCE_R) {
   if (!isRecord(trial)) return null;
   const judgment = enumOr(trial.judgment, new Set(["grip", "slip", "miss"]), null);
   if (!judgment) return null;
@@ -862,7 +885,7 @@ function sanitizeScanTrial(trial, rowIndex, fallbackSweepMs) {
     trial.selectedY < 0 ||
     trial.selectedY > 100 ||
     trial.toleranceR <= 0 ||
-    trial.toleranceR > 100 ||
+    trial.toleranceR > maxToleranceR ||
     trial.xPhaseMs < 0 ||
     trial.yPhaseMs < 0
   ) return null;
@@ -922,9 +945,12 @@ function summarizeScanTrials(trials) {
 function sanitizeScanSession(session) {
   if (!isRecord(session) || !SCAN_GAME_IDS.has(session.gameId)) return null;
   const config = isRecord(session.config) ? session.config : {};
+  // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。持たない古い記録は false。
+  const sureHit = config.sureHit === true;
   const sanitizedConfig = {
     sweepMs: numberInRange(config.sweepMs, 2400, 400, 10_000, true),
-    toleranceR: numberInRange(config.toleranceR, 12, 1, 50),
+    toleranceR: numberInRange(config.toleranceR, 12, 1, sureHit ? MAX_SURE_HIT_SCAN_TOLERANCE_R : 50),
+    sureHit,
     targetTrials: numberInRange(config.targetTrials, 5, 1, 100, true),
     graspAnimMs: numberInRange(config.graspAnimMs, 1200, 100, 10_000, true),
     // その回、目標の通過音を鳴らしていたか（settings.craneAudioGuidance）。
@@ -974,8 +1000,14 @@ function sanitizeScanSession(session) {
   };
   const rawTrials = Array.isArray(session.trials) ? session.trials : null;
   const slots =
-    rawTrials?.map((trial, index) => sanitizeScanTrial(trial, index, sanitizedConfig.sweepMs)) ||
-    [];
+    rawTrials?.map((trial, index) =>
+      sanitizeScanTrial(
+        trial,
+        index,
+        sanitizedConfig.sweepMs,
+        sureHit ? MAX_SURE_HIT_SCAN_TOLERANCE_R : MAX_SCAN_TOLERANCE_R
+      )
+    ) || [];
   const trials = slots.filter(Boolean).slice(0, MAX_TRIALS_PER_SESSION);
   const completedNormally =
     session.finished === true &&
@@ -1117,6 +1149,8 @@ function sanitizeReactionSession(session) {
     cueTimbre: enumOr(config.cueTimbre, CUE_TIMBRES, null),
     // 成立確認の状態（src/lib/readinessCheck.js）。met / overridden / n/a。
     measurementReadiness: enumOr(config.measurementReadiness, READINESS_STATES, "n/a"),
+    // 押せば必ず当たる回か（difficultyMode.js の resolveSureHit）。持たない古い記録は false。
+    sureHit: config.sureHit === true,
   };
   const rawTrials = Array.isArray(session.trials) ? session.trials : null;
   // 受付時間は試行ごとに違いうる（エンドレスでは試行とともに短くなる。
@@ -1217,7 +1251,8 @@ export function sanitizeState(candidate) {
   const fallback = cloneDefaultState();
   if (!isRecord(candidate)) return fallback;
 
-  const settings = isRecord(candidate.settings) ? candidate.settings : {};
+  // 前の段階の速さで保存された設定は、ここで今の段階へ移す（timingLevels.js。1回だけ）。
+  const settings = migrateTimingLevels(isRecord(candidate.settings) ? candidate.settings : {});
   const switchControlMode = booleanOr(
     settings.switchControlMode,
     fallback.settings.switchControlMode
@@ -1371,6 +1406,7 @@ export function sanitizeState(candidate) {
         MAX_BASELINE_OFFSET_MS,
         true
       ),
+      sureHit: booleanOr(settings.sureHit, fallback.settings.sureHit),
       rhythmBpm: nullableNumberInRange(settings.rhythmBpm, null, 20, 240, true),
       countInBeats: nullableNumberInRange(settings.countInBeats, null, 1, 16, true),
       targetBeats: nullableNumberInRange(settings.targetBeats, null, 1, 200, true),
@@ -1378,7 +1414,7 @@ export function sanitizeState(candidate) {
         settings.slotCycleMs,
         fallback.settings.slotCycleMs,
         2800,
-        9600,
+        12000,
         true
       ),
       slotToleranceMs: numberInRange(
@@ -1393,7 +1429,7 @@ export function sanitizeState(candidate) {
       // 範囲は sanitizeScanSession が config に許す幅（sweepMs 400〜10000 /
       // toleranceR 1〜50）の内側に収める。ここを外すと、設定どおりに遊んだ
       // セッションが保存時に別の値へ丸められて記録と食い違う。
-      craneSweepMs: nullableNumberInRange(settings.craneSweepMs, null, 800, 6000, true),
+      craneSweepMs: nullableNumberInRange(settings.craneSweepMs, null, 800, 10000, true),
       craneToleranceR: nullableNumberInRange(settings.craneToleranceR, null, 4, 40, true),
       fishingLimitMs: nullableNumberInRange(settings.fishingLimitMs, null, 800, 6000, true),
       craneTargetTrials: nullableNumberInRange(settings.craneTargetTrials, null, 3, 15, true),
@@ -1412,6 +1448,8 @@ export function sanitizeState(candidate) {
         settings.craneAudioGuidance,
         fallback.settings.craneAudioGuidance
       ),
+      // 上の migrateTimingLevels で今の段階へ移したので、今の版を書く。
+      timingLevels: TIMING_LEVELS_VERSION,
     },
     logs: Array.isArray(candidate.logs)
       ? candidate.logs.map(sanitizeLogEntry).filter(Boolean).slice(0, MAX_LOG_ENTRIES)

@@ -1501,9 +1501,33 @@
    ]
   },
   {
+   "text": "すきな楽器",
+   "from": [
+    "tile.music-free.title"
+   ]
+  },
+  {
+   "text": "すきな楽器。",
+   "from": [
+    "tile.music-free.title (ready)"
+   ]
+  },
+  {
    "text": "すごい！",
    "from": [
     "party.voice.press"
+   ]
+  },
+  {
+   "text": "すず",
+   "from": [
+    "music.instrument.bell"
+   ]
+  },
+  {
+   "text": "すずを鳴らしてね",
+   "from": [
+    "music.teacher.prompt"
    ]
   },
   {
@@ -1543,9 +1567,34 @@
    ]
   },
   {
+   "text": "せんせいが、鳴らす楽器を言います。",
+   "from": [
+    "howto.music-teacher.1"
+   ]
+  },
+  {
+   "text": "せんせいと",
+   "from": [
+    "tile.music-teacher.title"
+   ]
+  },
+  {
+   "text": "せんせいと。",
+   "from": [
+    "tile.music-teacher.title (ready)"
+   ]
+  },
+  {
    "text": "ぜんぶ打てた！",
    "from": [
     "baseball.word.done"
+   ]
+  },
+  {
+   "text": "ぜんぶ鳴らせたね！",
+   "from": [
+    "music.teacher.finish",
+    "music.teacher.finish + cheer"
    ]
   },
   {
@@ -1583,6 +1632,25 @@
    "text": "た",
    "from": [
     "letters.option"
+   ]
+  },
+  {
+   "text": "たいこ",
+   "from": [
+    "music.instrument.taiko"
+   ]
+  },
+  {
+   "text": "たいこを鳴らしてね",
+   "from": [
+    "music.teacher.prompt"
+   ]
+  },
+  {
+   "text": "たくさん鳴らせたね！",
+   "from": [
+    "music.free.finish",
+    "music.free.finish + cheer"
    ]
   },
   {
@@ -1848,6 +1916,18 @@
    ]
   },
   {
+   "text": "もっきん",
+   "from": [
+    "music.instrument.xylophone"
+   ]
+  },
+  {
+   "text": "もっきんを鳴らしてね",
+   "from": [
+    "music.teacher.prompt"
+   ]
+  },
+  {
    "text": "や",
    "from": [
     "letters.option"
@@ -1867,6 +1947,8 @@
     "baseball.voice.finishNoHomerun + cheer",
     "color.voice.finish + cheer",
     "coloring.voice.finish + cheer",
+    "music.free.finish + cheer",
+    "music.teacher.finish + cheer",
     "party.voice.full + cheer",
     "party.voice.outfit.bow + cheer",
     "party.voice.outfit.crown + cheer",
@@ -1898,6 +1980,12 @@
    ]
   },
   {
+   "text": "わくがその楽器に来たら、押します。",
+   "from": [
+    "howto.music-teacher.2"
+   ]
+  },
+  {
    "text": "アームが下りて、つかめたら景品口へ運びます。",
    "from": [
     "howto.crane.3"
@@ -1921,6 +2009,18 @@
    "from": [
     "color.voice.progress",
     "party.voice.press"
+   ]
+  },
+  {
+   "text": "カスタネット",
+   "from": [
+    "music.instrument.castanets"
+   ]
+  },
+  {
+   "text": "カスタネットを鳴らしてね",
+   "from": [
+    "music.teacher.prompt"
    ]
   },
   {
@@ -2035,6 +2135,18 @@
    ]
   },
   {
+   "text": "ピアノ",
+   "from": [
+    "music.instrument.piano"
+   ]
+  },
+  {
+   "text": "ピアノを鳴らしてね",
+   "from": [
+    "music.teacher.prompt"
+   ]
+  },
+  {
    "text": "ホームランは1回！",
    "from": [
     "baseball.voice.finish",
@@ -2079,6 +2191,18 @@
    "text": "ボールが転がって来ます。",
    "from": [
     "howto.baseball.1"
+   ]
+  },
+  {
+   "text": "ラッパ",
+   "from": [
+    "music.instrument.trumpet"
+   ]
+  },
+  {
+   "text": "ラッパを鳴らしてね",
+   "from": [
+    "music.teacher.prompt"
    ]
   },
   {
@@ -2210,6 +2334,12 @@
    ]
   },
   {
+   "text": "押すと、わくの楽器が鳴ります。",
+   "from": [
+    "howto.music-free.2"
+   ]
+  },
+  {
    "text": "支援者と一緒に使う測定です。",
    "from": [
     "howto.calibration.3"
@@ -2323,13 +2453,15 @@
   {
    "text": "音あそび",
    "from": [
-    "tile.gonogo.title"
+    "tile.gonogo.title",
+    "tile.music-corner.title"
    ]
   },
   {
    "text": "音あそび。",
    "from": [
-    "tile.gonogo.title (ready)"
+    "tile.gonogo.title (ready)",
+    "tile.music-corner.title (ready)"
    ]
   },
   {
@@ -2391,6 +2523,12 @@
    "text": "魚だけ釣る。",
    "from": [
     "tile.fishing-gonogo.title (ready)"
+   ]
+  },
+  {
+   "text": "黄色いわくが、楽器をじゅんばんにまわります。",
+   "from": [
+    "howto.music-free.1"
    ]
   }
  ],
@@ -3080,6 +3218,12 @@
    ]
   },
   {
+   "text": "A yellow frame moves from instrument to instrument.",
+   "from": [
+    "howto.music-free.1"
+   ]
+  },
+  {
    "text": "After that, press on every note.",
    "from": [
     "howto.calibration.2",
@@ -3117,6 +3261,18 @@
    ]
   },
   {
+   "text": "Any instrument",
+   "from": [
+    "tile.music-free.title"
+   ]
+  },
+  {
+   "text": "Any instrument.",
+   "from": [
+    "tile.music-free.title (ready)"
+   ]
+  },
+  {
    "text": "Awesome!",
    "from": [
     "party.voice.press"
@@ -3141,6 +3297,18 @@
    ]
   },
   {
+   "text": "Bell",
+   "from": [
+    "music.instrument.bell"
+   ]
+  },
+  {
+   "text": "Bell, please!",
+   "from": [
+    "music.teacher.prompt"
+   ]
+  },
+  {
    "text": "Boring",
    "from": [
     "voca.phrase"
@@ -3150,6 +3318,18 @@
    "text": "Calling someone",
    "from": [
     "voca.category"
+   ]
+  },
+  {
+   "text": "Castanets",
+   "from": [
+    "music.instrument.castanets"
+   ]
+  },
+  {
+   "text": "Castanets, please!",
+   "from": [
+    "music.teacher.prompt"
    ]
   },
   {
@@ -3225,6 +3405,18 @@
    "from": [
     "color.voice.progress",
     "party.voice.press"
+   ]
+  },
+  {
+   "text": "Drum",
+   "from": [
+    "music.instrument.taiko"
+   ]
+  },
+  {
+   "text": "Drum, please!",
+   "from": [
+    "music.teacher.prompt"
    ]
   },
   {
@@ -3415,6 +3607,8 @@
     "baseball.voice.finishNoHomerun + cheer",
     "color.voice.finish + cheer",
     "coloring.voice.finish + cheer",
+    "music.free.finish + cheer",
+    "music.teacher.finish + cheer",
     "party.voice.full + cheer",
     "party.voice.outfit.bow + cheer",
     "party.voice.outfit.crown + cheer",
@@ -3595,6 +3789,18 @@
    ]
   },
   {
+   "text": "Piano",
+   "from": [
+    "music.instrument.piano"
+   ]
+  },
+  {
+   "text": "Piano, please!",
+   "from": [
+    "music.teacher.prompt"
+   ]
+  },
+  {
    "text": "Pick a game",
    "from": [
     "result.home"
@@ -3664,6 +3870,12 @@
    "text": "Press right away.",
    "from": [
     "howto.fishing.2.practice"
+   ]
+  },
+  {
+   "text": "Press to play the one in the frame.",
+   "from": [
+    "howto.music-free.2"
    ]
   },
   {
@@ -3899,13 +4111,15 @@
   {
    "text": "Sound game",
    "from": [
-    "tile.gonogo.title"
+    "tile.gonogo.title",
+    "tile.music-corner.title"
    ]
   },
   {
    "text": "Sound game.",
    "from": [
-    "tile.gonogo.title (ready)"
+    "tile.gonogo.title (ready)",
+    "tile.music-corner.title (ready)"
    ]
   },
   {
@@ -3988,6 +4202,12 @@
    ]
   },
   {
+   "text": "The teacher names an instrument.",
+   "from": [
+    "howto.music-teacher.1"
+   ]
+  },
+  {
    "text": "Then one high note follows.",
    "from": [
     "howto.rhythm-l1.2"
@@ -4015,6 +4235,18 @@
    "text": "Tired",
    "from": [
     "voca.phrase"
+   ]
+  },
+  {
+   "text": "Trumpet",
+   "from": [
+    "music.instrument.trumpet"
+   ]
+  },
+  {
+   "text": "Trumpet, please!",
+   "from": [
+    "music.teacher.prompt"
    ]
   },
   {
@@ -4068,10 +4300,40 @@
    ]
   },
   {
+   "text": "When the frame reaches it, press.",
+   "from": [
+    "howto.music-teacher.2"
+   ]
+  },
+  {
    "text": "Which one?",
    "from": [
     "tile.matching.title",
     "tile.matching.title (ready)"
+   ]
+  },
+  {
+   "text": "With the teacher",
+   "from": [
+    "tile.music-teacher.title"
+   ]
+  },
+  {
+   "text": "With the teacher.",
+   "from": [
+    "tile.music-teacher.title (ready)"
+   ]
+  },
+  {
+   "text": "Xylophone",
+   "from": [
+    "music.instrument.xylophone"
+   ]
+  },
+  {
+   "text": "Xylophone, please!",
+   "from": [
+    "music.teacher.prompt"
    ]
   },
   {
@@ -4376,6 +4638,20 @@
    "text": "You made it all the way to the end!",
    "from": [
     "slot.voice.finishNone"
+   ]
+  },
+  {
+   "text": "You played lots of music!",
+   "from": [
+    "music.free.finish",
+    "music.free.finish + cheer"
+   ]
+  },
+  {
+   "text": "You played them all!",
+   "from": [
+    "music.teacher.finish",
+    "music.teacher.finish + cheer"
    ]
   },
   {
