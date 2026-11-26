@@ -31,6 +31,7 @@ const PEAK_LIMIT = 0.89; // −1dBFS
  * file   … 元の音のファイル名（sourceDir の中）
  * start / end … 使う区間（秒）
  * filters … ffmpeg の -af に足すもの
+ * repeatAt / repeatGain … 切り出した音を、この時刻（秒）に重ねて鳴らす（カスタネットの「カチカチ」）
  */
 const SOUNDS = [
   {
@@ -141,13 +142,16 @@ const SOUNDS = [
     format: "wav",
   },
   {
+    // すず: 「シャン、シャン」。FluidR3 の tinkle_bell は1音の「チーン」で、もっきんと同じに聞こえると
+    // 言われた（2026-11-26）。鈴を振る音は FluidR3 に無いので合成した（scripts/synth-sounds.mjs）。
+    // 倍音が 17kHz まであるので 44.1kHz で書き出す。
     name: "instrument-bell",
-    file: "fluidr3/fluidr3-tinkle_bell-C5.mp3",
-    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/tinkle_bell-mp3/C5.mp3",
+    file: "synth/jingle.wav",
+    url: "scripts/synth-sounds.mjs（node scripts/synth-sounds.mjs で作る）",
     start: 0,
-    end: 1.2,
-    fadeOut: 0.5,
-    rate: 32000,
+    end: 1.0,
+    fadeOut: 0.2,
+    rate: 44100,
     format: "wav",
   },
   {
@@ -161,12 +165,17 @@ const SOUNDS = [
     format: "wav",
   },
   {
+    // カスタネット: 「カチカチ」。低い woodblock（C5）の「コン」は太鼓と同じに聞こえると言われた
+    // （2026-11-26）。高い音（C7）の短い当たりを、2回続けて鳴らす（repeatAt）。
     name: "instrument-castanets",
-    file: "fluidr3/fluidr3-woodblock-C5.mp3",
-    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/woodblock-mp3/C5.mp3",
+    file: "fluidr3/fluidr3-woodblock-C7.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/woodblock-mp3/C7.mp3",
     start: 0,
-    end: 0.4,
-    fadeOut: 0.12,
+    end: 0.09,
+    fadeOut: 0.03,
+    repeatAt: [0, 0.085],
+    repeatGain: [1, 0.8],
+    rate: 44100,
     format: "wav",
   },
   // 先生の言った楽器を鳴らせたときの「パーン」（オーケストラ・ヒット）。
@@ -265,6 +274,17 @@ for (const sound of SOUNDS) {
   const fadeOut = Math.round(rate * (sound.fadeOut ?? 0.05));
   for (let i = 0; i < Math.min(fadeOut, samples.length); i += 1) {
     samples[samples.length - 1 - i] *= 0.5 - 0.5 * Math.cos((Math.PI * i) / fadeOut);
+  }
+
+  // 同じ音を続けて鳴らす（repeatAt の時刻に、repeatGain の大きさで重ねる）。
+  if (Array.isArray(sound.repeatAt) && sound.repeatAt.length) {
+    const offsets = sound.repeatAt.map((seconds) => Math.round(seconds * rate));
+    const combined = new Float32Array(Math.max(...offsets) + samples.length);
+    offsets.forEach((offset, index) => {
+      const gainAt = sound.repeatGain?.[index] ?? 1;
+      for (let i = 0; i < samples.length; i += 1) combined[offset + i] += samples[i] * gainAt;
+    });
+    samples = combined;
   }
 
   // 大きさをそろえる。山が −1dBFS を越えるなら、そこで止める。
