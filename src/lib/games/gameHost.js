@@ -754,6 +754,10 @@ export function createGameHost(ctx) {
 
   /** お祝いの待ちのあと（または待たずに）、けっかの画面へ移る。 */
   function showResult(summary) {
+    // はじめの遊びは、おいわいの待ちのあいだも「この遊びの設定」を開ける。開いたまま
+    // けっかへ移ると、設定が次の回まで残り、スイッチを押しても遊びが進まなかった
+    // （dispatchInput は、設定が開いているあいだ入力を受けない）。変更は捨てて閉じる。
+    gameSettings.dismiss();
     const profile = atmosphere?.profile ?? null;
     const party = profile?.resultCompanions ? atmosphere.summary() : null;
     lastAtmosphereLevel = profile?.level ?? null;

@@ -302,7 +302,7 @@ export function initNeuroNodeApp() {
     document.body.classList.toggle("start-mode", nextView === "start");
     // 支援者の世界（評価ログ・設定）では自前走査を動かさない（scan.js の scanningIsOff()）。
     // ドックの2つは、そこでは押しても何も起きない操作子になるので、無効化したうえで
-    // ドックごと隠す（styles.css の body.supporter-menu-mode）。効かない操作子を置いて
+    // ドックごと隠す（theme-hakkiri.css の body.supporter-menu-mode）。効かない操作子を置いて
     // おくと、支援者は「押したのに動かない」を不具合として報告するしかなく、設定の
     // タップ標的も覆う。以前は下端の版面の伸び縮みを避けて見せたまま無効化していたが、
     // 支援者の世界の画面はどれも縦に流れる業務画面なので、伸び縮みは問題にならない。

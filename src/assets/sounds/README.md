@@ -11,7 +11,8 @@
 | `creature-dolphin.wav` | 押したときの音「生きものの声」のイルカ | Felix Blume（CC0） |
 | `bat-homerun.wav` / `bat-hit.wav` | ボールを打つ遊びの「カキーン」 | OtoLogic「SNES 野球01」（CC BY 4.0） |
 | `homerun-cheer.mp3` | ホームランの歓声 | OtoLogic「SNES 野球01」（CC BY 4.0） |
-| `instrument-piano.wav` / `instrument-taiko.wav` / `instrument-bell.wav` / `instrument-xylophone.wav` / `instrument-castanets.wav` / `instrument-trumpet.wav` | 音あそび（音楽室）で、枠のある楽器を押したときの音（ピアノ・太鼓・すず・もっきん・カスタネット・ラッパ） | FluidR3_GM（Frank Wen）の acoustic_grand_piano C4・taiko_drum C3・tinkle_bell C5・xylophone C5・woodblock C5・trumpet C5。gleitz/midi-js-soundfonts の書き出し（CC BY 3.0） |
+| `instrument-piano.wav` / `instrument-taiko.wav` / `instrument-xylophone.wav` / `instrument-trumpet.wav` | 音あそび（音楽室）で、枠のある楽器を押したときの音（ピアノ・太鼓・もっきん・ラッパ） | FluidR3_GM（Frank Wen）の acoustic_grand_piano C4・taiko_drum C3・xylophone C5・trumpet C5。gleitz/midi-js-soundfonts の書き出し（CC BY 3.0） |
+| `instrument-bell.wav` / `instrument-castanets.wav` | 音あそび（音楽室）の すず（「シャン、シャン」）と カスタネット（「カチカチ」）。どちらも1打を2回重ねる | FluidR3_GM の打楽器のセットの タンバリン（54 番）と クラベス（75 番）。WebAudioFont（surikov/webaudiofontdata）の書き出しから取り出した |
 | `orchestra-hit.wav` | 音あそびで、先生の言った楽器を鳴らせたときの「パーン」（雰囲気が ふつう 以上の回だけ） | FluidR3_GM の orchestra_hit C4（同上） |
 
 笑い声（`laugh`）、カメ・タコ・カニは、まだ合成音です。
@@ -26,7 +27,7 @@
    短く切り、頭の無音を削り、**大きさをそろえる**（iPad のスピーカー相当で −18dBFS）。
    アプリはこの大きさを前提に鳴らすので、そろえずに置くと大きすぎたり小さすぎたりする。
 3. CC BY の音は `src/lib/soundCredits.js` に作者・出典・ライセンスを書く
-   （アプリの設定「見え方・音」のいちばん下に出る。これが使う条件）。
+   （アプリの設定の「音の素材」に出る。これが使う条件）。
 
 - 押した瞬間に鳴らす短い音は WAV（mp3 は頭に数十ms の無音が入る）。長い音は mp3。
 - 測定の遊び（リール・高い音だけ・アーム・さかなつり）の音は、録音に替えない。
