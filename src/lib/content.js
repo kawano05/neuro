@@ -463,6 +463,8 @@ export const matchingTasks = [
     prompt: "赤いものを選んでください",
     // 画面に出す問い（ふりがな付き。i18n.js の書き方）。記録と正解の判定は answer / label のまま。
     promptRuby: "赤[あか]い ものは どれかな？",
+    // 表記が English のときの問い（選ぶ札の英語は下の LEARN_LABEL_EN）。
+    promptEn: "Which one is red?",
     answer: "りんご",
     options: [
       { label: "りんご", visual: "circle red" },
@@ -474,6 +476,7 @@ export const matchingTasks = [
   {
     prompt: "丸い形を選んでください",
     promptRuby: "丸[まる]い かたちは どれかな？",
+    promptEn: "Which one is round?",
     answer: "まる",
     options: [
       { label: "しかく", visual: "square teal" },
@@ -485,6 +488,7 @@ export const matchingTasks = [
   {
     prompt: "食べものを選んでください",
     promptRuby: "食[た]べものは どれかな？",
+    promptEn: "Which one is food?",
     answer: "パン",
     options: [
       { label: "くつ", visual: "bar teal" },
@@ -495,12 +499,43 @@ export const matchingTasks = [
   },
 ];
 
+/**
+ * どれかな？の札の英語（表記が English のときの、画面の字と声）。
+ * 記録（操作ログの label）と正解の判定は、言語で変わらないよう日本語の answer / label のまま。
+ */
+export const LEARN_LABEL_EN = {
+  りんご: "Apple",
+  そら: "Sky",
+  はっぱ: "Leaf",
+  ゆき: "Snow",
+  まる: "Circle",
+  しかく: "Square",
+  さんかく: "Triangle",
+  ながしかく: "Rectangle",
+  くつ: "Shoe",
+  パン: "Bread",
+  ほん: "Book",
+  いす: "Chair",
+};
+
 /** 文字学習の出題 */
 export const letterTasks = [
   { prompt: "「あめ」の最初の文字を選んでください", promptRuby: "「あめ」の はじめの 文字[もじ]は どれかな？", answer: "あ", options: ["あ", "い", "う", "え"] },
   { prompt: "「からだ」の最初の文字を選んでください", promptRuby: "「からだ」の はじめの 文字[もじ]は どれかな？", answer: "か", options: ["さ", "た", "か", "な"] },
   { prompt: "「みず」の最初の文字を選んでください", promptRuby: "「みず」の はじめの 文字[もじ]は どれかな？", answer: "み", options: ["に", "み", "し", "り"] },
   { prompt: "「ありがとう」の最初の文字を選んでください", promptRuby: "「ありがとう」の はじめの 文字[もじ]は どれかな？", answer: "あ", options: ["お", "あ", "ま", "や"] },
+];
+
+/**
+ * 文字学習の出題（表記が English のとき）。ひらがなの課題は英語に訳せないので、同じ形
+ * （ことばの はじめの 文字を えらぶ）の、アルファベットの課題を別に持つ。数は日本語の課題と同じ
+ * （何問目かは state.letterIndex を両方で使う）。
+ */
+export const letterTasksEn = [
+  { prompt: "Which letter does “apple” start with?", answer: "A", options: ["A", "E", "I", "O"] },
+  { prompt: "Which letter does “ball” start with?", answer: "B", options: ["D", "P", "B", "R"] },
+  { prompt: "Which letter does “sun” start with?", answer: "S", options: ["M", "S", "T", "N"] },
+  { prompt: "Which letter does “thank you” start with?", answer: "T", options: ["F", "T", "L", "H"] },
 ];
 
 /** 操作訓練のモード一覧（iOS Switch Control の模擬） */
@@ -577,7 +612,7 @@ export const PHRASE_EN = {
   いいえ: "No",
   どちらでもありません: "Neither",
   だいじょうぶです: "I'm okay",
-  おかあさん: "Mom",
+  おかあさん: "Mum",
   おとうさん: "Dad",
   せんせい: "Teacher",
   かんごしさん: "Nurse",

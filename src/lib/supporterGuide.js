@@ -22,6 +22,27 @@ import { say } from "./supporterText.js";
 import { escapeHtml } from "./utils.js";
 
 export const GUIDE_TITLE = "かんたん説明書";
+
+/**
+ * 印刷用の説明書の、本文の外の字（題・前書き・印刷のボタン・末尾の一言）。言語ごと。
+ * 日本語は GUIDE_TITLE・GUIDE_LEAD と同じ文（public/guide.html が1字も変わらないように）。
+ */
+export function printableGuideWords(lang = "ja") {
+  const en = lang === "en";
+  return {
+    htmlLang: en ? "en-GB" : "ja",
+    title: en ? "Quick guide" : GUIDE_TITLE,
+    titleSuffix: en ? " (for families, teachers and supporters)" : "（ご家族・先生・支援者の方へ）",
+    lead: en
+      ? "For families, teachers and supporters. This app is for practising “pressing” with the NeuroNode switch through play. " +
+        "It starts with games where something always happens whenever you press."
+      : GUIDE_LEAD,
+    print: en ? "Print (A4)" : "印刷する（A4）",
+    foot: en
+      ? "This guide has the same content as “Getting started: how to use” on the app’s settings screen."
+      : "この説明書は、アプリの設定画面の「はじめての方へ：つかいかた」と同じ中身です。",
+  };
+}
 export const GUIDE_LEAD =
   "ご家族・先生・支援者の方へ。NeuroNode（ニューロノード）のスイッチで「押す」練習を、遊びながらするアプリです。" +
   "はじめは、いつ押しても必ず何かが起きる遊びから始めます。";
@@ -76,13 +97,13 @@ function beforeSection(w) {
   };
 }
 
-/** 画面の見本（印刷用だけ。アプリの画面を簡単にした絵）。印刷用は日本語。 */
-const STEP_PICTURES = {
-  start: `<div class="screen light" aria-hidden="true"><div class="big-button">はじめる</div></div>`,
-  choose: `<div class="screen light" aria-hidden="true"><span class="corner">支援者の設定</span><div class="tiles"><span>①</span><span>②</span><span>③</span><span>④</span><span>⑤</span><span>⑥</span><span>⑦</span><span>⑧</span><span>…</span></div></div>`,
-  play: `<div class="screen" aria-hidden="true"><div class="bar"><span>この遊びの設定</span><span>× おわる</span></div><svg class="animal" viewBox="0 0 300 240"><path d="M40 150 C 60 80, 150 50, 225 85 C 250 97, 268 112, 282 124 C 262 124, 250 126, 240 132 C 234 162, 200 186, 150 188 C 110 190, 80 182, 60 172 C 45 190, 30 204, 16 210 C 22 190, 28 172, 40 150 Z" fill="#4DC4FF"></path><path d="M138 72 C 148 46, 168 36, 186 32 C 178 50, 176 66, 180 82 Z" fill="#1FA2E0"></path><circle cx="222" cy="104" r="8" fill="#10222E"></circle></svg></div>`,
-  done: `<div class="screen light" aria-hidden="true"><div class="done">できた！</div><div class="buttons"><span>もういちど</span><span>遊びを選ぶ</span></div></div>`,
-};
+/** 画面の見本（印刷用だけ。アプリの画面を簡単にした絵）。絵の中の字は、アプリのその言語の字と同じ。 */
+const stepPictures = (w) => ({
+  start: `<div class="screen light" aria-hidden="true"><div class="big-button">${w.pick("はじめる", "Start")}</div></div>`,
+  choose: `<div class="screen light" aria-hidden="true"><span class="corner">${w.pick("支援者の設定", "Supporter settings")}</span><div class="tiles"><span>①</span><span>②</span><span>③</span><span>④</span><span>⑤</span><span>⑥</span><span>⑦</span><span>⑧</span><span>…</span></div></div>`,
+  play: `<div class="screen" aria-hidden="true"><div class="bar"><span>${w.pick("この遊びの設定", "Game settings")}</span><span>${w.pick("× おわる", "× Finish")}</span></div><svg class="animal" viewBox="0 0 300 240"><path d="M40 150 C 60 80, 150 50, 225 85 C 250 97, 268 112, 282 124 C 262 124, 250 126, 240 132 C 234 162, 200 186, 150 188 C 110 190, 80 182, 60 172 C 45 190, 30 204, 16 210 C 22 190, 28 172, 40 150 Z" fill="#4DC4FF"></path><path d="M138 72 C 148 46, 168 36, 186 32 C 178 50, 176 66, 180 82 Z" fill="#1FA2E0"></path><circle cx="222" cy="104" r="8" fill="#10222E"></circle></svg></div>`,
+  done: `<div class="screen light" aria-hidden="true"><div class="done">${w.pick("できた！", "You did it!")}</div><div class="buttons"><span>${w.pick("もういちど", "Again")}</span><span>${w.pick("遊びを選ぶ", "Pick a game")}</span></div></div>`,
+});
 
 function steps(w) {
   return [
@@ -131,7 +152,7 @@ function stepsSection(w, print) {
     .map(
       (step) => `
         <div class="step">
-          ${print ? STEP_PICTURES[step.id] : ""}
+          ${print ? stepPictures(w)[step.id] : ""}
           <p><strong>${step.title}</strong><br />${step.text}</p>
         </div>`
     )
@@ -158,7 +179,7 @@ function gamesSection(w, print) {
   const list = print
     ? `\n      <table>
         <thead>
-          <tr><th>番号</th><th>遊び</th><th>どんな遊び？</th><th>むずかしさ</th></tr>
+          <tr><th>${w.pick("番号", "No.")}</th><th>${w.pick("遊び", "Game")}</th><th>${w.pick("どんな遊び？", "What is it like?")}</th><th>${w.pick("むずかしさ", "Level")}</th></tr>
         </thead>
         <tbody>
 ${games(w).map(([no, name, text, level]) => `          <tr><td class="no">${no}</td><td>${name}</td><td>${text}</td><td><span class="badge">${level}</span></td></tr>`).join("\n")}
@@ -327,11 +348,11 @@ ${items.map(([question, answer]) => `        <dt>${question}</dt>\n        <dd>$
 /**
  * 説明書の本文（見出しから「こまったとき」まで）。
  * @param {{print?: boolean, lang?: "ja"|"en"}} [options]
- *   print … 印刷用（番号つきの見出し・画面の絵・遊びの表。日本語）
+ *   print … 印刷用（番号つきの見出し・画面の絵・遊びの表）
  *   lang  … 設定画面に出すときの言語（支援者の画面の言語）
  */
 export function supporterGuideHtml({ print = false, lang = "ja" } = {}) {
-  const language = print ? "ja" : lang;
+  const language = lang;
   const w = wordsFor(language);
   const sections = [beforeSection(w), stepsSection(w, print), gamesSection(w, print), settingsSection(w, language), troubleSection(w)];
   return sections

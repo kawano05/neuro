@@ -6,16 +6,23 @@
 // 見た目と言葉だけを利用者向けにした（docs/design-renewal-2026-09-25.md §3.14）。
 // =====================================================================
 
-import { matchingTasks } from "../content.js";
+import { LEARN_LABEL_EN, matchingTasks } from "../content.js";
 import { LEARN_PICTURES } from "../art/hakkiriArt.js";
 import { rubyToHtml } from "../i18n.js";
+import { escapeHtml } from "../utils.js";
 
 export function initMatching(ctx) {
   const { state, elements, save, logEvent, voiceFeedback, playTone, scan } = ctx;
 
+  // 表記が English のときは、問いと札の字・声を英語にする（content.js の promptEn・LEARN_LABEL_EN）。
+  // 記録（logEvent の label）と正解の判定は、日本語の label のまま。
+  const english = () => ctx.textMode?.() === "en";
+  const shown = (label) => (english() && LEARN_LABEL_EN[label]) || label;
+
   function render() {
     const task = matchingTasks[state.matchingIndex % matchingTasks.length];
-    elements.matchingPrompt.innerHTML = rubyToHtml(task.promptRuby || task.prompt);
+    elements.matchingPrompt.innerHTML =
+      english() && task.promptEn ? escapeHtml(task.promptEn) : rubyToHtml(task.promptRuby || task.prompt);
     elements.matchingGrid.innerHTML = "";
     task.options.forEach((option) => {
       const button = document.createElement("button");
@@ -26,7 +33,7 @@ export function initMatching(ctx) {
       const art = picture
         ? `<svg class="match-picture" viewBox="0 0 100 100" aria-hidden="true" focusable="false">${picture}</svg>`
         : `<span class="shape ${option.visual}"></span>`;
-      button.innerHTML = `${art}<strong>${option.label}</strong>`;
+      button.innerHTML = `${art}<strong>${escapeHtml(shown(option.label))}</strong>`;
       button.addEventListener("click", () => choose(option.label));
       elements.matchingGrid.append(button);
     });
@@ -40,7 +47,7 @@ export function initMatching(ctx) {
     // 間違えても へこませない（打ち合わせ §1.5「あっさり次へ」）。
     voiceFeedback(
       correct ? ctx.t("learn.correct") : ctx.t("learn.tryNext"),
-      `${correct ? ctx.t("learn.correct") : ctx.t("learn.tryNext")} ${answer}`
+      `${correct ? ctx.t("learn.correct") : ctx.t("learn.tryNext")} ${shown(answer)}`
     );
     logEvent({ type: "matching", label: answer, correct });
     state.matchingIndex = (state.matchingIndex + 1) % matchingTasks.length;

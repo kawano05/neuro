@@ -3192,7 +3192,7 @@
    ]
   },
   {
-   "text": "A ball comes rolling toward you.",
+   "text": "A ball comes rolling towards you.",
    "from": [
     "howto.baseball.1"
    ]
@@ -3697,7 +3697,7 @@
    ]
   },
   {
-   "text": "Mom",
+   "text": "Mum",
    "from": [
     "voca.phrase"
    ]
@@ -3727,7 +3727,7 @@
    ]
   },
   {
-   "text": "Nice color!",
+   "text": "Nice colour!",
    "from": [
     "coloring.voice.progress"
    ]

@@ -9,10 +9,12 @@
 // のほうが速く読める。逆に漢字が読めない利用者にはひらがなが要る。
 // どちらか一方に決め打ちするのは、どちらかの利用者を締め出すことになる。
 //
-// 範囲は**利用者の世界（スタート/ホーム/ゲーム/リザルト）だけ**。
-// 支援者の世界（設定・評価ログ・研究・効果測定）は日本語のままにしてある。
-// あちらは日本語の支援者・研究者が使う業務画面で、対象利用者は見ない。
-// 訳す量が数倍になるわりに、読字能力が問題になる場所ではない。
+// この辞書の範囲は**利用者の世界（スタート/ホーム/ゲーム/リザルト）だけ**。
+// 支援者の世界（設定・評価ログ・がんばりの記録・説明書）の文は、ここには入れず、使う場所に
+// {ja, en} の組で置く（src/lib/supporterText.js の say）。あちらは ふりがな・かな・声のパックと
+// 結びつかない、漢字かな混じりの日本語と英語だけの文。
+// 支援者の世界も、言語が English のときは英語で出す（設定は 2026-10-02、評価ログ・学ぶ・伝えるの
+// 中身・印刷用の説明書は 2026-11-26。日本の外で使う支援者は日本語を読めない）。
 //
 // 表記は測定条件でもある。手順の説明が読めるかどうかは成績に効きうるので、
 // どの表記で回したかは session.config.textMode に残す（visualGuidance などと
@@ -171,7 +173,7 @@ const STRINGS = {
     kana: "ふうせんが {n}こ われたよ",
     en: "You popped {n} {n:balloon|balloons}!",
   },
-  "coloring.word.0": { ruby: "色[いろ]が ついた！", kanji: "色が ついた！", kana: "いろが ついた！", en: "Colorful!" },
+  "coloring.word.0": { ruby: "色[いろ]が ついた！", kanji: "色が ついた！", kana: "いろが ついた！", en: "Colourful!" },
   "coloring.word.1": { ruby: "いいね！", kanji: "いいね！", kana: "いいね！", en: "Nice!" },
   "coloring.word.2": { ruby: "きれい！", kanji: "きれい！", kana: "きれい！", en: "Pretty!" },
   "coloring.word.3": { ruby: "もう すこし！", kanji: "もう すこし！", kana: "もう すこし！", en: "Almost!" },
@@ -180,7 +182,7 @@ const STRINGS = {
     ruby: "色[いろ]が ついたよ。あと {n}回[かい]",
     kanji: "色が ついたよ。あと {n}回",
     kana: "いろが ついたよ。あと {n}かい",
-    en: "Nice color! {n} more to go.",
+    en: "Nice colour! {n} more to go.",
   },
   "coloring.voice.finish": { ruby: "{name}が できたよ", kanji: "{name}が できたよ", kana: "{name}が できたよ", en: "Your {name} is all done!" },
   "baseball.word.ready": { ruby: "くるよ…", kanji: "くるよ…", kana: "くるよ…", en: "Here it comes..." },
@@ -622,7 +624,7 @@ const STRINGS = {
   "howto.baseball.1": { ruby: "ボールが 転[ころ]がって 来[き]ます。",
     kanji: "ボールが 転がって 来ます。",
     kana: "ボールが ころがって きます。",
-    en: "A ball comes rolling toward you.",
+    en: "A ball comes rolling towards you.",
   },
   "howto.baseball.2": { ruby: "バットの ところに 来[き]たら 押[お]します。",
     kanji: "バットの ところに 来たら 押します。",

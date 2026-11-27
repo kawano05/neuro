@@ -19,8 +19,8 @@
   <!-- 同じ中身を絵つきで、印刷して渡せる形にしたもの（public/guide.html）。
        iPad のアプリ版では別の画面を開けないので、settings.js が隠す。 -->
   <p class="settings-guide-print" id="settingsGuidePrint">
-    <a href="./guide.html" target="_blank" rel="noopener"
-      >{say({ ja: "印刷用の説明書（A4・絵つき）を開く", en: "Open the printable guide (A4, with pictures; in Japanese)" }, lang)}</a
+    <a href={lang === "en" ? "./guide-en.html" : "./guide.html"} target="_blank" rel="noopener"
+      >{say({ ja: "印刷用の説明書（A4・絵つき）を開く", en: "Open the printable guide (A4, with pictures)" }, lang)}</a
     >
   </p>
 </details>

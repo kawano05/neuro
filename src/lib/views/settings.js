@@ -36,7 +36,7 @@ export function renderSoundCredits(listEl, { links = true, lang = "ja" } = {}) {
       use.textContent = en ? credit.useEn || credit.use : credit.use;
       const line = document.createElement("span");
       line.textContent = en
-        ? ` “${credit.title}” ${credit.author}. ${credit.changesEn || credit.changes}. `
+        ? ` “${credit.titleEn || credit.title}” ${credit.authorEn || credit.author}. ${credit.changesEn || credit.changes}. `
         : `「${credit.title}」 ${credit.author}。${credit.changes}。 `;
       // CC BY はライセンスの場所（URL）も示すのが条件。
       const address = (text, href) => {
@@ -49,12 +49,15 @@ export function renderSoundCredits(listEl, { links = true, lang = "ja" } = {}) {
         }
         return node;
       };
+      // 英語の画面では、ライセンスの名前と、クリエイティブ・コモンズの説明のページも英語のものにする。
+      const license = en ? credit.licenseEn || credit.license : credit.license;
+      const licenseUrl = en ? credit.licenseUrl.replace(/\/deed\.ja$/, "/deed.en") : credit.licenseUrl;
       item.append(
         use,
         line,
         address(credit.source, credit.source),
         document.createTextNode(" ／ "),
-        address(links ? credit.license : `${credit.license} ${credit.licenseUrl}`, credit.licenseUrl)
+        address(links ? license : `${license} ${licenseUrl}`, licenseUrl)
       );
       return item;
     })
@@ -229,6 +232,9 @@ export function initSettings(ctx) {
     const root = document.documentElement;
     root.classList.toggle("large-text", state.settings.largeText);
     root.classList.toggle("text-ruby", resolveTextMode(state.settings) === "ruby");
+    // ページの言語も表記に合わせる。読み上げソフト（VoiceOver など）は lang を見て発音を選ぶので、
+    // 日本語のままだと英語の文を日本語の声で読む。日本語の表記では ja のまま（何も変わらない）。
+    root.lang = lang() === "en" ? "en-GB" : "ja";
   }
 
   /**

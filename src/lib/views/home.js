@@ -10,7 +10,7 @@
 
 import { gameModules } from "../games/registry.js";
 import { isMeasurementMode, resolveSureHit } from "../difficultyMode.js";
-import { POP_ANIMALS, SCENE_ART, artSvg } from "../art/hakkiriArt.js";
+import { POP_ANIMALS, sceneArtFor, artSvg } from "../art/hakkiriArt.js";
 import { tileThemeFor } from "../homeTheme.js";
 import {
   GRID_LAYOUT_MIN_WIDTH,
@@ -162,7 +162,7 @@ export function initHome(ctx) {
       ? `<span class="hk-tile-badge" id="${levelId}">${ctx.tHtml(levelKey)}</span>`
       : "";
     button.innerHTML = `
-      <span class="hk-tile-art" aria-hidden="true">${artSvg(SCENE_ART[theme.art])}</span>
+      <span class="hk-tile-art" aria-hidden="true">${artSvg(sceneArtFor(theme.art, ctx.textMode?.()))}</span>
       <span class="hk-tile-tags">
         <span class="scan-order" aria-hidden="true">${index + 1}</span>
         ${badge}

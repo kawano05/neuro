@@ -37,7 +37,7 @@
     </div>
   </header>
 
-  <nav class="tabbar" aria-label="主要画面">
+  <nav class="tabbar" aria-label={t({ ja: "主要画面", en: "Main screens" })}>
     <!--
       支援者の世界（タブ群）から利用者の世界（home）へ戻る導線
       （実機確認2026-07-04で発覚：タブビューへ入ると強制終了以外に戻れなかった。
@@ -93,10 +93,10 @@
   <p class="supporter-message" id="supporterMessage" role="status" hidden></p>
 
   <aside id="storageWarning" class="storage-warning" role="status" hidden>
-    <p>記録を端末に保存できません。読み込み直す前に生データを書き出してください。</p>
+    <p>{t({ ja: "記録を端末に保存できません。読み込み直す前に生データを書き出してください。", en: "The records cannot be saved on this device. Export the raw data before reloading." })}</p>
     <div class="action-row wrap">
-      <button id="storageExport" class="secondary" type="button">未保存の記録をJSONで書き出す</button>
-      <button id="storageRetry" class="secondary" type="button">保存をやり直す</button>
+      <button id="storageExport" class="secondary" type="button">{t({ ja: "未保存の記録をJSONで書き出す", en: "Export unsaved records as JSON" })}</button>
+      <button id="storageRetry" class="secondary" type="button">{t({ ja: "保存をやり直す", en: "Try saving again" })}</button>
     </div>
   </aside>
 
@@ -116,7 +116,7 @@
     <section class="view is-active" id="startView" aria-labelledby="start-title">
       <div class="start-screen">
         <p class="eyebrow">NeuroNode</p>
-        <h2 id="start-title" class="sr-only">スタート画面</h2>
+        <h2 id="start-title" class="sr-only">{t({ ja: "スタート画面", en: "Start screen" })}</h2>
         <button class="start-stage" id="startStage" type="button">
           <span class="start-art" id="startArt" aria-hidden="true"></span>
           <span class="start-lead" id="startLead" aria-hidden="true">おして、はじめよう。</span>
@@ -132,7 +132,7 @@
         <p class="home-guide" id="homeGuide">やりたいことを えらびます</p>
         <p class="home-order-note" id="homeOrderNote"></p>
       </div>
-      <div class="activity-list" id="gameTileGrid" aria-label="アクティビティの一覧"></div>
+      <div class="activity-list" id="gameTileGrid" aria-label={t({ ja: "アクティビティの一覧", en: "List of games" })}></div>
     </section>
 
     <!--
@@ -149,8 +149,8 @@
       （styles.css の position: relative）、同じ座標にオーバーレイし続ける。
     -->
     <section class="view" id="gameView" aria-labelledby="game-title">
-      <h2 id="game-title" class="sr-only">ゲーム画面</h2>
-      <div class="game-stage" id="gameStage" role="button" tabindex="0" aria-label="ゲームの入力エリア">
+      <h2 id="game-title" class="sr-only">{t({ ja: "ゲーム画面", en: "Game screen" })}</h2>
+      <div class="game-stage" id="gameStage" role="button" tabindex="0" aria-label={t({ ja: "ゲームの入力エリア", en: "Game input area" })}>
         <div class="game-stage-content" id="gameStageContent" aria-hidden="true"></div>
       </div>
       <div class="game-progress" id="gameProgress" aria-live="polite"></div>
@@ -214,7 +214,7 @@
           id="calibrationSaveOffset"
           type="button"
         >
-          この値を保存する
+          {t({ ja: "この値を保存する", en: "Save this value" })}
         </button>
       </div>
       <div class="action-row wrap">
@@ -236,7 +236,7 @@
         <span class="metric-label" id="matchingLabel">お題</span>
         <strong id="matchingPrompt">赤いものを選んでください</strong>
       </div>
-      <div class="card-grid" id="matchingGrid" aria-label="マッチング選択肢"></div>
+      <div class="card-grid" id="matchingGrid" aria-label={t({ ja: "マッチング選択肢", en: "Choices" })}></div>
     </section>
 
     <section class="view" id="voca" aria-labelledby="voca-title">
@@ -253,8 +253,8 @@
         <strong id="currentPhrase">まだ選択されていません</strong>
       </div>
 
-      <div class="category-row" id="categoryRow" aria-label="カテゴリ"></div>
-      <div class="phrase-grid" id="phraseGrid" aria-label="定型句"></div>
+      <div class="category-row" id="categoryRow" aria-label={t({ ja: "カテゴリ", en: "Categories" })}></div>
+      <div class="phrase-grid" id="phraseGrid" aria-label={t({ ja: "定型句", en: "Phrases" })}></div>
     </section>
 
     <section class="view" id="letters" aria-labelledby="letters-title">
@@ -270,7 +270,7 @@
         <span class="metric-label" id="letterLabel">文字のお題</span>
         <strong id="letterPrompt">「あめ」の最初の文字を選んでください</strong>
       </div>
-      <div class="letter-grid" id="letterGrid" aria-label="文字選択肢"></div>
+      <div class="letter-grid" id="letterGrid" aria-label={t({ ja: "文字選択肢", en: "Letter choices" })}></div>
     </section>
 
     <!--
@@ -290,7 +290,7 @@
       <div class="section-head">
         <div>
           <p class="eyebrow">Evaluation</p>
-          <h2 id="log-title">評価ログ</h2>
+          <h2 id="log-title">{t({ ja: "評価ログ", en: "Records" })}</h2>
         </div>
         <!--
           支援者が使うデータ画面はここ1枚にまとめる（2026-08-29）。
@@ -299,15 +299,15 @@
           手段と、取り違えを防ぐ手当てだけ。
         -->
         <div class="action-row">
-          <button class="secondary" id="exportSessionLedgerCsv" data-scan>セッション台帳</button>
-          <button class="secondary" id="exportRhythmCsv" data-scan>リズムCSV</button>
-          <button class="secondary" id="exportSlotCsv" data-scan>リールCSV</button>
-          <button class="secondary" id="exportScanCsv" data-scan>走査CSV</button>
-          <button class="secondary" id="exportRtCsv" data-scan>反応CSV</button>
-          <button class="secondary" id="exportRawJson" data-scan>生データ(JSON)</button>
-          <button class="secondary" id="exportCsv" data-scan>操作ログCSV</button>
-          <button class="danger" id="clearLog" data-scan>ログ削除</button>
-          <button class="danger" id="handOverParticipant" data-scan>参加者を切り替える</button>
+          <button class="secondary" id="exportSessionLedgerCsv" data-scan>{t({ ja: "セッション台帳", en: "Session ledger" })}</button>
+          <button class="secondary" id="exportRhythmCsv" data-scan>{t({ ja: "リズムCSV", en: "Rhythm CSV" })}</button>
+          <button class="secondary" id="exportSlotCsv" data-scan>{t({ ja: "リールCSV", en: "Picture match CSV" })}</button>
+          <button class="secondary" id="exportScanCsv" data-scan>{t({ ja: "走査CSV", en: "Scanning CSV" })}</button>
+          <button class="secondary" id="exportRtCsv" data-scan>{t({ ja: "反応CSV", en: "Reaction CSV" })}</button>
+          <button class="secondary" id="exportRawJson" data-scan>{t({ ja: "生データ(JSON)", en: "Raw data (JSON)" })}</button>
+          <button class="secondary" id="exportCsv" data-scan>{t({ ja: "操作ログCSV", en: "Input log CSV" })}</button>
+          <button class="danger" id="clearLog" data-scan>{t({ ja: "ログ削除", en: "Delete input log" })}</button>
+          <button class="danger" id="handOverParticipant" data-scan>{t({ ja: "参加者を切り替える", en: "Switch participant" })}</button>
         </div>
       </div>
 
@@ -318,8 +318,8 @@
       -->
       <div class="supporter-fields">
           <label class="field-row">
-            <span>参加者ID</span>
-            <input id="participantId" type="text" inputmode="text" placeholder="例: P001" />
+            <span>{t({ ja: "参加者ID", en: "Participant ID" })}</span>
+            <input id="participantId" type="text" inputmode="text" placeholder={t({ ja: "例: P001", en: "e.g. P001" })} />
           </label>
       </div>
 
@@ -330,15 +330,15 @@
 
       <div class="summary-grid">
         <div class="summary-tile">
-          <span class="metric-label">総入力</span>
+          <span class="metric-label">{t({ ja: "総入力", en: "Total inputs" })}</span>
           <strong id="totalInputs">0</strong>
         </div>
         <div class="summary-tile">
-          <span class="metric-label">正答率</span>
+          <span class="metric-label">{t({ ja: "正答率", en: "Correct rate" })}</span>
           <strong id="accuracyRate">--</strong>
         </div>
         <div class="summary-tile">
-          <span class="metric-label">誤選択</span>
+          <span class="metric-label">{t({ ja: "誤選択", en: "Wrong choices" })}</span>
           <strong id="mistakeCount">0</strong>
         </div>
       </div>
@@ -358,10 +358,9 @@
         する。同じ指標でも測っているものが変わるので、1本にまとめると
         比較にならない（src/lib/sessionTrend.js）。
       -->
-      <h3 class="settings-group-title">回ごとの推移</h3>
+      <h3 class="settings-group-title">{t({ ja: "回ごとの推移", en: "Trend across runs" })}</h3>
       <p class="settings-group-note">
-        同じ あそび・同じ条件で完走した回だけを、古い順に並べています。
-        条件を変えた回は別の線になります。中断した回は含みません。
+        {t({ ja: "同じ あそび・同じ条件で完走した回だけを、古い順に並べています。条件を変えた回は別の線になります。中断した回は含みません。", en: "Only completed runs of the same game under the same conditions are shown, oldest first. Runs with different conditions form a separate line. Interrupted runs are not included." })}
       </p>
       <!--
         あそびごとのタブ。記録のあるあそびだけを出すと「無い」ことが見えず、
@@ -373,17 +372,17 @@
         同じ扱い）。走査の輪に入れると、押しても利用者に関係のない項目が
         並ぶだけ増える。
       -->
-      <div class="trend-tabs" id="trendTabs" role="tablist" aria-label="あそびを えらぶ"></div>
-      <div id="sessionTrends" aria-label="セッションの推移"></div>
+      <div class="trend-tabs" id="trendTabs" role="tablist" aria-label={t({ ja: "あそびを えらぶ", en: "Choose a game" })}></div>
+      <div id="sessionTrends" aria-label={t({ ja: "セッションの推移", en: "Session trends" })}></div>
 
-      <h3 class="settings-group-title">遊びの記録</h3>
+      <h3 class="settings-group-title">{t({ ja: "遊びの記録", en: "Play records" })}</h3>
       <p class="settings-group-note">
-        1回ごとの条件です。設定を変えた回は、ここの値も変わります。
+        {t({ ja: "1回ごとの条件です。設定を変えた回は、ここの値も変わります。", en: "The conditions of each run. Runs played with different settings show different values here." })}
       </p>
-      <div class="log-list" id="sessionList" aria-label="記録済みのセッション"></div>
+      <div class="log-list" id="sessionList" aria-label={t({ ja: "記録済みのセッション", en: "Recorded sessions" })}></div>
 
-      <h3 class="settings-group-title">操作ログ</h3>
-      <div class="log-list" id="logList" aria-label="直近の操作ログ"></div>
+      <h3 class="settings-group-title">{t({ ja: "操作ログ", en: "Input log" })}</h3>
+      <div class="log-list" id="logList" aria-label={t({ ja: "直近の操作ログ", en: "Recent input log" })}></div>
     </section>
 
     <SettingsView />
