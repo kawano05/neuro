@@ -198,6 +198,35 @@ test("a slot session reports its sequential-stop setup and result", () => {
   assert.equal(describeSessionOutcome(interrupted), "中断 5/12回");
 });
 
+test("a sure-hit run is named first, so it never shares a line with ordinary runs", () => {
+  // 押せば必ず当たる回（difficultyMode.js の resolveSureHit）。どこで押しても当たりになるので、
+  // ふだんの回と同じ束（sessionTrend.js の trendKey）に入ると、切り替えた日に成績が跳ね上がって見える。
+  const gonogo = { taskType: "gonogo", gameId: "gonogo", config: { bpm: 50, targetBeats: 20 } };
+  const sureGonogo = { ...gonogo, config: { ...gonogo.config, sureHit: true } };
+  assert.equal(describeSessionConditions(gonogo), "テンポ 50 / 20はく");
+  assert.equal(describeSessionConditions(sureGonogo), "押せば必ず当たる / テンポ 50 / 20はく");
+
+  assert.equal(
+    describeSessionConditions(craneSession({ config: { sweepMs: 2200, toleranceR: 300, targetTrials: 5, sureHit: true } })),
+    "押せば必ず当たる / はやさ 2200ms / ひろさ 300 / 5かい"
+  );
+  assert.equal(
+    describeSessionConditions({
+      taskType: "slot",
+      gameId: "slot-l1",
+      config: { cycleMs: 3200, toleranceMs: 3200, rounds: 8, reelCount: 1, sureHit: true },
+    }),
+    "押せば必ず当たる / 1周 3200ms / 合う幅 ±3200ms / 8ラウンド / 1本"
+  );
+  // さかなつりは、長さも数も決まっているので名前だけ。
+  assert.equal(
+    describeSessionConditions({ taskType: "rt", gameId: "fishing", config: { targetTrials: 10, limitMs: 10_000, sureHit: true } }),
+    "押せば必ず当たる"
+  );
+  // 印の無い回は、これまでどおり。
+  assert.equal(describeSessionConditions(craneSession()), "はやさ 2200ms / ひろさ 15 / 5かい");
+});
+
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);
 if (failed > 0) process.exit(1);
 console.log("session conditions tests passed");

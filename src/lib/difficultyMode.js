@@ -61,6 +61,40 @@ export const MEASUREMENT_PROTOCOL = {
   },
 };
 
+/**
+ * 押せば必ず当たる回の、アームの「つかめる広さ」（床の上の半径）。
+ *
+ * つかめるのは、ねらいからの距離が この半分まで（games/pointing.js の graspOutcome）。
+ * 床は 0〜100 の正方形で、いちばん遠い2点の距離は対角の約 141.4。半分の 150 がそれより
+ * 大きいので、どこで止めても「つかんだ」になる。
+ */
+export const SURE_HIT_CRANE_TOLERANCE_R = 300;
+
+/**
+ * 押せば必ず当たる回の、高い音だけの判定の窓（拍の前後、ミリ秒）。
+ *
+ * 拍と拍のあいだの ちょうど半分。となりの拍の窓と すきまなく つながるので、どこで押しても
+ * いちばん近い拍に入る（ふだんは 拍の間隔の 45% まで。games/judge.js の
+ * computeEffectiveWindowMs）。あわせて、この回は押さない合図（低い音）を出さない
+ * （games/rhythm.js の resolveParams が goRatio を 1 にする）。
+ */
+export function sureHitRhythmWindowMs(bpm) {
+  return 60000 / bpm / 2;
+}
+
+/**
+ * 押せば必ず当たる回の、さかなつりの数値。
+ *
+ *   foreperiodMs … 魚が寄ってくる時間。短く、そろえる（ふだんは 1.8〜4.2 秒の ばらばら）。
+ *                   寄ってくる途中の押しは、この回では数えない（games/fishing.js）。
+ *   limitMs      … アタリが続く長さ。記録に残せる いちばん長い値（state.js の sanitize の上限）。
+ *                   食いついた魚は、押すまで10秒 待つ。
+ *   fishCount    … 1回に来る魚の数（ふだんは 60 秒ぶん）。釣ったら すぐ次の魚が来るので、
+ *                   時間ではなく数で決める。
+ * あわせて、押さない合図（長靴）は出さない（fakeRatio 0）。
+ */
+export const SURE_HIT_FISHING = Object.freeze({ foreperiodMs: 900, limitMs: 10_000, fishCount: 10 });
+
 /** 設定値から、いまどちらの回かを決める。 */
 export function resolveDifficultyMode(settings) {
   const mode = settings?.difficultyMode;
@@ -76,6 +110,45 @@ const BRIGHT_CUE_GAMES = new Set(["gonogo", "fishing", "fishing-gonogo"]);
  */
 export function cueTimbreFor(gameId, settings) {
   return BRIGHT_CUE_GAMES.has(gameId) && resolveDifficultyMode(settings) !== "measure" ? "bright" : "sine";
+}
+
+/**
+ * 「押せば必ず当たる」（settings.sureHit）を入れてある遊び。
+ *
+ * 2026-11-04 に訪問先の学校で頼まれた。「どの遊びも、押したら必ず当たりになる段階が
+ * ほしい」——押すことはできるが、時刻を合わせるのは まだ難しい人のための段階。
+ * 判定の式は変えず、当たりの広さなどの数値を、どこで押しても当たる大きさにする
+ * （それぞれの resolve…Difficulty）。数値だけで届かないところ（合図の前に押した、など）は
+ * 遊びの側で扱う。押した時刻・位置などの生の値は、そのまま記録する。
+ *
+ * 設定画面と「この遊びの設定」に出す遊びも、ここから引く（settingDefinitions.js の inGame）。
+ */
+export const SURE_HIT_GAMES = Object.freeze([
+  "slot-l1",
+  "slot-l2",
+  "crane",
+  "baseball",
+  "gonogo",
+  "fishing",
+  "fishing-gonogo",
+]);
+
+/**
+ * 押せば必ず当たる回のあいだ、効かなくなる設定（当たりの広さ・長さ。この回は決まった広い値で走る）。
+ * 設定の画面と「この遊びの設定」は、オンのあいだ これらを使えなくして、理由を出す
+ * （効かない操作子を黙って置かない。docs/rules/supporter-settings.md）。
+ */
+export const SURE_HIT_OVERRIDDEN_SETTINGS = Object.freeze(["slotToleranceMs", "craneToleranceR", "fishingLimitMs"]);
+
+/**
+ * その回を「押せば必ず当たる」で走らせるか。
+ *
+ * そくていの回では必ず false（MUST）。そくていは protocol の値で走ることが条件そのもの。
+ * どちらだったかは session.config.sureHit に残し、CSV にも出す
+ * （docs/rules/measurement-invariance.md の「記録」）。
+ */
+export function resolveSureHit(gameId, settings) {
+  return SURE_HIT_GAMES.includes(gameId) && !isMeasurementMode(settings) && settings?.sureHit === true;
 }
 
 /**
@@ -188,12 +261,17 @@ export function resolveSlotDifficulty(gameId, settings, preset, practiceSeed) {
     ? protocolValues.rounds
     : settings?.[roundsKey] ?? preset.rounds;
   const maximumUnambiguousTolerance = cycleMs / (preset.symbolCount * 2);
+  // 押せば必ず当たる回: 「合った」にする広さを1周ぶんにする。目標の絵は1周に1回 通るので、
+  // どこで押しても、いちばん近い通過から1周より離れない（最初の通過の前に押しても同じ）。
+  // となりの絵と取り違えない上限は、この回だけ外す（games/slotJudge.js の wideTolerance）。
+  const sureHit = resolveSureHit(gameId, settings);
   return {
     ...preset,
     cycleMs,
-    toleranceMs: Math.min(requestedToleranceMs, maximumUnambiguousTolerance),
+    toleranceMs: sureHit ? cycleMs : Math.min(requestedToleranceMs, maximumUnambiguousTolerance),
     rounds,
     seed: measuring ? protocolValues.seed : practiceSeed,
+    sureHit,
   };
 }
 
@@ -213,14 +291,20 @@ export function resolveCraneDifficulty(settings, preset) {
       // 常に素の toleranceR を返す（games/craneGeometry.js）。
       assistMaxSteps: 0,
       audioGuidance: false,
+      sureHit: false,
     };
   }
+  const sureHit = resolveSureHit("crane", settings);
   return {
     ...preset,
     sweepMs: settings?.craneSweepMs ?? preset.sweepMs,
-    toleranceR: settings?.craneToleranceR ?? preset.toleranceR,
+    // 押せば必ず当たる回: つかめる広さを、床のどこで止めても届く大きさにする
+    // （SURE_HIT_CRANE_TOLERANCE_R）。これ以上は広げないので、アシストも切る。
+    toleranceR: sureHit ? SURE_HIT_CRANE_TOLERANCE_R : settings?.craneToleranceR ?? preset.toleranceR,
+    ...(sureHit ? { assistMaxSteps: 0 } : {}),
     targetTrials: settings?.craneTargetTrials ?? preset.targetTrials,
     audioGuidance: settings?.craneAudioGuidance === true,
+    sureHit,
   };
 }
 
@@ -236,9 +320,23 @@ export function resolveCraneDifficulty(settings, preset) {
  */
 export function resolveFishingDifficulty(gameId, settings, preset) {
   if (isMeasurementMode(settings)) {
-    return { ...preset, ...MEASUREMENT_PROTOCOL.fishing[gameId] };
+    return { ...preset, ...MEASUREMENT_PROTOCOL.fishing[gameId], sureHit: false };
   }
-  return { ...preset, limitMs: settings?.fishingLimitMs ?? preset.limitMs };
+  if (resolveSureHit(gameId, settings)) {
+    const { foreperiodMs, limitMs, fishCount } = SURE_HIT_FISHING;
+    return {
+      ...preset,
+      foreperiodMinMs: foreperiodMs,
+      foreperiodMaxMs: foreperiodMs,
+      // 魚は、寄ってくる時間いっぱいを使って糸まで来る。
+      approachMs: foreperiodMs,
+      limitMs,
+      fakeRatio: 0,
+      sessionMs: fishCount * (foreperiodMs + limitMs),
+      sureHit: true,
+    };
+  }
+  return { ...preset, limitMs: settings?.fishingLimitMs ?? preset.limitMs, sureHit: false };
 }
 
 /**

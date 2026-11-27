@@ -110,6 +110,10 @@ export const SESSION_LEDGER_HEADERS = Object.freeze([
   // 見え方の版（config.artVersion。その回に画面へ出した絵の版、src/lib/artVersion.js）。
   // fxLevel の後ろに足す。版を持たない課題と、この列より前の記録は空欄。
   "artVersion",
+  // 押せば必ず当たる回か（config.sureHit。difficultyMode.js の resolveSureHit）。この回は
+  // どこで押しても当たりになるので、成績をほかの回と同じ分布に混ぜない。
+  // 末尾に足す（列位置を動かさない）。この列より前の記録は false。
+  "sureHit",
 ]);
 
 function deviceColumns(session) {
@@ -194,6 +198,9 @@ export function buildRhythmCsvRows(sessions) {
       // れんしゅうの高い音だけの回は bright（2026-10-21 から）。そくていの回はいつでも sine。
       // artVersion の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
       "cueTimbre",
+      // 押せば必ず当たる回か（config.sureHit）。この回は effectiveWindowMs が拍の間隔の半分で、
+      // 押さない合図が無い（beatKind はどれも go）。cueTimbre の後ろに足す。この列より前の記録は false。
+      "sureHit",
     ],
   ];
   sessions.forEach((session) => {
@@ -225,6 +232,7 @@ export function buildRhythmCsvRows(sessions) {
         config.fxLevel ?? "",
         config.artVersion ?? "",
         config.cueTimbre ?? "",
+        config.sureHit === true,
       ]);
     });
   });
@@ -263,6 +271,7 @@ export function buildSessionLedgerRows(sessions) {
       JSON.stringify(session.summary ?? {}),
       session.config?.fxLevel ?? "",
       session.config?.artVersion ?? "",
+      session.config?.sureHit === true,
     ]);
   });
   return rows;
@@ -312,6 +321,10 @@ export function buildTaskCsvRows(sessions, taskType) {
         // 見え方の版（config.artVersion）。れんしゅうの回の絵が変わった前後を分ける。
         // fxLevel の後ろに足す（列位置を動かさない）。この列より前の記録は空欄。
         "artVersion",
+        // 押せば必ず当たる回か（config.sureHit）。この回は toleranceR が床より広く、どこで
+        // 止めても grip になる。selectedX・selectedY・distance は止めた場所のまま。
+        // artVersion の後ろに足す。この列より前の記録は false。
+        "sureHit",
       ],
     ];
     sessions
@@ -347,6 +360,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.endReason ?? "",
             session.config?.fxLevel ?? "",
             session.config?.artVersion ?? "",
+            session.config?.sureHit === true,
           ]);
         });
       });
@@ -386,6 +400,10 @@ export function buildTaskCsvRows(sessions, taskType) {
         // アタリの合図の音色（config.cueTimbre。sine / bright）。れんしゅうの回は bright
         // （2026-10-21 から）。artVersion の後ろに足す。この列より前の記録は空欄。
         "cueTimbre",
+        // 押せば必ず当たる回か（config.sureHit）。この回は魚がすぐ食いつき（foreperiodMs が短く
+        // そろう）、アタリが10秒 続き、長靴が出ない。寄ってくる途中の押しは記録しない。
+        // cueTimbre の後ろに足す。この列より前の記録は false。
+        "sureHit",
       ],
     ];
     sessions
@@ -417,6 +435,7 @@ export function buildTaskCsvRows(sessions, taskType) {
             session.config?.fxLevel ?? "",
             session.config?.artVersion ?? "",
             session.config?.cueTimbre ?? "",
+            session.config?.sureHit === true,
           ]);
         });
       });

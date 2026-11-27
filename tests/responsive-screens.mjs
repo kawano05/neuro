@@ -172,7 +172,8 @@ const CORNER_OF = {
   crane: "crane-corner",
   fishing: "fishing-corner",
   "fishing-gonogo": "fishing-corner",
-  gonogo: null,
+  // れんしゅうの回のホームの音あそびは 2026-11-25 から音楽室（高い音だけ は そくていの回だけ）。
+  "music-free": "music-corner",
 };
 
 /**
@@ -263,7 +264,8 @@ async function assertCraneStatusVisible(page, where) {
 async function playToResult(page, game, where) {
   for (let step = 0; step < 100 && !(await page.locator("#resultView.is-active").count()); step += 1) {
     await page.clock.fastForward(500);
-    if (game === "crane") await page.locator("#gameStage").evaluate((stage) => stage.click());
+    // アームと音楽室（すきな 楽器）は、押すまで終わらない。
+    if (game === "crane" || game === "music-free") await page.locator("#gameStage").evaluate((stage) => stage.click());
     else await page.clock.fastForward(10_000);
   }
   assert(await page.locator("#resultView.is-active").count(), `けっかに進まない: ${where}`);

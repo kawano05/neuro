@@ -6,7 +6,7 @@
 //   node tests/baseball.test.mjs
 
 import assert from "node:assert/strict";
-import { HIT_WINDOW_MS, HOMERUN_WINDOW_MS, judgeSwing } from "../src/lib/games/baseball.js";
+import { HIT_WINDOW_MS, HOMERUN_WINDOW_MS, PASS_GRACE_MS, PITCH_MS, judgeSwing } from "../src/lib/games/baseball.js";
 
 let passed = 0;
 let failed = 0;
@@ -42,6 +42,16 @@ test("far off still hits the ball (there is no miss)", () => {
   const outcomes = new Set();
   for (let delta = -2000; delta <= 2000; delta += 7) outcomes.add(judgeSwing(delta));
   assert.deepEqual([...outcomes].sort(), ["bunt", "hit", "homerun"]);
+});
+
+test("with no limit on the perfect window, any swing while the ball is out is a home run", () => {
+  // 押せば必ず当たる回（difficultyMode.js の resolveSureHit）。振りが数えられるのは、投げてから
+  // 見送りになるまで（いちばん遅い球で -PITCH_MS.slow 〜 +PASS_GRACE_MS）。
+  for (let delta = -PITCH_MS.slow; delta <= PASS_GRACE_MS; delta += 13) {
+    assert.equal(judgeSwing(delta, Number.POSITIVE_INFINITY), "homerun", `delta ${delta}`);
+  }
+  // ふだんの幅を渡せば、これまでどおり。
+  assert.equal(judgeSwing(HOMERUN_WINDOW_MS + 1, HOMERUN_WINDOW_MS), "hit");
 });
 
 console.log(`\n${passed + failed} tests run, ${passed} passed, ${failed} failed.`);

@@ -59,7 +59,11 @@ function sanitizeConfig(gameId, rawConfig) {
   const reelCount = gameId === "slot-l2" ? 3 : 1;
   const symbolCount = SLOT_SYMBOL_IDS.length;
   const cycleMs = bounded(value.cycleMs, 3200, 800, 12_000, true);
-  const toleranceMaximum = cycleMs / (symbolCount * 2);
+  // 押せば必ず当たる回（difficultyMode.js の resolveSureHit）は、許容幅が1周ぶんまである。
+  // 落とすと再読み込みで条件が消え、広い許容幅で当たった行が検算に通らなくなる。
+  // この値を持たない古い記録は false（その頃は無かった）。
+  const sureHit = value.sureHit === true;
+  const toleranceMaximum = sureHit ? cycleMs : cycleMs / (symbolCount * 2);
   return {
     reelCount,
     symbolCount,
@@ -83,6 +87,7 @@ function sanitizeConfig(gameId, rawConfig) {
     measurementReadiness: READINESS_STATES.has(value.measurementReadiness)
       ? value.measurementReadiness
       : "n/a",
+    sureHit,
   };
 }
 
@@ -123,6 +128,7 @@ function sanitizeTrial(trial, rowIndex, config) {
       symbolOrder,
       targetSymbol: trial.targetSymbol,
       initialPhase: trial.initialPhase,
+      wideTolerance: config.sureHit,
     });
   } catch {
     return null;

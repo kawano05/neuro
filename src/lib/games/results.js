@@ -12,6 +12,7 @@ import { displayOffsetMs } from "./rhythm.js";
 import { PRIZE_ART } from "./craneArt.js";
 import { slotSymbolHtml } from "./slotArt.js";
 import { POP_ANIMALS, artSvg, burstSvg } from "../art/hakkiriArt.js";
+import { MUSIC_INSTRUMENTS, musicInstrumentSvg } from "../art/musicRoomArt.js";
 import { otterSvg, outfitClasses } from "../art/partyArt.js";
 import { fullJarHtml, todayJarsHtml } from "./partyStage.js";
 import { atmosphereFor } from "../atmosphere.js";
@@ -349,6 +350,15 @@ function renderCompletionResult(summary, context = {}) {
       h: summary.baseball.homeruns ?? 0,
       k: summary.baseball.hits ?? 0,
     });
+  } else if (Array.isArray(summary?.music?.played)) {
+    // 音あそび（音楽室）: 鳴らした楽器を並べる。すきな 楽器 は何回 鳴らしたか、せんせいと は
+    // 先生の言った楽器を いくつ鳴らせたか（games/musicRoom.js）。
+    const played = summary.music.played.filter((id) => MUSIC_INSTRUMENTS.includes(id));
+    items = played.map((id) => `<span class="hk-result-item is-instrument">${musicInstrumentSvg(id)}</span>`).join("");
+    summaryText =
+      summary.music.mode === "teacher"
+        ? t("result.music.teacher.summary", { n: played.length })
+        : t("result.music.free.summary", { n: presses });
   } else if (Array.isArray(summary?.balloons)) {
     items = summary.balloons
       .map((color) => `<span class="hk-result-item is-burst">${burstSvg(color)}</span>`)

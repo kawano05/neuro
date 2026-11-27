@@ -29,7 +29,7 @@
 // 「小学校高学年が読んで分かる」くらいの言葉で書く（打ち合わせ §1.8）。
 // =====================================================================
 
-import { isMeasurementMode } from "../difficultyMode.js";
+import { SURE_HIT_OVERRIDDEN_SETTINGS, isMeasurementMode } from "../difficultyMode.js";
 import { ART_FAMILIES } from "../artVersion.js";
 import { SETTING_DEFINITIONS } from "../settingDefinitions.js";
 import { PLAY_BACKGROUNDS_BY_GAME, PLAY_SOUNDS_BY_GAME } from "../state.js";
@@ -99,6 +99,14 @@ function beginnerGroups(gameId) {
 /** ボールを打つ遊び。速さは次の1球から効くので、その場で続けられる（live）。 */
 function baseballGroups() {
   return [
+    // 押せば必ず当たる（ボールが出ているあいだなら、いつ振ってもホームラン）。次の1球から効く。
+    // 名前・そくていで固定されるかは、タイミングの遊びと同じ表から引く。
+    {
+      key: "sureHit",
+      label: SETTING_DEFINITIONS.sureHit.label,
+      measured: SETTING_DEFINITIONS.sureHit.measured === true,
+      options: IN_GAME_CHOICES.sureHit,
+    },
     {
       key: "playPrefs.baseball.speed",
       label: { ja: "ボールの速さ", en: "Ball speed" },
@@ -122,13 +130,20 @@ function baseballGroups() {
  * （tests/settings-definitions.test.mjs）。null は「ふつう」＝ content.js のプリセット。
  */
 const IN_GAME_CHOICES = {
+  // 押せば必ず当たる（difficultyMode.js の resolveSureHit）。入れてある遊びにだけ出る。
+  sureHit: [
+    [false, { ja: "オフ", en: "Off" }],
+    [true, { ja: "オン", en: "On" }],
+  ],
   // リールが1周する時間（ミリ秒）。大きいほど ゆっくり。ふつう＝slotPresets.cycleMs。
   // 「とても ゆっくり」は 2026-10-21 に足した（施設の試用で「もっと遅くできる設定が欲しい」）。
+  // 2026-11-25 に、札はそのままで値を一段階ずつ遅くした（7200/4800/3200/2800 から。
+  // 前の札の値で保存された設定は、src/lib/timingLevels.js が同じ札の新しい値へ1回だけ移す）。
   slotCycleMs: [
-    [7200, { ja: "とても ゆっくり", en: "Very slow" }],
-    [4800, { ja: "ゆっくり", en: "Slow" }],
-    [3200, { ja: "ふつう", en: "Normal" }],
-    [2800, { ja: "はやい", en: "Fast" }],
+    [9600, { ja: "とても ゆっくり", en: "Very slow" }],
+    [7200, { ja: "ゆっくり", en: "Slow" }],
+    [4800, { ja: "ふつう", en: "Normal" }],
+    [3200, { ja: "はやい", en: "Fast" }],
   ],
   // 「合った」にする広さ（目標の真ん中から前後何ミリ秒まで）。既定は 220（ひろい）。
   // 打ち合わせで、ほかのソフトの「遊びの中でボールの大きさをボンと変えられる」のが使いやすいと
@@ -141,18 +156,22 @@ const IN_GAME_CHOICES = {
     [160, { ja: "すこし せまい", en: "A bit narrow" }],
     [100, { ja: "せまい", en: "Narrow" }],
   ],
-  // 「高い音だけ」の音の速さ（1分あたりの拍数）。ふつう＝rhythmPresets（50）。
+  // 「高い音だけ」の音の速さ（1分あたりの拍数）。ふつう＝rhythmPresets（40）。
+  // 2026-11-25 に一段階ずつ遅くした（40/50/60 から。src/lib/timingLevels.js）。
   rhythmBpm: [
-    [40, { ja: "ゆっくり", en: "Slow" }],
+    [30, { ja: "ゆっくり", en: "Slow" }],
     [null, { ja: "ふつう", en: "Normal" }],
-    [60, { ja: "はやい", en: "Fast" }],
+    [50, { ja: "はやい", en: "Fast" }],
   ],
-  // アームが端から端まで動く時間。ふつう＝cranePresets（2200ms）。速くしすぎると「狙って押す」
+  // アームが端から端まで動く時間。ふつう＝cranePresets（3200ms）。速くしすぎると「狙って押す」
   // より前に目で追うことが辛くなる（cranePresets のコメント）ので、はやいも控えめにしてある。
+  // 2026-11-25 に一段階ずつ遅くし（1700/2200/3200 から）、「とても ゆっくり」を足した
+  // （打ち合わせで「アームはいちばん遅くしても速い」。src/lib/timingLevels.js）。
   craneSweepMs: [
-    [3200, { ja: "ゆっくり", en: "Slow" }],
+    [7200, { ja: "とても ゆっくり", en: "Very slow" }],
+    [4800, { ja: "ゆっくり", en: "Slow" }],
     [null, { ja: "ふつう", en: "Normal" }],
-    [1700, { ja: "はやい", en: "Fast" }],
+    [2200, { ja: "はやい", en: "Fast" }],
   ],
   // アームで「つかめる」広さ（床の上の半径）。ふつう＝cranePresets（15）。
   craneToleranceR: [
@@ -160,12 +179,13 @@ const IN_GAME_CHOICES = {
     [null, { ja: "ふつう", en: "Normal" }],
     [9, { ja: "せまい", en: "Narrow" }],
   ],
-  // さかなつりの、アタリが続く長さ（食いついてから逃げるまで）。ふつう＝fishingPresets（2000ms）。
-  // 長いほど、ゆっくり押しても釣れる。
+  // さかなつりの、アタリが続く長さ（食いついてから逃げるまで）。ふつう＝fishingPresets（3000ms）。
+  // 長いほど、ゆっくり押しても釣れる。2026-11-25 に一段階ずつ長くした（1400/2000/3000 から。
+  // src/lib/timingLevels.js）。
   fishingLimitMs: [
-    [3000, { ja: "ながい", en: "Long" }],
+    [4500, { ja: "ながい", en: "Long" }],
     [null, { ja: "ふつう", en: "Normal" }],
-    [1400, { ja: "みじかい", en: "Short" }],
+    [2000, { ja: "みじかい", en: "Short" }],
   ],
 };
 
@@ -211,6 +231,9 @@ export const GAME_SETTINGS = {
   balloon: { mode: "live", groups: beginnerGroups("balloon") },
   coloring: { mode: "live", groups: beginnerGroups("coloring") },
   baseball: { mode: "live", groups: baseballGroups() },
+  // 音あそび（音楽室）。枠の速さは支援者の設定「枠が動く速さ」。ここで選ぶのは おいわいだけ。
+  "music-free": { mode: "live", groups: [cheerGroup("music-free")] },
+  "music-teacher": { mode: "live", groups: [cheerGroup("music-teacher")] },
   "slot-l1": { mode: "restart", groups: timingGroups("slot-l1") },
   "slot-l2": { mode: "restart", groups: timingGroups("slot-l2") },
   gonogo: { mode: "restart", groups: timingGroups("gonogo") },
@@ -275,6 +298,11 @@ export function createGameSettings(ctx, host) {
     return openFor !== null;
   }
 
+  /** 「押せば必ず当たる」のあいだ効かない項目か（当たりの広さ・長さ）。 */
+  function overriddenBySureHit(group) {
+    return SURE_HIT_OVERRIDDEN_SETTINGS.includes(group.key);
+  }
+
   function notesFor(definition, measuring) {
     const notes = [];
     if (definition.mode === "live") {
@@ -294,12 +322,30 @@ export function createGameSettings(ctx, host) {
     } else {
       notes.push({ text: { ja: "閉じると、この設定で はじめます。", en: "When closed, the game starts with these settings." } });
     }
-    if (measuring && definition.groups.some((group) => group.measured)) {
+    const measuredGroups = definition.groups.filter((group) => group.measured);
+    if (measuring && measuredGroups.length) {
+      // 固定されるのが「押せば必ず当たる」だけの遊び（ボールを打つ）では、速さは変えられる。
+      const onlySureHit = measuredGroups.every((group) => group.key === "sureHit");
+      notes.push({
+        lock: true,
+        text: onlySureHit
+          ? {
+              ja: "いまは「そくてい」の回なので、「押せば必ず当たる」は使えません。",
+              en: "This is a measured run, so “Every press wins” cannot be used.",
+            }
+          : {
+              ja: "いまは「そくてい」の回なので、速さや広さ・長さは変えられません。記録の条件をそろえるためです。",
+              en: "This is a measured run, so speed, range and length cannot be changed. This keeps the recording conditions the same.",
+            },
+      });
+    }
+    // 「押せば必ず当たる」を選んでいるあいだ、広さ・長さは効かない（下の render が使えなくする）。
+    if (!measuring && draft.sureHit === true && definition.groups.some(overriddenBySureHit)) {
       notes.push({
         lock: true,
         text: {
-          ja: "いまは「そくてい」の回なので、速さや広さ・長さは変えられません。記録の条件をそろえるためです。",
-          en: "This is a measured run, so speed, range and length cannot be changed. This keeps the recording conditions the same.",
+          ja: "「押せば必ず当たる」がオンのあいだ、広さ・長さの設定は使いません。",
+          en: "While “Every press wins” is on, the range and length settings are not used.",
         },
       });
     }
@@ -347,7 +393,8 @@ export function createGameSettings(ctx, host) {
       .join("");
     const groups = definition.groups
       .map((group) => {
-        const locked = Boolean(group.measured && measuring);
+        const locked =
+          Boolean(group.measured && measuring) || (draft.sureHit === true && overriddenBySureHit(group));
         const options = group.options
           .map(([value, label]) => {
             const pressed = draft[group.key] === value;

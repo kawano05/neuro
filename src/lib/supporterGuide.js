@@ -148,7 +148,7 @@ function games(w) {
     row("③", "tile.coloring.title", "level.easy", "押すたびに、絵に色がついていきます。5回でできあがり。", "Each press adds colour to the picture. Five presses finish it."),
     row("④", "tile.baseball.title", "level.used", "転がってくるボールを、押してバットで打ちます。振れば必ず当たり、ぴったりだとホームラン。", "Press to swing the bat at the rolling ball. Every swing hits, and perfect timing is a home run."),
     row("⑤", "tile.slot-corner.title", "level.used", "くるくる回る絵が、目標の絵になったときに押します（タイミングの練習）。", "Press when the spinning picture matches the target picture (timing practice)."),
-    row("⑥", "tile.gonogo.title", "level.used", "高い音のときだけ押し、低い音では待ちます。", "Press only on high notes and wait on low notes."),
+    row("⑥", "tile.music-corner.title", "level.easy", "音楽室に楽器が6つ並び、黄色い枠が順に回ります。「すきな がっき」は押すと枠の楽器が鳴ります（10回）。「せんせいと」は、先生が言った楽器に枠が来たら押します（5問。ちがう楽器で押しても、その楽器が鳴るだけ）。そくていの回は、高い音のときだけ押す遊びになります。", "Six instruments sit in a music room and a yellow frame moves across them. In “Any instrument”, each press plays the one in the frame (10 presses). In “With the teacher”, press when the frame reaches the instrument the teacher names (5 rounds; another instrument just plays itself). In measured runs, this becomes the game of pressing only on high notes."),
     row("⑦", "tile.crane-corner.title", "level.challenge", "動くアームが ぬいぐるみの上に来たときに押します。", "Press when the moving claw is above a plush toy."),
     row("⑧", "tile.fishing-corner.title", "level.challenge", "「アタリ」の音（れんしゅうでは大きな「！」も）が出たら、すぐ押します。", "Press as soon as the bite sound plays (in practice, a big “!” also appears)."),
   ];

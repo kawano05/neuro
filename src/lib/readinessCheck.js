@@ -98,6 +98,12 @@ const MIN_TRIALS = 6;
 function isUsable(session) {
   // 中断した回は試行数が計画と違うので割合の意味が変わる。
   if (!session || session.aborted === true || session.finished !== true) return false;
+  // 押せば必ず当たる回（difficultyMode.js の resolveSureHit）は根拠にしない。どこで押しても
+  // 当たりになる回なので、ねらわずに押しつづけただけでも満点になる。高い音だけは押さない合図が
+  // 出ない（押す割合の差が、聞き分けていなくても最大になる）。さかなつりは合図の前の押しを
+  // 数えない（合図より先に押しはじめていても、記録に残らない）。根拠に入れると、確かめて
+  // いないのに、あとのそくていの回が「成立確認ずみ」と記録される。
+  if (session.config?.sureHit === true) return false;
   // そくていの回そのものは根拠にしない（成立を確かめる前に測った回なので、
   // それを成立の根拠にすると循環する）。
   return (session.config?.difficultyMode ?? "practice") !== "measure";

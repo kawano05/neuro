@@ -43,6 +43,7 @@ import {
   resolveCraneDifficulty,
   resolveDifficultyMode,
   resolveEndlessMode,
+  resolveSureHit,
 } from "../difficultyMode.js";
 import { evaluatePick, graspOutcome, scanPercentAt } from "./pointing.js";
 import {
@@ -306,6 +307,10 @@ export function endlessSweepMs(baseSweepMs, trialIndex) {
   );
 }
 
+function endlessFor(settings, requestedEndless) {
+  return !resolveSureHit("crane", settings) && resolveEndlessMode(settings, requestedEndless);
+}
+
 function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = null) {
   // そくていの回は protocol 固定・アシスト無し・通過音無し、
   // れんしゅうの回は支援者の設定 → 既定の順（src/lib/difficultyMode.js）。
@@ -314,10 +319,13 @@ function resolveCraneConfig(settings, readiness, requestedEndless, fxLevel = nul
     ...resolveCraneDifficulty(settings, cranePresets),
     // 「ずっとあそぶ」の回か。そくていでは resolveEndlessMode が必ず false を
     // 返すので、測る回の試行数は protocol のまま動かない。
-    endless: resolveEndlessMode(settings, requestedEndless),
+    //
+    // 押せば必ず当たる回も false。「ずっとあそぶ」は外したところで終わる遊び方なので、
+    // 外れない回では終わりが来ない（その入口はホームにも出さない。views/home.js）。
+    endless: endlessFor(settings, requestedEndless),
     // 難度の上げ方の版。定数を変えると回どうしを比べられなくなるので、
     // どの版で走った回かを残す（difficultyMode.js）。
-    endlessProtocolVersion: resolveEndlessMode(settings, requestedEndless)
+    endlessProtocolVersion: endlessFor(settings, requestedEndless)
       ? ENDLESS_PROTOCOL_VERSION
       : null,
     difficultyMode: resolveDifficultyMode(settings),
@@ -389,6 +397,10 @@ export function createCraneGame(ctx) {
   let phaseStartedPerfMs = 0;
   let selectedX = null;
   let selectedY = null;
+  // アームが降りる場所。ふだんは止めた場所そのもの。押せば必ず当たる回は ねらいの上で、
+  // 降りながら そこへ寄る（見た目だけ。記録の selectedX・selectedY は止めた場所のまま）。
+  let dropX = null;
+  let dropY = null;
   let xPhaseMs = 0;
   let yPhaseMs = 0;
   let currentIndex = 0;
@@ -594,6 +606,8 @@ export function createCraneGame(ctx) {
     // 描いた楕円の中に入っていれば必ず判定にも入る（tests/crane-geometry で固定）。
     // アシストで許容が広がった試行では、この輪がそのぶん大きくなる。
     const ring = floorCircleSize(trialToleranceR * 0.5, target.y);
+    // 押せば必ず当たる回は、輪が床より大きい（どこでもつかめる）ので描かない。
+    if (config.sureHit) ringEl.style.display = "none";
     ringEl.style.left = `${at.left}%`;
     ringEl.style.top = `${at.top}%`;
     ringEl.style.width = `${ring.width}%`;
@@ -946,20 +960,26 @@ export function createCraneGame(ctx) {
       maybePassTone(percent, target.y, cueTones.high);
     } else if (phase === "drop") {
       const progress = Math.min(1, elapsed / DROP_MS);
-      placeClaw(selectedX, selectedY, easeInOut(progress));
+      if (config.sureHit) {
+        // 止めた場所から ねらいの上へ、降りながら寄る。
+        const eased = easeInOut(progress);
+        placeClaw(selectedX + (dropX - selectedX) * eased, selectedY + (dropY - selectedY) * eased, eased);
+      } else {
+        placeClaw(selectedX, selectedY, easeInOut(progress));
+      }
       if (progress >= 1) {
         setPhase("close", nowPerfMs);
         resolveTrial();
       }
     } else if (phase === "close") {
-      placeClaw(selectedX, selectedY, 1);
+      placeClaw(dropX, dropY, 1);
       if (elapsed >= CLOSE_MS) {
         setPhase("lift", nowPerfMs);
         statusEl.innerHTML = judgment === "grip" ? tHtml("crane.lifted") : statusEl.innerHTML;
       }
     } else if (phase === "lift") {
       const progress = Math.min(1, elapsed / LIFT_MS);
-      placeClaw(selectedX, selectedY, 1 - easeInOut(progress));
+      placeClaw(dropX, dropY, 1 - easeInOut(progress));
       if (judgment === "grip") followPrizeToClaw();
       if (progress >= 1) {
         if (judgment === "grip") {
@@ -994,7 +1014,7 @@ export function createCraneGame(ctx) {
 
   /** アームごと景品口へ水平移動する。 */
   function carryToChute(progress) {
-    const at = project(selectedX, selectedY);
+    const at = project(dropX, dropY);
     const fromLeft = at.left;
     const fromTop = at.top - GEOM.altitude * at.scale;
     const left = fromLeft + (CHUTE.left - fromLeft) * progress;
@@ -1089,6 +1109,9 @@ export function createCraneGame(ctx) {
       yPhaseMs = Math.max(0, perfMs - phaseStartedPerfMs);
       selectedY = scanPercentAt(yPhaseMs, trialSweepMs);
       placeClaw(selectedX, selectedY, 0);
+      const target = currentTarget();
+      dropX = config.sureHit ? target.x : selectedX;
+      dropY = config.sureHit ? target.y : selectedY;
       startDrop(perfMs);
     }
   }

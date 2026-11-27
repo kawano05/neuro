@@ -31,6 +31,7 @@ const PEAK_LIMIT = 0.89; // −1dBFS
  * file   … 元の音のファイル名（sourceDir の中）
  * start / end … 使う区間（秒）
  * filters … ffmpeg の -af に足すもの
+ * repeatAt / repeatGain … 切り出した音を、この時刻（秒）に重ねて鳴らす（カスタネットの「カチカチ」）
  */
 const SOUNDS = [
   {
@@ -103,6 +104,91 @@ const SOUNDS = [
     fadeIn: 0.03,
     fadeOut: 0.3,
     rate: 32000,
+    format: "wav",
+  },
+  // 音あそび（音楽室）の楽器（2026-11-25。押すと、枠のある楽器の音が鳴る）。元は
+  // FluidR3_GM（Frank Wen、CC BY 3.0）の1音ずつの書き出し。gleitz/midi-js-soundfonts の
+  // FluidR3_GM/<楽器>-mp3/<音>.mp3 を、名前を変えて fluidr3/ に置く。
+  {
+    name: "instrument-piano",
+    file: "fluidr3/fluidr3-acoustic_grand_piano-C4.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/acoustic_grand_piano-mp3/C4.mp3",
+    start: 0,
+    end: 1.3,
+    fadeOut: 0.5,
+    rate: 32000,
+    format: "wav",
+  },
+  {
+    name: "instrument-trumpet",
+    file: "fluidr3/fluidr3-trumpet-C5.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/trumpet-mp3/C5.mp3",
+    start: 0,
+    end: 1.0,
+    fadeOut: 0.35,
+    rate: 32000,
+    format: "wav",
+  },
+  {
+    name: "instrument-taiko",
+    file: "fluidr3/fluidr3-taiko_drum-C3.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/taiko_drum-mp3/C3.mp3",
+    start: 0,
+    end: 0.9,
+    // iPad のスピーカーで出ない低い所を先に落とす。落とさないと、低い山で −1dBFS に当たって
+    // そろえる大きさまで上げられない（スピーカー相当で −23dB に止まった）。
+    filters: ["highpass=f=220"],
+    fadeOut: 0.3,
+    format: "wav",
+  },
+  {
+    // すず: 「シャン、シャン」。FluidR3 の tinkle_bell（1音の「チーン」）は、もっきんと同じに聞こえると
+    // 言われた（2026-11-26）。FluidR3 の打楽器のセットのタンバリン（54 番）の鈴の音を、2回重ねる。
+    // 打楽器のセットは gleitz の書き出しに無いので、WebAudioFont（surikov/webaudiofontdata）の
+    // 128<番号>_0_FluidR3_GM_sf2_file.js の中の mp3（base64）を取り出して webaudiofont/ に置く。
+    name: "instrument-bell",
+    file: "webaudiofont/12854_0_FluidR3_GM-0.mp3",
+    url: "https://surikov.github.io/webaudiofontdata/sound/12854_0_FluidR3_GM_sf2_file.js",
+    start: 0,
+    end: 0.5,
+    fadeOut: 0.15,
+    repeatAt: [0, 0.3],
+    repeatGain: [1, 0.85],
+    rate: 44100,
+    format: "wav",
+  },
+  {
+    name: "instrument-xylophone",
+    file: "fluidr3/fluidr3-xylophone-C5.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/xylophone-mp3/C5.mp3",
+    start: 0,
+    end: 0.8,
+    fadeOut: 0.3,
+    rate: 32000,
+    format: "wav",
+  },
+  {
+    // カスタネット: 「カチカチ」。低い woodblock（C5、「コン」）は太鼓と同じに聞こえると言われた
+    // （2026-11-26）。FluidR3 の打楽器のセットのクラベス（75 番、木を打ち合わせる硬い音）を2回重ねる。
+    name: "instrument-castanets",
+    file: "webaudiofont/12875_0_FluidR3_GM-0.mp3",
+    url: "https://surikov.github.io/webaudiofontdata/sound/12875_0_FluidR3_GM_sf2_file.js",
+    start: 0,
+    end: 0.1,
+    fadeOut: 0.03,
+    repeatAt: [0, 0.09],
+    repeatGain: [1, 0.85],
+    rate: 44100,
+    format: "wav",
+  },
+  // 先生の言った楽器を鳴らせたときの「パーン」（オーケストラ・ヒット）。
+  {
+    name: "orchestra-hit",
+    file: "fluidr3/fluidr3-orchestra_hit-C4.mp3",
+    url: "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/orchestra_hit-mp3/C4.mp3",
+    start: 0,
+    end: 1.1,
+    fadeOut: 0.45,
     format: "wav",
   },
 ];
@@ -191,6 +277,17 @@ for (const sound of SOUNDS) {
   const fadeOut = Math.round(rate * (sound.fadeOut ?? 0.05));
   for (let i = 0; i < Math.min(fadeOut, samples.length); i += 1) {
     samples[samples.length - 1 - i] *= 0.5 - 0.5 * Math.cos((Math.PI * i) / fadeOut);
+  }
+
+  // 同じ音を続けて鳴らす（repeatAt の時刻に、repeatGain の大きさで重ねる）。
+  if (Array.isArray(sound.repeatAt) && sound.repeatAt.length) {
+    const offsets = sound.repeatAt.map((seconds) => Math.round(seconds * rate));
+    const combined = new Float32Array(Math.max(...offsets) + samples.length);
+    offsets.forEach((offset, index) => {
+      const gainAt = sound.repeatGain?.[index] ?? 1;
+      for (let i = 0; i < samples.length; i += 1) combined[offset + i] += samples[i] * gainAt;
+    });
+    samples = combined;
   }
 
   // 大きさをそろえる。山が −1dBFS を越えるなら、そこで止める。

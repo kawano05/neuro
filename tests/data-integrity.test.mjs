@@ -204,7 +204,9 @@ test("the redesign's settings survive a reload and fall back on unknown values",
   assert.equal(sanitizeState({ settings: { scanFeedback: "beep" } }).settings.scanFeedback, "speak");
   // はじめの遊びは、遊びごとに見え方と音を持つ。既定の音に「びっくりする音」は使わない
   // （強すぎる音は発作につながりうる、と言われている）。
-  assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "baseball", "color-legacy", "coloring"]);
+  assert.deepEqual(Object.keys(defaults.playPrefs).sort(), ["balloon", "baseball", "color-legacy", "coloring", "music-free", "music-teacher"]);
+  // 音あそび（音楽室）は、押したときの音が楽器そのものなので、選べるのは おいわいだけ（2026-11-25）。
+  assert.deepEqual(defaults.playPrefs["music-free"], { cheer: "both" });
   // ボールを打つ遊びは、背景の代わりにボールの速さを持つ（遊びごとに項目が違う）。
   assert.deepEqual(defaults.playPrefs.baseball, { speed: "normal", sound: "bat", cheer: "both" });
   Object.values(defaults.playPrefs).forEach((prefs) => {
@@ -874,8 +876,9 @@ test("loadState migrates the complete v3 state to v4 without converting old rhyt
 
   const migrated = loadState();
   assert.equal(migrated.settings.scanInterval, 2800, "v3 must win over v2");
-  assert.equal(migrated.settings.rhythmBpm, 50, "legacy rhythm settings stay for one version");
-  assert.equal(migrated.settings.slotCycleMs, 3200, "new v4 settings receive safe defaults");
+  // 50 は前の速さの段階の「ふつう」の数なので、今の段階の 40 へ移る（timingLevels.js、2026-11-25）。
+  assert.equal(migrated.settings.rhythmBpm, 40, "legacy rhythm settings stay, moved to the current speed levels");
+  assert.equal(migrated.settings.slotCycleMs, cloneDefaultState().settings.slotCycleMs, "new v4 settings receive safe defaults");
   assert.equal(migrated.sessions.length, 1);
   assert.equal(migrated.sessions[0].gameId, "rhythm-l1");
   assert.equal(migrated.sessions[0].taskType, "sms");
@@ -1045,9 +1048,12 @@ test("slot CSV uses the fixed slot-v1 columns and remains formula-safe", () => {
     // 画面に出した1コマの高さ（2026-09-28、games/slotFit.js）。その後ろ。
     "reelCellPx",
     "artVersion",
+    // 押せば必ず当たる回か（2026-11-24、difficultyMode.js の resolveSureHit）。いちばん後ろ。
+    "sureHit",
   ]);
-  assert.equal(rows[0].length, 34);
-  assert.equal(rows[1].length, 34);
+  assert.equal(rows[0].length, 35);
+  assert.equal(rows[1].length, 35);
+  assert.deepEqual(columnOf(rows, "sureHit"), [false], "sureHit を持たない古い記録は false");
   // 演出の強さ・1コマの高さ・見え方の版を持たない古い記録は空欄。
   for (const name of ["fxLevel", "reelCellPx", "artVersion"]) {
     assert.deepEqual(columnOf(rows, name), [""], `${name} を持たない古い記録は空欄`);
@@ -1107,9 +1113,10 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // ＋ endless ＋ sweepMs。
   // ＋ endless ＋ sweepMs ＋ endlessProtocolVersion ＋ endReason。
   // ＋ fxLevel（演出の強さ。2026-09-28）。
-  // ＋ artVersion（見え方の版。2026-09-30、いちばん後ろ）。
-  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 7);
-  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 7);
+  // ＋ artVersion（見え方の版。2026-09-30）。
+  // ＋ sureHit（押せば必ず当たる回か。2026-11-24、いちばん後ろ）。
+  assert.equal(scanRows[0].length, 20 + DEVICE_COLUMNS + 8);
+  assert.equal(scanRows[1].length, 20 + DEVICE_COLUMNS + 8);
   assert.equal(scanRows[0][17], "judgment");
   assert.equal(scanRows[1][17], "grip");
   assert.equal(scanRows[0][18], "audioGuidance");
@@ -1140,11 +1147,12 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   // その試行のアームの速さ。エンドレスでは試行ごとに変わるので、toleranceR
   // だけでは要求精度（grip圏の半径 × sweepMs/100）が出せない。
   assert.equal(scanRows[0][29], "sweepMs");
-  assert.deepEqual(scanRows[0].slice(-3), ["endReason", "fxLevel", "artVersion"]);
+  // ＋ sureHit（押せば必ず当たる回か。2026-11-24、いちばん後ろ）。
+  assert.deepEqual(scanRows[0].slice(-4), ["endReason", "fxLevel", "artVersion", "sureHit"]);
   assert.equal(scanRows[1][29], "");
   // 終了理由を持たない回は空欄（「分からない」と「予定どおり」は違う）。
-  // 演出の強さ・見え方の版を持たない古い記録も空欄。
-  assert.deepEqual(scanRows[1].slice(-3), ["", "", ""]);
+  // 演出の強さ・見え方の版を持たない古い記録も空欄。sureHit を持たない古い記録は false。
+  assert.deepEqual(scanRows[1].slice(-4), ["", "", "", false]);
 
   const rtRows = buildTaskCsvRows(
     [
@@ -1176,8 +1184,9 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   //   ＋ fxLevel（演出の強さ。2026-09-28）。
   //   ＋ artVersion（見え方の版。2026-09-30）。
   //   ＋ cueTimbre（アタリの合図の音色。2026-10-21、いちばん後ろ）。
-  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 9);
-  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 9);
+  //   ＋ sureHit（押せば必ず当たる回か。2026-11-24、いちばん後ろ）。
+  assert.equal(rtRows[0].length, 14 + DEVICE_COLUMNS + 10);
+  assert.equal(rtRows[1].length, 14 + DEVICE_COLUMNS + 10);
   assert.equal(rtRows[0][13], "excluded");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 2], "deviceUserAgent");
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS - 1], "deviceInputMethod");
@@ -1186,7 +1195,8 @@ test("scan and rt CSV builders keep task-specific column counts", () => {
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 2], "endless");
   // 試行ごとの受付時間。エンドレスでは試行ごとに短くなる。
   assert.equal(rtRows[0][14 + DEVICE_COLUMNS + 3], "limitMs");
-  assert.deepEqual(rtRows[0].slice(-4), ["endReason", "fxLevel", "artVersion", "cueTimbre"]);
+  assert.deepEqual(rtRows[0].slice(-5), ["endReason", "fxLevel", "artVersion", "cueTimbre", "sureHit"]);
+  assert.equal(rtRows[1].at(-1), false, "sureHit を持たない古い記録は false");
   // 列を持たない古い記録は practice / n/a / false に倒す（scan と同じ既定）。
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS], "practice");
   assert.equal(rtRows[1][14 + DEVICE_COLUMNS + 1], "n/a");
@@ -1985,8 +1995,8 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
   // 既存18列 ＋ visualGuidance ＋ difficultyMode ＋ 端末7列 ＋ readiness。
   // 端末列は 2026-08-29 に deviceInputMethod を末尾へ足して7つになった。
   // ＋ fxLevel（演出の強さ。2026-09-28）＋ artVersion（見え方の版。2026-10-01）
-  // ＋ cueTimbre（押す合図の音色。2026-10-21、いちばん後ろ）。
-  assert.equal(rows[0].length, 20 + 7 + 4);
+  // ＋ cueTimbre（押す合図の音色。2026-10-21）＋ sureHit（押せば必ず当たる回か。2026-11-24、いちばん後ろ）。
+  assert.equal(rows[0].length, 20 + 7 + 5);
   assert.equal(rows[0][16], "judgment");
   assert.equal(rows[0][17], "excluded");
   assert.equal(rows[0][18], "visualGuidance");
@@ -2000,10 +2010,10 @@ test("the rhythm CSV appends visualGuidance without moving the existing 18 colum
 
   // 末尾に成立確認の状態（src/lib/readinessCheck.js）。この列が無いと、
   // 成績の低い回について「そもそも課題が成立していたのか」を後から分けられない。
-  assert.deepEqual(rows[0].slice(-4), ["measurementReadiness", "fxLevel", "artVersion", "cueTimbre"]);
+  assert.deepEqual(rows[0].slice(-5), ["measurementReadiness", "fxLevel", "artVersion", "cueTimbre", "sureHit"]);
   // 列を持たない古い記録は n/a。met と復元してしまうと、確認を経た回と
-  // 区別できなくなる。演出の強さ・見え方の版を持たない古い記録は空欄。
-  assert.deepEqual(rows[1].slice(-4), ["n/a", "", "", ""]);
+  // 区別できなくなる。演出の強さ・見え方の版を持たない古い記録は空欄。sureHit は false。
+  assert.deepEqual(rows[1].slice(-5), ["n/a", "", "", "", false]);
 });
 
 test("the rhythm CSV carries the readiness state of a measurement run", () => {
