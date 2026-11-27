@@ -547,7 +547,7 @@ export function initDataExport(ctx) {
   const { state, elements, save, announce, notifySupporter } = ctx;
   // 支援者の画面の言語（設定の「言語」に合わせる。supporterText.js）。
   const lang = () => supporterLang(state.settings);
-  const tr = (text) => say(text, lang());
+  const tr = (text, values) => say(text, lang(), values);
 
   const backup = createRecordBackup(state);
   ctx.recordBackup = backup;
@@ -587,7 +587,7 @@ export function initDataExport(ctx) {
       // announce の出力先 #liveRegion は .sr-only なので、読み上げを使わない支援者には
       // 何も届かない——押しても無反応に見え、壊れていると受け取られる。画面にも出す。
       announce(tr(definition.empty));
-      notifySupporter(`${tr(definition.empty)}${tr({ ja: "。", en: ". " })}${tr(definition.how)}`);
+      notifySupporter(tr({ ja: "{empty}。{how}", en: "{empty}. {how}" }, { empty: definition.empty, how: definition.how }));
       return;
     }
     download(definition.rows(sessions), definition.stem, definition.kind, sessions);
@@ -608,10 +608,13 @@ export function initDataExport(ctx) {
     };
     download(payload, "neuronode-raw", "raw");
     notifySupporter(
-      tr({
-        ja: `生データを書き出しました（セッション${state.sessions.length}件、ログ${state.logs.length}件）。`,
-        en: `Raw data exported (sessions: ${state.sessions.length}, log entries: ${state.logs.length}).`,
-      })
+      tr(
+        {
+          ja: "生データを書き出しました（セッション{sessions}件、ログ{logs}件）。",
+          en: "Raw data exported (sessions: {sessions}, log entries: {logs}).",
+        },
+        { sessions: state.sessions.length, logs: state.logs.length }
+      )
     );
   }
 
@@ -628,14 +631,20 @@ export function initDataExport(ctx) {
     warning.hidden = false;
     warning.textContent =
       remaining > 0
-        ? tr({
-            ja: `セッションの保存上限（${MAX_SESSIONS}件）まであと${remaining}件です。上限を超えると古い回から消えるので、先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。`,
-            en: `${remaining} more until the session limit (${MAX_SESSIONS}). Past the limit the oldest runs are removed, so export “Session ledger” and each CSV, or “Raw data (JSON)”, first.`,
-          })
-        : tr({
-            ja: `セッションの保存上限（${MAX_SESSIONS}件）に達しています。次の回を記録すると最も古い回が消えます。今すぐ書き出してください。`,
-            en: `The session limit (${MAX_SESSIONS}) has been reached. Recording the next run removes the oldest one. Export now.`,
-          });
+        ? tr(
+            {
+              ja: "セッションの保存上限（{max}件）まであと{remaining}件です。上限を超えると古い回から消えるので、先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。",
+              en: "{remaining} more until the session limit ({max}). Past the limit the oldest runs are removed, so export “Session ledger” and each CSV, or “Raw data (JSON)”, first.",
+            },
+            { max: MAX_SESSIONS, remaining }
+          )
+        : tr(
+            {
+              ja: "セッションの保存上限（{max}件）に達しています。次の回を記録すると最も古い回が消えます。今すぐ書き出してください。",
+              en: "The session limit ({max}) has been reached. Recording the next run removes the oldest one. Export now.",
+            },
+            { max: MAX_SESSIONS }
+          );
   }
 
   function handOverToNextParticipant() {
@@ -648,19 +657,25 @@ export function initDataExport(ctx) {
     }
     if (!backup.canClear()) {
       notifySupporter(
-        tr({
-          ja: `現在の記録はまだすべて書き出していません。セッション${sessionCount}件・ログ${logCount}件が消えます。先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。`,
-          en: `Not all of the current records have been exported. ${sessionCount} sessions and ${logCount} log entries would be lost. Export “Session ledger” and each CSV, or “Raw data (JSON)”, first.`,
-        })
+        tr(
+          {
+            ja: "現在の記録はまだすべて書き出していません。セッション{sessions}件・ログ{logs}件が消えます。先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。",
+            en: "Not all of the current records have been exported. {sessions} sessions and {logs} log entries would be lost. Export “Session ledger” and each CSV, or “Raw data (JSON)”, first.",
+          },
+          { sessions: sessionCount, logs: logCount }
+        )
       );
       announce(tr({ ja: "先に書き出してください", en: "Please export first" }));
       return;
     }
     if (!window.confirm(
-      tr({
-        ja: `この端末の記録を消します。\n\n　セッション ${sessionCount}件\n　操作ログ ${logCount}件\n　測定結果と観察メモ\n\n書き出したファイルは消えません。消した記録は元に戻せません。`,
-        en: `This deletes the records on this device.\n\n  Sessions: ${sessionCount}\n  Input log entries: ${logCount}\n  Measurement results and observation notes\n\nExported files are not deleted. Deleted records cannot be restored.`,
-      })
+      tr(
+        {
+          ja: "この端末の記録を消します。\n\n　セッション {sessions}件\n　操作ログ {logs}件\n　測定結果と観察メモ\n\n書き出したファイルは消えません。消した記録は元に戻せません。",
+          en: "This deletes the records on this device.\n\n  Sessions: {sessions}\n  Input log entries: {logs}\n  Measurement results and observation notes\n\nExported files are not deleted. Deleted records cannot be restored.",
+        },
+        { sessions: sessionCount, logs: logCount }
+      )
     )) {
       announce(tr({ ja: "消すのをやめました", en: "Nothing was deleted" }));
       return;
@@ -681,18 +696,30 @@ export function initDataExport(ctx) {
     ctx.renderAll();
     if (nextParticipant) {
       notifySupporter(
-        tr({
-          ja: `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。次の参加者「${nextParticipant}」で始められます。`,
-          en: `Records deleted (sessions: ${sessionCount}, log entries: ${logCount}). Ready to start with the next participant, “${nextParticipant}”.`,
-        })
+        tr(
+          {
+            ja: "記録を消しました（セッション{sessions}件・ログ{logs}件）。次の参加者「{participant}」で始められます。",
+            en: "Records deleted (sessions: {sessions}, log entries: {logs}). Ready to start with the next participant, “{participant}”.",
+          },
+          // 参加者IDは人が入れた字なので、最後に入れる（中に {…} があっても、穴として読まれない）。
+          { sessions: sessionCount, logs: logCount, participant: nextParticipant }
+        )
       );
-      announce(tr({ ja: `記録を消しました。次の参加者は${nextParticipant}です`, en: `Records deleted. The next participant is ${nextParticipant}` }));
+      announce(
+        tr(
+          { ja: "記録を消しました。次の参加者は{participant}です", en: "Records deleted. The next participant is {participant}" },
+          { participant: nextParticipant }
+        )
+      );
     } else {
       notifySupporter(
-        tr({
-          ja: `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。次の参加者IDを入れてから始めてください。`,
-          en: `Records deleted (sessions: ${sessionCount}, log entries: ${logCount}). Enter the next participant ID before starting.`,
-        })
+        tr(
+          {
+            ja: "記録を消しました（セッション{sessions}件・ログ{logs}件）。次の参加者IDを入れてから始めてください。",
+            en: "Records deleted (sessions: {sessions}, log entries: {logs}). Enter the next participant ID before starting.",
+          },
+          { sessions: sessionCount, logs: logCount }
+        )
       );
       announce(tr({ ja: "記録を消しました。次の参加者IDを入れてください", en: "Records deleted. Enter the next participant ID" }));
     }

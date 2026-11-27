@@ -23,21 +23,28 @@ import { isMeasurementMode } from "../difficultyMode.js";
 import { resolveTextMode } from "../i18n.js";
 import { evaluateReadiness } from "../readinessCheck.js";
 import { SOUND_CREDITS } from "../soundCredits.js";
-import { say, supporterLang, supporterLanguage } from "../supporterText.js";
+import { fromEnglish, say, supporterLang, supporterLanguage, supporterLanguageInfo } from "../supporterText.js";
 
 /** 音の素材のクレジットを描く。中身は固定の表なので、字はそのまま入れる。 */
 export function renderSoundCredits(listEl, { links = true, lang = "ja" } = {}) {
   if (!listEl) return;
-  const en = lang === "en";
+  const ja = lang === "ja";
+  // 日本語のほかの言語は、英語の欄（useEn など）を元にする。何に使ったか・手を入れたことは訳し、
+  // 題・作者は固有名なので英語のまま出す。
+  const english = (credit, name) => credit[`${name}En`] || credit[name];
   listEl.replaceChildren(
     ...SOUND_CREDITS.map((credit) => {
       const item = document.createElement("li");
       const use = document.createElement("strong");
-      use.textContent = en ? credit.useEn || credit.use : credit.use;
+      use.textContent = ja ? credit.use : fromEnglish(english(credit, "use"), lang);
       const line = document.createElement("span");
-      line.textContent = en
-        ? ` “${credit.titleEn || credit.title}” ${credit.authorEn || credit.author}. ${credit.changesEn || credit.changes}. `
-        : `「${credit.title}」 ${credit.author}。${credit.changes}。 `;
+      line.textContent = say(
+        { ja: "「{title}」 {author}。{changes}。 ", en: " “{title}” {author}. {changes}. " },
+        lang,
+        ja
+          ? { title: credit.title, author: credit.author, changes: credit.changes }
+          : { title: english(credit, "title"), author: english(credit, "author"), changes: fromEnglish(english(credit, "changes"), lang) }
+      );
       // CC BY はライセンスの場所（URL）も示すのが条件。
       const address = (text, href) => {
         const node = links ? document.createElement("a") : document.createElement("span");
@@ -50,8 +57,9 @@ export function renderSoundCredits(listEl, { links = true, lang = "ja" } = {}) {
         return node;
       };
       // 英語の画面では、ライセンスの名前と、クリエイティブ・コモンズの説明のページも英語のものにする。
-      const license = en ? credit.licenseEn || credit.license : credit.license;
-      const licenseUrl = en ? credit.licenseUrl.replace(/\/deed\.ja$/, "/deed.en") : credit.licenseUrl;
+      // 規約の名前は、英語の言い方を別に書いたもの（licenseEn。説明の文になっている）だけを訳す。
+      const license = ja ? credit.license : credit.licenseEn ? fromEnglish(credit.licenseEn, lang) : credit.license;
+      const licenseUrl = ja ? credit.licenseUrl : credit.licenseUrl.replace(/\/deed\.ja$/, "/deed.en");
       item.append(
         use,
         line,
@@ -76,7 +84,7 @@ export function initSettings(ctx) {
   /** 支援者の画面の言語（利用者の「言語」に合わせる。src/lib/supporterText.js）。 */
   const lang = () => supporterLang(state.settings);
   /** {ja, en} の文を、いまの言語で。 */
-  const tr = (text) => say(text, lang());
+  const tr = (text, values) => say(text, lang(), values);
 
   // 音の素材のクレジット（src/lib/soundCredits.js）。アプリ版では、上の説明書と
   // 同じ理由でリンクにしない（アドレスは字で出す）。
@@ -202,9 +210,10 @@ export function initSettings(ctx) {
       icon.setAttribute("aria-hidden", "true");
       const label = document.createElement("span");
       label.className = "readiness-label";
-      const name = lang() === "en" ? check.labelEn || check.label : check.label;
-      const reason = lang() === "en" ? check.reasonEn || check.reason : check.reason;
-      label.textContent = check.met ? name : lang() === "en" ? `${name} (${reason})` : `${name}（${reason}）`;
+      const name = tr(check.labelText);
+      label.textContent = check.met
+        ? name
+        : tr({ ja: "{name}（{reason}）", en: "{name} ({reason})" }, { name, reason: tr(check.reasonText) });
       item.append(icon, label);
       elements.readinessList.append(item);
     });
@@ -234,7 +243,7 @@ export function initSettings(ctx) {
     root.classList.toggle("text-ruby", resolveTextMode(state.settings) === "ruby");
     // ページの言語も表記に合わせる。読み上げソフト（VoiceOver など）は lang を見て発音を選ぶので、
     // 日本語のままだと英語の文を日本語の声で読む。日本語の表記では ja のまま（何も変わらない）。
-    root.lang = lang() === "en" ? "en-GB" : "ja";
+    root.lang = supporterLanguageInfo(lang()).htmlLang;
   }
 
   /**
@@ -274,13 +283,14 @@ export function initSettings(ctx) {
   const FEEDBACK = {
     scanFeedback: () => announce(tr({ ja: "枠が動いたときの音を変えました", en: "Changed the sound when the highlight moves" })),
     // 選んだ言語で知らせる。
-    textMode: () => announce(tr({ ja: "言語を日本語にしました", en: "Language set to English" })),
+    textMode: () =>
+      announce(tr({ ja: "言語を{name}にしました", en: "Language set to {name}" }, { name: supporterLanguageInfo(lang()).name })),
     // 読み上げの声を替えたら、その声で一言読む（支援者が聞いて選べるように）。
     speechVoice: () => audio.speak(ctx.t("color.voice.cheer")),
     fxLevel: () => {
       // 画面の名前は「遊びの雰囲気」。読み上げだけ古い名前（演出の強さ）だった。
       const chosen = formatFieldValue(fieldOf("fxLevel"), state.settings.fxLevel, lang());
-      announce(tr({ ja: `遊びの雰囲気を「${chosen}」にしました`, en: `Play atmosphere set to “${chosen}”` }));
+      announce(tr({ ja: "遊びの雰囲気を「{chosen}」にしました", en: "Play atmosphere set to “{chosen}”" }, { chosen }));
       // 選んだ強さを、その場で小さく見せる（設定の面の真ん中で星がはじける）。
       ctx.fx?.pressRing(elements.fxLevel, { color: "#FFC83D" });
       ctx.fx?.engine.burst({

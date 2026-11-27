@@ -6,7 +6,8 @@
 // 見た目と言葉だけを利用者向けにした（docs/design-renewal-2026-09-25.md §3.14）。
 // =====================================================================
 
-import { LEARN_LABEL_EN, matchingTasks } from "../content.js";
+import { matchingTasks } from "../content.js";
+import { learnLabel, learnLang, matchingPrompt } from "../learnText.js";
 import { LEARN_PICTURES } from "../art/hakkiriArt.js";
 import { rubyToHtml } from "../i18n.js";
 import { escapeHtml } from "../utils.js";
@@ -14,15 +15,15 @@ import { escapeHtml } from "../utils.js";
 export function initMatching(ctx) {
   const { state, elements, save, logEvent, voiceFeedback, playTone, scan } = ctx;
 
-  // 表記が English のときは、問いと札の字・声を英語にする（content.js の promptEn・LEARN_LABEL_EN）。
+  // 表記が日本語でないときは、問いと札の字・声を その言語にする（learnText.js）。
   // 記録（logEvent の label）と正解の判定は、日本語の label のまま。
-  const english = () => ctx.textMode?.() === "en";
-  const shown = (label) => (english() && LEARN_LABEL_EN[label]) || label;
+  const lang = () => learnLang(ctx.textMode?.());
+  const shown = (label) => learnLabel(label, lang());
 
   function render() {
     const task = matchingTasks[state.matchingIndex % matchingTasks.length];
-    elements.matchingPrompt.innerHTML =
-      english() && task.promptEn ? escapeHtml(task.promptEn) : rubyToHtml(task.promptRuby || task.prompt);
+    const prompt = matchingPrompt(task, lang());
+    elements.matchingPrompt.innerHTML = prompt ? escapeHtml(prompt) : rubyToHtml(task.promptRuby || task.prompt);
     elements.matchingGrid.innerHTML = "";
     task.options.forEach((option) => {
       const button = document.createElement("button");

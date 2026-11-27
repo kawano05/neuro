@@ -57,6 +57,12 @@ const PREFERRED_VOICES = {
     "Moira",
     "Tessa",
   ],
+  // 作り置きの声が無い言語（locales/ の voicePack: false）は、いつも端末の声で読む。
+  // 名前は iPad・Windows・Chrome に入っている声（実機では確かめていない。無ければ下の点数だけで選ぶ）。
+  de: ["Anna", "Petra", "Helena", "Markus", "Viktor", "Yannick", "Martin", "Katja", "Conrad", "Google Deutsch"],
+  es: ["Mónica", "Monica", "Marisol", "Jorge", "Elvira", "Alvaro", "Google español"],
+  fr: ["Audrey", "Aurélie", "Aurelie", "Thomas", "Marie", "Denise", "Henri", "Google français"],
+  pt: ["Luciana", "Fernanda", "Felipe", "Francisca", "Antonio", "Google português do Brasil"],
 };
 
 const HIGH_QUALITY = /(Premium|プレミアム)/i;

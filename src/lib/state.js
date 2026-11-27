@@ -288,7 +288,7 @@ export const defaultState = {
     //
     // どちらだったかは session.config.difficultyMode に残り、CSVにも出る。
     difficultyMode: "practice",
-    // 利用者向け文言の表記（src/lib/i18n.js）。"kanji" / "kana" / "en"。
+    // 利用者向け文言の表記（src/lib/i18n.js）。"ruby" / "en" と、足した言語（locales/index.js）。以前の "kanji" / "kana" は "ruby" に読み替える。
     //
     // 既定はひらがな（これまでの表示を変えない）。この集団は読字能力の幅が
     // 大きく、ひらがなだけが常にやさしいわけではない——日本語は漢字が語の

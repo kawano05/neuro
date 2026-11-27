@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Guia rápido (para famílias, professores e acompanhantes)</title>
+<!--
+  このファイルは scripts/generate-guide.mjs が作る（手で直さない）。文は src/lib/supporterGuide.js、絵と印刷の体裁は scripts/guide-template.html。
+  印刷して渡すための説明書（A4 で2〜3枚）。打ち合わせで「お母さんに渡す簡単な
+  説明書がほしい」「最初の画面だけでも、どのボタンが何をするのか支援者向けに
+  書いてあれば解決しそう」と言われた（docs/design-renewal-2026-09-25.md §1.8）。
+  アプリの中の「はじめての方へ：つかいかた」（設定画面）と同じ中身を、絵つきで。
+  オフラインでも読めるよう、字体・絵はすべてこのファイルの中に持つ。
+-->
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #4e5d78;
+    --line: #1a1a1a;
+    --blue: #005aff;
+    --yellow: #ffc83d;
+    --paper: #ffffff;
+    --soft: #f2f7ff;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: #e9eef5;
+    color: var(--ink);
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+
+  .sheet {
+    width: min(210mm, 100%);
+    margin: 16px auto;
+    padding: 14mm 14mm 12mm;
+    background: var(--paper);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .toolbar {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 16px auto 0;
+  }
+
+  .toolbar button {
+    min-height: 44px;
+    padding: 0 22px;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    background: var(--blue);
+    color: #ffffff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  h1 {
+    margin: 0 0 4px;
+    font-size: 24px;
+    line-height: 1.4;
+  }
+
+  .lead {
+    margin: 0 0 14px;
+    color: var(--muted);
+  }
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 3px solid var(--line);
+    font-size: 18px;
+  }
+
+  h2 .num {
+    display: inline-grid;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: #ffffff;
+    place-items: center;
+    font-size: 15px;
+  }
+
+  section {
+    break-inside: avoid;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .step {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    break-inside: avoid;
+  }
+
+  .step strong {
+    font-size: 16px;
+  }
+
+  .step p {
+    margin: 0;
+  }
+
+  /* 画面の見本（アプリの画面を簡単にした絵） */
+  .screen {
+    position: relative;
+    height: 120px;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    background: #0b1a33;
+    overflow: hidden;
+  }
+
+  .screen.light {
+    background: #ffffff;
+  }
+
+  .screen .big-button {
+    position: absolute;
+    inset: 32px 22%;
+    display: grid;
+    border: 3px solid var(--line);
+    border-radius: 999px;
+    background: var(--blue);
+    color: #ffffff;
+    place-items: center;
+    font-size: 18px;
+    font-weight: 800;
+  }
+
+  .screen .tiles {
+    position: absolute;
+    inset: 22px 10px 8px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 5px;
+  }
+
+  .screen .tiles span {
+    display: flex;
+    align-items: flex-start;
+    padding: 2px 4px;
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .screen .tiles span:first-child {
+    grid-column: 1 / span 2;
+    grid-row: 1 / span 2;
+    outline: 3px solid var(--yellow);
+    outline-offset: 1px;
+  }
+
+  .screen .corner {
+    position: absolute;
+    top: 3px;
+    right: 8px;
+    padding: 0 6px;
+    border: 1.5px solid var(--line);
+    border-radius: 6px;
+    background: #ffffff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+
+  .screen .bar {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    display: flex;
+    gap: 5px;
+  }
+
+  .screen .bar span {
+    padding: 1px 6px;
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    background: rgba(0, 8, 20, 0.8);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .screen .animal {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    width: 110px;
+    transform: translate(-50%, -50%);
+  }
+
+  .screen .buttons {
+    position: absolute;
+    inset: auto 12px 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .screen .buttons span {
+    flex: 1;
+    padding: 6px 0;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .screen .buttons span:first-child {
+    background: var(--blue);
+    color: #ffffff;
+    outline: 3px solid var(--yellow);
+  }
+
+  .screen .done {
+    position: absolute;
+    top: 18px;
+    left: 0;
+    right: 0;
+    font-size: 20px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 6px 8px;
+    border: 1.5px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--soft);
+  }
+
+  td.no {
+    width: 36px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0 8px;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .note {
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    border-left: 6px solid var(--yellow);
+    background: #fff8e0;
+  }
+
+  .qa {
+    margin: 0;
+  }
+
+  .qa dt {
+    margin-top: 8px;
+    font-weight: 800;
+  }
+
+  .qa dt::before {
+    content: "Q. ";
+    color: var(--blue);
+  }
+
+  .qa dd {
+    margin: 0 0 0 1.4em;
+  }
+
+  section ul {
+    margin: 4px 0 8px;
+    padding-left: 1.4em;
+  }
+
+  section p {
+    margin: 6px 0;
+  }
+
+  .foot {
+    margin-top: 16px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  @media (max-width: 640px) {
+    .sheet {
+      margin: 0;
+      padding: 16px;
+      box-shadow: none;
+    }
+
+    .steps {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  @media print {
+    body {
+      background: #ffffff;
+      font-size: 10.5pt;
+    }
+
+    .sheet {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+
+    .toolbar {
+      display: none;
+    }
+
+    .page-break {
+      break-before: page;
+    }
+
+    .screen,
+    h2 .num,
+    .screen .big-button,
+    .screen .bar span,
+    .screen .buttons span:first-child,
+    th,
+    .note {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button type="button" onclick="window.print()">Imprimir (A4)</button>
+</div>
+
+<main class="sheet">
+  <h1>Guia rápido</h1>
+  <p class="lead">
+    Para famílias, professores e acompanhantes. Este app serve para praticar o “apertar” com o acionador NeuroNode por meio de jogos. Ele começa com jogos em que sempre acontece alguma coisa quando se aperta.
+  </p>
+
+  <section>
+      <h2><span class="num">1</span>Antes de começar (uma vez)</h2>
+      <ul>
+        <li><strong>Conecte o NeuroNode ao iPad como teclado</strong>. Apertar o acionador faz os jogos avançarem.</li>
+        <li>No iPad, deixe “Ajustes” → “Acessibilidade” → “Controle Assistivo” <strong>desligado</strong>.
+          As escolhas são feitas com a moldura amarela do app (não é preciso mudar nada dentro do app).</li>
+        <li>O som é importante nestes jogos. Aumente o <strong>volume</strong> do iPad e desative o <strong>modo silencioso</strong>.</li>
+      </ul>
+      <p class="note">
+        Só se quiser usar o Controle Assistivo do próprio iPad, ligue <strong>os dois</strong>: o ajuste do iPad e, no app,
+        “Ajustes do acionador” → “Usar o Controle Assistivo do iPad” nos ajustes de acompanhante.
+        Se só o ajuste do iPad estiver ligado, a moldura amarela (do app) e a moldura do iPad aparecem juntas e fica difícil escolher.
+      </p>
+  </section>
+
+  <section>
+      <h2><span class="num">2</span>Como usar</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="screen light" aria-hidden="true"><div class="big-button">Começar</div></div>
+          <p><strong>① Começar</strong><br />A primeira tela tem só “Começar”. Aperte o acionador uma vez para ir à tela de escolha do jogo.</p>
+        </div>
+        <div class="step">
+          <div class="screen light" aria-hidden="true"><span class="corner">Ajustes de acompanhante</span><div class="tiles"><span>①</span><span>②</span><span>③</span><span>④</span><span>⑤</span><span>⑥</span><span>⑦</span><span>⑧</span><span>…</span></div></div>
+          <p><strong>② Escolher um jogo</strong><br />A moldura amarela passa de item em item. Aperte quando ela chegar ao jogo desejado. O ① é o mais fácil, e os números maiores são mais difíceis. Também dá para escolher tocando na tela.</p>
+        </div>
+        <div class="step">
+          <div class="screen" aria-hidden="true"><div class="bar"><span>Ajustes do jogo</span><span>× Terminar</span></div><svg class="animal" viewBox="0 0 300 240"><path d="M40 150 C 60 80, 150 50, 225 85 C 250 97, 268 112, 282 124 C 262 124, 250 126, 240 132 C 234 162, 200 186, 150 188 C 110 190, 80 182, 60 172 C 45 190, 30 204, 16 210 C 22 190, 28 172, 40 150 Z" fill="#4DC4FF"></path><path d="M138 72 C 148 46, 168 36, 186 32 C 178 50, 176 66, 180 82 Z" fill="#1FA2E0"></path><circle cx="222" cy="104" r="8" fill="#10222E"></circle></svg></div>
+          <p><strong>③ Jogar</strong><br />Apertar faz aparecer figuras e sons. Com “Ajustes do jogo”, no canto superior direito, dá para mudar na hora os sons, a velocidade e o estilo das figuras dos jogos de apertar na hora certa (Livro ilustrado / Simples). Esse botão é para acompanhantes e só aparece nos jogos que têm ajustes. Para parar, use “Terminar”.</p>
+        </div>
+        <div class="step">
+          <div class="screen light" aria-hidden="true"><div class="done">Você conseguiu!</div><div class="buttons"><span>De novo</span><span>Escolher jogo</span></div></div>
+          <p><strong>④ Você conseguiu!</strong><br />No fim, aparece a tela “Você conseguiu!”. Escolha “De novo” ou “Escolher jogo”.</p>
+        </div>
+      </div>
+  </section>
+
+  <section class="page-break">
+      <h2><span class="num">3</span>Ordem sugerida dos jogos</h2>
+      <table>
+        <thead>
+          <tr><th>Nº</th><th>Jogo</th><th>Como é?</th><th>Nível</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="no">①</td><td>Cadê? Achou!</td><td>A cada aperto, um animal sai da tela escura. Pode apertar a qualquer momento.</td><td><span class="badge">Comece aqui</span></td></tr>
+          <tr><td class="no">②</td><td>Estoura balão</td><td>Cada aperto estoura um balão. Com cinco apertos, todos estouram.</td><td><span class="badge">Fácil</span></td></tr>
+          <tr><td class="no">③</td><td>Colorir</td><td>Cada aperto põe cor no desenho. Com cinco apertos, ele fica pronto.</td><td><span class="badge">Fácil</span></td></tr>
+          <tr><td class="no">④</td><td>Beisebol</td><td>Aperte para bater com o taco na bola que vem rolando. Toda tacada acerta, e na hora exata é home run.</td><td><span class="badge">Próximo passo</span></td></tr>
+          <tr><td class="no">⑤</td><td>Figuras iguais</td><td>Aperte quando a figura que gira ficar igual à figura-alvo (treino de apertar na hora certa).</td><td><span class="badge">Próximo passo</span></td></tr>
+          <tr><td class="no">⑥</td><td>Jogo dos sons</td><td>Seis instrumentos ficam em uma sala de música e uma moldura amarela passa por eles. Em “Tocar à vontade”, cada aperto toca o instrumento da moldura (10 apertos). Em “Com a professora”, aperte quando a moldura chegar ao instrumento que a professora disser (5 rodadas; outro instrumento apenas toca o próprio som). Na medição, vira o jogo de apertar só nos sons agudos.</td><td><span class="badge">Fácil</span></td></tr>
+          <tr><td class="no">⑦</td><td>Máquina de garra</td><td>Aperte quando a garra em movimento estiver em cima de uma pelúcia.</td><td><span class="badge">Desafio</span></td></tr>
+          <tr><td class="no">⑧</td><td>Pescaria</td><td>Aperte assim que tocar o som da fisgada (na prática, também aparece um “!” grande).</td><td><span class="badge">Desafio</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note">Do ① ao ③ não dá para errar. Quando ficar claro que “apertar faz algo acontecer”, passe para o ④ (toda tacada acerta; o primeiro passo para apertar na hora certa) e, depois, para os jogos de apertar na hora certa, a partir do ⑤.</p>
+  </section>
+
+  <section>
+      <h2><span class="num">4</span>Ajustes de acompanhante</h2>
+      <p>
+        Para abrir, toque em “<strong>Ajustes de acompanhante</strong>”, no canto superior direito da tela de escolha do jogo (não abre com o acionador,
+        para que quem joga não abra sem querer, e a moldura amarela fica parada na tela de ajustes). Para voltar, use “← Voltar ao início”.
+        As alterações são salvas automaticamente. Com um teclado, mova-se com Tab e abra ou feche os títulos com Enter / Espaço.
+      </p>
+      <p><strong>“Ajustes mais usados”</strong> (os 8 que aparecem desde o início)</p>
+      <ul>
+          <li><strong>Idioma / Language</strong> … Escolha o idioma dos jogos e das telas de acompanhante.</li>
+          <li><strong>Clima do jogo</strong> … Escolha o quanto o cenário se movimenta e como o aperto e o final são comemorados.</li>
+          <li><strong>Ler em voz alta</strong> … Lê as instruções e os elogios em voz alta.</li>
+          <li><strong>Efeitos sonoros</strong> … Toca sons de aperto e aplausos. Os sinais dos jogos nunca são silenciados.</li>
+          <li><strong>Velocidade da moldura</strong> … Tempo até a moldura passar para o próximo item.</li>
+          <li><strong>Texto grande</strong> … Aumenta o texto da tela.</li>
+          <li><strong>Ocultar jogos que exigem olhar com atenção</strong> … Oculta “Figuras iguais” e “Máquina de garra” da tela de início.</li>
+          <li><strong>Sempre acerta</strong> … Qualquer aperto conta como acerto, não importa o momento.</li>
+      </ul>
+      <p><strong>Ajustes detalhados</strong> (toque em um título para abrir; vários podem ficar abertos ao mesmo tempo)</p>
+      <ul>
+        <li><strong>Ajustes do acionador</strong> … Usar o Controle Assistivo do iPad, Mover a moldura automaticamente, Som quando a moldura se move, Mostrar um botão “Apertar” na tela</li>
+        <li><strong>Ajustes de tela e voz</strong> … Alto contraste, Volume da voz, Voz</li>
+        <li><strong>Dificuldade de cada jogo</strong> … velocidade, rodadas e mais para Figuras iguais, Jogo dos sons, Máquina de garra, Pescaria (também dá para mudar em “Ajustes do jogo” durante o jogo)</li>
+        <li><strong>Créditos de som</strong> … autores e fontes dos materiais de voz e de som</li>
+        <li><strong>Pesquisa (prática / medição)</strong> … só para medições de pesquisa. Normalmente, deixe em “Prática”.
+          Na medição, a velocidade, as rodadas e as pistas dos jogos ficam fixas. A referência de tempo do aperto também fica aqui.</li>
+      </ul>
+      <p class="note">
+        Cada grupo de ajustes detalhados tem um botão “<strong>Redefinir</strong>”. Depois de tocar nele, o que foi redefinido aparece logo abaixo.
+        Um item acinzentado mostra o motivo na própria linha (na medição, também aparece o valor usado para medir).
+      </p>
+      <p><strong>Clima do jogo</strong> (nos ajustes mais usados; escolha um de quatro)</p>
+      <ul>
+          <li><strong>Nenhum</strong> … Figuras e resposta ao aperto. No fim, uma mensagem e uma estrela parada.</li>
+          <li><strong>Simples</strong> … Brilhos pequenos e um anel de estrelas. O fundo fica parado.</li>
+          <li><strong>Animado</strong> … O jogo de sempre. No resultado, uma lontra e o pote de brilho recebem você.</li>
+          <li><strong>Festa</strong> … As estrelas se juntam a cada acerto. No fim, um desfile e um enfeite de prêmio.</li>
+      </ul>
+      <p class="note">
+        Para pessoas sensíveis a luz ou a som, escolha “Simples” ou “Nenhum”. Os flashes são limitados a 3 por segundo em qualquer clima.
+        Na medição, nenhum efeito é acrescentado aos jogos, seja qual for o clima escolhido.
+      </p>
+  </section>
+
+  <section>
+      <h2><span class="num">5</span>Solução de problemas</h2>
+      <dl class="qa">
+        <dt>A moldura amarela e a moldura do iPad aparecem juntas</dt>
+        <dd>Desligue o Controle Assistivo do iPad (veja “Antes de começar”).</dd>
+        <dt>A moldura não se move</dt>
+        <dd>Ligue “Ajustes do acionador” → “Mover a moldura automaticamente”. Enquanto “Ajustes do acionador” → “Usar o Controle Assistivo do iPad” está ligado, a moldura do app não se move.</dd>
+        <dt>A moldura está rápida ou lenta demais</dt>
+        <dd>Mude em “Ajustes mais usados” → “Velocidade da moldura”.</dd>
+        <dt>É difícil ficar olhando para a tela</dt>
+        <dd>Coloque “Ajustes do acionador” → “Som quando a moldura se move” em “Ler o nome” para ouvir o nome a cada movimento (“Um som discreto” toca só um som).</dd>
+        <dt>O nome é lido a cada movimento, e isso é demais</dt>
+        <dd>Coloque “Ajustes do acionador” → “Som quando a moldura se move” em “Um som discreto” ou “Nenhum”.</dd>
+        <dt>A luz ou o movimento parecem excessivos, ou a pessoa fica agitada demais</dt>
+        <dd>Coloque “Ajustes mais usados” → “Clima do jogo” em “Simples” ou “Nenhum”.</dd>
+        <dt>Sem som</dt>
+        <dd>Verifique o volume e o modo silencioso do iPad. Ligue também “Ajustes mais usados” → “Efeitos sonoros”.</dd>
+        <dt>Sem voz, ou a voz está baixa</dt>
+        <dd>Ligue “Ajustes mais usados” → “Ler em voz alta”. Mude o volume em “Ajustes de tela e voz” → “Volume da voz”.</dd>
+        <dt>Um ajuste está acinzentado</dt>
+        <dd>O motivo aparece nessa linha. Se disser “Fixo na medição”, mude “Pesquisa (prática / medição)” → “Prática / Medição” para “Prática” para poder alterar.</dd>
+        <dt>Quero desfazer ajustes alterados</dt>
+        <dd>Toque em “Redefinir” nesse grupo de ajustes detalhados.</dd>
+        <dt>Nada acontece ao apertar</dt>
+        <dd>Verifique se o NeuroNode está conectado ao iPad (como teclado). Se tocar na tela funciona, o app está funcionando.</dd>
+        <dt>Quero mudar o idioma</dt>
+        <dd>Escolha em “Ajustes mais usados” → “Idioma / Language”. Os jogos e estas telas de acompanhante mudam juntos.</dd>
+      </dl>
+  </section>
+
+  <p class="foot">Este guia tem o mesmo conteúdo de “Primeiros passos: como usar”, na tela de ajustes do app.</p>
+</main>
+</body>
+</html>

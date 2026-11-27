@@ -271,7 +271,8 @@ test("every supporter-screen name, hint, option and group title has Japanese and
 test("the language choice sits at the top of the common settings and drives the supporter language", () => {
   assert.equal(settingsGroup("common").fields[0].key, "textMode", "言語は よく使う設定の いちばん上");
   assert.ok(!settingsGroup("senses").fields.some((field) => field.key === "textMode"), "見え方・声には もう無い");
-  assert.deepEqual(settingsField("textMode").options, [["ruby", "日本語"], ["en", "English"]]);
+  // はじめの2つは日本語と英語。そのあとに、足した言語が並ぶ（src/lib/locales/index.js。中身は locales.test.mjs が見る）。
+  assert.deepEqual(settingsField("textMode").options.slice(0, 2), [["ruby", "日本語"], ["en", "English"]]);
   assert.equal(supporterLang({ textMode: "en" }), "en");
   assert.equal(supporterLang({ textMode: "ruby" }), "ja");
   assert.equal(supporterLang({ textMode: "kana" }), "ja", "古い表記は日本語");

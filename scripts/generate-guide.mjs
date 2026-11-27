@@ -1,7 +1,8 @@
 // =====================================================================
-// scripts/generate-guide.mjs — 印刷用の説明書 public/guide.html（日本語）・public/guide-en.html（英語）を作る
+// scripts/generate-guide.mjs — 印刷用の説明書を、言語ごとに作る（public/guide.html が日本語、
+// ほかは public/guide-<言語>.html。言語の一覧は src/lib/locales/index.js）
 //
-//   node scripts/generate-guide.mjs          … 2つの説明書を書き直す
+//   node scripts/generate-guide.mjs          … 全部の言語の説明書を書き直す
 //   node scripts/generate-guide.mjs --check  … 書き直しが要るなら 1 で終わる（書かない）
 //
 // 中身は設定画面の「はじめての方へ：つかいかた」と同じ src/lib/supporterGuide.js から作る。
@@ -16,13 +17,19 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { LANGUAGES, guideFileName } from "../src/lib/locales/index.js";
 import { printableGuideWords, supporterGuideHtml } from "../src/lib/supporterGuide.js";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const TEMPLATE_PATH = resolve(projectRoot, "scripts/guide-template.html");
 export const GUIDE_PATH = resolve(projectRoot, "public/guide.html");
-/** 言語ごとの置き場所。日本語の名前は前のまま（配ったリンクと、ホーム画面に入れた端末の写しを変えない）。 */
-export const GUIDE_PATHS = { ja: GUIDE_PATH, en: resolve(projectRoot, "public/guide-en.html") };
+/** 言語ごとの置き場所（点検用の にせの言語には作らない）。 */
+export const GUIDE_PATHS = Object.fromEntries(
+  LANGUAGES.filter((language) => !language.pseudo).map((language) => [
+    language.code,
+    resolve(projectRoot, "public", guideFileName(language.code)),
+  ])
+);
 
 const GENERATED_NOTE =
   "このファイルは scripts/generate-guide.mjs が作る（手で直さない）。文は src/lib/supporterGuide.js、" +

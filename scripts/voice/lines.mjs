@@ -23,16 +23,22 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { PHRASE_EN, cranePrizes, gameHowTo, letterTasks, matchingTasks, phraseCategories } from "../../src/lib/content.js";
+import { cranePrizes, gameHowTo, letterTasks, matchingTasks, phraseCategories } from "../../src/lib/content.js";
 import { BEGINNER_TARGET_PRESSES } from "../../src/lib/games/beginnerKit.js";
 import { COLOR_TARGET_PRESSES } from "../../src/lib/games/colorLegacy.js";
 import { musicSpokenTexts } from "../../src/lib/games/musicRoom.js";
 import { allStringKeys, joinSpeech, speechLangForText, toSpeechText, translate } from "../../src/lib/i18n.js";
+import { learnLang, phraseText } from "../../src/lib/learnText.js";
+import { LANGUAGES } from "../../src/lib/locales/index.js";
 import { PARTY_OUTFITS } from "../../src/lib/party.js";
 import { splitSpeechChunks, voiceLang } from "../../src/lib/voicePack.js";
 
-/** 表記（利用者が選べるもの）。ふりがな付き漢字は日本語、English は英語で読む。 */
-export const VOICE_TEXT_MODES = ["ruby", "en"];
+/**
+ * 声のパックを作る言語（locales/index.js で voicePack が true のもの）と、その表記。
+ * パックの無い言語は端末の声で読むので、ここには入らない。
+ */
+const VOICE_LANGUAGES = LANGUAGES.filter((language) => language.voicePack && !language.pseudo);
+export const VOICE_TEXT_MODES = VOICE_LANGUAGES.map((language) => language.mode);
 
 /** 数の範囲（両端を含む）。 */
 const range = (from, to) => Array.from({ length: to - from + 1 }, (_, index) => from + index);
@@ -79,11 +85,11 @@ export function spokenTexts(mode) {
   ["home.back", "home.nextPage", "start.begin", "game.exit", "game.settings", "result.retry", "result.home", "learn.next", "learn.again"].forEach(
     (key) => say(t(key), key)
   );
-  const english = mode === "en";
+  const lang = learnLang(mode);
   Object.entries(phraseCategories).forEach(([category, phrases]) => {
-    say((english && PHRASE_EN[category]) || category, "voca.category");
+    say(phraseText(category, lang) || category, "voca.category");
     // ことばは、選ぶと声で伝える（voca.js の spoken）。名前と同じ文。
-    phrases.forEach((phrase) => say((english && PHRASE_EN[phrase]) || phrase, "voca.phrase"));
+    phrases.forEach((phrase) => say(phraseText(phrase, lang) || phrase, "voca.phrase"));
   });
   letterTasks.forEach((task) => task.options.forEach((letter) => say(letter, "letters.option")));
   matchingTasks.forEach((task) => task.options.forEach((option) => say(option.label, "matching.option")));
@@ -154,10 +160,10 @@ export function spokenTexts(mode) {
 
 /**
  * 声のパックに入れるかたまりの一覧。
- * @returns {{ja: Array<{text: string, from: string[]}>, en: Array<{text: string, from: string[]}>}}
+ * @returns {Record<string, Array<{text: string, from: string[]}>>} 言語（"ja" / "en" …）ごと
  */
 export function collectVoiceLines() {
-  const byLang = { ja: new Map(), en: new Map() };
+  const byLang = Object.fromEntries(VOICE_LANGUAGES.map((language) => [language.code, new Map()]));
   for (const mode of VOICE_TEXT_MODES) {
     for (const { text, from } of spokenTexts(mode)) {
       const lang = speechLangForText(text, mode);
@@ -173,12 +179,12 @@ export function collectVoiceLines() {
     [...bucket.entries()]
       .map(([text, from]) => ({ text, from: [...from].sort() }))
       .sort((a, b) => (a.text < b.text ? -1 : a.text > b.text ? 1 : 0));
-  return { ja: list(byLang.ja), en: list(byLang.en) };
+  return Object.fromEntries(Object.entries(byLang).map(([code, bucket]) => [code, list(bucket)]));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const lines = collectVoiceLines();
   const outPath = join(dirname(fileURLToPath(import.meta.url)), "lines.json");
   writeFileSync(outPath, `${JSON.stringify(lines, null, 1)}\n`, "utf8");
-  console.log(`wrote ${outPath}: ja ${lines.ja.length}, en ${lines.en.length}`);
+  console.log(`wrote ${outPath}: ${Object.entries(lines).map(([code, list]) => `${code} ${list.length}`).join(", ")}`);
 }

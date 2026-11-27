@@ -21,6 +21,14 @@ const CC_BY_4 = { license: "CC BY 4.0", licenseUrl: "https://creativecommons.org
 const CC0 = { license: "CC0", licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/deed.ja" };
 const CC_BY_3 = { license: "CC BY 3.0", licenseUrl: "https://creativecommons.org/licenses/by/3.0/deed.ja" };
 
+/**
+ * 3つ目からの言語が訳す、クレジットの英語の文（何に使ったか・手を入れたこと・説明の文になっている規約の名前）。
+ * 題・作者と、CC BY 4.0 のような規約の名前は固有名なので訳さない。
+ */
+export function creditPhrases() {
+  return SOUND_CREDITS.flatMap((credit) => [credit.useEn, credit.changesEn, credit.licenseEn]).filter(Boolean);
+}
+
 export const SOUND_CREDITS = [
   {
     use: "読み上げの声（日本語）",

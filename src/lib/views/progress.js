@@ -19,7 +19,7 @@
 
 import { gameModules } from "../games/registry.js";
 import { summarizePlayRecords } from "../playRecords.js";
-import { say, supporterLang } from "../supporterText.js";
+import { say, supporterLang, supporterLanguageInfo } from "../supporterText.js";
 import { escapeHtml } from "../utils.js";
 
 export function initProgress(ctx) {
@@ -34,7 +34,7 @@ export function initProgress(ctx) {
     return fromTile || gameId;
   }
 
-  const times = (n, lang) => say({ ja: `${n}回`, en: `${n}` }, lang);
+  const times = (n, lang) => say({ ja: "{n}回", en: "{n}" }, lang, { n });
 
   /**
    * 棒の列。高さは value / of。遊んだ回の成績は 0 でも細い棒を残す（minPercent。「遊んだ」が
@@ -69,7 +69,7 @@ export function initProgress(ctx) {
       participantId: state.evaluation?.participantId || "",
     });
 
-    const locale = lang === "en" ? "en-GB" : "ja-JP";
+    const locale = supporterLanguageInfo(lang).dateLocale;
     const peak = Math.max(1, ...summary.week.map((entry) => entry.plays));
     elements.progressWeek.innerHTML = bars(
       summary.week.map((entry, index) => {

@@ -30,9 +30,11 @@ const LOCKS = {
   measured: {
     active: (settings) => isMeasurementMode(settings),
     reason: (field, lang) =>
-      lang === "en"
-        ? `Fixed in measured runs (measured runs use ${protocolText(field.key, "en")}).`
-        : `そくていの回は固定です（そくていでは ${protocolText(field.key)}）。`,
+      say(
+        { ja: "そくていの回は固定です（そくていでは {value}）。", en: "Fixed in measured runs (measured runs use {value})." },
+        lang,
+        { value: protocolText(field.key, lang) }
+      ),
     resetReason: { ja: "そくていの回は固定なので、戻せません。", en: "Fixed in measured runs, so it cannot be reset." },
   },
   switchControl: {
@@ -80,8 +82,9 @@ const FIELD_LOCKS = {
 
 /** 遊びの名前（利用者の世界の辞書。日本語は漢字の表記）と、その遊びを既定に戻すボタンの文字。 */
 function gameGroup(titleKey) {
-  const title = { ja: translate(titleKey, "kanji"), en: translate(titleKey, "en") };
-  return { title, reset: { ja: `「${title.ja}」を既定に戻す`, en: `Reset “${title.en}”` } };
+  // key を付けておくと、3つ目からの言語は say が辞書のその言語の文を引く。
+  const title = { ja: translate(titleKey, "kanji"), en: translate(titleKey, "en"), key: titleKey };
+  return { title, reset: { ja: "「{title}」を既定に戻す", en: "Reset “{title}”", values: { title } } };
 }
 
 /**
@@ -180,9 +183,8 @@ export function settingPath(key, lang = "ja") {
   const field = settingsField(key);
   const steps = [settingsGroup(field.group).title, field.label];
   if (PLAY_DETAILS.groups.includes(field.group)) steps.unshift(PLAY_DETAILS.title);
-  return lang === "en"
-    ? steps.map((step) => `“${say(step, "en")}”`).join(" → ")
-    : steps.map((step) => `「${say(step)}」`).join("→");
+  const quoted = { ja: "「{text}」", en: "“{text}”" };
+  return steps.map((step) => say(quoted, lang, { text: step })).join(say({ ja: "→", en: " → " }, lang));
 }
 
 /** 入力に見せる値（null の範囲はプリセット、古い値は読み替えたもの）。 */
@@ -266,8 +268,9 @@ export function resetPlan(group, settings) {
  */
 export function describeReset(group, plan, lang = "ja") {
   if (plan.blockedReason) return plan.blockedReason;
-  const en = lang === "en";
+  const w = (text, values) => say(text, lang, values);
   const title = say(group.title, lang);
+  const comma = w({ ja: "、", en: ", " });
   // 残した理由ごとにまとめる（「そくていの回は固定です」を項目の数だけ繰り返さない）。
   const byReason = new Map();
   plan.kept.forEach(({ field, reason }) => {
@@ -275,17 +278,24 @@ export function describeReset(group, plan, lang = "ja") {
   });
   const kept = [...byReason]
     .map(([reason, labels]) =>
-      en
-        ? ` Not changed: ${labels.join(", ")} (${reason.replace(/\.$/, "")}).`
-        : `変えていないもの: ${labels.join("、")}（${reason.replace(/。$/, "")}）。`
+      w(
+        { ja: "変えていないもの: {labels}（{reason}）。", en: " Not changed: {labels} ({reason})." },
+        // 理由は文で来る。かっこの中に入れるので、終わりの句点を外す。
+        { labels: labels.join(comma), reason: reason.replace(/[。.]$/, "") }
+      )
     )
     .join("");
-  if (!plan.changes.length) return en ? `“${title}” is already at the defaults.${kept}` : `「${title}」は、もう既定のままです。${kept}`;
+  if (!plan.changes.length) {
+    return w({ ja: "「{title}」は、もう既定のままです。{kept}", en: "“{title}” is already at the defaults.{kept}" }, { title, kept });
+  }
   const changed = plan.changes
     .map(({ field, from, to }) => {
       const values = `${formatFieldValue(field, from, lang)} → ${formatFieldValue(field, to, lang)}`;
-      return en ? `${say(field.label, lang)} (${values})` : `${say(field.label)}（${values}）`;
+      return w({ ja: "{label}（{values}）", en: "{label} ({values})" }, { label: say(field.label, lang), values });
     })
-    .join(en ? ", " : "、");
-  return en ? `Reset “${title}” to the defaults: ${changed}.${kept}` : `「${title}」を既定に戻しました: ${changed}。${kept}`;
+    .join(comma);
+  return w(
+    { ja: "「{title}」を既定に戻しました: {changed}。{kept}", en: "Reset “{title}” to the defaults: {changed}.{kept}" },
+    { title, changed, kept }
+  );
 }

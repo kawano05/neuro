@@ -16,6 +16,7 @@
 // =====================================================================
 
 import { describeSessionConditions } from "./sessionConditions.js";
+import { say } from "./supporterText.js";
 
 /** 束ねるのに必要な最小の回数。1点では推移にならない。 */
 export const MIN_SESSIONS_FOR_TREND = 2;
@@ -160,7 +161,7 @@ export function summariseSessionTrends(sessions, participantId = "", lang = "ja"
         taskType: session.taskType,
         // 束ねる鍵（trendKey）は言語で変わらない。ここは画面に出す字なので、言語を渡す。
         conditions: describeSessionConditions(session, lang),
-        label: metric.label[lang] ?? metric.label.ja,
+        label: say(metric.label, lang),
         unit: metric.unit,
         higherIsBetter: metric.higherIsBetter,
         points: [],

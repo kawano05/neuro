@@ -2,6 +2,9 @@
 // 保存済み summary は信用せず、検証済み trials を正本として再計算する。
 
 import { sanitizeArtVersion } from "../artVersion.js";
+// 記録として妥当な表記の値は i18n.js の1か所で決める（言語を足したとき、ここだけ古いままだと、
+// その言語で遊んだ回が「ruby で遊んだ」と記録される）。
+import { TEXT_MODES } from "../i18n.js";
 import {
   SLOT_ENGINE_VERSION,
   SLOT_JUDGMENTS,
@@ -15,7 +18,6 @@ const SLOT_GAME_IDS = new Set(["slot-l1", "slot-l2"]);
 const SYMBOL_IDS = new Set(SLOT_SYMBOL_IDS);
 const JUDGMENTS = new Set(SLOT_JUDGMENTS);
 const DIFFICULTY_MODES = new Set(["measure", "practice"]);
-const TEXT_MODES = new Set(["ruby", "kanji", "kana", "en"]);
 const READINESS_STATES = new Set(["met", "overridden", "n/a"]);
 // 演出の強さ（src/lib/fx/fxSafety.js の FX_LEVELS と同じ値）。
 const FX_LEVELS = new Set(["none", "subtle", "normal", "big"]);

@@ -888,8 +888,9 @@ export function createGameHost(ctx) {
     });
     announce(
       ctx.tr({
-        ja: `基準オフセットを ${formatSignedMs(candidate)} に保存しました`,
-        en: `Saved ${formatSignedMs(candidate)} as the baseline offset`,
+        ja: "基準オフセットを {offset} に保存しました",
+        en: "Saved {offset} as the baseline offset",
+        values: { offset: formatSignedMs(candidate) },
       })
     );
     ctx.renderAll();
@@ -1029,15 +1030,17 @@ export function createGameHost(ctx) {
       } else if (calibrationOffsetSaved) {
         elements.calibrationOffer.hidden = false;
         elements.calibrationOfferText.textContent = ctx.tr({
-          ja: `基準オフセットを ${formatSignedMs(candidate)} に保存しました`,
-          en: `Saved ${formatSignedMs(candidate)} as the baseline offset`,
+          ja: "基準オフセットを {offset} に保存しました",
+          en: "Saved {offset} as the baseline offset",
+          values: { offset: formatSignedMs(candidate) },
         });
         elements.calibrationSaveOffset.hidden = true;
       } else {
         elements.calibrationOffer.hidden = false;
         elements.calibrationOfferText.textContent = ctx.tr({
-          ja: `候補値 ${formatSignedMs(candidate)} を設定に保存しますか`,
-          en: `Save the suggested value ${formatSignedMs(candidate)} to the settings?`,
+          ja: "候補値 {offset} を設定に保存しますか",
+          en: "Save the suggested value {offset} to the settings?",
+          values: { offset: formatSignedMs(candidate) },
         });
         elements.calibrationSaveOffset.hidden = false;
       }
