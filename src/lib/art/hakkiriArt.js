@@ -112,6 +112,18 @@ export const POP_ANIMALS = [
  *   --tile-thumb で敷くので、余白が出ても継ぎ目にならない。背の低いタイルで
  *   slice にすると、イルカが背びれしか見えなくなった。
  */
+/**
+ * 札の絵を、表記に合わせて引く。字の入った絵は「文字を えらぶ」の2枚の札（あ・い）だけで、
+ * 表記が English のときは、その課題と同じアルファベット（A・B）にする。ほかの絵は言語で変わらない。
+ * @param {string} name SCENE_ART の名前
+ * @param {string} [mode] 表記（"ruby" / "en"）
+ */
+export function sceneArtFor(name, mode) {
+  const art = SCENE_ART[name];
+  if (!art || mode !== "en" || name !== "learnLetters") return art;
+  return { ...art, body: art.body.replace(">あ</text>", ">A</text>").replace(">い</text>", ">B</text>") };
+}
+
 export function artSvg(art, { className = "", slice = false } = {}) {
   if (!art) return "";
   const ratio = slice ? "xMidYMid slice" : "xMidYMid meet";

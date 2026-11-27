@@ -24,6 +24,7 @@
 
 import { visibleViews } from "./content.js";
 import { resolveTextMode, translate, translateHtml } from "./i18n.js";
+import { say, supporterLang } from "./supporterText.js";
 import { loadState, createStateSaver, MAX_LOG_ENTRIES } from "./state.js";
 import { collectElements } from "./dom.js";
 import { createAudio } from "./audio.js";
@@ -116,6 +117,8 @@ export function initNeuroNodeApp() {
   ctx.t = (key, values) => translate(key, resolveTextMode(state.settings), values);
   ctx.tHtml = (key, values) => translateHtml(key, resolveTextMode(state.settings), values);
   ctx.textMode = () => resolveTextMode(state.settings);
+  // 支援者に向けた文（通知・帯の字）を、支援者の画面の言語で選ぶ（{ja, en} の組。supporterText.js）。
+  ctx.tr = (text) => say(text, supporterLang(state.settings));
 
   ctx.announce = (message) => {
     elements.liveRegion.textContent = message;
@@ -141,7 +144,7 @@ export function initNeuroNodeApp() {
   };
 
   const saveState = createStateSaver(state, () =>
-    ctx.announce("データの保存に失敗しました。端末の空き容量を確認してください。")
+    ctx.announce(ctx.tr({ ja: "データの保存に失敗しました。端末の空き容量を確認してください。", en: "Saving failed. Check the free space on the device." }))
   );
 
   // 警告は通常の案内や6秒の支援者メッセージとは別に保持する。
@@ -315,7 +318,7 @@ export function initNeuroNodeApp() {
     elements.homeSupporterMenu.hidden = nextView !== "home";
     // 利用者の世界では「おす」だけ（出すのは showScreenSwitch がONのとき。
     // theme-hakkiri.css）。「入力して決定」は支援者の言葉だった。
-    elements.primarySwitchLabel.textContent = USER_WORLD_VIEWS.has(nextView) ? "おす" : "入力";
+    elements.primarySwitchLabel.textContent = USER_WORLD_VIEWS.has(nextView) ? ctx.tr({ ja: "おす", en: "Press" }) : ctx.tr({ ja: "入力", en: "Input" });
     document.body.classList.toggle("user-world", USER_WORLD_VIEWS.has(nextView));
 
     ctx.views.home.render();
@@ -366,14 +369,14 @@ export function initNeuroNodeApp() {
   elements.homeReturn.addEventListener("click", () => {
     ctx.views.home.showLobby();
     ctx.switchView("home");
-    ctx.announce("メニューにもどります");
+    ctx.announce(ctx.tr({ ja: "メニューにもどります", en: "Back to the menu" }));
   });
 
   // 利用者の走査順には入らない、タップ／キーボード専用の支援者入口。
   elements.homeSupporterMenu.addEventListener("click", (event) => {
     event.stopPropagation();
     ctx.switchView("settings");
-    ctx.announce("支援者メニューです");
+    ctx.announce(ctx.tr({ ja: "支援者メニューです", en: "Supporter menu" }));
   });
 
   // 入力ファネルの対象要素: 通常の入力ボタン、スタート画面のステージ、

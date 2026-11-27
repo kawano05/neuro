@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quick guide (for families, teachers and supporters)</title>
+<!--
+  このファイルは scripts/generate-guide.mjs が作る（手で直さない）。文は src/lib/supporterGuide.js、絵と印刷の体裁は scripts/guide-template.html。
+  印刷して渡すための説明書（A4 で2〜3枚）。打ち合わせで「お母さんに渡す簡単な
+  説明書がほしい」「最初の画面だけでも、どのボタンが何をするのか支援者向けに
+  書いてあれば解決しそう」と言われた（docs/design-renewal-2026-09-25.md §1.8）。
+  アプリの中の「はじめての方へ：つかいかた」（設定画面）と同じ中身を、絵つきで。
+  オフラインでも読めるよう、字体・絵はすべてこのファイルの中に持つ。
+-->
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #4e5d78;
+    --line: #1a1a1a;
+    --blue: #005aff;
+    --yellow: #ffc83d;
+    --paper: #ffffff;
+    --soft: #f2f7ff;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: #e9eef5;
+    color: var(--ink);
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+
+  .sheet {
+    width: min(210mm, 100%);
+    margin: 16px auto;
+    padding: 14mm 14mm 12mm;
+    background: var(--paper);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .toolbar {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 16px auto 0;
+  }
+
+  .toolbar button {
+    min-height: 44px;
+    padding: 0 22px;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    background: var(--blue);
+    color: #ffffff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  h1 {
+    margin: 0 0 4px;
+    font-size: 24px;
+    line-height: 1.4;
+  }
+
+  .lead {
+    margin: 0 0 14px;
+    color: var(--muted);
+  }
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 3px solid var(--line);
+    font-size: 18px;
+  }
+
+  h2 .num {
+    display: inline-grid;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: #ffffff;
+    place-items: center;
+    font-size: 15px;
+  }
+
+  section {
+    break-inside: avoid;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .step {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    break-inside: avoid;
+  }
+
+  .step strong {
+    font-size: 16px;
+  }
+
+  .step p {
+    margin: 0;
+  }
+
+  /* 画面の見本（アプリの画面を簡単にした絵） */
+  .screen {
+    position: relative;
+    height: 120px;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    background: #0b1a33;
+    overflow: hidden;
+  }
+
+  .screen.light {
+    background: #ffffff;
+  }
+
+  .screen .big-button {
+    position: absolute;
+    inset: 32px 22%;
+    display: grid;
+    border: 3px solid var(--line);
+    border-radius: 999px;
+    background: var(--blue);
+    color: #ffffff;
+    place-items: center;
+    font-size: 18px;
+    font-weight: 800;
+  }
+
+  .screen .tiles {
+    position: absolute;
+    inset: 22px 10px 8px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 5px;
+  }
+
+  .screen .tiles span {
+    display: flex;
+    align-items: flex-start;
+    padding: 2px 4px;
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .screen .tiles span:first-child {
+    grid-column: 1 / span 2;
+    grid-row: 1 / span 2;
+    outline: 3px solid var(--yellow);
+    outline-offset: 1px;
+  }
+
+  .screen .corner {
+    position: absolute;
+    top: 3px;
+    right: 8px;
+    padding: 0 6px;
+    border: 1.5px solid var(--line);
+    border-radius: 6px;
+    background: #ffffff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+
+  .screen .bar {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    display: flex;
+    gap: 5px;
+  }
+
+  .screen .bar span {
+    padding: 1px 6px;
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    background: rgba(0, 8, 20, 0.8);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .screen .animal {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    width: 110px;
+    transform: translate(-50%, -50%);
+  }
+
+  .screen .buttons {
+    position: absolute;
+    inset: auto 12px 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .screen .buttons span {
+    flex: 1;
+    padding: 6px 0;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .screen .buttons span:first-child {
+    background: var(--blue);
+    color: #ffffff;
+    outline: 3px solid var(--yellow);
+  }
+
+  .screen .done {
+    position: absolute;
+    top: 18px;
+    left: 0;
+    right: 0;
+    font-size: 20px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 6px 8px;
+    border: 1.5px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--soft);
+  }
+
+  td.no {
+    width: 36px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0 8px;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .note {
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    border-left: 6px solid var(--yellow);
+    background: #fff8e0;
+  }
+
+  .qa {
+    margin: 0;
+  }
+
+  .qa dt {
+    margin-top: 8px;
+    font-weight: 800;
+  }
+
+  .qa dt::before {
+    content: "Q. ";
+    color: var(--blue);
+  }
+
+  .qa dd {
+    margin: 0 0 0 1.4em;
+  }
+
+  section ul {
+    margin: 4px 0 8px;
+    padding-left: 1.4em;
+  }
+
+  section p {
+    margin: 6px 0;
+  }
+
+  .foot {
+    margin-top: 16px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  @media (max-width: 640px) {
+    .sheet {
+      margin: 0;
+      padding: 16px;
+      box-shadow: none;
+    }
+
+    .steps {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  @media print {
+    body {
+      background: #ffffff;
+      font-size: 10.5pt;
+    }
+
+    .sheet {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+
+    .toolbar {
+      display: none;
+    }
+
+    .page-break {
+      break-before: page;
+    }
+
+    .screen,
+    h2 .num,
+    .screen .big-button,
+    .screen .bar span,
+    .screen .buttons span:first-child,
+    th,
+    .note {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button type="button" onclick="window.print()">Print (A4)</button>
+</div>
+
+<main class="sheet">
+  <h1>Quick guide</h1>
+  <p class="lead">
+    For families, teachers and supporters. This app is for practising “pressing” with the NeuroNode switch through play. It starts with games where something always happens whenever you press.
+  </p>
+
+  <section>
+      <h2><span class="num">1</span>Before you start (once)</h2>
+      <ul>
+        <li><strong>Connect NeuroNode to the iPad as a keyboard</strong>. Pressing the switch moves the games forward.</li>
+        <li>Leave the iPad's Settings → Accessibility → Switch Control <strong>off</strong>.
+          Choices are made with the app's yellow highlight (nothing needs to change inside the app).</li>
+        <li>Sound matters in these games. Turn the iPad's <strong>volume</strong> up and turn <strong>silent mode</strong> off.</li>
+      </ul>
+      <p class="note">
+        Only if you want to use the iPad's own Switch Control, turn on <strong>both</strong> the iPad's setting and the app's
+        “Switch settings” → “Use iPad Switch Control” in the supporter settings.
+        If only the iPad's setting is on, the yellow highlight (app) and the iPad's highlight both appear and choosing becomes hard.
+      </p>
+  </section>
+
+  <section>
+      <h2><span class="num">2</span>How to use</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="screen light" aria-hidden="true"><div class="big-button">Start</div></div>
+          <p><strong>① Start</strong><br />The first screen only has “Start”. Press the switch once to reach the screen for choosing a game.</p>
+        </div>
+        <div class="step">
+          <div class="screen light" aria-hidden="true"><span class="corner">Supporter settings</span><div class="tiles"><span>①</span><span>②</span><span>③</span><span>④</span><span>⑤</span><span>⑥</span><span>⑦</span><span>⑧</span><span>…</span></div></div>
+          <p><strong>② Choose a game</strong><br />The yellow highlight moves from item to item. Press when it reaches the game you want. ① is the easiest, and higher numbers are harder. You can also choose by touching the screen.</p>
+        </div>
+        <div class="step">
+          <div class="screen" aria-hidden="true"><div class="bar"><span>Game settings</span><span>× Finish</span></div><svg class="animal" viewBox="0 0 300 240"><path d="M40 150 C 60 80, 150 50, 225 85 C 250 97, 268 112, 282 124 C 262 124, 250 126, 240 132 C 234 162, 200 186, 150 188 C 110 190, 80 182, 60 172 C 45 190, 30 204, 16 210 C 22 190, 28 172, 40 150 Z" fill="#4DC4FF"></path><path d="M138 72 C 148 46, 168 36, 186 32 C 178 50, 176 66, 180 82 Z" fill="#1FA2E0"></path><circle cx="222" cy="104" r="8" fill="#10222E"></circle></svg></div>
+          <p><strong>③ Play</strong><br />Pressing brings out pictures and sounds. With “Game settings” at the top right you can change the sounds, the speed, and the picture style of the timing games (Picture book / Simple) on the spot (a button for supporters, only in games that have settings). To stop, use “Finish”.</p>
+        </div>
+        <div class="step">
+          <div class="screen light" aria-hidden="true"><div class="done">You did it!</div><div class="buttons"><span>Again</span><span>Pick a game</span></div></div>
+          <p><strong>④ Done!</strong><br />At the end, the “Done!” screen appears. Choose “Again” or “Pick a game”.</p>
+        </div>
+      </div>
+  </section>
+
+  <section class="page-break">
+      <h2><span class="num">3</span>Suggested order of the games</h2>
+      <table>
+        <thead>
+          <tr><th>No.</th><th>Game</th><th>What is it like?</th><th>Level</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="no">①</td><td>Peekaboo</td><td>Each press brings an animal out of the dark screen. Pressing at any time is fine.</td><td><span class="badge">Start here</span></td></tr>
+          <tr><td class="no">②</td><td>Pop the balloons</td><td>Each press pops one balloon. Five presses pop them all.</td><td><span class="badge">Easy</span></td></tr>
+          <tr><td class="no">③</td><td>Colouring</td><td>Each press adds colour to the picture. Five presses finish it.</td><td><span class="badge">Easy</span></td></tr>
+          <tr><td class="no">④</td><td>Baseball</td><td>Press to swing the bat at the rolling ball. Every swing hits, and perfect timing is a home run.</td><td><span class="badge">Next step</span></td></tr>
+          <tr><td class="no">⑤</td><td>Picture match</td><td>Press when the spinning picture matches the target picture (timing practice).</td><td><span class="badge">Next step</span></td></tr>
+          <tr><td class="no">⑥</td><td>Sound game</td><td>Six instruments sit in a music room and a yellow frame moves across them. In “Any instrument”, each press plays the one in the frame (10 presses). In “With the teacher”, press when the frame reaches the instrument the teacher names (5 rounds; another instrument just plays itself). In measured runs, this becomes the game of pressing only on high notes.</td><td><span class="badge">Easy</span></td></tr>
+          <tr><td class="no">⑦</td><td>Claw machine</td><td>Press when the moving claw is above a plush toy.</td><td><span class="badge">Challenge</span></td></tr>
+          <tr><td class="no">⑧</td><td>Fishing</td><td>Press as soon as the bite sound plays (in practice, a big “!” also appears).</td><td><span class="badge">Challenge</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note">There is no failing in ① to ③. Once “pressing makes something happen” is understood, move on to ④ (every swing hits; the first step into timing), and then to the timing games from ⑤.</p>
+  </section>
+
+  <section>
+      <h2><span class="num">4</span>Supporter settings</h2>
+      <p>
+        Open it by touching “<strong>Supporter settings</strong>” at the top right of the game-choosing screen (it does not open with the switch,
+        so the player cannot open it by mistake, and the yellow highlight stops on the settings screen). To go back, use “← Back to home”.
+        Changes are saved automatically. With a keyboard, move with Tab and open or close headings with Enter / Space.
+      </p>
+      <p><strong>“Common settings”</strong> (the 8 shown from the start)</p>
+      <ul>
+          <li><strong>Language / 言語</strong> … Choose the language for the games and the supporter screens.</li>
+          <li><strong>Play atmosphere</strong> … Choose how lively the world is and how pressing and finishing are celebrated.</li>
+          <li><strong>Read aloud</strong> … Reads the instructions and praise aloud.</li>
+          <li><strong>Sound effects</strong> … Plays press sounds and applause. The cues of the games are never muted.</li>
+          <li><strong>Highlight speed</strong> … Time before the highlight moves to the next item.</li>
+          <li><strong>Large text</strong> … Makes the text on screen larger.</li>
+          <li><strong>Hide games that need close watching</strong> … Hides “Picture match” and “Claw machine” from the home screen.</li>
+          <li><strong>Every press wins</strong> … Any press counts as a win, whenever it is pressed.</li>
+      </ul>
+      <p><strong>Detailed settings</strong> (tap a heading to open it; any number can be open at once)</p>
+      <ul>
+        <li><strong>Switch settings</strong> … Use iPad Switch Control, Move the highlight automatically, Sound when the highlight moves, Show an on-screen “Press” button</li>
+        <li><strong>Display and voice settings</strong> … High contrast, Voice volume, Voice</li>
+        <li><strong>Difficulty of each game</strong> … speed, rounds and more for Picture match, Sound game, Claw machine, Fishing (also changeable from “Game settings” during play)</li>
+        <li><strong>Sound credits</strong> … authors and sources of the voice and sound materials</li>
+        <li><strong>Research (practice / measure)</strong> … only for research measurements. Normally leave it on “Practice”.
+          In measured runs, the speed, rounds and cues of the games are fixed. The press timing baseline is also here.</li>
+      </ul>
+      <p class="note">
+        Each group of detailed settings has a “<strong>Reset</strong>” button. After pressing it, what was reset appears just below.
+        A greyed-out item shows the reason on its row (in measured runs, the value used for measuring is also shown).
+      </p>
+      <p><strong>Play atmosphere</strong> (in the common settings; choose one of four)</p>
+      <ul>
+          <li><strong>None</strong> … Pictures and press feedback. Finish with a message and a still star.</li>
+          <li><strong>Simple</strong> … Small sparkles and a star ring. The background stays still.</li>
+          <li><strong>Lively</strong> … The usual play. An otter and sparkle jar welcome you at the result.</li>
+          <li><strong>Party</strong> … Stars collect after each success. Finish with a parade and an outfit reward.</li>
+      </ul>
+      <p class="note">
+        For people sensitive to light or sound, choose “Simple” or “None”. Flashes are limited to 3 per second in every atmosphere.
+        In measured runs, no effects are added to the games whichever atmosphere is chosen.
+      </p>
+  </section>
+
+  <section>
+      <h2><span class="num">5</span>Troubleshooting</h2>
+      <dl class="qa">
+        <dt>Both the yellow highlight and the iPad's highlight appear</dt>
+        <dd>Turn the iPad's Switch Control off (see “Before you start”).</dd>
+        <dt>The highlight does not move</dt>
+        <dd>Turn on “Switch settings” → “Move the highlight automatically”. While “Switch settings” → “Use iPad Switch Control” is on, the app's highlight does not move.</dd>
+        <dt>The highlight is too fast or too slow</dt>
+        <dd>Change it with “Common settings” → “Highlight speed”.</dd>
+        <dt>Watching the screen is hard</dt>
+        <dd>Set “Switch settings” → “Sound when the highlight moves” to “Read the name” to hear the name at each move (“A small sound” plays a sound only).</dd>
+        <dt>The name is read at every move, and it is too much</dt>
+        <dd>Set “Switch settings” → “Sound when the highlight moves” to “A small sound” or “None”.</dd>
+        <dt>Light or motion seems too much, or the player gets overexcited</dt>
+        <dd>Set “Common settings” → “Play atmosphere” to “Simple” or “None”.</dd>
+        <dt>No sound</dt>
+        <dd>Check the iPad's volume and silent mode. Also turn on “Common settings” → “Sound effects”.</dd>
+        <dt>No voice, or the voice is quiet</dt>
+        <dd>Turn on “Common settings” → “Read aloud”. Change the volume with “Display and voice settings” → “Voice volume”.</dd>
+        <dt>A setting is greyed out</dt>
+        <dd>The reason is shown on that row. If it says “Fixed in measured runs”, switch “Research (practice / measure)” → “Practice / Measure” to “Practice” to change it.</dd>
+        <dt>I want to undo changed settings</dt>
+        <dd>Press “Reset” in that group of detailed settings.</dd>
+        <dt>Nothing happens when pressing</dt>
+        <dd>Check that NeuroNode is connected to the iPad (as a keyboard). If touching the screen works, the app is working.</dd>
+        <dt>I want to change the language</dt>
+        <dd>Choose it with “Common settings” → “Language / 言語”. The games and these supporter screens switch together.</dd>
+      </dl>
+  </section>
+
+  <p class="foot">This guide has the same content as “Getting started: how to use” on the app’s settings screen.</p>
+</main>
+</body>
+</html>

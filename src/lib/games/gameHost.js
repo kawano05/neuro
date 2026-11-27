@@ -886,7 +886,12 @@ export function createGameHost(ctx) {
       label: `キャリブレーション基準オフセットを更新 ${formatSignedMs(previous)} → ${formatSignedMs(candidate)}`,
       skipEvaluation: true,
     });
-    announce(`基準オフセットを ${formatSignedMs(candidate)} に保存しました`);
+    announce(
+      ctx.tr({
+        ja: `基準オフセットを ${formatSignedMs(candidate)} に保存しました`,
+        en: `Saved ${formatSignedMs(candidate)} as the baseline offset`,
+      })
+    );
     ctx.renderAll();
   }
 
@@ -1023,11 +1028,17 @@ export function createGameHost(ctx) {
         elements.calibrationOffer.hidden = true;
       } else if (calibrationOffsetSaved) {
         elements.calibrationOffer.hidden = false;
-        elements.calibrationOfferText.textContent = `基準オフセットを ${formatSignedMs(candidate)} に保存しました`;
+        elements.calibrationOfferText.textContent = ctx.tr({
+          ja: `基準オフセットを ${formatSignedMs(candidate)} に保存しました`,
+          en: `Saved ${formatSignedMs(candidate)} as the baseline offset`,
+        });
         elements.calibrationSaveOffset.hidden = true;
       } else {
         elements.calibrationOffer.hidden = false;
-        elements.calibrationOfferText.textContent = `候補値 ${formatSignedMs(candidate)} を設定に保存しますか`;
+        elements.calibrationOfferText.textContent = ctx.tr({
+          ja: `候補値 ${formatSignedMs(candidate)} を設定に保存しますか`,
+          en: `Save the suggested value ${formatSignedMs(candidate)} to the settings?`,
+        });
         elements.calibrationSaveOffset.hidden = false;
       }
     },

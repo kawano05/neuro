@@ -4,6 +4,8 @@
 
 import { escapeHtml, formatTime, toLocalIso } from "../utils.js";
 import { MAX_LOG_ENTRIES } from "../state.js";
+import { say, supporterLang } from "../supporterText.js";
+import { LEARN_LABEL_EN, PHRASE_EN } from "../content.js";
 import {
   describeSessionConditions,
   describeSessionOutcome,
@@ -16,6 +18,55 @@ import {
   trendDirection,
 } from "../sessionTrend.js";
 
+/**
+ * 操作ログの札を、英語の画面に出す言葉へ読み替える。
+ *
+ * 記録（state.logs と CSV の label）は、言語で変わらないよう日本語のまま残す——同じ操作が、端末の
+ * 言語によって別の札で記録されると、あとから集められない。読み替えるのは画面に出すときだけ。
+ * 知らない札は そのまま出す（黙って消さない）。札を足したら、ここにも足す。
+ */
+const LOG_LABELS_EN = {
+  スタート: "Start",
+  色変化: "Peekaboo",
+  "ふうせん わり": "Pop the balloons",
+  ぬりえ: "Colouring",
+  "ボールを 打つ": "Baseball: hit the ball",
+  "音あそび（すきな がっき）": "Sound game (any instrument)",
+  "音あそび（せんせいと）": "Sound game (with the teacher)",
+};
+const LOG_LABEL_PATTERNS_EN = [
+  [/^(\S+) 終了 taskType=(\S+)$/, (m) => `${m[1]} finished (taskType=${m[2]})`],
+  [
+    /^(\S+) エンドレス 無入力(\d+)秒で「もういちど／おわる」を出した$/,
+    (m) => `${m[1]} endless: “Again / Finish” shown after ${m[2]}s without input`,
+  ],
+  [/^キャリブレーション基準オフセットを更新 (.+) → (.+)$/, (m) => `Baseline offset updated: ${m[1]} → ${m[2]}`],
+  [/^難易度モードを (\S+) に変更$/, (m) => `Difficulty mode changed to ${m[1]}`],
+  // 前の版の保存を引き継いだときの札（state.js）。
+  [/^旧保存\((.+)\)からv4へ移行しました。$/, (m) => `Migrated the earlier save (${m[1]}) to v4.`],
+  [
+    /^旧保存\((.+)\)から移行しました（settings\/logs\/evaluationのみ）。$/,
+    (m) => `Migrated the earlier save (${m[1]}): settings, logs and evaluation only.`,
+  ],
+  [
+    /^旧保存\((.+)\)から移行しました。metricsは引き継ぎ対象外です。$/,
+    (m) => `Migrated the earlier save (${m[1]}). Metrics are not carried over.`,
+  ],
+];
+
+export function logLabelForDisplay(entry, lang = "ja") {
+  const label = entry?.label || entry?.type || "";
+  if (lang !== "en") return label;
+  if (entry.type === "matching" && LEARN_LABEL_EN[label]) return LEARN_LABEL_EN[label];
+  if (entry.type === "phrase" && PHRASE_EN[label]) return PHRASE_EN[label];
+  if (LOG_LABELS_EN[label]) return LOG_LABELS_EN[label];
+  for (const [pattern, toEnglish] of LOG_LABEL_PATTERNS_EN) {
+    const match = label.match(pattern);
+    if (match) return toEnglish(match);
+  }
+  return label;
+}
+
 /** ゲームIDを支援者に読める名前へ。未知のIDはそのまま出す（黙って消さない）。 */
 function gameTitle(gameId) {
   return gameModules.find((game) => game.id === gameId)?.title ?? gameId;
@@ -26,11 +77,11 @@ function roundValue(value) {
 }
 
 /** 端末のローカル時刻の「8/28」。支援者が見るのは日付であって ISO ではない。 */
-function shortLocalDate(isoString) {
+function shortLocalDate(isoString, lang = "ja") {
   const jst = toLocalIso(isoString);
   if (!jst) return "";
   const [, month, day] = jst.slice(0, 10).split("-");
-  return `${Number(month)}/${Number(day)}`;
+  return lang === "en" ? `${Number(day)}/${Number(month)}` : `${Number(month)}/${Number(day)}`;
 }
 
 /**
@@ -51,7 +102,8 @@ function shortLocalDate(isoString) {
  *
  * 点の値も出す（多いときは最初・最後・最高だけ）。線から値を目で読ませない。
  */
-function renderTrend(group, gameName) {
+function renderTrend(group, gameName, lang = "ja") {
+  const w = (ja, en) => (lang === "en" ? en : ja);
   const values = group.points.map((point) => point.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -96,7 +148,11 @@ function renderTrend(group, gameName) {
 
   const direction = trendDirection(group);
   const directionLabel =
-    direction === "better" ? "よくなっています" : direction === "worse" ? "さがっています" : "かわっていません";
+    direction === "better"
+      ? w("よくなっています", "Improving")
+      : direction === "worse"
+        ? w("さがっています", "Getting worse")
+        : w("かわっていません", "No change");
 
   // 値の札は、点が少ないうちは全部に出す。多くなったら重なって読めなく
   // なるので、最初・最後・いちばん良かった回だけに絞る。
@@ -120,12 +176,23 @@ function renderTrend(group, gameName) {
     })
     .join("");
 
-  const firstDate = shortLocalDate(positions[0]?.startedAtIso);
-  const lastDate = shortLocalDate(positions.at(-1)?.startedAtIso);
+  const firstDate = shortLocalDate(positions[0]?.startedAtIso, lang);
+  const lastDate = shortLocalDate(positions.at(-1)?.startedAtIso, lang);
   const sameDay = firstDate === lastDate;
 
   const axisTop = `${roundValue(max)}${unit}`;
   const axisBottom = `${roundValue(min)}${unit}`;
+
+  // 図の読み上げ（線の図は目でしか読めないので、同じ中身を文にする）。
+  const count = group.points.length;
+  const plotLabel = w(
+    `${group.label}の推移。${count}回ぶん。${sameDay ? firstDate : `${firstDate}から${lastDate}まで`}。` +
+      `はじめ ${roundValue(group.first)}${unit}、いま ${roundValue(group.last)}${unit}、` +
+      `いちばん よかった回 ${roundValue(group.best)}${unit}。たて軸は ${axisBottom} から ${axisTop} まで。${directionLabel}`,
+    `${group.label} over ${count} runs, ${sameDay ? firstDate : `${firstDate} to ${lastDate}`}. ` +
+      `First ${roundValue(group.first)}${unit}, latest ${roundValue(group.last)}${unit}, ` +
+      `best ${roundValue(group.best)}${unit}. The vertical axis runs from ${axisBottom} to ${axisTop}. ${directionLabel}.`
+  );
 
   return `
     <article class="trend-card">
@@ -133,24 +200,23 @@ function renderTrend(group, gameName) {
         <div>
           <!-- あそび名は節の見出しに出ているので繰り返さない。カードの主役は
                条件——同じあそびの中で線が分かれている理由がこれ。 -->
-          <strong>${escapeHtml(group.conditions || "既定の条件")}</strong>
+          <strong>${escapeHtml(group.conditions || w("既定の条件", "Default conditions"))}</strong>
           <small>${escapeHtml(gameName || gameTitle(group.gameId))}</small>
         </div>
         <span class="trend-direction is-${direction}">${directionLabel}</span>
       </header>
       <p class="trend-metric">
         ${escapeHtml(group.label)}
-        <span class="trend-hint">（${group.higherIsBetter ? "大きい" : "小さい"}ほうが よい）</span>
+        <span class="trend-hint">${w(
+          `（${group.higherIsBetter ? "大きい" : "小さい"}ほうが よい）`,
+          `(${group.higherIsBetter ? "higher" : "lower"} is better)`
+        )}</span>
       </p>
       <svg
         class="trend-plot"
         viewBox="0 0 ${view.width} ${view.height}"
         role="img"
-        aria-label="${escapeHtml(group.label)}の推移。${group.points.length}回ぶん。
-          ${sameDay ? `${firstDate}` : `${firstDate}から${lastDate}まで`}。
-          はじめ ${roundValue(group.first)}${unit}、いま ${roundValue(group.last)}${unit}、
-          いちばん よかった回 ${roundValue(group.best)}${unit}。
-          たて軸は ${axisBottom} から ${axisTop} まで。${directionLabel}"
+        aria-label="${escapeHtml(plotLabel)}"
       >
         <!-- 縦軸の上端と下端。拡大された線だけを出すと、わずかな差が
              大きな変化に読める。 -->
@@ -174,10 +240,10 @@ function renderTrend(group, gameName) {
         }
       </svg>
       <dl class="trend-values">
-        <div><dt>はじめ</dt><dd>${roundValue(group.first)}${unit}</dd></div>
-        <div><dt>いま</dt><dd>${roundValue(group.last)}${unit}</dd></div>
-        <div><dt>さいこう</dt><dd>${roundValue(group.best)}${unit}</dd></div>
-        <div><dt>かいすう</dt><dd>${group.points.length}回</dd></div>
+        <div><dt>${w("はじめ", "First")}</dt><dd>${roundValue(group.first)}${unit}</dd></div>
+        <div><dt>${w("いま", "Latest")}</dt><dd>${roundValue(group.last)}${unit}</dd></div>
+        <div><dt>${w("さいこう", "Best")}</dt><dd>${roundValue(group.best)}${unit}</dd></div>
+        <div><dt>${w("かいすう", "Runs")}</dt><dd>${w(`${count}回`, `${count}`)}</dd></div>
       </dl>
     </article>
   `;
@@ -252,6 +318,9 @@ const TREND_TASK_TYPES = new Set(["sms", "gonogo", "scan", "rt", "slot"]);
 
 export function initLog(ctx) {
   const { state, elements, save, announce, notifySupporter } = ctx;
+  // 支援者の画面の言語（設定の「言語」に合わせる。supporterText.js）。
+  const lang = () => supporterLang(state.settings);
+  const tr = (text) => say(text, lang());
 
   // いま開いているあそびのタブ。保存はしない——支援者がこの画面を開き直す
   // たびに最初のタブから見る想定で、前回どこを見ていたかを覚えていると
@@ -268,10 +337,12 @@ export function initLog(ctx) {
    * （何も出さないより、どの記録か分かるほうがよい）。
    */
   function trendGameTitle(gameId) {
-    const fromTile = gameModules.find((game) => game.id === gameId)?.title;
-    if (fromTile) return fromTile;
     const key = `tile.${gameId}.title`;
     const translated = ctx.t(key);
+    // 英語の画面では、文言の辞書の名前を先に見る（遊びの表の title は日本語だけ）。
+    if (lang() === "en" && translated !== key) return translated;
+    const fromTile = gameModules.find((game) => game.id === gameId)?.title;
+    if (fromTile) return fromTile;
     return translated === key ? gameId : translated;
   }
 
@@ -351,7 +422,7 @@ export function initLog(ctx) {
    */
   function renderTrends() {
     if (!elements.sessionTrends) return;
-    const groups = summariseSessionTrends(state.sessions, state.evaluation?.participantId);
+    const groups = summariseSessionTrends(state.sessions, state.evaluation?.participantId, lang());
     const byGame = groupTrendsByGame(
       groups,
       gameModules.map((game) => game.id)
@@ -363,16 +434,17 @@ export function initLog(ctx) {
     if (!section) {
       elements.sessionTrends.innerHTML = `
         <div class="empty-state">
-          <strong>${escapeHtml(trendGameTitle(activeId) || "このあそび")}</strong> の データがありません。<br />
-          同じ条件で 2回以上 完走すると、ここに うつりかわりが出ます
-          （中断した回は 含みません）。
+          ${tr({
+            ja: `<strong>${escapeHtml(trendGameTitle(activeId) || "このあそび")}</strong> の データがありません。<br />同じ条件で 2回以上 完走すると、ここに うつりかわりが出ます（中断した回は 含みません）。`,
+            en: `No data for <strong>${escapeHtml(trendGameTitle(activeId) || "this game")}</strong> yet.<br />Once two or more runs are completed under the same conditions, the trend appears here (interrupted runs are not included).`,
+          })}
         </div>
       `;
       return;
     }
     elements.sessionTrends.innerHTML = `
       <div class="trend-grid">${section.trends
-        .map((trend) => renderTrend(trend, trendGameTitle(section.gameId)))
+        .map((trend) => renderTrend(trend, trendGameTitle(section.gameId), lang()))
         .join("")}</div>
     `;
   }
@@ -384,7 +456,7 @@ export function initLog(ctx) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
       empty.textContent =
-        "まだ あそびの きろくがありません。絵あわせ・音あそび・クレーンゲーム・さかなつりを1回終えると記録されます。";
+        tr({ ja: "まだ あそびの きろくがありません。絵あわせ・音あそび・クレーンゲーム・さかなつりを1回終えると記録されます。", en: "No play records yet. A record is added each time a run of Picture match, Sound game, Claw machine or Fishing is finished." });
       elements.sessionList.append(empty);
       return;
     }
@@ -393,14 +465,14 @@ export function initLog(ctx) {
       item.className = "log-item is-session";
       // 条件は独立した行に置く。.log-item は3カラムなので、4つ目を同じ行に
       // 並べると時刻の下に回り込んで揃わない。
-      const conditions = describeSessionConditions(session);
+      const conditions = describeSessionConditions(session, lang());
       // 結果は課題ごとの主要指標。条件と並べて初めて「その条件でどうだったか」
       // になる。解釈するのは支援者なので、詳細はCSVに任せて材料だけ出す。
-      const result = describeSessionResult(session);
+      const result = describeSessionResult(session, lang());
       item.innerHTML = `
         <span class="metric-label">${formatTime(session.startedAtIso)}</span>
         <strong>${escapeHtml(trendGameTitle(session.gameId))}</strong>
-        <span>${escapeHtml(describeSessionOutcome(session))}</span>
+        <span>${escapeHtml(describeSessionOutcome(session, lang()))}</span>
         ${result ? `<span class="session-result">${escapeHtml(result)}</span>` : ""}
         ${conditions ? `<span class="session-conditions">${escapeHtml(conditions)}</span>` : ""}
       `;
@@ -427,7 +499,7 @@ export function initLog(ctx) {
     if (state.logs.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
-      empty.textContent = "まだログはありません。教材、マッチング、VOCA、文字学習で入力すると記録されます。";
+      empty.textContent = tr({ ja: "まだログはありません。教材、マッチング、VOCA、文字学習で入力すると記録されます。", en: "No input log yet. Inputs in the games and in Which one?, Say it with words and Pick a letter are recorded here." });
       elements.logList.append(empty);
       return;
     }
@@ -436,18 +508,20 @@ export function initLog(ctx) {
       const retentionWarning = document.createElement("div");
       retentionWarning.className = "empty-state";
       retentionWarning.textContent =
-        `保存上限の直近${MAX_LOG_ENTRIES}件に達しています。` +
-        "次の入力から最も古いログが置き換わるため、必要なら先にCSVを書き出してください。";
+        tr({
+        ja: `保存上限の直近${MAX_LOG_ENTRIES}件に達しています。次の入力から最も古いログが置き換わるため、必要なら先にCSVを書き出してください。`,
+        en: `The log has reached its limit of ${MAX_LOG_ENTRIES} entries. From the next input the oldest entry is replaced, so export the CSV first if you need it.`,
+      });
       elements.logList.append(retentionWarning);
     }
 
     state.logs.slice(0, 32).forEach((entry) => {
       const item = document.createElement("article");
       item.className = "log-item";
-      const result = entry.correct === true ? "正答" : entry.correct === false ? "誤選択" : "";
+      const result = entry.correct === true ? tr({ ja: "正答", en: "Correct" }) : entry.correct === false ? tr({ ja: "誤選択", en: "Wrong choice" }) : "";
       item.innerHTML = `
       <span class="metric-label">${formatTime(entry.time)}</span>
-      <strong>${escapeHtml(entry.label || entry.type)}</strong>
+      <strong>${escapeHtml(logLabelForDisplay(entry, lang()))}</strong>
       <span>${result}</span>
     `;
       elements.logList.append(item);
@@ -457,8 +531,8 @@ export function initLog(ctx) {
   /** 全ログをBOM付きCSVでダウンロードする */
   function exportCsv() {
     if (!state.logs.length) {
-      announce("書き出すログがありません");
-      notifySupporter("書き出すログがありません。利用者が何か操作するとログが増えます。");
+      announce(tr({ ja: "書き出すログがありません", en: "There is no log to export" }));
+      notifySupporter(tr({ ja: "書き出すログがありません。利用者が何か操作するとログが増えます。", en: "There is no log to export. Entries are added as the user plays." }));
       return;
     }
     // 名前・BOM・控えは書き出しの共通の道（dataExport.js の download）。ログには行ごとの
@@ -472,7 +546,12 @@ export function initLog(ctx) {
     if (!tab) return;
     selectedTrendGameId = tab.dataset.trendGame;
     renderTrends();
-    announce(`${trendGameTitle(selectedTrendGameId)} の うつりかわりを ひらきました`);
+    announce(
+      tr({
+        ja: `${trendGameTitle(selectedTrendGameId)} の うつりかわりを ひらきました`,
+        en: `Showing the trend for ${trendGameTitle(selectedTrendGameId)}`,
+      })
+    );
   });
 
   elements.exportCsv.addEventListener("click", exportCsv);
@@ -485,24 +564,31 @@ export function initLog(ctx) {
     // 手間は1回だけ増え、事故は止まる。
     const count = state.logs.length;
     if (count === 0) {
-      announce("消すログがありません");
-      notifySupporter("消すログがありません。");
+      announce(tr({ ja: "消すログがありません", en: "There is no log to delete" }));
+      notifySupporter(tr({ ja: "消すログがありません。", en: "There is no log to delete." }));
       return;
     }
     if (!ctx.recordBackup?.canClear("logs")) {
-      notifySupporter("現在の操作ログを先にCSVまたは生データ(JSON)で書き出してください。");
-      announce("先に書き出してください");
+      notifySupporter(tr({ ja: "現在の操作ログを先にCSVまたは生データ(JSON)で書き出してください。", en: "Export the current input log as CSV or raw data (JSON) first." }));
+      announce(tr({ ja: "先に書き出してください", en: "Please export first" }));
       return;
     }
-    if (!window.confirm(`操作ログ ${count}件を消します。元に戻せません。`)) {
-      announce("消すのをやめました");
+    if (!window.confirm(
+        tr({
+          ja: `操作ログ ${count}件を消します。元に戻せません。`,
+          en: `This deletes ${count} input log ${count === 1 ? "entry" : "entries"}. It cannot be undone.`,
+        })
+      )) {
+      announce(tr({ ja: "消すのをやめました", en: "Nothing was deleted" }));
       return;
     }
     state.logs = [];
     save();
     render();
-    announce("ログを削除しました");
-    notifySupporter(`操作ログ ${count}件を消しました。`);
+    announce(tr({ ja: "ログを削除しました", en: "Log deleted" }));
+    notifySupporter(
+      tr({ ja: `操作ログ ${count}件を消しました。`, en: `Deleted ${count} input log ${count === 1 ? "entry" : "entries"}.` })
+    );
   });
 
   return { render };

@@ -5,15 +5,20 @@
 // 見た目と言葉だけを利用者向けにした（docs/design-renewal-2026-09-25.md §3.14）。
 // =====================================================================
 
-import { letterTasks } from "../content.js";
+import { letterTasks, letterTasksEn } from "../content.js";
+import { escapeHtml } from "../utils.js";
 import { rubyToHtml } from "../i18n.js";
 
 export function initLetters(ctx) {
   const { state, elements, save, logEvent, voiceFeedback, playTone, scan } = ctx;
 
+  // 表記が English のときは、アルファベットの課題（content.js の letterTasksEn）。
+  const english = () => ctx.textMode?.() === "en";
+  const tasks = () => (english() ? letterTasksEn : letterTasks);
+
   function render() {
-    const task = letterTasks[state.letterIndex % letterTasks.length];
-    elements.letterPrompt.innerHTML = rubyToHtml(task.promptRuby || task.prompt);
+    const task = tasks()[state.letterIndex % tasks().length];
+    elements.letterPrompt.innerHTML = english() ? escapeHtml(task.prompt) : rubyToHtml(task.promptRuby || task.prompt);
     elements.letterGrid.innerHTML = "";
     task.options.forEach((letter) => {
       const button = document.createElement("button");
@@ -28,7 +33,7 @@ export function initLetters(ctx) {
 
   /** 文字を選んだときの判定・記録・次の問題への遷移 */
   function choose(letter) {
-    const task = letterTasks[state.letterIndex % letterTasks.length];
+    const task = tasks()[state.letterIndex % tasks().length];
     const correct = letter === task.answer;
     playTone(correct ? 760 : 240);
     voiceFeedback(

@@ -20,6 +20,7 @@ import { cloneDefaultState, MAX_SESSIONS } from "./state.js";
 import { escapeCsv, exportFileStamp, toLocalIso } from "./utils.js";
 import { storageKey } from "./content.js";
 import { buildSlotCsvRows } from "./slotCsv.js";
+import { say, supporterLang } from "./supporterText.js";
 export { buildSlotCsvRows };
 
 const COMMON_TASK_HEADERS = [
@@ -501,8 +502,8 @@ const TASK_EXPORTS = [
     stem: "neuronode-rhythm",
     select: (session) => session.taskType === "sms" || session.taskType === "gonogo",
     rows: buildRhythmCsvRows,
-    empty: "書き出すリズム計測データがありません",
-    how: "リズムまたはGo/No-Goを1回終えると記録されます。",
+    empty: { ja: "書き出すリズム計測データがありません", en: "There is no rhythm data to export" },
+    how: { ja: "リズムまたはGo/No-Goを1回終えると記録されます。", en: "It is recorded once a run of Rhythm or the high-notes-only game is finished." },
   },
   {
     button: "exportSlotCsv",
@@ -510,8 +511,8 @@ const TASK_EXPORTS = [
     stem: "neuronode-slot",
     select: (session) => session.taskType === "slot",
     rows: buildSlotCsvRows,
-    empty: "書き出すリール停止データがありません",
-    how: "L1またはL2を1回終えると記録されます。",
+    empty: { ja: "書き出すリール停止データがありません", en: "There is no Picture match data to export" },
+    how: { ja: "L1またはL2を1回終えると記録されます。", en: "It is recorded once a run of Picture match is finished." },
   },
   {
     button: "exportScanCsv",
@@ -519,8 +520,8 @@ const TASK_EXPORTS = [
     stem: "neuronode-scan",
     select: (session) => session.taskType === "scan",
     rows: (sessions) => buildTaskCsvRows(sessions, "scan"),
-    empty: "書き出す走査課題データがありません",
-    how: "利用者が該当のあそびを1回終えると記録されます。",
+    empty: { ja: "書き出す走査課題データがありません", en: "There is no scanning data to export" },
+    how: { ja: "利用者が該当のあそびを1回終えると記録されます。", en: "It is recorded once the user finishes a run of that game." },
   },
   {
     button: "exportRtCsv",
@@ -528,8 +529,8 @@ const TASK_EXPORTS = [
     stem: "neuronode-rt",
     select: (session) => session.taskType === "rt",
     rows: (sessions) => buildTaskCsvRows(sessions, "rt"),
-    empty: "書き出す反応課題データがありません",
-    how: "利用者が該当のあそびを1回終えると記録されます。",
+    empty: { ja: "書き出す反応課題データがありません", en: "There is no reaction data to export" },
+    how: { ja: "利用者が該当のあそびを1回終えると記録されます。", en: "It is recorded once the user finishes a run of that game." },
   },
   {
     button: "exportSessionLedgerCsv",
@@ -537,13 +538,16 @@ const TASK_EXPORTS = [
     stem: "neuronode-sessions",
     select: () => true,
     rows: buildSessionLedgerRows,
-    empty: "書き出すセッションがありません",
-    how: "あそびを1回終えると1行ぶん記録されます。",
+    empty: { ja: "書き出すセッションがありません", en: "There are no sessions to export" },
+    how: { ja: "あそびを1回終えると1行ぶん記録されます。", en: "One row is recorded each time a run is finished." },
   },
 ];
 
 export function initDataExport(ctx) {
   const { state, elements, save, announce, notifySupporter } = ctx;
+  // 支援者の画面の言語（設定の「言語」に合わせる。supporterText.js）。
+  const lang = () => supporterLang(state.settings);
+  const tr = (text) => say(text, lang());
 
   const backup = createRecordBackup(state);
   ctx.recordBackup = backup;
@@ -582,8 +586,8 @@ export function initDataExport(ctx) {
     if (!sessions.length) {
       // announce の出力先 #liveRegion は .sr-only なので、読み上げを使わない支援者には
       // 何も届かない——押しても無反応に見え、壊れていると受け取られる。画面にも出す。
-      announce(definition.empty);
-      notifySupporter(`${definition.empty}。${definition.how}`);
+      announce(tr(definition.empty));
+      notifySupporter(`${tr(definition.empty)}${tr({ ja: "。", en: ". " })}${tr(definition.how)}`);
       return;
     }
     download(definition.rows(sessions), definition.stem, definition.kind, sessions);
@@ -604,7 +608,10 @@ export function initDataExport(ctx) {
     };
     download(payload, "neuronode-raw", "raw");
     notifySupporter(
-      `生データを書き出しました（セッション${state.sessions.length}件、ログ${state.logs.length}件）。`
+      tr({
+        ja: `生データを書き出しました（セッション${state.sessions.length}件、ログ${state.logs.length}件）。`,
+        en: `Raw data exported (sessions: ${state.sessions.length}, log entries: ${state.logs.length}).`,
+      })
     );
   }
 
@@ -621,37 +628,41 @@ export function initDataExport(ctx) {
     warning.hidden = false;
     warning.textContent =
       remaining > 0
-        ? `セッションの保存上限（${MAX_SESSIONS}件）まであと${remaining}件です。` +
-          "上限を超えると古い回から消えるので、先に「セッション台帳」と各CSV、" +
-          "または「生データ(JSON)」を書き出してください。"
-        : `セッションの保存上限（${MAX_SESSIONS}件）に達しています。` +
-          "次の回を記録すると最も古い回が消えます。今すぐ書き出してください。";
+        ? tr({
+            ja: `セッションの保存上限（${MAX_SESSIONS}件）まであと${remaining}件です。上限を超えると古い回から消えるので、先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。`,
+            en: `${remaining} more until the session limit (${MAX_SESSIONS}). Past the limit the oldest runs are removed, so export “Session ledger” and each CSV, or “Raw data (JSON)”, first.`,
+          })
+        : tr({
+            ja: `セッションの保存上限（${MAX_SESSIONS}件）に達しています。次の回を記録すると最も古い回が消えます。今すぐ書き出してください。`,
+            en: `The session limit (${MAX_SESSIONS}) has been reached. Recording the next run removes the oldest one. Export now.`,
+          });
   }
 
   function handOverToNextParticipant() {
     const sessionCount = state.sessions.length;
     const logCount = state.logs.length;
     if (sessionCount === 0 && logCount === 0) {
-      notifySupporter("消すものがありません。この端末にはまだ記録が入っていません。");
-      announce("消すものがありません");
+      notifySupporter(tr({ ja: "消すものがありません。この端末にはまだ記録が入っていません。", en: "There is nothing to delete. This device has no records yet." }));
+      announce(tr({ ja: "消すものがありません", en: "There is nothing to delete" }));
       return;
     }
     if (!backup.canClear()) {
       notifySupporter(
-        `現在の記録はまだすべて書き出していません。セッション${sessionCount}件・ログ${logCount}件が消えます。` +
-          "先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。"
+        tr({
+          ja: `現在の記録はまだすべて書き出していません。セッション${sessionCount}件・ログ${logCount}件が消えます。先に「セッション台帳」と各CSV、または「生データ(JSON)」を書き出してください。`,
+          en: `Not all of the current records have been exported. ${sessionCount} sessions and ${logCount} log entries would be lost. Export “Session ledger” and each CSV, or “Raw data (JSON)”, first.`,
+        })
       );
-      announce("先に書き出してください");
+      announce(tr({ ja: "先に書き出してください", en: "Please export first" }));
       return;
     }
     if (!window.confirm(
-      `この端末の記録を消します。\n\n` +
-        `　セッション ${sessionCount}件\n` +
-        `　操作ログ ${logCount}件\n` +
-        `　測定結果と観察メモ\n\n` +
-        "書き出したファイルは消えません。消した記録は元に戻せません。"
+      tr({
+        ja: `この端末の記録を消します。\n\n　セッション ${sessionCount}件\n　操作ログ ${logCount}件\n　測定結果と観察メモ\n\n書き出したファイルは消えません。消した記録は元に戻せません。`,
+        en: `This deletes the records on this device.\n\n  Sessions: ${sessionCount}\n  Input log entries: ${logCount}\n  Measurement results and observation notes\n\nExported files are not deleted. Deleted records cannot be restored.`,
+      })
     )) {
-      announce("消すのをやめました");
+      announce(tr({ ja: "消すのをやめました", en: "Nothing was deleted" }));
       return;
     }
 
@@ -670,16 +681,20 @@ export function initDataExport(ctx) {
     ctx.renderAll();
     if (nextParticipant) {
       notifySupporter(
-        `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。` +
-          `次の参加者「${nextParticipant}」で始められます。`
+        tr({
+          ja: `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。次の参加者「${nextParticipant}」で始められます。`,
+          en: `Records deleted (sessions: ${sessionCount}, log entries: ${logCount}). Ready to start with the next participant, “${nextParticipant}”.`,
+        })
       );
-      announce(`記録を消しました。次の参加者は${nextParticipant}です`);
+      announce(tr({ ja: `記録を消しました。次の参加者は${nextParticipant}です`, en: `Records deleted. The next participant is ${nextParticipant}` }));
     } else {
       notifySupporter(
-        `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。` +
-          "次の参加者IDを入れてから始めてください。"
+        tr({
+          ja: `記録を消しました（セッション${sessionCount}件・ログ${logCount}件）。次の参加者IDを入れてから始めてください。`,
+          en: `Records deleted (sessions: ${sessionCount}, log entries: ${logCount}). Enter the next participant ID before starting.`,
+        })
       );
-      announce("記録を消しました。次の参加者IDを入れてください");
+      announce(tr({ ja: "記録を消しました。次の参加者IDを入れてください", en: "Records deleted. Enter the next participant ID" }));
     }
   }
 

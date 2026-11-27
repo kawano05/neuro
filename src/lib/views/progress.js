@@ -69,7 +69,7 @@ export function initProgress(ctx) {
       participantId: state.evaluation?.participantId || "",
     });
 
-    const locale = lang === "en" ? "en-US" : "ja-JP";
+    const locale = lang === "en" ? "en-GB" : "ja-JP";
     const peak = Math.max(1, ...summary.week.map((entry) => entry.plays));
     elements.progressWeek.innerHTML = bars(
       summary.week.map((entry, index) => {

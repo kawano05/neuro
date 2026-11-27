@@ -43,6 +43,24 @@ await test("the printable guide is regenerated from the shared guide", async () 
   );
 });
 
+// 英語の印刷用の説明書（public/guide-en.html）。日本語版と同じ仕組みで作り、絵の中の字・表の見出し・
+// 印刷のボタンまで英語にする。日本語が残ってよいのは、言語の設定の名前（Language / 言語）だけ。
+await test("the English printable guide is regenerated and has no Japanese left", async () => {
+  const printable = await renderPrintableGuide("en");
+  assert.equal(
+    await readCommittedGuide("en"),
+    printable,
+    "public/guide-en.html が古い。node scripts/generate-guide.mjs で作り直す"
+  );
+  assert.match(printable, /<html lang="en-GB">/);
+  const shown = printable
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<style[\s\S]*?<\/style>/g, "")
+    .replace(/Language \/ 言語|言語 \/ Language|日本語/g, "");
+  const japanese = shown.match(/[぀-ヿ一-龠]/g);
+  assert.equal(japanese, null, `English printable guide still has Japanese: ${(japanese || []).join("")}`);
+});
+
 await test("the app guide and the printable guide say the same things", () => {
   const app = supporterGuideHtml();
   const print = supporterGuideHtml({ print: true });
