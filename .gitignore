@@ -7,7 +7,9 @@ dist/
 *.log
 playwright-report/
 .playwright-cli/
-output/playwright/
+# 手元の作業の置き場（会議の録音・文字起こし・相談用の資料・検査の画像）。このリポジトリは
+# 公開なので、まるごと入れない。共有する資料は、公開してよいものだけを docs/ に置く。
+output/
 test-results/
 # CI が撮る画面（scripts/capture-screens.mjs）。成果物として上げるだけで、
 # リポジトリには入れない。

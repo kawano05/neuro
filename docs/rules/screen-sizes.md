@@ -40,8 +40,8 @@
   `max-height` か `orientation: landscape` で別に見る（`src/responsive.css`）。
 - 遊ぶ前の説明は、手順が全部入る画面では全部、入らない画面では1つずつ出し、前後のボタンで行き来する
   （`src/lib/games/readyScreen.js` の fit）。けっかは操作のボタンの場所を先に取り、中身だけを縮める。
-- 走査で選べるものは、どの大きさでも入力ドックの裏に隠れない（ホームは 740px を境にページに分ける。
-  `src/lib/scanPaging.js`）。
+- 走査で選べるものは、どの大きさでも入力ドックの裏に隠れない（ホームは、描いたあとに測って入りきらなかった
+  ときだけページに分ける。`src/lib/views/home.js`・`src/lib/scanPaging.js`）。
 - タップの的は 44×44px 以上。
 
 ## 経緯

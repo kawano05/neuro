@@ -29,7 +29,7 @@ iPad が中心で、iPhone・PC でも使う。展示会でも見せる。
 
 | | 決まり | 守っている検査・仕組み |
 |---|---|---|
-| B1 | **利用者が迷い込まない。** 支援者の世界への入口はタップだけ。支援者の世界（評価ログ・設定）では走査を動かさない（`src/lib/viewWorld.js` の許可一覧の外側＝支援者の世界） | keeps all supporter screens out of the scan ring／`tests/scan-supporter.test.mjs` |
+| B1 | **利用者が迷い込まない。** 支援者の世界への入口はタップだけ。支援者の世界（がんばりの記録・評価ログ・設定）では走査を動かさない（`src/lib/viewWorld.js` の許可一覧の外側＝支援者の世界） | keeps all supporter screens out of the scan ring／`tests/scan-supporter.test.mjs` |
 | B2 | **押しまちがいに強い。** 続けて押しても2回に数えない。説明の画面のひと押しは課題の入力に数えない。開いた直後の押下（タイルを選んだ押下の跳ね返り）は受けない。設定を開いているあいだの押下は遊びを進めない | keeps the start press from falling through…／guards the explanation press… |
 | B3 | **支援者のまちがいを防ぐ。** そくていの回は、遊ぶ画面・説明・けっか・設定で「そくてい」とひと目で分かる（札は そくていの回にだけ出す。れんしゅうの回には出さない（2026-10-01、ユーザーの判断）。はじめの遊びには そくていの回が無いので出さない）。そくていの回に効く値は変えられない。記録を消す前に、いまの記録と同じ中身を書き出したか確かめる。設定は元に戻せる | blocks deletion when records change after an export／refuses to clear a participant's data before it has been exported |
 | B4 | **とり違えない記録。** 本番とプレビューで保存が別。参加者ごとに記録が分かれる。書き出したファイル名に参加者と日時 | names downloads with participant and time |

@@ -47,7 +47,6 @@
      出ても competing しないようにしてある。 */
   --amber: #e8a33d;
   --amber-deep: #b9761c;
-  --amber-soft: #fbeed6;
 
   /* 遊びの世界の地。--accent をそのまま敷くと明るすぎて、上に置く白い
      対象物とのコントラストが足りなかった（リズムの白円が地に溶けていた）。
@@ -66,9 +65,7 @@
   /* 判定の色。利用者向けの「はやい／おそい」と支援者向けのグラフで同じ色を
      使い、2つの世界で同じ意味を持たせる。 */
   --early: #4aa3c7;
-  --early-soft: #dceef5;
   --late: #d98548;
-  --late-soft: #faead9;
 
   /* 動き。iPad で見て破綻しない範囲に統一する。拍に同期する演出には
      使わない（basic-design.md §6）。 */
@@ -610,8 +607,6 @@ body.high-contrast .supporter-message {
 }
 
 /* 常設6項目とネイティブ折り畳み。業務画面の色と、44px以上の操作標的を保つ。 */
-/* 支援者設定ではドックの操作は無効。隠して設定のタップ標的を覆わないようにする。 */
-body.supporter-menu-mode .switch-dock { display: none; }
 .settings-status { margin: 0 0 14px; color: var(--muted); font-size: 0.95rem; }
 .settings-status.is-measuring { color: var(--accent-strong); font-weight: 700; }
 #settings .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -842,12 +837,6 @@ body.user-activity-mode .tabbar {
 .section-head {
   justify-content: space-between;
   margin-bottom: 16px;
-}
-
-.prompt {
-  margin: 0;
-  color: var(--muted);
-  font-weight: 500;
 }
 
 .reaction-label {
@@ -3875,7 +3864,7 @@ body.high-contrast .spread-mark {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
-  color: var(--text);
+  color: var(--ink);
   font-size: 0.9rem;
   cursor: pointer;
 }
@@ -3904,12 +3893,6 @@ body.high-contrast .spread-mark {
 
 .trend-tab.is-active .trend-tab-count {
   background: rgba(255, 255, 255, 0.22);
-}
-
-/* あそびごとの節。条件を変えた回があると同じあそびの線が複数できるので、
-   まずあそびで分けてから条件を並べる（views/log.js renderTrends）。 */
-.trend-game {
-  margin-bottom: 24px;
 }
 
 .trend-grid {
@@ -4122,7 +4105,7 @@ body.high-contrast .spread-mark {
 /* 点の値。線から目で読ませない——縦軸を拡大している以上、形だけでは
    どれだけ変わったか言えない。 */
 .trend-plot .trend-point-label {
-  fill: var(--text);
+  fill: var(--ink);
   font-size: 12px;
   font-weight: 700;
 }
@@ -4553,7 +4536,6 @@ body.game-mode .app-shell {
   box-shadow: inset 0 0 0 1px rgba(20, 125, 120, 0.2), var(--shadow-sm);
 }
 
-.metrics,
 .summary-tile,
 .message-board,
 .question-board,
@@ -4565,21 +4547,6 @@ body.game-mode .app-shell {
   box-shadow: var(--shadow-sm);
 }
 
-.metrics {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-}
-
-.metrics > div {
-  display: grid;
-  min-height: 104px;
-  padding: 16px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel);
-  align-content: center;
-}
-
 .metric-label {
   color: var(--muted);
   font-size: 0.78rem;
@@ -4587,7 +4554,6 @@ body.game-mode .app-shell {
   letter-spacing: 0.04em;
 }
 
-.metrics strong,
 .summary-tile strong,
 .message-board strong {
   display: block;

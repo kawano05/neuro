@@ -20,9 +20,7 @@ body.user-world {
   --hk-sub: #3a3a3a;
   --hk-paper: #ffffff;
   --hk-blue: #005aff;
-  --hk-blue-deep: #0047cc;
   --hk-yellow: #ffc83d;
-  --hk-night: #000814;
   --hk-ring: 0 0 0 5px var(--hk-yellow), 0 0 0 8px var(--hk-ink);
   --font-round:
     "Hiragino Maru Gothic ProN", "Hiragino Maru Gothic Pro", "BIZ UDPGothic",

@@ -53,7 +53,6 @@ import {
   judgeInput,
   sweepExpired,
   computeEffectiveWindowMs,
-  computeBeatIntervalMs,
   generateGoNoGoSequence,
 } from "./judge.js";
 import { practiceArtFor } from "../artVersion.js";

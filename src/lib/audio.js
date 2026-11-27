@@ -465,6 +465,9 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
     if (!sampleUrls[name]) return false;
     const ctx = ensureContext();
     if (!ctx) return false;
+    // 読み込めなかった録音（preloadSamples が表から外したもの）は「無い」として扱う。以前は
+    // ここで true を返していたので、呼び出し側が合成の音へ回らず、読み直すまで無音だった。
+    if (!samples.has(name)) return false;
     const level = CELEBRATION_SAMPLES.has(name) ? CELEBRATION_SAMPLE_LEVEL : SAMPLE_LEVEL;
     const requestedAt = ctx.currentTime + Math.max(0, delayS);
     const currentGeneration = effectGeneration;

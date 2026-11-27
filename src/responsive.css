@@ -193,6 +193,27 @@ body.large-text .game-ready-go { font-size: clamp(20px, 2.5vmin, 28px); }
   .game-ready-controls { bottom: max(8px, env(safe-area-inset-bottom)); }
   #gameReadyStart { min-height: 52px; }
 }
+/* スマホの縦の幅では、前後の説明を絵（‹ ›）だけのボタンにする。字のままだと、説明を
+   1手順ずつ見せるとき（games/readyScreen.js）に「前の説明・1 / 4・次の説明・始める」が
+   1列に入りきらず、「始める」が画面の右へ、「前の説明」が左へ出ていた（390px、ルビ。
+   字の幅が広めの Linux の字形で 403px ぶん要った。2026-10-22）。字は消さずに大きさを 0 に
+   するので、読み上げの名前（aria-label）には残る（.game-settings と同じやり方）。 */
+@media (max-width: 560px) {
+  .game-ready-controls { width: calc(100% - 24px); gap: 8px; }
+  #gameReadyPrevious,
+  #gameReadyForward { width: 48px; min-width: 48px; padding: 0; font-size: 0; }
+  #gameReadyPrevious rt,
+  #gameReadyForward rt { font-size: 0; }
+  #gameReadyPrevious::before,
+  #gameReadyForward::before {
+    font-family: "Font Awesome 7 Free";
+    font-size: 1.15rem;
+    font-weight: 900;
+  }
+  #gameReadyPrevious::before { content: "\f053"; }
+  #gameReadyForward::before { content: "\f054"; }
+  #gameReadyPage { white-space: nowrap; }
+}
 body.high-contrast.game-mode.user-world .game-stage-content.is-ready { background: #000; color: #fff; }
 body.high-contrast .game-ready-controls { color: #fff; }
 body.high-contrast .game-ready-go,
