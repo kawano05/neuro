@@ -90,10 +90,11 @@ export const SOUND_CREDITS = [
   // gleitz/midi-js-soundfonts が配っていて、その README が FluidR3_GM を CC BY 3.0 としている
   // （元の音色集の Debian の記録は MIT。どちらでも、クレジットを出せば公開のリポジトリに置ける）。
   {
+    // すずはタンバリン、カスタネットはクラベス（打楽器のセット。WebAudioFont の書き出し。2026-11-26）。
     use: "音あそびの楽器（ピアノ・太鼓・すず・もっきん・カスタネット・ラッパ）と「パーン」",
     useEn: "Sound game instruments (piano, drum, bell, xylophone, castanets, trumpet) and the “ta-da” hit",
-    title: "FluidR3_GM（acoustic_grand_piano・taiko_drum・tinkle_bell・xylophone・woodblock・trumpet・orchestra_hit）",
-    author: "Frank Wen（FluidR3_GM.sf2）、Benjamin Gleitzman（midi-js-soundfonts の書き出し）",
+    title: "FluidR3_GM（acoustic_grand_piano・taiko_drum・xylophone・trumpet・orchestra_hit、打楽器のタンバリン・クラベス）",
+    author: "Frank Wen（FluidR3_GM.sf2）、Benjamin Gleitzman（midi-js-soundfonts の書き出し）、Sergey Surikov（WebAudioFont の書き出し）",
     source: "https://github.com/gleitz/midi-js-soundfonts",
     ...CC_BY_3,
     changes: "1音ずつ短く切り、低い音を減らし、音の大きさをそろえた",
