@@ -48,8 +48,9 @@ const CLOSERS = new Set(["」", "』", "）", ")", "\"", "”", "’"]);
  * @returns {string[]}
  */
 export function splitSpeechChunks(text, lang) {
-  const english = voiceLang(lang) === "en";
-  const terminal = english ? EN_TERMINAL : JA_TERMINAL;
+  // 日本語のほかの言語（英語と、足した言語）は、英語と同じ切り方。
+  const spaced = voiceLang(lang) !== "ja";
+  const terminal = spaced ? EN_TERMINAL : JA_TERMINAL;
   const source = String(text ?? "").replace(/\s+/g, " ").trim();
   const chunks = [];
   let current = "";
@@ -67,7 +68,7 @@ export function splitSpeechChunks(text, lang) {
       index += 1;
       next = source[index + 1];
     }
-    if (english && next !== undefined && next !== " ") continue;
+    if (spaced && next !== undefined && next !== " ") continue;
     chunks.push(current.trim());
     current = "";
   }

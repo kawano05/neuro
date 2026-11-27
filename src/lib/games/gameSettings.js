@@ -479,7 +479,9 @@ export function createGameSettings(ctx, host) {
     elements.gameSettings?.setAttribute("aria-expanded", "false");
     if (changed.length) {
       announce(
-        supporterLang(state.settings) === "en" ? `Changed ${changed.join(" and ")}` : `${changed.join("と")}を変えました`
+        say({ ja: "{names}を変えました", en: "Changed {names}" }, supporterLang(state.settings), {
+          names: changed.join(say({ ja: "と", en: " and " }, supporterLang(state.settings))),
+        })
       );
     }
 

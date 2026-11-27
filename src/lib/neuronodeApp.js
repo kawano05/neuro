@@ -118,7 +118,7 @@ export function initNeuroNodeApp() {
   ctx.tHtml = (key, values) => translateHtml(key, resolveTextMode(state.settings), values);
   ctx.textMode = () => resolveTextMode(state.settings);
   // 支援者に向けた文（通知・帯の字）を、支援者の画面の言語で選ぶ（{ja, en} の組。supporterText.js）。
-  ctx.tr = (text) => say(text, supporterLang(state.settings));
+  ctx.tr = (text, values) => say(text, supporterLang(state.settings), values);
 
   ctx.announce = (message) => {
     elements.liveRegion.textContent = message;

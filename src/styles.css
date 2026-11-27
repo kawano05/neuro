@@ -5311,6 +5311,14 @@ input[type="checkbox"]:checked::before {
     white-space: nowrap;
   }
 
+  /* 1行に収まらない長い名前（ドイツ語の Aufzeichnungen など）は、枠の外へはみ出させずに折り返す。
+     収まる名前（日本語・英語）は、これまでどおり1行。 */
+  .tab {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
+
   .tab-full {
     display: none;
   }

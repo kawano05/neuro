@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kurzanleitung (für Familien, Lehrkräfte und Begleitpersonen)</title>
+<!--
+  このファイルは scripts/generate-guide.mjs が作る（手で直さない）。文は src/lib/supporterGuide.js、絵と印刷の体裁は scripts/guide-template.html。
+  印刷して渡すための説明書（A4 で2〜3枚）。打ち合わせで「お母さんに渡す簡単な
+  説明書がほしい」「最初の画面だけでも、どのボタンが何をするのか支援者向けに
+  書いてあれば解決しそう」と言われた（docs/design-renewal-2026-09-25.md §1.8）。
+  アプリの中の「はじめての方へ：つかいかた」（設定画面）と同じ中身を、絵つきで。
+  オフラインでも読めるよう、字体・絵はすべてこのファイルの中に持つ。
+-->
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #4e5d78;
+    --line: #1a1a1a;
+    --blue: #005aff;
+    --yellow: #ffc83d;
+    --paper: #ffffff;
+    --soft: #f2f7ff;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: #e9eef5;
+    color: var(--ink);
+    font-family: "Hiragino Maru Gothic ProN", "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+
+  .sheet {
+    width: min(210mm, 100%);
+    margin: 16px auto;
+    padding: 14mm 14mm 12mm;
+    background: var(--paper);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  .toolbar {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 16px auto 0;
+  }
+
+  .toolbar button {
+    min-height: 44px;
+    padding: 0 22px;
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    background: var(--blue);
+    color: #ffffff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  h1 {
+    margin: 0 0 4px;
+    font-size: 24px;
+    line-height: 1.4;
+  }
+
+  .lead {
+    margin: 0 0 14px;
+    color: var(--muted);
+  }
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 3px solid var(--line);
+    font-size: 18px;
+  }
+
+  h2 .num {
+    display: inline-grid;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: #ffffff;
+    place-items: center;
+    font-size: 15px;
+  }
+
+  section {
+    break-inside: avoid;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .step {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    break-inside: avoid;
+  }
+
+  .step strong {
+    font-size: 16px;
+  }
+
+  .step p {
+    margin: 0;
+  }
+
+  /* 画面の見本（アプリの画面を簡単にした絵） */
+  .screen {
+    position: relative;
+    height: 120px;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    background: #0b1a33;
+    overflow: hidden;
+  }
+
+  .screen.light {
+    background: #ffffff;
+  }
+
+  .screen .big-button {
+    position: absolute;
+    inset: 32px 22%;
+    display: grid;
+    border: 3px solid var(--line);
+    border-radius: 999px;
+    background: var(--blue);
+    color: #ffffff;
+    place-items: center;
+    font-size: 18px;
+    font-weight: 800;
+  }
+
+  .screen .tiles {
+    position: absolute;
+    inset: 22px 10px 8px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 5px;
+  }
+
+  .screen .tiles span {
+    display: flex;
+    align-items: flex-start;
+    padding: 2px 4px;
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .screen .tiles span:first-child {
+    grid-column: 1 / span 2;
+    grid-row: 1 / span 2;
+    outline: 3px solid var(--yellow);
+    outline-offset: 1px;
+  }
+
+  .screen .corner {
+    position: absolute;
+    top: 3px;
+    right: 8px;
+    padding: 0 6px;
+    border: 1.5px solid var(--line);
+    border-radius: 6px;
+    background: #ffffff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+
+  .screen .bar {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    display: flex;
+    gap: 5px;
+  }
+
+  .screen .bar span {
+    padding: 1px 6px;
+    border: 1.5px solid rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    background: rgba(0, 8, 20, 0.8);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .screen .animal {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    width: 110px;
+    transform: translate(-50%, -50%);
+  }
+
+  .screen .buttons {
+    position: absolute;
+    inset: auto 12px 18px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .screen .buttons span {
+    flex: 1;
+    padding: 6px 0;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .screen .buttons span:first-child {
+    background: var(--blue);
+    color: #ffffff;
+    outline: 3px solid var(--yellow);
+  }
+
+  .screen .done {
+    position: absolute;
+    top: 18px;
+    left: 0;
+    right: 0;
+    font-size: 20px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 6px 8px;
+    border: 1.5px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--soft);
+  }
+
+  td.no {
+    width: 36px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0 8px;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .note {
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    border-left: 6px solid var(--yellow);
+    background: #fff8e0;
+  }
+
+  .qa {
+    margin: 0;
+  }
+
+  .qa dt {
+    margin-top: 8px;
+    font-weight: 800;
+  }
+
+  .qa dt::before {
+    content: "Q. ";
+    color: var(--blue);
+  }
+
+  .qa dd {
+    margin: 0 0 0 1.4em;
+  }
+
+  section ul {
+    margin: 4px 0 8px;
+    padding-left: 1.4em;
+  }
+
+  section p {
+    margin: 6px 0;
+  }
+
+  .foot {
+    margin-top: 16px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  @media (max-width: 640px) {
+    .sheet {
+      margin: 0;
+      padding: 16px;
+      box-shadow: none;
+    }
+
+    .steps {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  @media print {
+    body {
+      background: #ffffff;
+      font-size: 10.5pt;
+    }
+
+    .sheet {
+      width: auto;
+      margin: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+
+    .toolbar {
+      display: none;
+    }
+
+    .page-break {
+      break-before: page;
+    }
+
+    .screen,
+    h2 .num,
+    .screen .big-button,
+    .screen .bar span,
+    .screen .buttons span:first-child,
+    th,
+    .note {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button type="button" onclick="window.print()">Drucken (A4)</button>
+</div>
+
+<main class="sheet">
+  <h1>Kurzanleitung</h1>
+  <p class="lead">
+    Für Familien, Lehrkräfte und Begleitpersonen. Mit dieser App lässt sich das „Drücken“ mit dem NeuroNode-Taster spielerisch üben. Sie beginnt mit Spielen, bei denen bei jedem Drücken immer etwas passiert.
+  </p>
+
+  <section>
+      <h2><span class="num">1</span>Vor dem Start (einmalig)</h2>
+      <ul>
+        <li><strong>Verbinden Sie NeuroNode als Tastatur mit dem iPad</strong>. Beim Drücken des Tasters laufen die Spiele weiter.</li>
+        <li>Lassen Sie auf dem iPad „Einstellungen“ → „Bedienungshilfen“ → „Schaltersteuerung“ <strong>ausgeschaltet</strong>.
+          Ausgewählt wird mit dem gelben Rahmen der App (in der App muss nichts geändert werden).</li>
+        <li>Der Ton ist bei diesen Spielen wichtig. Stellen Sie die <strong>Lautstärke</strong> des iPad hoch und schalten Sie den <strong>Stummmodus</strong> aus.</li>
+      </ul>
+      <p class="note">
+        Nur wenn Sie die iPad-eigene Schaltersteuerung verwenden möchten, schalten Sie <strong>beides</strong> ein: die Einstellung des iPad und in der App
+        „Taster-Einstellungen“ → „iPad-Schaltersteuerung verwenden“ in den Einstellungen für Begleitpersonen.
+        Ist nur die Einstellung des iPad eingeschaltet, erscheinen der gelbe Rahmen (App) und der Rahmen des iPad gleichzeitig, und das Auswählen wird schwierig.
+      </p>
+  </section>
+
+  <section>
+      <h2><span class="num">2</span>Bedienung</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="screen light" aria-hidden="true"><div class="big-button">Start</div></div>
+          <p><strong>① Starten</strong><br />Auf dem ersten Bildschirm gibt es nur „Start“. Drücken Sie den Taster einmal, um zur Übersicht mit den Spielen zu gelangen.</p>
+        </div>
+        <div class="step">
+          <div class="screen light" aria-hidden="true"><span class="corner">Einstellungen für Begleitpersonen</span><div class="tiles"><span>①</span><span>②</span><span>③</span><span>④</span><span>⑤</span><span>⑥</span><span>⑦</span><span>⑧</span><span>…</span></div></div>
+          <p><strong>② Spiel wählen</strong><br />Der gelbe Rahmen wandert von Element zu Element. Drücken Sie, wenn er das gewünschte Spiel erreicht. ① ist am leichtesten, höhere Nummern sind schwerer. Sie können auch durch Berühren des Bildschirms wählen.</p>
+        </div>
+        <div class="step">
+          <div class="screen" aria-hidden="true"><div class="bar"><span>Spieleinstellungen</span><span>× Beenden</span></div><svg class="animal" viewBox="0 0 300 240"><path d="M40 150 C 60 80, 150 50, 225 85 C 250 97, 268 112, 282 124 C 262 124, 250 126, 240 132 C 234 162, 200 186, 150 188 C 110 190, 80 182, 60 172 C 45 190, 30 204, 16 210 C 22 190, 28 172, 40 150 Z" fill="#4DC4FF"></path><path d="M138 72 C 148 46, 168 36, 186 32 C 178 50, 176 66, 180 82 Z" fill="#1FA2E0"></path><circle cx="222" cy="104" r="8" fill="#10222E"></circle></svg></div>
+          <p><strong>③ Spielen</strong><br />Beim Drücken erscheinen Bilder und Töne. Mit „Spieleinstellungen“ oben rechts lassen sich Töne, Tempo und der Bildstil der Timing-Spiele (Bilderbuch / Schlicht) direkt ändern (eine Schaltfläche für Begleitpersonen, nur in Spielen mit Einstellungen). Zum Aufhören dient „Beenden“.</p>
+        </div>
+        <div class="step">
+          <div class="screen light" aria-hidden="true"><div class="done">Geschafft!</div><div class="buttons"><span>Noch mal</span><span>Spiel wählen</span></div></div>
+          <p><strong>④ Geschafft!</strong><br />Am Ende erscheint der Bildschirm „Geschafft!“. Wählen Sie „Noch mal“ oder „Spiel wählen“.</p>
+        </div>
+      </div>
+  </section>
+
+  <section class="page-break">
+      <h2><span class="num">3</span>Empfohlene Reihenfolge der Spiele</h2>
+      <table>
+        <thead>
+          <tr><th>Nr.</th><th>Spiel</th><th>Worum geht es?</th><th>Stufe</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="no">①</td><td>Kuckuck</td><td>Bei jedem Drücken erscheint ein Tier aus dem dunklen Bildschirm. Gedrückt werden kann jederzeit.</td><td><span class="badge">Hier anfangen</span></td></tr>
+          <tr><td class="no">②</td><td>Ballons platzen</td><td>Bei jedem Drücken platzt ein Ballon. Nach fünfmal Drücken sind alle geplatzt.</td><td><span class="badge">Leicht</span></td></tr>
+          <tr><td class="no">③</td><td>Ausmalen</td><td>Bei jedem Drücken kommt Farbe ins Bild. Nach fünfmal Drücken ist es fertig.</td><td><span class="badge">Leicht</span></td></tr>
+          <tr><td class="no">④</td><td>Baseball</td><td>Beim Drücken schlägt der Schläger nach dem rollenden Ball. Jeder Schlag trifft, und bei perfektem Timing gibt es einen Homerun.</td><td><span class="badge">Als Nächstes</span></td></tr>
+          <tr><td class="no">⑤</td><td>Bilder stoppen</td><td>Drücken, wenn das sich drehende Bild dem Zielbild entspricht (Timing-Übung).</td><td><span class="badge">Als Nächstes</span></td></tr>
+          <tr><td class="no">⑥</td><td>Musikspiel</td><td>In einem Musikzimmer stehen sechs Instrumente, und ein gelber Rahmen wandert darüber. Bei „Frei spielen“ erklingt bei jedem Drücken das Instrument im Rahmen (10-mal Drücken). Bei „Mit der Lehrerin“ wird gedrückt, wenn der Rahmen das Instrument erreicht, das die Lehrerin nennt (5 Runden; bei einem anderen Instrument erklingt einfach dieses). Bei Messungen wird daraus das Spiel, bei dem nur bei hohen Tönen gedrückt wird.</td><td><span class="badge">Leicht</span></td></tr>
+          <tr><td class="no">⑦</td><td>Greifautomat</td><td>Drücken, wenn der fahrende Greifarm über einem Kuscheltier ist.</td><td><span class="badge">Knifflig</span></td></tr>
+          <tr><td class="no">⑧</td><td>Angeln</td><td>Sofort drücken, wenn der Biss-Ton erklingt (bei der Übung erscheint zusätzlich ein großes „!“).</td><td><span class="badge">Knifflig</span></td></tr>
+        </tbody>
+      </table>
+      <p class="note">Bei ① bis ③ kann nichts misslingen. Sobald verstanden ist: „Wenn ich drücke, passiert etwas“, geht es weiter zu ④ (jeder Schlag trifft; der erste Schritt zum Timing) und danach zu den Timing-Spielen ab ⑤.</p>
+  </section>
+
+  <section>
+      <h2><span class="num">4</span>Einstellungen für Begleitpersonen</h2>
+      <p>
+        Sie öffnen sie durch Tippen auf „<strong>Einstellungen für Begleitpersonen</strong>“ oben rechts in der Übersicht (mit dem Taster lassen sie sich nicht öffnen,
+        damit die spielende Person sie nicht versehentlich öffnet; im Einstellungsbildschirm hält auch der gelbe Rahmen an). Zurück geht es mit „← Zurück zur Übersicht“.
+        Änderungen werden automatisch gespeichert. Mit einer Tastatur bewegen Sie sich mit Tab und öffnen oder schließen Überschriften mit Enter / Leertaste.
+      </p>
+      <p><strong>„Häufige Einstellungen“</strong> (die 8, die von Anfang an sichtbar sind)</p>
+      <ul>
+          <li><strong>Sprache / Language</strong> … Wählen Sie die Sprache für die Spiele und die Bildschirme für Begleitpersonen.</li>
+          <li><strong>Spielatmosphäre</strong> … Wählen Sie, wie lebhaft die Spielwelt ist und wie das Drücken und der Abschluss gefeiert werden.</li>
+          <li><strong>Vorlesen</strong> … Liest Anleitungen und Lob vor.</li>
+          <li><strong>Toneffekte</strong> … Spielt Töne beim Drücken und Applaus ab. Die Signale der Spiele werden nie stummgeschaltet.</li>
+          <li><strong>Rahmen-Tempo</strong> … Zeit, bis der Rahmen zum nächsten Element springt.</li>
+          <li><strong>Großer Text</strong> … Vergrößert den Text auf dem Bildschirm.</li>
+          <li><strong>Spiele ausblenden, bei denen man genau hinsehen muss</strong> … Blendet „Bilder stoppen“ und „Greifautomat“ in der Übersicht aus.</li>
+          <li><strong>Immer Treffer</strong> … Jedes Drücken zählt als Treffer, egal wann gedrückt wird.</li>
+      </ul>
+      <p><strong>Detaileinstellungen</strong> (zum Öffnen auf eine Überschrift tippen; es können beliebig viele gleichzeitig geöffnet sein)</p>
+      <ul>
+        <li><strong>Taster-Einstellungen</strong> … iPad-Schaltersteuerung verwenden, Rahmen automatisch bewegen, Ton beim Rahmenwechsel, Schaltfläche „Drücken“ einblenden</li>
+        <li><strong>Einstellungen für Anzeige und Stimme</strong> … Hoher Kontrast, Stimmlautstärke, Stimme</li>
+        <li><strong>Schwierigkeit der einzelnen Spiele</strong> … Tempo, Runden und mehr für Bilder stoppen, Musikspiel, Greifautomat, Angeln (auch während des Spiels über „Spieleinstellungen“ änderbar)</li>
+        <li><strong>Tonnachweise</strong> … Urheber und Quellen des Stimm- und Tonmaterials</li>
+        <li><strong>Forschung (Übung / Messung)</strong> … nur für Messungen in der Forschung. Lassen Sie es normalerweise auf „Übung“.
+          Bei Messungen sind Tempo, Runden und Hinweise der Spiele fest vorgegeben. Hier finden Sie auch den Referenzwert für das Timing.</li>
+      </ul>
+      <p class="note">
+        Jede Gruppe der Detaileinstellungen hat eine Schaltfläche „<strong>Zurücksetzen</strong>“. Nach dem Drücken erscheint direkt darunter, was zurückgesetzt wurde.
+        Bei einem ausgegrauten Eintrag steht der Grund in seiner Zeile (bei Messungen wird auch der für die Messung verwendete Wert angezeigt).
+      </p>
+      <p><strong>Spielatmosphäre</strong> (in den häufigen Einstellungen; eine von vier wählen)</p>
+      <ul>
+          <li><strong>Ohne</strong> … Bilder und Rückmeldung beim Drücken. Zum Schluss ein kurzer Satz und ein ruhiger Stern.</li>
+          <li><strong>Dezent</strong> … Kleine Funken und ein Sternenkranz. Der Hintergrund bleibt ruhig.</li>
+          <li><strong>Lebhaft</strong> … Das gewohnte Spiel. Beim Ergebnis warten ein Otter und das Glitzerglas.</li>
+          <li><strong>Party</strong> … Nach jedem Erfolg sammeln sich Sterne. Zum Schluss gibt es eine Parade und ein Kostümteil als Belohnung.</li>
+      </ul>
+      <p class="note">
+        Für Personen, die empfindlich auf Licht oder Töne reagieren, wählen Sie „Dezent“ oder „Ohne“. Lichtblitze sind in jeder Atmosphäre auf 3 pro Sekunde begrenzt.
+        Bei Messungen werden den Spielen keine Effekte hinzugefügt, egal welche Atmosphäre gewählt ist.
+      </p>
+  </section>
+
+  <section>
+      <h2><span class="num">5</span>Hilfe bei Problemen</h2>
+      <dl class="qa">
+        <dt>Der gelbe Rahmen und der Rahmen des iPad erscheinen gleichzeitig</dt>
+        <dd>Schalten Sie die Schaltersteuerung des iPad aus (siehe „Vor dem Start“).</dd>
+        <dt>Der Rahmen bewegt sich nicht</dt>
+        <dd>Schalten Sie „Taster-Einstellungen“ → „Rahmen automatisch bewegen“ ein. Solange „Taster-Einstellungen“ → „iPad-Schaltersteuerung verwenden“ eingeschaltet ist, bewegt sich der Rahmen der App nicht.</dd>
+        <dt>Der Rahmen ist zu schnell oder zu langsam</dt>
+        <dd>Ändern Sie es unter „Häufige Einstellungen“ → „Rahmen-Tempo“.</dd>
+        <dt>Auf den Bildschirm zu schauen fällt schwer</dt>
+        <dd>Stellen Sie „Taster-Einstellungen“ → „Ton beim Rahmenwechsel“ auf „Namen vorlesen“, dann wird bei jedem Wechsel der Name vorgelesen (bei „Leiser Ton“ erklingt nur ein Ton).</dd>
+        <dt>Der Name wird bei jedem Wechsel vorgelesen, und das ist zu viel</dt>
+        <dd>Stellen Sie „Taster-Einstellungen“ → „Ton beim Rahmenwechsel“ auf „Leiser Ton“ oder „Ohne“.</dd>
+        <dt>Licht oder Bewegung scheinen zu viel zu sein, oder die spielende Person wird zu aufgeregt</dt>
+        <dd>Stellen Sie „Häufige Einstellungen“ → „Spielatmosphäre“ auf „Dezent“ oder „Ohne“.</dd>
+        <dt>Kein Ton</dt>
+        <dd>Prüfen Sie Lautstärke und Stummmodus des iPad. Schalten Sie außerdem „Häufige Einstellungen“ → „Toneffekte“ ein.</dd>
+        <dt>Keine Stimme, oder die Stimme ist leise</dt>
+        <dd>Schalten Sie „Häufige Einstellungen“ → „Vorlesen“ ein. Die Lautstärke ändern Sie mit „Einstellungen für Anzeige und Stimme“ → „Stimmlautstärke“.</dd>
+        <dt>Eine Einstellung ist ausgegraut</dt>
+        <dd>Der Grund steht in dieser Zeile. Steht dort „Bei Messungen fest“, stellen Sie „Forschung (Übung / Messung)“ → „Übung / Messung“ auf „Übung“, um sie zu ändern.</dd>
+        <dt>Ich möchte geänderte Einstellungen rückgängig machen</dt>
+        <dd>Tippen Sie in der jeweiligen Gruppe der Detaileinstellungen auf „Zurücksetzen“.</dd>
+        <dt>Beim Drücken passiert nichts</dt>
+        <dd>Prüfen Sie, ob NeuroNode mit dem iPad verbunden ist (als Tastatur). Wenn das Berühren des Bildschirms funktioniert, läuft die App.</dd>
+        <dt>Ich möchte die Sprache ändern</dt>
+        <dd>Wählen Sie sie unter „Häufige Einstellungen“ → „Sprache / Language“. Die Spiele und diese Bildschirme für Begleitpersonen wechseln gemeinsam.</dd>
+      </dl>
+  </section>
+
+  <p class="foot">Diese Anleitung hat denselben Inhalt wie „Erste Schritte: Bedienung“ im Einstellungsbildschirm der App.</p>
+</main>
+</body>
+</html>

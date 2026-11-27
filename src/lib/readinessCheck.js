@@ -40,6 +40,8 @@
 // 分からず、壊れても測定は普通に始まって普通に数字が出る。
 // =====================================================================
 
+import { say } from "./supporterText.js";
+
 /**
  * 判定窓がセッションの時間のうちどれだけを覆うか（0〜1）。
  *
@@ -95,6 +97,18 @@ const MIN_SESSIONS = 2;
 const MIN_TRIALS = 6;
 
 /** 判定に使ってよい回か（完走していて、れんしゅうの回）。 */
+/**
+ * 「まだ通っていない理由」。reason（日本語）と reasonEn（英語）は検査と記録が読み、画面は
+ * reasonText（{ja, en} の組と、穴に入れる値）を その言語で出す。通っているとき（text が null）は空。
+ */
+function reasonOf(text, values) {
+  return {
+    reason: say(text, "ja", values),
+    reasonEn: say(text, "en", values),
+    reasonText: text ? { ...text, values } : null,
+  };
+}
+
 function isUsable(session) {
   // 中断した回は試行数が計画と違うので割合の意味が変わる。
   if (!session || session.aborted === true || session.finished !== true) return false;
@@ -126,7 +140,7 @@ function checkDiscrimination(sessions) {
   const usable = runs.filter((session) => countTrials(session) >= MIN_TRIALS);
   if (usable.length < MIN_SESSIONS) {
     const left = MIN_SESSIONS - usable.length;
-    return { met: false, value: null, reason: `「音あそび」をあと${left}回`, reasonEn: `${left} more “Sound game” ${left === 1 ? "run" : "runs"}` };
+    return { met: false, value: null, ...reasonOf({ ja: "「音あそび」をあと{n}回", en: "{n} more “Sound game” {n:run|runs}" }, { n: left }) };
   }
   const margins = usable.map(
     (session) => (session.summary?.goHitRate ?? 0) - (session.summary?.commissionRate ?? 0)
@@ -135,11 +149,11 @@ function checkDiscrimination(sessions) {
   return {
     met: worst >= DISCRIMINATION_MARGIN,
     value: worst,
-    reason:
+    ...reasonOf(
       worst >= DISCRIMINATION_MARGIN
-        ? ""
-        : "高い音と低い音で、押す割合がほとんど同じ",
-    reasonEn: worst >= DISCRIMINATION_MARGIN ? "" : "presses are almost as frequent on low notes as on high notes",
+        ? null
+        : { ja: "高い音と低い音で、押す割合がほとんど同じ", en: "presses are almost as frequent on low notes as on high notes" }
+    ),
   };
 }
 
@@ -155,7 +169,7 @@ function checkVolition(sessions) {
   const usable = runs.filter((session) => typeof session.summary?.meanRtMs === "number");
   if (usable.length < MIN_SESSIONS) {
     const left = MIN_SESSIONS - usable.length;
-    return { met: false, value: null, reason: `「さかなつり」をあと${left}回`, reasonEn: `${left} more fishing ${left === 1 ? "run" : "runs"}` };
+    return { met: false, value: null, ...reasonOf({ ja: "「さかなつり」をあと{n}回", en: "{n} more fishing {n:run|runs}" }, { n: left }) };
   }
   const rts = usable.map((session) => session.summary.meanRtMs);
   const worst = Math.max(...rts);
@@ -164,16 +178,13 @@ function checkVolition(sessions) {
   return {
     met: inRange,
     value: worst,
-    reason: inRange
-      ? ""
-      : fastest < VOLUNTARY_RT_MIN_MS
-        ? "合図より先に押しはじめている"
-        : "合図と押すことが結びついていない",
-    reasonEn: inRange
-      ? ""
-      : fastest < VOLUNTARY_RT_MIN_MS
-        ? "pressing starts before the cue"
-        : "pressing is not linked to the cue",
+    ...reasonOf(
+      inRange
+        ? null
+        : fastest < VOLUNTARY_RT_MIN_MS
+          ? { ja: "合図より先に押しはじめている", en: "pressing starts before the cue" }
+          : { ja: "合図と押すことが結びついていない", en: "pressing is not linked to the cue" }
+    ),
   };
 }
 
@@ -192,7 +203,7 @@ function checkRuleExecution(sessions) {
   );
   if (usable.length < MIN_SESSIONS) {
     const left = MIN_SESSIONS - usable.length;
-    return { met: false, value: null, reason: `「リズム」をあと${left}回`, reasonEn: `${left} more rhythm ${left === 1 ? "run" : "runs"}` };
+    return { met: false, value: null, ...reasonOf({ ja: "「リズム」をあと{n}回", en: "{n} more rhythm {n:run|runs}" }, { n: left }) };
   }
   const ratios = usable.map(
     (session) => session.summary.sdRawOffsetMs / uniformOffsetSdMs(session.config.bpm)
@@ -201,8 +212,9 @@ function checkRuleExecution(sessions) {
   return {
     met: worst <= SYNC_SD_RATIO,
     value: worst,
-    reason: worst <= SYNC_SD_RATIO ? "" : "押すタイミングが合図と結びついていない",
-    reasonEn: worst <= SYNC_SD_RATIO ? "" : "press timing is not linked to the cues",
+    ...reasonOf(
+      worst <= SYNC_SD_RATIO ? null : { ja: "押すタイミングが合図と結びついていない", en: "press timing is not linked to the cues" }
+    ),
   };
 }
 
@@ -210,13 +222,13 @@ function checkRuleExecution(sessions) {
  * 3つの前提の確認結果。
  *
  * label は支援者向け（この画面には支援者が同席する）。reason は「まだ通って
- * いない理由」で、通っているときは空。英語の画面のために labelEn・reasonEn も持つ
- * （支援者の画面は、利用者の「言語」に合わせる。src/lib/supporterText.js）。
+ * いない理由」で、通っているときは空。どちらも日本語（検査と記録が読む）。画面には
+ * labelText・reasonText（{ja, en} の組）を、支援者の画面の言語で出す（src/lib/supporterText.js）。
  */
 const CHECKS = [
-  { id: "discrimination", label: "高い音と低い音を聞き分けられる", labelEn: "Tells high notes from low notes", run: checkDiscrimination },
-  { id: "volition", label: "合図に対して意図して押せる", labelEn: "Presses on purpose in response to a cue", run: checkVolition },
-  { id: "ruleExecution", label: "追加の合図なしに規則を続けられる", labelEn: "Keeps following the rule without extra cues", run: checkRuleExecution },
+  { id: "discrimination", text: { ja: "高い音と低い音を聞き分けられる", en: "Tells high notes from low notes" }, run: checkDiscrimination },
+  { id: "volition", text: { ja: "合図に対して意図して押せる", en: "Presses on purpose in response to a cue" }, run: checkVolition },
+  { id: "ruleExecution", text: { ja: "追加の合図なしに規則を続けられる", en: "Keeps following the rule without extra cues" }, run: checkRuleExecution },
 ];
 
 /**
@@ -231,7 +243,7 @@ export function evaluateReadiness(sessions, participantId = "") {
   const scoped = participantId
     ? list.filter((session) => (session.participantId || "") === participantId)
     : list;
-  const checks = CHECKS.map(({ id, label, labelEn, run }) => ({ id, label, labelEn, ...run(scoped) }));
+  const checks = CHECKS.map(({ id, text, run }) => ({ id, label: text.ja, labelEn: text.en, labelText: text, ...run(scoped) }));
   return { checks, allMet: checks.every((check) => check.met) };
 }
 

@@ -20,7 +20,7 @@
 // 時刻に使うのは MUST NOT）。
 // =====================================================================
 
-import { resolveTextMode, speechLangForText, toSpeechText } from "./i18n.js";
+import { resolveTextMode, speechLangFor, speechLangForText, toSpeechText } from "./i18n.js";
 import { createPartyMusic } from "./partyMusic.js";
 import { presentation } from "./presentation.js";
 import { pickVoice } from "./speechVoice.js";
@@ -537,13 +537,15 @@ export function createAudio(getSettings, announce = () => {}, { sampleUrls = {},
 
   /**
    * 声のパックを先に読み込んでおく（スタートのひと押し。最初の読み上げを待たせない）。
-   * 日本語はいつも（英語の表記でも、ことばや文字は日本語で読む）、英語は英語の表記のとき。
+   * 日本語はいつも（ほかの言語の表記でも、ことばや文字は日本語で読むことがある）、ほかの言語は
+   * その表記のとき。パックの無い言語（端末の声で読む）は何もしない。
    */
   function prefetchVoice() {
     const settings = getSettings();
     if (!voicePack || !settings.speechEnabled || settings.speechVoice === "device") return;
     loadVoicePack("ja");
-    if (resolveTextMode(settings) === "en") loadVoicePack("en");
+    const language = voiceLang(speechLangFor(resolveTextMode(settings)));
+    if (language !== "ja" && voicePack.urls?.[language]) loadVoicePack(language);
   }
 
   /** パックの中の1つの音を AudioBuffer にする（作ったものは少しのあいだ取っておく）。 */

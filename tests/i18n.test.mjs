@@ -146,10 +146,12 @@ test("every kanji in the user's world carries a reading", () => {
 test("every string carries all three scripts", () => {
   // 片方だけ抜けていると既定へ落ちて日本語が出る。英語モードのつもりで
   // 日本語が混ざっていても、画面を見るまで分からない。
+  // 見るのは、この辞書に書く表記（日本語の3つと英語）。足した言語の訳は src/lib/locales/ にあり、
+  // 抜けは tests/locales.test.mjs が見る。
   const missing = [];
   allStringKeys().forEach((key) => {
     const entry = entryFor(key);
-    [...TEXT_MODES].forEach((mode) => {
+    ["ruby", "kanji", "kana", "en"].forEach((mode) => {
       if (typeof entry[mode] !== "string") missing.push(`${key}.${mode}`);
     });
   });

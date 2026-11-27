@@ -13,12 +13,15 @@
 // =====================================================================
 
 import { MEASUREMENT_PROTOCOL } from "./difficultyMode.js";
+import { say } from "./supporterText.js";
 
 /**
  * 表示の言葉を選ぶ。記録を束ねる鍵（sessionTrend.js の trendKey）は、言語で変わらないよう
  * いつも日本語（既定）で作る。画面に出すときだけ、支援者の画面の言語を渡す。
+ *
+ * 文は {ja, en} の組で書き、数は {name} の穴に入れる（supporterText.js の say）。
  */
-const pick = (lang) => (ja, en) => (lang === "en" ? en : ja);
+const pick = (lang) => (pair, values) => say(pair, lang, values);
 
 /** 完走したか、途中で終わったか。中断した回は数字の意味が変わる。 */
 export function describeSessionOutcome(session, lang = "ja") {
@@ -29,12 +32,12 @@ export function describeSessionOutcome(session, lang = "ja") {
     (session.taskType === "slot" && Number.isFinite(session.config?.rounds) && Number.isFinite(session.config?.reelCount)
       ? session.config.rounds * session.config.reelCount : null);
   if (session.finished === true && session.aborted === false) {
-    return w(`完走 ${trials}回`, `Completed, ${trials} ${trials === 1 ? "trial" : "trials"}`);
+    return w({ ja: "完走 {n}回", en: "Completed, {n} {n:trial|trials}" }, { n: trials });
   }
   // 中断した回を完走と並べて見せると、少ない試行数を成績の低さと取り違える。
   return planned === null
-    ? w(`中断 ${trials}回`, `Stopped early, ${trials} ${trials === 1 ? "trial" : "trials"}`)
-    : w(`中断 ${trials}/${planned}回`, `Stopped early, ${trials}/${planned} trials`);
+    ? w({ ja: "中断 {n}回", en: "Stopped early, {n} {n:trial|trials}" }, { n: trials })
+    : w({ ja: "中断 {done}/{planned}回", en: "Stopped early, {done}/{planned} trials" }, { done: trials, planned });
 }
 
 /**
@@ -67,41 +70,41 @@ export function describeSessionResult(session, lang = "ja") {
 
   if (session.taskType === "scan") {
     const trials = summary.trials ?? session.trials?.length ?? 0;
-    return w(`とれた ${summary.grips ?? 0}/${trials}`, `Grabbed ${summary.grips ?? 0}/${trials}`);
+    return w({ ja: "とれた {grips}/{trials}", en: "Grabbed {grips}/{trials}" }, { grips: summary.grips ?? 0, trials });
   }
 
   if (session.taskType === "sms") {
-    const parts = [w(`あった ${summary.hits ?? 0}`, `On time ${summary.hits ?? 0}`)];
+    const parts = [w({ ja: "あった {hits}", en: "On time {hits}" }, { hits: summary.hits ?? 0 })];
     const offset = signedMs(summary.meanRawOffsetMs);
     // ずれは hit が1つも無いと出せない。出せないものを 0ms と書かない。
-    if (offset) parts.push(w(`ずれ 平均 ${offset}`, `mean offset ${offset}`));
+    if (offset) parts.push(w({ ja: "ずれ 平均 {offset}", en: "mean offset {offset}" }, { offset }));
     return parts.join(" / ");
   }
 
   if (session.taskType === "gonogo") {
     // 抑制課題の主要指標は commissionRate（押してはいけない拍で押した割合）。
-    return w(
-      `あった ${summary.hits ?? 0} / つい おした ${summary.commissions ?? 0}`,
-      `On time ${summary.hits ?? 0} / pressed by mistake ${summary.commissions ?? 0}`
-    );
+    return [
+      w({ ja: "あった {hits}", en: "On time {hits}" }, { hits: summary.hits ?? 0 }),
+      w({ ja: "つい おした {commissions}", en: "pressed by mistake {commissions}" }, { commissions: summary.commissions ?? 0 }),
+    ].join(" / ");
   }
 
   if (session.taskType === "slot") {
     const trials = summary.trials ?? session.trials?.length ?? 0;
-    const parts = [w(`あった ${summary.hits ?? 0}/${trials}`, `Matched ${summary.hits ?? 0}/${trials}`)];
+    const parts = [w({ ja: "あった {hits}/{trials}", en: "Matched {hits}/{trials}" }, { hits: summary.hits ?? 0, trials })];
     if (typeof summary.medianAbsoluteErrorMs === "number") {
-      parts.push(w(`ずれ 中央 ${Math.round(summary.medianAbsoluteErrorMs)}ms`, `median error ${Math.round(summary.medianAbsoluteErrorMs)}ms`));
+      parts.push(w({ ja: "ずれ 中央 {ms}ms", en: "median error {ms}ms" }, { ms: Math.round(summary.medianAbsoluteErrorMs) }));
     }
-    if ((summary.timeoutCount ?? 0) > 0) parts.push(w(`時間切れ ${summary.timeoutCount}`, `timed out ${summary.timeoutCount}`));
+    if ((summary.timeoutCount ?? 0) > 0) parts.push(w({ ja: "時間切れ {count}", en: "timed out {count}" }, { count: summary.timeoutCount }));
     return parts.join(" / ");
   }
 
 
   if (session.taskType === "rt") {
     const parts = [];
-    if (typeof summary.meanRtMs === "number") parts.push(w(`はやさ 平均 ${Math.round(summary.meanRtMs)}ms`, `mean reaction ${Math.round(summary.meanRtMs)}ms`));
-    parts.push(w(`つれた ${summary.hits ?? 0}`, `caught ${summary.hits ?? 0}`));
-    if ((summary.falseStarts ?? 0) > 0) parts.push(w(`フライング ${summary.falseStarts}`, `early presses ${summary.falseStarts}`));
+    if (typeof summary.meanRtMs === "number") parts.push(w({ ja: "はやさ 平均 {ms}ms", en: "mean reaction {ms}ms" }, { ms: Math.round(summary.meanRtMs) }));
+    parts.push(w({ ja: "つれた {hits}", en: "caught {hits}" }, { hits: summary.hits ?? 0 }));
+    if ((summary.falseStarts ?? 0) > 0) parts.push(w({ ja: "フライング {count}", en: "early presses {count}" }, { count: summary.falseStarts }));
     return parts.join(" / ");
   }
 
@@ -134,58 +137,58 @@ export function describeSessionConditions(session, lang = "ja") {
   // （games/crane.js の endlessToleranceR / endlessSweepMs）。試行数は
   // 条件ではなく結果なので、ここには出さない——出すと回ごとにキーが変わり、
   // 線が1点ずつに割れて推移が一度も出なくなる（実測で0本だった）。
-  if (config.endless === true) return w("エンドレス", "Endless");
+  if (config.endless === true) return w({ ja: "エンドレス", en: "Endless" });
 
   // 押せば必ず当たる回（difficultyMode.js の resolveSureHit）は、名前を先頭に出して別の束にする。
   // どこで押しても当たりになる回なので、ふだんの回と同じ線に載せると、切り替えた日に成績が
   // 跳ね上がって（戻した日に落ちて）見える。高い音だけは、ほかの値（テンポ・拍の数）が
   // ふだんの回と同じなので、名前が無いと同じ束に入ってしまう。
-  const sureHit = config.sureHit === true ? [w("押せば必ず当たる", "Every press wins")] : [];
+  const sureHit = config.sureHit === true ? [w({ ja: "押せば必ず当たる", en: "Every press wins" })] : [];
 
   if (session.taskType === "scan") {
     const parts = [];
-    if (typeof config.sweepMs === "number") parts.push(w(`はやさ ${config.sweepMs}ms`, `sweep ${config.sweepMs}ms`));
-    if (typeof config.toleranceR === "number") parts.push(w(`ひろさ ${config.toleranceR}`, `width ${config.toleranceR}`));
-    if (typeof config.targetTrials === "number") parts.push(w(`${config.targetTrials}かい`, `${config.targetTrials} ${config.targetTrials === 1 ? "try" : "tries"}`));
+    if (typeof config.sweepMs === "number") parts.push(w({ ja: "はやさ {ms}ms", en: "sweep {ms}ms" }, { ms: config.sweepMs }));
+    if (typeof config.toleranceR === "number") parts.push(w({ ja: "ひろさ {r}", en: "width {r}" }, { r: config.toleranceR }));
+    if (typeof config.targetTrials === "number") parts.push(w({ ja: "{n}かい", en: "{n} {n:try|tries}" }, { n: config.targetTrials }));
     // 通過音を鳴らしていた回は、画面を見なくても解ける——視覚課題としての
     // 成績ではなくなるので、条件として並べないと回どうしを比べられない。
-    if (config.audioGuidance === true) parts.push(w("通過音あり", "pass-over sound on"));
-    if (config.difficultyMode === "measure") parts.unshift(w("そくてい", "Measure"));
-    if (config.measurementReadiness === "overridden") parts.push(w("成立確認なし", "readiness not checked"));
+    if (config.audioGuidance === true) parts.push(w({ ja: "通過音あり", en: "pass-over sound on" }));
+    if (config.difficultyMode === "measure") parts.unshift(w({ ja: "そくてい", en: "Measure" }));
+    if (config.measurementReadiness === "overridden") parts.push(w({ ja: "成立確認なし", en: "readiness not checked" }));
     return [...sureHit, ...parts].join(" / ");
   }
 
   if (session.taskType === "sms" || session.taskType === "gonogo") {
     const parts = [];
-    if (typeof config.bpm === "number") parts.push(w(`テンポ ${config.bpm}`, `tempo ${config.bpm}`));
-    if (typeof config.targetBeats === "number") parts.push(w(`${config.targetBeats}はく`, `${config.targetBeats} beats`));
+    if (typeof config.bpm === "number") parts.push(w({ ja: "テンポ {bpm}", en: "tempo {bpm}" }, { bpm: config.bpm }));
+    if (typeof config.targetBeats === "number") parts.push(w({ ja: "{n}はく", en: "{n} beats" }, { n: config.targetBeats }));
     // 画面から拍の手がかり（予告の溜め＋ずれの目盛り）を出していた回は、
     // 聴覚だけへの同期ではないので測定として別条件になる。ここに出さないと、
     // 支援者は2つの回を並べたときに違いに気づけない。
     //
     // 出すのは ON のときだけ。既定が OFF なので、OFF を毎行書くと全行に
     // 同じ札が並んで、条件の違いを探すのがかえって難しくなる。
-    if (config.visualGuidance === true) parts.push(w("手がかりあり", "visual cue on"));
+    if (config.visualGuidance === true) parts.push(w({ ja: "手がかりあり", en: "visual cue on" }));
     // そくていの回は先頭に出す。条件の束の名前なので、個別の値より先に
     // 目に入るほうが「この回は何なのか」が速く分かる。
-    if (config.difficultyMode === "measure") parts.unshift(w("そくてい", "Measure"));
+    if (config.difficultyMode === "measure") parts.unshift(w({ ja: "そくてい", en: "Measure" }));
     // 成立確認（高低の聞き分け・随意操作・規則の実行）を確かめないまま
     // 測った回。成績が低かったときに、抑制の失敗なのか課題がそもそも
     // 成立していなかったのかを分けられない回なので、条件として出す。
     // 出すのは overridden のときだけ——met を毎行書くと札が並ぶだけで、
     // 見分けたいほうが埋もれる（そくていの札と同じ扱い）。
-    if (config.measurementReadiness === "overridden") parts.push(w("成立確認なし", "readiness not checked"));
+    if (config.measurementReadiness === "overridden") parts.push(w({ ja: "成立確認なし", en: "readiness not checked" }));
     return [...sureHit, ...parts].join(" / ");
   }
 
   if (session.taskType === "slot") {
     const parts = [];
-    if (typeof config.cycleMs === "number") parts.push(w(`1周 ${config.cycleMs}ms`, `cycle ${config.cycleMs}ms`));
-    if (typeof config.toleranceMs === "number") parts.push(w(`合う幅 ±${config.toleranceMs}ms`, `window ±${config.toleranceMs}ms`));
-    if (typeof config.rounds === "number") parts.push(w(`${config.rounds}ラウンド`, `${config.rounds} ${config.rounds === 1 ? "round" : "rounds"}`));
-    if (typeof config.reelCount === "number") parts.push(w(`${config.reelCount}本`, `${config.reelCount} ${config.reelCount === 1 ? "reel" : "reels"}`));
-    if (config.difficultyMode === "measure") parts.unshift(w("そくてい", "Measure"));
-    if (config.measurementReadiness === "overridden") parts.push(w("成立確認なし", "readiness not checked"));
+    if (typeof config.cycleMs === "number") parts.push(w({ ja: "1周 {ms}ms", en: "cycle {ms}ms" }, { ms: config.cycleMs }));
+    if (typeof config.toleranceMs === "number") parts.push(w({ ja: "合う幅 ±{ms}ms", en: "window ±{ms}ms" }, { ms: config.toleranceMs }));
+    if (typeof config.rounds === "number") parts.push(w({ ja: "{n}ラウンド", en: "{n} {n:round|rounds}" }, { n: config.rounds }));
+    if (typeof config.reelCount === "number") parts.push(w({ ja: "{n}本", en: "{n} {n:reel|reels}" }, { n: config.reelCount }));
+    if (config.difficultyMode === "measure") parts.unshift(w({ ja: "そくてい", en: "Measure" }));
+    if (config.measurementReadiness === "overridden") parts.push(w({ ja: "成立確認なし", en: "readiness not checked" }));
     return [...sureHit, ...parts].join(" / ");
   }
 
@@ -203,7 +206,7 @@ export function describeSessionConditions(session, lang = "ja") {
     if (sureHit.length) return sureHit[0];
     const defaultLimitMs = MEASUREMENT_PROTOCOL.fishing[session.gameId]?.limitMs;
     if (typeof config.limitMs === "number" && typeof defaultLimitMs === "number" && config.limitMs !== defaultLimitMs) {
-      return w(`アタリ ${config.limitMs}ms`, `bite window ${config.limitMs}ms`);
+      return w({ ja: "アタリ {ms}ms", en: "bite window {ms}ms" }, { ms: config.limitMs });
     }
     //
     // 試行数は出さない。前刺激間隔の乱数で回ごとに変わるので、条件キーに

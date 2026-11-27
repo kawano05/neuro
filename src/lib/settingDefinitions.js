@@ -32,24 +32,31 @@ import { ATMOSPHERES } from "./atmosphere.js";
 import { cranePresets, fishingPresets, rhythmPresets, slotPresets } from "./content.js";
 import { MEASUREMENT_PROTOCOL, SURE_HIT_GAMES, resolveDifficultyMode } from "./difficultyMode.js";
 import { resolveTextMode, translate } from "./i18n.js";
+import { LANGUAGES, localNumber } from "./locales/index.js";
 import { say } from "./supporterText.js";
 
 /** 値を文にする形。画面の数字と、スライダーの読み上げ（aria-valuetext）で同じものを使う。 */
 const FORMATS = Object.freeze({
-  seconds: (ms, lang) => `${Number((ms / 1000).toFixed(2))}${lang === "en" ? " s" : "秒"}`,
+  seconds: (ms, lang) => say({ ja: "{n}秒", en: "{n} s" }, lang, { n: localNumber(Number((ms / 1000).toFixed(2)), lang) }),
   percent: (ratio) => `${Math.round(ratio * 100)}%`,
-  times: (count, lang) => (lang === "en" ? `${count} ${count === 1 ? "time" : "times"}` : `${count}回`),
-  perMinute: (count, lang) => (lang === "en" ? `${count} per minute` : `1分に${count}回`),
-  onOff: (on, lang) => (lang === "en" ? (on ? "On" : "Off") : on ? "オン" : "オフ"),
+  times: (count, lang) => say({ ja: "{n}回", en: "{n} {n:time|times}" }, lang, { n: count }),
+  perMinute: (count, lang) => say({ ja: "1分に{n}回", en: "{n} per minute" }, lang, { n: count }),
+  onOff: (on, lang) => say(on ? { ja: "オン", en: "On" } : { ja: "オフ", en: "Off" }, lang),
   plain: (value) => String(value),
 });
 
 const PROTOCOL = MEASUREMENT_PROTOCOL;
 
-/** 利用者の世界の辞書の文を、支援者の画面の2つの言葉で（日本語は漢字の表記）。 */
+/**
+ * 利用者の世界の辞書の文を、支援者の画面の言葉で（日本語は漢字の表記）。
+ * key を付けておくと、3つ目からの言語は say が辞書のその言語の文を引く。
+ */
 function both(key) {
-  return { ja: translate(key, "kanji"), en: translate(key, "en") };
+  return { ja: translate(key, "kanji"), en: translate(key, "en"), key };
 }
+
+/** 日本語の分かち書きの空白を詰めた組（「」の中に入れるとき）。 */
+const tight = (pair) => ({ ...pair, ja: pair.ja.replace(/\s+/g, "") });
 
 /** 雰囲気の名前と説明は、遊びの舞台と同じ辞書のキー（atmosphere.js）。 */
 function atmosphereDescription(level, lang = "ja") {
@@ -72,10 +79,8 @@ export const SETTING_DEFINITIONS = Object.freeze({
     type: "select",
     label: { ja: "言語 / Language", en: "Language / 言語" },
     hint: { ja: "遊びと支援者の画面の言葉を選びます。", en: "Choose the language for the games and the supporter screens." },
-    options: [
-      ["ruby", "日本語"],
-      ["en", "English"],
-    ],
+    // 選択肢は言語の一覧（locales/index.js）から。名前は、その言語での呼び名。
+    options: LANGUAGES.map((language) => [language.mode, language.name]),
     // 以前の kanji / kana が保存された端末は、選べる表記（ruby）へ読み替える。
     resolve: resolveTextMode,
   },
@@ -123,8 +128,9 @@ export const SETTING_DEFINITIONS = Object.freeze({
     type: "checkbox",
     label: { ja: "画面をよく見る遊びを隠す", en: "Hide games that need close watching" },
     hint: {
-      ja: `「${slotCorner.ja}」と「${craneCorner.ja}」をホームから隠します。`,
-      en: `Hides “${slotCorner.en}” and “${craneCorner.en}” from the home screen.`,
+      ja: "「{slot}」と「{crane}」をホームから隠します。",
+      en: "Hides “{slot}” and “{crane}” from the home screen.",
+      values: { slot: slotCorner, crane: craneCorner },
     },
     format: "onOff",
   },
@@ -245,7 +251,7 @@ export const SETTING_DEFINITIONS = Object.freeze({
   },
   slotL1Rounds: {
     type: "range",
-    label: { ja: `「${slotOne.ja.replace(/\s+/g, "")}」の回数`, en: `Rounds of “${slotOne.en}”` },
+    label: { ja: "「{game}」の回数", en: "Rounds of “{game}”", values: { game: tight(slotOne) } },
     hint: { ja: "1列の絵を止める回数です。", en: "How many times one column is stopped." },
     min: 3,
     max: 20,
@@ -257,7 +263,7 @@ export const SETTING_DEFINITIONS = Object.freeze({
   },
   slotL2Rounds: {
     type: "range",
-    label: { ja: `「${slotThree.ja.replace(/\s+/g, "")}」の回数`, en: `Rounds of “${slotThree.en}”` },
+    label: { ja: "「{game}」の回数", en: "Rounds of “{game}”", values: { game: tight(slotThree) } },
     hint: { ja: "3列を順番に止める回数です。", en: "How many times the three columns are stopped in order." },
     min: 2,
     max: 12,

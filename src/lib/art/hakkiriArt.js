@@ -10,6 +10,8 @@
 // ばらばらに書くと、どこか1枚だけ読み上げに乗る。
 // =====================================================================
 
+import { languageOfMode } from "../locales/index.js";
+
 /** ホームのサムネイルと遊びかたカードの背景（viewBox 360x176 / 360x200）。 */
 export const SCENE_ART = {
   pop: {
@@ -114,13 +116,13 @@ export const POP_ANIMALS = [
  */
 /**
  * 札の絵を、表記に合わせて引く。字の入った絵は「文字を えらぶ」の2枚の札（あ・い）だけで、
- * 表記が English のときは、その課題と同じアルファベット（A・B）にする。ほかの絵は言語で変わらない。
+ * 表記が日本語でないときは、その課題と同じアルファベット（A・B）にする。ほかの絵は言語で変わらない。
  * @param {string} name SCENE_ART の名前
- * @param {string} [mode] 表記（"ruby" / "en"）
+ * @param {string} [mode] 表記（"ruby" / "en" / 足した言語）
  */
 export function sceneArtFor(name, mode) {
   const art = SCENE_ART[name];
-  if (!art || mode !== "en" || name !== "learnLetters") return art;
+  if (!art || !mode || languageOfMode(mode) === "ja" || name !== "learnLetters") return art;
   return { ...art, body: art.body.replace(">あ</text>", ">A</text>").replace(">い</text>", ">B</text>") };
 }
 

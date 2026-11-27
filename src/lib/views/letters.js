@@ -5,20 +5,21 @@
 // 見た目と言葉だけを利用者向けにした（docs/design-renewal-2026-09-25.md §3.14）。
 // =====================================================================
 
-import { letterTasks, letterTasksEn } from "../content.js";
+import { letterTasks } from "../content.js";
+import { learnLang, letterTasksFor } from "../learnText.js";
 import { escapeHtml } from "../utils.js";
 import { rubyToHtml } from "../i18n.js";
 
 export function initLetters(ctx) {
   const { state, elements, save, logEvent, voiceFeedback, playTone, scan } = ctx;
 
-  // 表記が English のときは、アルファベットの課題（content.js の letterTasksEn）。
-  const english = () => ctx.textMode?.() === "en";
-  const tasks = () => (english() ? letterTasksEn : letterTasks);
+  // 表記が日本語でないときは、その言語のアルファベットの課題（learnText.js の letterTasksFor）。
+  const japanese = () => learnLang(ctx.textMode?.()) === "ja";
+  const tasks = () => letterTasksFor(learnLang(ctx.textMode?.()));
 
   function render() {
     const task = tasks()[state.letterIndex % tasks().length];
-    elements.letterPrompt.innerHTML = english() ? escapeHtml(task.prompt) : rubyToHtml(task.promptRuby || task.prompt);
+    elements.letterPrompt.innerHTML = japanese() ? rubyToHtml(task.promptRuby || task.prompt) : escapeHtml(task.prompt);
     elements.letterGrid.innerHTML = "";
     task.options.forEach((letter) => {
       const button = document.createElement("button");

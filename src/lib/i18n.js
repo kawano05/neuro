@@ -16,6 +16,9 @@
 // 支援者の世界も、言語が English のときは英語で出す（設定は 2026-10-02、評価ログ・学ぶ・伝えるの
 // 中身・印刷用の説明書は 2026-11-26。日本の外で使う支援者は日本語を読めない）。
 //
+// 日本語と英語のほかの言語は、この辞書には書かず、src/lib/locales/ に1言語1ファイルで足す
+// （鍵 → 訳。無ければ英語で出す）。足し方は docs/adding-a-language.md。
+//
 // 表記は測定条件でもある。手順の説明が読めるかどうかは成績に効きうるので、
 // どの表記で回したかは session.config.textMode に残す（visualGuidance などと
 // 同じ扱い）。
@@ -24,6 +27,7 @@
 // 分かるが、「キーが無いときに何が出るか」は見ても分からない。
 // =====================================================================
 
+import { LANGUAGES, catalogString, languageOfMode } from "./locales/index.js";
 import { escapeHtml } from "./utils.js";
 
 /**
@@ -34,7 +38,9 @@ import { escapeHtml } from "./utils.js";
  * 復元するときに知らない値として捨ててしまうと、その回の条件が消える。
  * 選べる値（SELECTABLE_TEXT_MODES）と、記録として妥当な値は別物。
  */
-export const TEXT_MODES = new Set(["ruby", "kanji", "kana", "en"]);
+// 日本語のほかの言語は、言語の一覧（locales/index.js）から来る。
+const OTHER_LANGUAGES = LANGUAGES.filter((language) => language.code !== "ja");
+export const TEXT_MODES = new Set(["ruby", "kanji", "kana", ...OTHER_LANGUAGES.map((language) => language.mode)]);
 
 /**
  * いま設定画面で選べる表記。
@@ -49,7 +55,7 @@ export const TEXT_MODES = new Set(["ruby", "kanji", "kana", "en"]);
  * 条件が1つ減るという利点もある。表記は測定条件なので、モードが多いほど
  * 層別すべきセルが分散する。
  */
-export const SELECTABLE_TEXT_MODES = new Set(["ruby", "en"]);
+export const SELECTABLE_TEXT_MODES = new Set(LANGUAGES.map((language) => language.mode));
 
 /**
  * 既定はルビ付き漢字。
@@ -60,7 +66,17 @@ export const SELECTABLE_TEXT_MODES = new Set(["ruby", "en"]);
 export const DEFAULT_TEXT_MODE = "ruby";
 
 /** 読み上げに渡す言語（audio.js の speak）。 */
-export const SPEECH_LANG = { ruby: "ja-JP", kanji: "ja-JP", kana: "ja-JP", en: "en-US" };
+export const SPEECH_LANG = {
+  ruby: "ja-JP",
+  kanji: "ja-JP",
+  kana: "ja-JP",
+  ...Object.fromEntries(OTHER_LANGUAGES.map((language) => [language.mode, language.speech])),
+};
+
+/** その表記は日本語か（ルビ・漢字・かな）。英語や、3つ目からの言語は false。 */
+export function isJapaneseMode(mode) {
+  return languageOfMode(mode) === "ja";
+}
 
 /**
  * ルビの書き方: `漢字[よみ]`。
@@ -1207,7 +1223,8 @@ const STRINGS = {
   "crane.gotPrize": { ruby: "{name}を つかんだ！",
     kanji: "{name}を つかんだ！",
     kana: "{name}を つかんだ！",
-    en: "Got the {name}!",
+    // 景品の名前（prize.*）は the を含む（"the bear"）。ここで the を重ねない。
+    en: "Got {name}!",
   },
 
   // --- さかなつりの状態表示 ---
@@ -1346,7 +1363,7 @@ export function resolveTextMode(settings) {
  * は `"{n}x"` になる）。差し込む値は文字どおり入れたいので、関数にして
  * 解釈を止める。
  */
-function fill(text, values, transform = (value) => String(value)) {
+export function fill(text, values, transform = (value) => String(value)) {
   if (!values) return text;
   return Object.entries(values).reduce(
     (out, [name, value]) =>
@@ -1374,10 +1391,21 @@ function fill(text, values, transform = (value) => String(value)) {
  * 含まれたときにルビの記法として解釈される——値は辞書の一部ではないので、
  * 加工の対象にしてはいけない。
  */
+/**
+ * その表記の文。3つ目からの言語は、訳（locales/）→ 英語 → 日本語の順に探す。
+ * 訳が抜けていても日本語へは落とさない（日本語を読めない人のための言語なので、英語のほうが読める）。
+ */
+function textFor(entry, key, mode) {
+  if (entry[mode] != null) return entry[mode];
+  const language = languageOfMode(mode);
+  if (language !== "ja") return catalogString(language, key, entry.en) ?? entry.en ?? entry[DEFAULT_TEXT_MODE] ?? key;
+  return entry[DEFAULT_TEXT_MODE] ?? key;
+}
+
 export function translate(key, mode, values) {
   const entry = STRINGS[key];
   if (!entry) return key;
-  const text = entry[mode] ?? entry[DEFAULT_TEXT_MODE] ?? key;
+  const text = textFor(entry, key, mode);
   return fill(rubyToPlain(text), values);
 }
 
@@ -1395,7 +1423,7 @@ export function translate(key, mode, values) {
 export function translateHtml(key, mode, values) {
   const entry = STRINGS[key];
   if (!entry) return escapeHtml(key);
-  const text = entry[mode] ?? entry[DEFAULT_TEXT_MODE] ?? key;
+  const text = textFor(entry, key, mode);
   return fill(rubyToHtml(text), values, (value) => escapeHtml(value));
 }
 
